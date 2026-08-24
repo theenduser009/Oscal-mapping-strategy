@@ -1,63 +1,98 @@
-Great — now we know the **entire POA&M scope currently present in the CSV**:
+Exactly — registry is confirmed. ✅
 
-```text
-SOURCE_FIELD_NAME : POAMS
-OSCAL_MODEL       : POA&M
-MAPPING_TYPE      : Reference
+Before we run POA&M through the mapper, there is **one important semantic check** I want to make first.
 
-OSCAL path:
-plan-of-action-and-milestones.poam-items[]
+Our generic mapper currently creates the **root node once per source record**. That made perfect sense for SSP because each Authorization Package row represented an SSP root.
+
+For POA&M, `POAMS` is a **reference collection**, so we need to know:
+
+> Does every Authorization Package actually have POA&M data, or only some of them?
+
+Run this **read-only** check:
+
+```python
+# ============================================================
+# POA&M Source Coverage Check
+# READ ONLY
+# ============================================================
+
+records_total = 0
+records_with_poams = 0
+records_without_poams = 0
+total_poam_refs = 0
+
+distinct_content_ids = set()
+max_refs_per_record = 0
+
+for record in source_df.to_local_iterator():
+
+    records_total += 1
+
+    source_obj = _parse_source_json(record)
+    value = resolve_json_path(source_obj, "POAMS")
+
+    if value in (None, "", [], {}):
+        records_without_poams += 1
+        continue
+
+    records_with_poams += 1
+
+    items = value if isinstance(value, list) else [value]
+
+    max_refs_per_record = max(
+        max_refs_per_record,
+        len(items)
+    )
+
+    for item in items:
+
+        total_poam_refs += 1
+
+        if isinstance(item, dict):
+            cid = (
+                item.get("ContentId")
+                or item.get("CONTENT_ID")
+                or item.get("content_id")
+            )
+
+            if cid is not None:
+                distinct_content_ids.add(str(cid))
+
+        else:
+            distinct_content_ids.add(str(item))
+
+
+print("=== POA&M SOURCE COVERAGE ===")
+print("Authorization Package records :", records_total)
+print("Records WITH POAMS            :", records_with_poams)
+print("Records WITHOUT POAMS         :", records_without_poams)
+print("Total POA&M references        :", total_poam_refs)
+print("Distinct referenced ContentIds:", len(distinct_content_ids))
+print("Maximum refs in one record    :", max_refs_per_record)
 ```
 
-So, based on the current mapping, the hierarchy is only:
+### Why this matters
+
+Suppose the output is:
 
 ```text
-Level 0
+2165 total Authorization Packages
+800 have POAMS
+1365 have no POAMS
+```
+
+Then we probably **should not create 2,165 empty `plan-of-action-and-milestones` roots**.
+
+We would want something more like:
+
+```text
+Authorization Package with POAMS
+        ↓
 plan-of-action-and-milestones
-
-└── Level 1
-    poam-items[]
+        ↓
+poam-items[]
 ```
 
-There are **no deeper POA&M paths in the CSV right now**. And because `MAPPING_TYPE = Reference`, those `poam-items[]` values are references rather than full POA&M item attributes. From our earlier source inspection, `POAMS` contained lists of `{ContentId, LevelId}` references, and `ContentId` was safe as the instance identity.
+only where POA&M references actually exist.
 
-### Next step only: check the POA&M registry
-
-We previously experimented with POA&M registry rows, so **do not insert anything yet**. First see what is already registered:
-
-```sql
-SELECT
-    OSCAL_MODEL_KEY,
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    ITEM_PATH,
-    PROCESS_ORDER,
-    IS_ACTIVE
-FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-WHERE OSCAL_MODEL_KEY IN ('POAM', 'POA&M')
-ORDER BY PROCESS_ORDER, NODE_PATH;
-```
-
-Ideally we should already have exactly this:
-
-```text
-POAM
-plan-of-action-and-milestones
-parent = NULL
-collection = FALSE
-key = SINGLETON
-
-POAM
-plan-of-action-and-milestones.poam-items[]
-parent = plan-of-action-and-milestones
-collection = TRUE
-key = CONTENT_ID
-item_path = $
-```
-
-Show me that result.
-
-Then we can configure the **same production mapper** for POA&M. We will not create another mapping engine. Also, before we actually write to the POA&M tables, we’ll account for the fact that their PK column names are `PK_DIM_OSCAL_POAM_ELEMENT_HASH` and `PK_FACT_OSCAL_POAM_DEPENDENCY_HASH`, rather than the SSP names.
+So run this first. **Don't modify the mapper or registry yet.** This result will tell us whether our current generic root-creation rule is correct for POA&M or needs a generic metadata rule.
