@@ -1,161 +1,91 @@
-Yes — this is the important discovery. We **definitely have deeper mapped SSP structure**, and now we can add it to the registry based on the actual mapping/data rather than guessing.
-
-From what you showed, I can confirm these three deeper singleton nodes:
+✅ **Cell 7 passed. New verified baseline:**
 
 ```text
-system-security-plan.system-characteristics
-│
-├── authorization-boundary
-│   └── description
-│
-├── security-impact-level
-│   ├── security-objective-availability
-│   ├── security-objective-confidentiality
-│   └── security-objective-integrity
-│
-└── status
-    ├── state
-    └── remarks
+DIM  92,880 / 92,880
+FACT 90,715 / 90,715
+LOAD VERIFIED
 ```
 
-Fields such as these remain payload fields of `system-characteristics`, not separate DIM nodes:
+Now we should **not manually guess `network-architecture`, `data-flow`, `system-information`, etc.** We can make the mapping file tell us every remaining nested object under `system-characteristics`.
+
+Our earlier inventory missed deeper singleton objects. This next check fixes that properly and should replace the need to visually hunt through all 32 mappings.
+
+### Next cell — remaining structural nodes under System Characteristics
+
+```python
+# ============================================================
+# Find remaining System Characteristics structural nodes
+# READ ONLY
+# ============================================================
+
+from snowflake.snowpark.functions import col
+
+BASE = "system-security-plan.system-characteristics"
+
+# Actual mapped paths
+mapped_paths = [
+    r["OSCAL_ELEMENT_PATH"]
+    for r in (
+        canonical_mapping_df
+        .filter(col("OSCAL_ELEMENT_PATH").startswith(BASE + "."))
+        .select("OSCAL_ELEMENT_PATH")
+        .distinct()
+        .collect()
+    )
+    if r["OSCAL_ELEMENT_PATH"]
+]
+
+# Existing registry paths
+registered_paths = {
+    r["NODE_PATH"]
+    for r in (
+        element_registry_df
+        .filter(col("OSCAL_MODEL_KEY") == "SSP")
+        .select("NODE_PATH")
+        .collect()
+    )
+}
+
+# A structural node is a proper prefix of an actual mapped path.
+# The final path segment is treated as the payload field.
+candidates = set()
+
+for full_path in mapped_paths:
+    parts = full_path.split(".")
+
+    # Do not include the final leaf field
+    for i in range(3, len(parts)):
+        prefix = ".".join(parts[:i])
+
+        if prefix.startswith(BASE + "."):
+            candidates.add(prefix)
+
+print("=== Remaining System Characteristics Structural Nodes ===")
+
+for path in sorted(candidates):
+    status = (
+        "REGISTERED"
+        if path in registered_paths
+        else "NOT REGISTERED"
+    )
+
+    print(status, " | ", path)
+```
+
+What I expect this to do is show something like:
 
 ```text
-date-authorized
-description
-security-sensitivity-level
-system-name
-system-name-short
+REGISTERED     | ...authorization-boundary
+REGISTERED     | ...security-impact-level
+REGISTERED     | ...status
+
+NOT REGISTERED | ...network-architecture
+NOT REGISTERED | ...data-flow
+...
 ```
 
-And we already have:
+**But we will use the actual output, not that expectation.**
 
-```text
-props[]
-system-ids[]
-```
+This is the better method going forward: every time we go deeper, the **real OSCAL paths in your mapping identify the structural parents automatically**. Then we check their source data and add confirmed ones to the registry.
 
-So **next step is registry only**. Add the three confirmed singleton objects:
-
-```sql
-MERGE INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY t
-USING (
-
-    SELECT
-        'SSP' AS OSCAL_MODEL_KEY,
-        'system-security-plan.system-characteristics.authorization-boundary' AS NODE_PATH,
-        'authorization-boundary' AS ELEMENT_TYPE,
-        'system-security-plan.system-characteristics' AS PARENT_NODE_PATH,
-        FALSE AS IS_COLLECTION,
-        'SINGLETON' AS INSTANCE_KEY_RULE,
-        3 AS PROCESS_ORDER,
-        TRUE AS IS_ACTIVE,
-        NULL AS ITEM_PATH
-
-    UNION ALL
-
-    SELECT
-        'SSP',
-        'system-security-plan.system-characteristics.security-impact-level',
-        'security-impact-level',
-        'system-security-plan.system-characteristics',
-        FALSE,
-        'SINGLETON',
-        3,
-        TRUE,
-        NULL
-
-    UNION ALL
-
-    SELECT
-        'SSP',
-        'system-security-plan.system-characteristics.status',
-        'status',
-        'system-security-plan.system-characteristics',
-        FALSE,
-        'SINGLETON',
-        3,
-        TRUE,
-        NULL
-
-) s
-
-ON  t.OSCAL_MODEL_KEY = s.OSCAL_MODEL_KEY
-AND t.NODE_PATH = s.NODE_PATH
-
-WHEN MATCHED THEN UPDATE SET
-    t.ELEMENT_TYPE      = s.ELEMENT_TYPE,
-    t.PARENT_NODE_PATH  = s.PARENT_NODE_PATH,
-    t.IS_COLLECTION     = s.IS_COLLECTION,
-    t.INSTANCE_KEY_RULE = s.INSTANCE_KEY_RULE,
-    t.PROCESS_ORDER     = s.PROCESS_ORDER,
-    t.IS_ACTIVE         = s.IS_ACTIVE,
-    t.ITEM_PATH         = s.ITEM_PATH
-
-WHEN NOT MATCHED THEN INSERT (
-    OSCAL_MODEL_KEY,
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    PROCESS_ORDER,
-    IS_ACTIVE,
-    ITEM_PATH
-)
-VALUES (
-    s.OSCAL_MODEL_KEY,
-    s.NODE_PATH,
-    s.ELEMENT_TYPE,
-    s.PARENT_NODE_PATH,
-    s.IS_COLLECTION,
-    s.INSTANCE_KEY_RULE,
-    s.PROCESS_ORDER,
-    s.IS_ACTIVE,
-    s.ITEM_PATH
-);
-```
-
-Notice I am **not** registering:
-
-```text
-security-objective-availability
-security-objective-confidentiality
-security-objective-integrity
-```
-
-as separate nodes. They are mapped properties **inside `security-impact-level`**, so they'll live in that node's JSON.
-
-Same reasoning:
-
-```text
-authorization-boundary.description
-```
-
-belongs inside the `authorization-boundary` node.
-
-And:
-
-```text
-status.state
-status.remarks
-```
-
-belong inside the `status` node.
-
-This is exactly the parent/child normalization we wanted:
-
-```text
-DIM:
-system-characteristics
-authorization-boundary
-security-impact-level
-status
-
-FACT:
-system-characteristics → authorization-boundary
-system-characteristics → security-impact-level
-system-characteristics → status
-```
-
-Run this registry MERGE only. Then refresh Cell 3 and run Cell 5 unchanged. **Do not run Cell 6 yet** — first we inspect the new node counts and make sure the hierarchy was generated correctly.
+Run only this next and show me the output.
