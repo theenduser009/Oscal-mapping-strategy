@@ -1,298 +1,250 @@
-Yes — the real problem is that the other AI keeps trying to **infer too much from the mapping CSV**, and every time it guesses, we end up redesigning Cell 3.
+Yes — **this is finally on the right track.** I read all five screenshots carefully.
 
-We should stop asking it to “discover” the whole OSCAL structure.
-
-Here is the clean decision:
-
-**Cell 3 has only two jobs:**
+And the important result is:
 
 ```text
-1. Normalize the field-mapping CSV
-2. Load/use a separate structural element registry
+canonical_mapping_df = 608 rows
+element_registry_df  = 5 rows
+
+Usable SSP mappings  = 54
+Mappings without owner = 0
 ```
 
-That’s it.
-
-The existing CSV is for:
+That proves the core idea works:
 
 ```text
-ARCHER FIELD
-    →
-OSCAL FIELD PATH
-```
-
-It is **not reliable enough to decide every node boundary and parent relationship**.
-
-So we should stop making AI invent things like:
-
-```text
-is this a node?
-is document-ids[] a node?
-is components[] a node?
-what is the parent?
-```
-
-That structural information belongs in a **small second metadata object**: `element_registry_df`.
-
-This actually makes the architecture MORE reusable, not less:
-
-```text
-FIELD MAPPING CSV
-        +
-ELEMENT REGISTRY
+mapping path
         ↓
-GENERIC ENGINE
+deepest registered NODE_PATH
+        ↓
+OWNER_NODE_PATH
+        ↓
+FIELD_RELATIVE_PATH
 ```
 
-For SSP, the first registry rows can simply be:
+So a mapping such as:
 
 ```text
-system-security-plan
-system-security-plan.metadata
-system-security-plan.system-characteristics
-system-security-plan.system-implementation
-system-security-plan.control-implementation
+system-security-plan.metadata.document-ids[].identifier
 ```
 
-Later we add `components[]`, `props[]`, POA&M nodes, Assessment Results nodes, etc. as metadata rows — **no Python rewrite**.
+is correctly owned by:
+
+```text
+system-security-plan.metadata
+```
+
+instead of incorrectly creating `document-ids[]` as another DIM node.
+
+**That is exactly the architecture we wanted.**
+
+However, before I freeze Cell 3, I see **two actual production issues** in the code. We can fix them without rewriting Cell 3 again.
+
+### 1. Remove the hardcoded `system-security-plan`
+
+In Part C, the other AI wrote things like:
+
+```sql
+WHERE cm2.OSCAL_ELEMENT_PATH LIKE 'system-security-plan%'
+```
+
+and:
+
+```sql
+WHERE cm.OSCAL_ELEMENT_PATH LIKE 'system-security-plan%'
+```
+
+That puts SSP-specific knowledge back into the generic engine.
+
+We already have:
+
+```python
+CONFIG["OSCAL_MODEL"] = "SSP"
+```
+
+and:
+
+```text
+element_registry_df.OSCAL_MODEL_KEY
+```
+
+So the matching should use the **active registry**, not a hardcoded root string.
+
+Conceptually:
+
+```text
+CONFIG["OSCAL_MODEL"]
+       ↓
+filter element_registry_df
+       ↓
+active registry nodes
+       ↓
+match mappings against those nodes
+```
+
+Then tomorrow:
+
+```python
+CONFIG["OSCAL_MODEL"] = "POAM"
+```
+
+runs the same code without changing `"system-security-plan"` strings.
+
+### 2. Make prefix matching segment-safe
+
+Current code uses:
+
+```sql
+cm2.OSCAL_ELEMENT_PATH LIKE er2.NODE_PATH || '%'
+```
+
+That works with today's paths, but it's slightly unsafe.
+
+For example, a node:
+
+```text
+abc.metadata
+```
+
+would technically also prefix-match:
+
+```text
+abc.metadata-extra.foo
+```
+
+We want:
+
+```text
+mapping path = node path
+```
+
+OR:
+
+```text
+mapping path starts with node path + "."
+```
+
+So the generic condition should conceptually be:
+
+```sql
+cm.OSCAL_ELEMENT_PATH = er.NODE_PATH
+OR
+cm.OSCAL_ELEMENT_PATH LIKE er.NODE_PATH || '.%'
+```
+
+That makes node ownership structurally correct.
 
 ---
 
-## Send the other AI this exact prompt
+### One smaller cleanup
 
-> STOP trying to infer the complete OSCAL hierarchy from the existing mapping CSV.
->
-> We are stuck because the mapping CSV is FIELD-MAPPING metadata, not a complete structural/node-registry definition.
->
-> We are freezing the architecture now.
->
-> ## FINAL ARCHITECTURE
->
-> There are TWO metadata inputs:
->
-> ### 1. `mapping_df`
->
-> Existing CSV.
->
-> Purpose:
->
-> `SOURCE FIELD -> OSCAL_ELEMENT_PATH`
->
-> It contains the existing 608 mapping rows and columns:
->
-> `ARCHER_FIELD_NAME`
-> `Sparx EA Mapping Completed`
-> `NULL%`
-> `DATA_TYPE`
-> `CARDINALITY`
-> `OSCAL_MODEL`
-> `OSCAL_ELEMENT_PATH`
-> `OSCAL_DATA_TYPE`
-> `MAPPING_TYPE`
-> `TRANSFORMATION_LOGIC`
-> `NOTES`
->
-> This CSV does NOT define all node boundaries.
->
-> ### 2. `element_registry_df`
->
-> Separate structural metadata.
->
-> Purpose:
->
-> define which OSCAL paths become DIM nodes and how those nodes relate to each other.
->
-> It must contain:
->
-> `OSCAL_MODEL_KEY`
-> `NODE_PATH`
-> `ELEMENT_TYPE`
-> `PARENT_NODE_PATH`
-> `IS_COLLECTION`
-> `INSTANCE_KEY_RULE`
-> `PROCESS_ORDER`
-> `IS_ACTIVE`
->
-> Do NOT add more columns right now.
->
-> Do NOT invent dependency types, creation rules, or new identity policies in this step.
->
-> ---
->
-> ## CELL 3 RESPONSIBILITY
->
-> Cell 3 must create only:
->
-> `canonical_mapping_df`
->
-> and
->
-> `element_registry_df`
->
-> Nothing else.
->
-> No DIM.
-> No FACT.
-> No node hashes.
-> No UUIDs.
-> No MERGE.
-> No payload construction.
->
-> ---
->
-> ## PART A — canonical_mapping_df
->
-> Keep all original mapping rows.
->
-> Normalize only these runtime column names:
->
-> `ARCHER_FIELD_NAME -> SOURCE_FIELD_NAME`
->
-> keep:
->
-> `OSCAL_MODEL`
-> `OSCAL_ELEMENT_PATH`
-> `CARDINALITY`
-> `OSCAL_DATA_TYPE`
-> `MAPPING_TYPE`
-> `TRANSFORMATION_LOGIC`
->
-> Preserve the original `OSCAL_MODEL` value as raw mapping metadata.
->
-> Do NOT filter `OSCAL_MODEL == "SSP"`.
->
-> For the SSP test case, identify usable mappings by:
->
-> `OSCAL_ELEMENT_PATH starts with "system-security-plan"`
->
-> because the raw `OSCAL_MODEL` column contains section labels such as:
->
-> `SSP - Metadata`
-> `SSP - System Characteristics`
-> `SSP - System Implementation`
-> `SSP - Control Implementation`
->
-> and is not a canonical model key.
->
-> Do NOT derive node boundaries from every dot in `OSCAL_ELEMENT_PATH`.
->
-> ---
->
-> ## PART B — element_registry_df
->
-> Do NOT derive this automatically from every mapping path.
->
-> Build/load it as explicit structural metadata.
->
-> For the FIRST SSP test, use exactly these five approved registry rows:
->
-> | OSCAL_MODEL_KEY | NODE_PATH | ELEMENT_TYPE | PARENT_NODE_PATH | IS_COLLECTION | INSTANCE_KEY_RULE | PROCESS_ORDER | IS_ACTIVE |
-> | SSP | system-security-plan | system-security-plan | NULL | False | SINGLETON | 1 | True |
-> | SSP | system-security-plan.metadata | metadata | system-security-plan | False | SINGLETON | 2 | True |
-> | SSP | system-security-plan.system-characteristics | system-characteristics | system-security-plan | False | SINGLETON | 2 | True |
-> | SSP | system-security-plan.system-implementation | system-implementation | system-security-plan | False | SINGLETON | 2 | True |
-> | SSP | system-security-plan.control-implementation | control-implementation | system-security-plan | False | SINGLETON | 2 | True |
->
-> These rows are STRUCTURAL metadata.
->
-> Do not infer `document-ids[]`, `props[]`, `components[]`, or other nested paths as separate nodes yet.
->
-> Those remain payload paths until deliberately added to `element_registry_df`.
->
-> ---
->
-> ## IMPORTANT GENERIC RULE
->
-> A mapping belongs to the deepest registered `NODE_PATH` that is a prefix of its `OSCAL_ELEMENT_PATH`.
->
-> Example:
->
-> `system-security-plan.metadata.document-ids[].identifier`
->
-> matches:
->
-> `system-security-plan`
->
-> and
->
-> `system-security-plan.metadata`
->
-> The deepest registered match is:
->
-> `system-security-plan.metadata`
->
-> Therefore:
->
-> `OWNER_NODE_PATH = system-security-plan.metadata`
->
-> and:
->
-> `FIELD_RELATIVE_PATH = document-ids[].identifier`
->
-> Another example:
->
-> `system-security-plan.system-characteristics.security-impact-level.security-objective-integrity`
->
-> belongs to:
->
-> `system-security-plan.system-characteristics`
->
-> Do NOT turn `security-impact-level` into a DIM node unless it is explicitly added to the registry.
->
-> ---
->
-> ## CELL 3 OUTPUT
->
-> Cell 3 should output only:
->
-> 1. `canonical_mapping_df`
-> 2. `element_registry_df`
-> 3. count of usable SSP mapping rows
-> 4. the five registry rows
-> 5. 10 example mappings showing:
->
->    * `SOURCE_FIELD_NAME`
->    * `OSCAL_ELEMENT_PATH`
->    * matched `OWNER_NODE_PATH`
->    * derived `FIELD_RELATIVE_PATH`
->
-> If a mapping cannot match any registered node, mark:
->
-> `OWNER_NODE_PATH = NULL`
->
-> Do NOT invent one.
->
-> ---
->
-> ## ABSOLUTE RULES
->
-> Do not change Cell 1.
-> Do not change Cell 2.
-> Do not create Cell 4.
-> Do not redesign the registry.
-> Do not add more structural columns.
-> Do not create nodes.
-> Do not create relationships.
-> Do not write to Snowflake.
->
-> Build this exact Cell 3 and STOP.
-
-This is the important reset: **we are no longer asking AI to be an OSCAL architect inside Cell 3.** We are giving it a precise metadata contract.
-
-And this remains fully dynamic:
+Your `canonical_mapping_df` currently dropped the original:
 
 ```text
-new field mapping
-→ change mapping CSV
-
-new OSCAL node
-→ add registry row
-
-new parent/child structure
-→ change registry metadata
-
-Python engine
-→ unchanged
+DATA_TYPE
 ```
 
-That is the architecture we wanted from the beginning.
+even though the comment says preserve mapping metadata.
+
+Keep it.
+
+So canonical mapping should retain:
+
+```text
+SOURCE_FIELD_NAME
+DATA_TYPE
+OSCAL_MODEL
+OSCAL_ELEMENT_PATH
+CARDINALITY
+OSCAL_DATA_TYPE
+MAPPING_TYPE
+TRANSFORMATION_LOGIC
+SPARX_COMPLETED
+NULL_PCT
+NOTES
+```
+
+No big redesign.
+
+---
+
+## Don't let the other AI rewrite Cell 3 again
+
+Tell it this exact thing:
+
+> **Cell 3 architecture is approved. Do NOT redesign it. Make ONLY three corrections to the existing Cell 3.**
+>
+> **Correction 1 — remove SSP hardcoding from Part C.**
+>
+> Remove all literal filtering such as:
+>
+> `LIKE 'system-security-plan%'`
+>
+> Owner-node matching must instead use only registry rows where:
+>
+> `OSCAL_MODEL_KEY = CONFIG["OSCAL_MODEL"]`
+>
+> Therefore the same Part C must work when CONFIG later changes from `SSP` to another OSCAL model.
+>
+> Do not derive or hardcode the root string in Python or SQL.
+>
+> **Correction 2 — make node-prefix matching segment-safe.**
+>
+> Replace generic matching:
+>
+> `OSCAL_ELEMENT_PATH LIKE NODE_PATH || '%'`
+>
+> with the logical condition:
+>
+> `OSCAL_ELEMENT_PATH = NODE_PATH`
+>
+> OR
+>
+> `OSCAL_ELEMENT_PATH LIKE NODE_PATH || '.%'`
+>
+> Then continue selecting the deepest matching registered NODE_PATH.
+>
+> **Correction 3 — preserve DATA_TYPE.**
+>
+> Add existing CSV column `DATA_TYPE` to `canonical_mapping_df`.
+>
+> Do not change the 5 approved registry rows.
+> Do not add registry columns.
+> Do not add more nodes.
+> Do not change Cells 1 or 2.
+> Do not create hashes or UUIDs.
+> Do not build DIM or FACT.
+> Do not create Cell 4.
+>
+> After these three edits, rerun Cell 3 and show only:
+>
+> * canonical mapping count
+> * registry count
+> * usable mappings for CONFIG model
+> * mappings with no registered owner
+> * 10 ownership examples
+>
+> Then STOP.
+
+If after that we still get:
+
+```text
+608 canonical mappings
+5 registry nodes
+54 usable SSP mappings
+0 unmapped-to-owner SSP mappings
+```
+
+**Cell 3 is frozen.**
+
+No more architecture discussion in Cell 3.
+
+And yes, the five registry rows are currently embedded as Python data. That's okay for this first controlled test. We will later move the **registry data** to configuration/table/CSV without changing the engine logic. We do **not** need to block ourselves on that now.
+
+We finally have the key abstraction working:
+
+**mapping CSV = fields**
+**element registry = structure**
+**Python = generic mechanics**
+
+That is the reusable foundation.
