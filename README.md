@@ -1,103 +1,114 @@
-This output is exactly what we needed. It tells us **not to run POA&M through the mapper yet**.
+Yes. Since you are back in the **development/reference notebook**, do **not change any existing SSP cells**. Add **one new temporary cell at the very bottom**.
 
-Three important facts:
+Call it something like:
 
 ```text
-Authorization Packages       2165
-Packages with POAMS            536
-POA&M reference occurrences   2563
-Distinct POA&M ContentIds     1112
+POA&M Prep — Reference Graph
 ```
 
-So:
-
-1. We should **not create 2,165 POA&M roots**. Only 536 source records actually have POA&M references.
-2. More importantly, `2563 references` but only `1112 distinct ContentIds` means **the same POA&M ContentId is referenced by multiple Authorization Packages**.
-3. Before deciding the POA&M node identity, we need to understand that reuse. Otherwise we could accidentally duplicate one logical POA&M item many times.
-
-### Next step only — inspect shared POA&M ContentIds
-
-Run this read-only cell:
+Paste this:
 
 ```python
 # ============================================================
-# POA&M Cross-Package Reference Check
-# READ ONLY
+# POA&M Prep — Reference Graph
+# DEV / READ ONLY
 # ============================================================
 
-from collections import defaultdict
+from snowflake.snowpark.functions import col
 
-poam_usage = defaultdict(set)
-poam_occurrences = defaultdict(int)
+
+# ------------------------------------------------------------
+# 1. Find Authorization Packages that actually contain POAMS
+# ------------------------------------------------------------
+
+poam_source_ids = []
 
 for record in source_df.to_local_iterator():
 
-    source_record_id = str(record["SOURCE_RECORD_ID"])
-
     source_obj = _parse_source_json(record)
-    value = resolve_json_path(source_obj, "POAMS")
+    poams = resolve_json_path(source_obj, "POAMS")
 
-    if value in (None, "", [], {}):
-        continue
-
-    items = value if isinstance(value, list) else [value]
-
-    for item in items:
-
-        if isinstance(item, dict):
-            content_id = item.get("ContentId")
-        else:
-            content_id = item
-
-        if content_id is None:
-            continue
-
-        content_id = str(content_id)
-
-        poam_usage[content_id].add(source_record_id)
-        poam_occurrences[content_id] += 1
+    if poams not in (None, "", [], {}):
+        poam_source_ids.append(
+            str(record["SOURCE_RECORD_ID"])
+        )
 
 
-shared = [
-    (
-        content_id,
-        len(source_records),
-        poam_occurrences[content_id]
+# ------------------------------------------------------------
+# 2. Filter source to only packages containing POA&M refs
+# ------------------------------------------------------------
+
+poam_source_df = (
+    source_df
+    .filter(
+        col("SOURCE_RECORD_ID").isin(
+            *poam_source_ids
+        )
     )
-    for content_id, source_records in poam_usage.items()
-    if len(source_records) > 1
-]
-
-shared.sort(
-    key=lambda x: x[1],
-    reverse=True
 )
 
 
-print("=== POA&M CROSS-PACKAGE REUSE ===")
-print("Distinct ContentIds        :", len(poam_usage))
-print("Shared by multiple packages:", len(shared))
+# ------------------------------------------------------------
+# 3. POA&M mappings only
+# ------------------------------------------------------------
 
-print("\n=== TOP SHARED POA&M IDs ===")
-
-for content_id, package_count, occurrences in shared[:20]:
-    print(
-        "ContentId:", content_id,
-        "| Packages:", package_count,
-        "| Occurrences:", occurrences
+poam_mapping_df = (
+    canonical_mapping_df
+    .filter(
+        col("OSCAL_ELEMENT_PATH").startswith(
+            "plan-of-action-and-milestones"
+        )
     )
+)
+
+
+# ------------------------------------------------------------
+# 4. Active POA&M registry only
+# ------------------------------------------------------------
+
+poam_registry_df = (
+    session.table(CONFIG["REGISTRY_TABLE"])
+    .filter(
+        (col("OSCAL_MODEL_KEY") == "POAM")
+        & (col("IS_ACTIVE") == True)
+    )
+)
+
+
+# ------------------------------------------------------------
+# 5. Verify
+# ------------------------------------------------------------
+
+print("=== POA&M DEV INPUTS ===")
+print("Source packages with POAMS :", poam_source_df.count())
+print("POA&M mapping rows         :", poam_mapping_df.count())
+print("POA&M registry rows        :", poam_registry_df.count())
 ```
 
-Why I'm stopping here first: our current generic collection key would effectively be:
+We expect exactly:
 
 ```text
-AuthorizationPackageID + POAM ContentId
+Source packages with POAMS : 536
+POA&M mapping rows         : 1
+POA&M registry rows        : 2
 ```
 
-If `ContentId 566742` belongs to 10 different Authorization Packages, that would create **10 separate POA&M item nodes**.
+### What we are doing
 
-That may be correct, or `566742` may actually be **one reusable POA&M entity** that should exist once and be related to several packages. We need the actual data to answer that instead of guessing.
+We are **not changing SSP** and not writing anything yet.
 
-Also, your result confirms another improvement we'll eventually make to the generic mapper: an empty OSCAL root should not be created when neither it nor any descendant has data. That would give POA&M approximately **536 roots rather than 2,165**, assuming the root is package-scoped.
+We're preparing:
 
-Run this reuse check next. Then we can make the POA&M identity decision correctly.
+```text
+536 Authorization Packages containing POAMS
+            ↓
+plan-of-action-and-milestones
+            ↓
+poam-items[]
+            ↓
+{"ContentId": ..., "LevelId": 346}
+```
+
+And importantly, the other **1,629 Authorization Packages will not get empty POA&M roots**.
+
+Run this one cell and show me the three counts. Then we'll feed these three dataframes into the same generic graph builder — no separate POA&M mapping code.
