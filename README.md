@@ -1,120 +1,75 @@
-Perfect — this proves the **clean production execution path** works end-to-end in dry-run mode:
+Exactly. **Parameterization can wait. The mapper is proven; now we use it to onboard the other OSCAL models.**
+
+And we should **not write another mapper**. From here the work is:
 
 ```text
-Nodes      : 92,880
-Edges      : 90,715
-Validation : PASSED
-Writes     : False
+Same generic mapper
+        +
+different mapping paths
+        +
+registry rows
+        =
+next OSCAL model
 ```
 
-So yes: **freeze Cells 1–5.** The old SSP notebook is now reference/evidence only, not part of production execution.
+I recommend we do the models one at a time, starting from what is actually present in your 608-row mapping—not from assumptions.
 
-### Next step: add post-load verification — without creating another cell
+### Next step only: inventory the remaining OSCAL roots
 
-Put this function at the **bottom of Cell 6**, after `validate_and_load_oscal()`:
+Run this read-only cell in the **old/reference notebook or a temporary cell in the mapper**:
 
 ```python
-def verify_oscal_load(
-    canonical_nodes_df,
-    canonical_edges_df,
-    config
-):
-    """
-    Verify that every node/edge produced by this run
-    exists in the target DIM/FACT tables.
-    """
+# ============================================================
+# Remaining OSCAL Model / Root Inventory
+# READ ONLY
+# ============================================================
 
-    expected_dim = canonical_nodes_df.count()
-    expected_fact = canonical_edges_df.count()
+from collections import Counter
 
-    canonical_nodes_df.select(
-        col("NODE_KEY").alias("PK_OSCAL_SSP_ELEMENT_HASH")
-    ).create_or_replace_temp_view(
-        "TMP_OSCAL_VERIFY_DIM"
-    )
+root_counts = Counter()
 
-    canonical_edges_df.select(
-        col("EDGE_KEY").alias("PK_FACT_OSCAL_DEPENDENCY_HASH")
-    ).create_or_replace_temp_view(
-        "TMP_OSCAL_VERIFY_FACT"
-    )
+for row in canonical_mapping_df.select(
+    "OSCAL_ELEMENT_PATH"
+).collect():
 
-    dim_matches = session.sql(f"""
-        SELECT COUNT(*) AS CNT
-        FROM TMP_OSCAL_VERIFY_DIM s
-        JOIN {config["TARGET_DIM"]} t
-          ON s.PK_OSCAL_SSP_ELEMENT_HASH
-           = t.PK_OSCAL_SSP_ELEMENT_HASH
-    """).collect()[0]["CNT"]
+    path = row["OSCAL_ELEMENT_PATH"]
 
-    fact_matches = session.sql(f"""
-        SELECT COUNT(*) AS CNT
-        FROM TMP_OSCAL_VERIFY_FACT s
-        JOIN {config["TARGET_FACT"]} t
-          ON s.PK_FACT_OSCAL_DEPENDENCY_HASH
-           = t.PK_FACT_OSCAL_DEPENDENCY_HASH
-    """).collect()[0]["CNT"]
+    if not path:
+        continue
 
-    print("\n=== Post-Load Verification ===")
-    print("DIM expected :", expected_dim)
-    print("DIM matched  :", dim_matches)
-    print("FACT expected:", expected_fact)
-    print("FACT matched :", fact_matches)
+    root = str(path).split(".")[0]
 
-    if (
-        dim_matches != expected_dim
-        or fact_matches != expected_fact
-    ):
-        raise ValueError(
-            "OSCAL post-load verification FAILED"
-        )
+    root_counts[root] += 1
 
-    print("LOAD VERIFIED")
 
-    return {
-        "dim_expected": expected_dim,
-        "dim_matched": dim_matches,
-        "fact_expected": expected_fact,
-        "fact_matched": fact_matches
-    }
+print("=== OSCAL ROOT INVENTORY ===")
+
+for root, count in sorted(root_counts.items()):
+    print(f"{root:45} {count}")
 ```
 
-Then in **Cell 7**, immediately after:
-
-```python
-result = validate_and_load_oscal(
-    canonical_nodes_df=nodes_df,
-    canonical_edges_df=edges_df,
-    config=config
-)
-```
-
-add:
-
-```python
-if result["writes_executed"]:
-    result["verification"] = verify_oscal_load(
-        nodes_df,
-        edges_df,
-        config
-    )
-```
-
-That's all.
-
-Keep:
-
-```python
-"EXECUTE_WRITES": False
-```
-
-for this run and use **Run All** again. It should still finish at:
+This should expose roots such as, depending on the actual CSV:
 
 ```text
-Nodes : 92880
-Edges : 90715
-Validation PASSED
-Writes: False
+system-security-plan
+assessment-plan
+assessment-results
+plan-of-action-and-milestones
+...
 ```
 
-The verification won't execute yet. Once that passes, the next move is turning writes on for the first production-mapper test.
+Then we choose the **next root from the real mapping** and do exactly what worked for SSP:
+
+```text
+1. inspect its mapped hierarchy
+2. inspect actual Archer values where identity is unclear
+3. populate registry
+4. run the SAME mapper
+5. validate DIM + FACT
+```
+
+No new 700-line notebook. No model-specific Python.
+
+And yes, we already learned something about POA&M: `POAMS` in the Authorization Package is a list of `{ContentId, LevelId}` references. So when we get to POA&M, we must distinguish **the Auth Package → POA&M relationship** from the actual **POA&M document contents**. We won't pretend those references are the whole POA&M.
+
+Run this root inventory next and send me the output. Then I’ll tell you which model I recommend we onboard first.
