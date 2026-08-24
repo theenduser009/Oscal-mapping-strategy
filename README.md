@@ -1,82 +1,86 @@
-Right now, for SSP, we are **2 structural levels below the SSP root**, and some mapped JSON fields go **one level deeper inside those nodes**.
+This is a very useful result. Now we can say something much stronger about the **actual Archer data**, not just the OSCAL registry.
+
+Your raw Authorization Package has:
 
 ```text
-Level 0  system-security-plan
-│
-├── Level 1  metadata
-│      ├── Level 2  document-ids[]
-│      │      └── Level 3  identifier          ← JSON field
-│      └── Level 2  responsible-parties[]
-│
-├── Level 1  system-characteristics
-│      ├── Level 2  authorization-boundary
-│      │      └── Level 3  description         ← JSON field
-│      ├── Level 2  security-impact-level
-│      │      ├── Level 3  confidentiality
-│      │      ├── Level 3  integrity
-│      │      └── Level 3  availability
-│      ├── Level 2  status
-│      │      ├── Level 3  state
-│      │      └── Level 3  remarks
-│      ├── Level 2  system-ids[]
-│      │      └── Level 3  id
-│      └── Level 2  props[]
-│
-└── Level 1  system-implementation
-       └── Level 2  components[]
+Populated raw fields     : 393
+Already present in mapping: 388
+Populated but unmapped     : 5
 ```
 
-So there are **two different answers**:
-
-**DIM/FACT graph depth:** currently through **Level 2**.
-Example:
+The only populated source fields outside the mapping are:
 
 ```text
-SSP
-→ system-characteristics
-→ status
+INHERENT_RISK_OVERALL_SCORE                         2165 records
+FIELD_31745                                         2165
+FIELD_31744                                          531
+HELPER_BUSINESS_CRITICALITY_MOST_RECENT_OVERALL_SCORE 13
+FIELD_31747                                            6
 ```
 
-`status` is a DIM node and both arrows are FACT relationships.
+So we should **not start exploding hundreds of fields again**. We have reduced the actual source-data gap to these five.
 
-**Mapping/payload depth:** currently reaches **Level 3** in places.
-Example:
+Also, don't automatically map these five into SSP. Names like `HELPER_...` or risk scores may be Archer operational/calculated fields rather than OSCAL SSP content. And `FIELD_31745`, etc. are opaque, so we need to see what they actually contain before deciding.
+
+### Next step only: inspect these five
+
+Run this read-only cell:
+
+```python
+# ============================================================
+# Inspect populated unmapped Archer fields
+# READ ONLY
+# ============================================================
+
+UNMAPPED_FIELDS = [
+    "INHERENT_RISK_OVERALL_SCORE",
+    "FIELD_31745",
+    "FIELD_31744",
+    "HELPER_BUSINESS_CRITICALITY_MOST_RECENT_OVERALL_SCORE",
+    "FIELD_31747"
+]
+
+for field_name in UNMAPPED_FIELDS:
+
+    print("\n" + "=" * 80)
+    print("FIELD:", field_name)
+
+    samples = 0
+
+    for record in source_df.to_local_iterator():
+
+        source_obj = _parse_source_json(record)
+
+        value = resolve_json_path(
+            source_obj,
+            field_name
+        )
+
+        if value in (None, "", [], {}):
+            continue
+
+        print(
+            "SOURCE_RECORD_ID:",
+            record["SOURCE_RECORD_ID"]
+        )
+        print("TYPE :", type(value).__name__)
+        print("VALUE:", str(value)[:1000])
+
+        samples += 1
+
+        if samples >= 5:
+            break
+
+    print("Samples found:", samples)
+```
+
+Then we classify each one as either:
 
 ```text
-SSP
-→ system-characteristics
-→ status
-→ state
+Should map to SSP
+Should map to another OSCAL model
+Archer helper/calculated field — intentionally excluded
+Unknown — mapping team needs to identify it
 ```
 
-But `state` is not another DIM node; it lives inside the `status` JSON.
-
-And here's the key: **we have not yet proven from the raw Archer data that Level 3 is the deepest SSP-related data available.** We only proved it is the deepest level represented by the SSP mappings we've processed so far.
-
-So the next comprehensive audit should answer:
-
-```text
-Actual Archer data
-     ↓
-all SSP-related mapped fields
-     ↓
-Level 0
-Level 1
-Level 2
-Level 3
-Level 4?
-Level 5?
-...
-```
-
-That's the audit I would do next. If we discover something like:
-
-```text
-Level 2 implemented-requirements[]
-    → Level 3 statements[]
-        → Level 4 by-components[]
-```
-
-then we'll know we need to extend the registry and, importantly, handle **collection → collection lineage** generically.
-
-**Current proven point: structural Level 2, mapped leaf Level 3.**
+One important clarification: this 393-vs-388 audit proves **top-level Archer field coverage**. Our separate SSP path audit already proved the mapped SSP hierarchy has `0` missing structural nodes. Together, these two checks are getting us very close to genuinely saying: **we examined the actual data and the SSP mapping end-to-end**, rather than simply trusting the CSV.
