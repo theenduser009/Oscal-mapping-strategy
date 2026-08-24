@@ -1,351 +1,94 @@
-Excellent — **Cell 5 reproduced the exact verified baseline**:
+Perfect. ✅ Cell 6 is now proven and should be frozen.
 
-```text
-Canonical nodes : 92,880
-Canonical edges : 90,715
-```
+We are at the final production step: **Cell 7 = one orchestrator function**. This is what Matillion will eventually call conceptually.
 
-So the new production `build_oscal_graph()` function is proven. **Freeze Cells 1–5 now.** 🔒
-
-Next is **Cell 6 only: reusable validation + gated load**. Because `EXECUTE_WRITES=False`, the first run will validate everything but will not touch DIM/FACT.
+For now, keep `EXECUTE_WRITES=False`.
 
 ```python
 # ============================================================
-# Cell 6 — Validate + Load OSCAL Graph
-# PRODUCTION / REUSABLE
+# Cell 7 — Production OSCAL Mapper Orchestrator
 # ============================================================
 
-from snowflake.snowpark.functions import col, current_timestamp, lit
-
-
-def validate_and_load_oscal(
-    canonical_nodes_df,
-    canonical_edges_df,
+def run_oscal_mapping(
+    source_df,
+    canonical_mapping_df,
+    element_registry_df,
     config
 ):
+    """
+    Execute one complete metadata-driven OSCAL mapping run.
 
-    # --------------------------------------------------------
-    # A. Validation
-    # --------------------------------------------------------
+    Flow:
+        1. Build canonical OSCAL graph
+        2. Validate graph
+        3. Load DIM/FACT only when EXECUTE_WRITES=True
 
-    node_count = canonical_nodes_df.count()
-    edge_count = canonical_edges_df.count()
-
-    null_node_keys = (
+    Returns:
         canonical_nodes_df
-        .filter(col("NODE_KEY").is_null())
-        .count()
-    )
-
-    duplicate_node_keys = (
-        canonical_nodes_df
-        .group_by("NODE_KEY")
-        .count()
-        .filter(col("COUNT") > 1)
-        .count()
-    )
-
-    null_edge_keys = (
         canonical_edges_df
-        .filter(col("EDGE_KEY").is_null())
-        .count()
+        load_result
+    """
+
+    print("=" * 70)
+    print("OSCAL MAPPING RUN")
+    print("Model :", config["OSCAL_MODEL"])
+    print("Run ID:", config["RUN_ID"])
+    print("=" * 70)
+
+    # --------------------------------------------------------
+    # 1. Build graph
+    # --------------------------------------------------------
+
+    nodes_df, edges_df = build_oscal_graph(
+        source_df=source_df,
+        canonical_mapping_df=canonical_mapping_df,
+        element_registry_df=element_registry_df,
+        model_key=config["OSCAL_MODEL"],
+        source_system=config["SOURCE_SYSTEM_NAME"],
+        source_table=config["SOURCE_TABLE_NAME"]
     )
 
-    duplicate_edge_keys = (
-        canonical_edges_df
-        .group_by("EDGE_KEY")
-        .count()
-        .filter(col("COUNT") > 1)
-        .count()
+    # --------------------------------------------------------
+    # 2. Validate / optionally load
+    # --------------------------------------------------------
+
+    result = validate_and_load_oscal(
+        canonical_nodes_df=nodes_df,
+        canonical_edges_df=edges_df,
+        config=config
     )
 
+    print("\n" + "=" * 70)
+    print("OSCAL MAPPING RUN COMPLETE")
+    print("Nodes :", result["nodes"])
+    print("Edges :", result["edges"])
+    print("Writes:", result["writes_executed"])
+    print("=" * 70)
 
-    node_keys_df = canonical_nodes_df.select(
-        col("NODE_KEY")
-    ).distinct()
-
-
-    missing_parents = (
-        canonical_edges_df
-        .select(
-            col("SOURCE_NODE_KEY").alias("NODE_KEY")
-        )
-        .join(
-            node_keys_df,
-            ["NODE_KEY"],
-            "left_anti"
-        )
-        .count()
-    )
-
-
-    missing_children = (
-        canonical_edges_df
-        .select(
-            col("TARGET_NODE_KEY").alias("NODE_KEY")
-        )
-        .join(
-            node_keys_df,
-            ["NODE_KEY"],
-            "left_anti"
-        )
-        .count()
-    )
-
-
-    print("=== OSCAL Graph Validation ===")
-    print("Nodes               :", node_count)
-    print("Edges               :", edge_count)
-    print("Null node keys      :", null_node_keys)
-    print("Duplicate node keys :", duplicate_node_keys)
-    print("Null edge keys      :", null_edge_keys)
-    print("Duplicate edge keys :", duplicate_edge_keys)
-    print("Missing parents     :", missing_parents)
-    print("Missing children    :", missing_children)
-
-
-    validation_errors = sum([
-        null_node_keys,
-        duplicate_node_keys,
-        null_edge_keys,
-        duplicate_edge_keys,
-        missing_parents,
-        missing_children
-    ])
-
-
-    if validation_errors != 0:
-        raise ValueError(
-            "OSCAL graph validation FAILED"
-        )
-
-
-    print("\nValidation PASSED")
-
-
-    # --------------------------------------------------------
-    # B. Respect write gate
-    # --------------------------------------------------------
-
-    if not config["EXECUTE_WRITES"]:
-
-        print("\n=== WRITE GATE ===")
-        print("EXECUTE_WRITES = False")
-        print("No DIM/FACT changes were made.")
-
-        return {
-            "nodes": node_count,
-            "edges": edge_count,
-            "validation_passed": True,
-            "writes_executed": False
-        }
-
-
-    # --------------------------------------------------------
-    # C. Prepare DIM load
-    # --------------------------------------------------------
-
-    dim_load_df = (
-        canonical_nodes_df
-        .select(
-            col("NODE_KEY")
-                .alias("PK_OSCAL_SSP_ELEMENT_HASH"),
-
-            col("ELEMENT_TYPE"),
-
-            col("OSCAL_UUID"),
-
-            col("ELEMENT_JSON")
-                .alias("METADATA_JSON"),
-
-            col("SOURCE_SYSTEM_NAME"),
-
-            col("SOURCE_TABLE_NAME"),
-
-            col("SOURCE_RECORD_ID"),
-
-            lit(config["RUN_ID"])
-                .alias("DW_PIPELINE_RUN_ID"),
-
-            current_timestamp()
-                .alias("DW_LOAD_TIMESTAMP"),
-
-            current_timestamp()
-                .alias("DW_LOAD_TIMESTAMP_TZ")
-        )
-    )
-
-
-    # --------------------------------------------------------
-    # D. Prepare FACT load
-    # --------------------------------------------------------
-
-    fact_load_df = (
-        canonical_edges_df
-        .select(
-            col("EDGE_KEY")
-                .alias("PK_FACT_OSCAL_DEPENDENCY_HASH"),
-
-            col("SOURCE_NODE_KEY")
-                .alias("FK_SOURCE_ELEMENT_HASH"),
-
-            col("TARGET_NODE_KEY")
-                .alias("FK_TARGET_ELEMENT_HASH"),
-
-            col("DEPENDENCY_TYPE"),
-
-            col("SOURCE_OSCAL_UUID"),
-
-            col("TARGET_OSCAL_UUID")
-        )
-    )
-
-
-    # --------------------------------------------------------
-    # E. Temporary views used by MERGE
-    # --------------------------------------------------------
-
-    dim_load_df.create_or_replace_temp_view(
-        "TMP_OSCAL_DIM_LOAD"
-    )
-
-    fact_load_df.create_or_replace_temp_view(
-        "TMP_OSCAL_FACT_LOAD"
-    )
-
-
-    # --------------------------------------------------------
-    # F. Idempotent DIM MERGE
-    # --------------------------------------------------------
-
-    dim_merge_result = session.sql(f"""
-        MERGE INTO {config["TARGET_DIM"]} t
-        USING TMP_OSCAL_DIM_LOAD s
-
-        ON t.PK_OSCAL_SSP_ELEMENT_HASH
-         = s.PK_OSCAL_SSP_ELEMENT_HASH
-
-        WHEN MATCHED THEN UPDATE SET
-            t.ELEMENT_TYPE = s.ELEMENT_TYPE,
-            t.OSCAL_UUID = s.OSCAL_UUID,
-            t.METADATA_JSON = s.METADATA_JSON,
-            t.SOURCE_SYSTEM_NAME = s.SOURCE_SYSTEM_NAME,
-            t.SOURCE_TABLE_NAME = s.SOURCE_TABLE_NAME,
-            t.SOURCE_RECORD_ID = s.SOURCE_RECORD_ID,
-            t.DW_PIPELINE_RUN_ID = s.DW_PIPELINE_RUN_ID,
-            t.DW_LOAD_TIMESTAMP = s.DW_LOAD_TIMESTAMP,
-            t.DW_LOAD_TIMESTAMP_TZ = s.DW_LOAD_TIMESTAMP_TZ
-
-        WHEN NOT MATCHED THEN INSERT (
-            PK_OSCAL_SSP_ELEMENT_HASH,
-            ELEMENT_TYPE,
-            OSCAL_UUID,
-            METADATA_JSON,
-            SOURCE_SYSTEM_NAME,
-            SOURCE_TABLE_NAME,
-            SOURCE_RECORD_ID,
-            DW_PIPELINE_RUN_ID,
-            DW_LOAD_TIMESTAMP,
-            DW_LOAD_TIMESTAMP_TZ
-        )
-        VALUES (
-            s.PK_OSCAL_SSP_ELEMENT_HASH,
-            s.ELEMENT_TYPE,
-            s.OSCAL_UUID,
-            s.METADATA_JSON,
-            s.SOURCE_SYSTEM_NAME,
-            s.SOURCE_TABLE_NAME,
-            s.SOURCE_RECORD_ID,
-            s.DW_PIPELINE_RUN_ID,
-            s.DW_LOAD_TIMESTAMP,
-            s.DW_LOAD_TIMESTAMP_TZ
-        )
-    """).collect()
-
-
-    # --------------------------------------------------------
-    # G. Idempotent FACT MERGE
-    # --------------------------------------------------------
-
-    fact_merge_result = session.sql(f"""
-        MERGE INTO {config["TARGET_FACT"]} t
-        USING TMP_OSCAL_FACT_LOAD s
-
-        ON t.PK_FACT_OSCAL_DEPENDENCY_HASH
-         = s.PK_FACT_OSCAL_DEPENDENCY_HASH
-
-        WHEN MATCHED THEN UPDATE SET
-            t.FK_SOURCE_ELEMENT_HASH =
-                s.FK_SOURCE_ELEMENT_HASH,
-
-            t.FK_TARGET_ELEMENT_HASH =
-                s.FK_TARGET_ELEMENT_HASH,
-
-            t.DEPENDENCY_TYPE =
-                s.DEPENDENCY_TYPE,
-
-            t.SOURCE_OSCAL_UUID =
-                s.SOURCE_OSCAL_UUID,
-
-            t.TARGET_OSCAL_UUID =
-                s.TARGET_OSCAL_UUID
-
-        WHEN NOT MATCHED THEN INSERT (
-            PK_FACT_OSCAL_DEPENDENCY_HASH,
-            FK_SOURCE_ELEMENT_HASH,
-            FK_TARGET_ELEMENT_HASH,
-            DEPENDENCY_TYPE,
-            SOURCE_OSCAL_UUID,
-            TARGET_OSCAL_UUID
-        )
-        VALUES (
-            s.PK_FACT_OSCAL_DEPENDENCY_HASH,
-            s.FK_SOURCE_ELEMENT_HASH,
-            s.FK_TARGET_ELEMENT_HASH,
-            s.DEPENDENCY_TYPE,
-            s.SOURCE_OSCAL_UUID,
-            s.TARGET_OSCAL_UUID
-        )
-    """).collect()
-
-
-    print("\n=== MERGE COMPLETE ===")
-    print("DIM :", dim_merge_result)
-    print("FACT:", fact_merge_result)
-
-
-    return {
-        "nodes": node_count,
-        "edges": edge_count,
-        "validation_passed": True,
-        "writes_executed": True,
-        "dim_merge_result": dim_merge_result,
-        "fact_merge_result": fact_merge_result
-    }
+    return nodes_df, edges_df, result
 
 
 # ============================================================
-# Execute
+# Execute configured model
 # ============================================================
 
-load_result = validate_and_load_oscal(
-    canonical_nodes_df,
-    canonical_edges_df,
-    CONFIG
+final_nodes_df, final_edges_df, run_result = run_oscal_mapping(
+    source_df=source_df,
+    canonical_mapping_df=canonical_mapping_df,
+    element_registry_df=element_registry_df,
+    config=CONFIG
 )
 ```
 
-Because Cell 1 currently has:
-
-```python
-"EXECUTE_WRITES": False
-```
-
-the expected ending is:
+Expected result:
 
 ```text
-Nodes               : 92880
-Edges               : 90715
+OSCAL MAPPING RUN
+Model : SSP
+
+Nodes : 92880
+Edges : 90715
+
 Null node keys      : 0
 Duplicate node keys : 0
 Null edge keys      : 0
@@ -357,6 +100,21 @@ Validation PASSED
 
 EXECUTE_WRITES = False
 No DIM/FACT changes were made.
+
+OSCAL MAPPING RUN COMPLETE
+Nodes : 92880
+Edges : 90715
+Writes: False
 ```
 
-Run **Cell 6 only**. If that matches, we freeze the validation/load function too.
+This is the important architectural milestone: the caller no longer needs to understand `props[]`, `responsible-parties[]`, `components[]`, SSP hierarchy, hashes, or parent/child FACT construction.
+
+Eventually the caller simply runs:
+
+```python
+run_oscal_mapping(...)
+```
+
+while the **mapping CSV + element registry drive the model**.
+
+Run Cell 7. If it reproduces **92,880 / 90,715**, we freeze it. Then we do one final cleanup pass so Cells 5 and 6 only define functions rather than also executing them independently.
