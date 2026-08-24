@@ -1,84 +1,103 @@
-Excellent — **the backward-compatibility test passed exactly.** ✅
+Excellent — **76,083 DIM and 73,918 FACT is now our new verified SSP baseline.** ✅
+
+We have only one unresolved SSP branch from the current mapping inventory:
 
 ```text
-Before ITEM_PATH enhancement:
-Nodes = 66,118
-Edges = 63,953
-
-After ITEM_PATH enhancement:
-Nodes = 66,118
-Edges = 63,953
+system-security-plan.system-characteristics.props[]
 ```
 
-So we did **not break any existing SSP behavior**. The generic engine now understands the new metadata contract.
+Before registering it, we need one very specific check: **can one Archer source field produce multiple prop values for the same SSP?**
 
-### Next step: register `responsible-parties[]`
-
-Use one SQL cell:
-
-```sql
-MERGE INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY t
-USING (
-    SELECT
-        'SSP' AS OSCAL_MODEL_KEY,
-        'system-security-plan.metadata.responsible-parties[]' AS NODE_PATH,
-        'responsible-parties' AS ELEMENT_TYPE,
-        'system-security-plan.metadata' AS PARENT_NODE_PATH,
-        TRUE AS IS_COLLECTION,
-        'SOURCE_FIELD_NAME+ID' AS INSTANCE_KEY_RULE,
-        3 AS PROCESS_ORDER,
-        TRUE AS IS_ACTIVE,
-        'UserList[]' AS ITEM_PATH
-) s
-
-ON  t.OSCAL_MODEL_KEY = s.OSCAL_MODEL_KEY
-AND t.NODE_PATH = s.NODE_PATH
-
-WHEN MATCHED THEN UPDATE SET
-    t.ELEMENT_TYPE      = s.ELEMENT_TYPE,
-    t.PARENT_NODE_PATH  = s.PARENT_NODE_PATH,
-    t.IS_COLLECTION     = s.IS_COLLECTION,
-    t.INSTANCE_KEY_RULE = s.INSTANCE_KEY_RULE,
-    t.PROCESS_ORDER     = s.PROCESS_ORDER,
-    t.IS_ACTIVE         = s.IS_ACTIVE,
-    t.ITEM_PATH         = s.ITEM_PATH
-
-WHEN NOT MATCHED THEN INSERT (
-    OSCAL_MODEL_KEY,
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    PROCESS_ORDER,
-    IS_ACTIVE,
-    ITEM_PATH
-)
-VALUES (
-    s.OSCAL_MODEL_KEY,
-    s.NODE_PATH,
-    s.ELEMENT_TYPE,
-    s.PARENT_NODE_PATH,
-    s.IS_COLLECTION,
-    s.INSTANCE_KEY_RULE,
-    s.PROCESS_ORDER,
-    s.IS_ACTIVE,
-    s.ITEM_PATH
-);
-```
-
-This tells the engine generically:
+That determines whether the generic identity can simply be:
 
 ```text
-Source role field
-    ↓
-UserList[]
-    ↓
-each User object becomes an instance
-    ↓
-identity = SOURCE_FIELD_NAME + User.Id
+SOURCE_FIELD_NAME
 ```
 
-That preserves those **286 cases where the same user serves multiple roles** instead of incorrectly collapsing them.
+or must be:
 
-Run only this SQL next. After it inserts the row, we'll refresh Cell 3 and run Cell 5 unchanged to see the exact number of new responsible-party nodes.
+```text
+SOURCE_FIELD_NAME + VALUE
+```
+
+### Next cell — props identity check only
+
+```python
+# ============================================================
+# Validate props[] instance identity
+# READ ONLY
+# ============================================================
+
+from snowflake.snowpark.functions import col
+
+NODE_PATH = "system-security-plan.system-characteristics.props[]"
+
+prop_fields = [
+    r["SOURCE_FIELD_NAME"]
+    for r in (
+        canonical_mapping_df
+        .filter(col("OSCAL_ELEMENT_PATH") == NODE_PATH)
+        .select("SOURCE_FIELD_NAME")
+        .distinct()
+        .collect()
+    )
+]
+
+total_instances = 0
+multi_value_cases = []
+max_items = 0
+
+for record in source_df.to_local_iterator():
+
+    source_obj = _parse_source_json(record)
+    source_record_id = str(record["SOURCE_RECORD_ID"])
+
+    for source_field in prop_fields:
+
+        value = resolve_json_path(source_obj, source_field)
+
+        if value in (None, "", [], {}):
+            continue
+
+        values = value if isinstance(value, list) else [value]
+
+        total_instances += len(values)
+        max_items = max(max_items, len(values))
+
+        if len(values) > 1:
+            multi_value_cases.append(
+                (
+                    source_record_id,
+                    source_field,
+                    values
+                )
+            )
+
+
+print("=== props[] Identity Check ===")
+print("Mapped prop fields:", len(prop_fields))
+print("Total prop instances:", total_instances)
+print("Maximum items from one field:", max_items)
+print("Multi-value field occurrences:", len(multi_value_cases))
+
+if multi_value_cases:
+    print("\n=== Sample Multi-Value Cases ===")
+
+    for record_id, field, values in multi_value_cases[:10]:
+        print(
+            "SOURCE_RECORD_ID:", record_id,
+            "| FIELD:", field,
+            "| VALUES:", values
+        )
+```
+
+The key output is:
+
+```text
+Maximum items from one field: ?
+Multi-value field occurrences: ?
+```
+
+If max is `1`, we can safely make each mapped Archer field one `props[]` instance using `SOURCE_FIELD_NAME` as its deterministic identity.
+
+Run this only, then send me the result.
