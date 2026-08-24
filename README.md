@@ -1,39 +1,31 @@
-Excellent — this is **exactly the expected POA&M graph**. ✅
+Perfect. ✅ The POA&M graph itself is now proven:
 
 ```text
-536 POA&M roots
-2,563 poam-items[] references
-
-Total nodes = 3,099
-Total edges = 2,563
+Nodes               : 3,099
+Edges               : 2,563
+Null/duplicate keys : 0
+Missing parents     : 0
+Missing children    : 0
+Validation PASSED
+Writes              : False
 ```
 
-And the relationship is correct:
+So **do not turn writes on yet**. The graph logic needs no change.
 
-```text
-plan-of-action-and-milestones
-        |
-        | parent_of
-        v
-plan-of-action-and-milestones.poam-items[]
-```
+The next step is to make the **generic loader** understand that POA&M has different PK column names than SSP. We should solve this once, generically, rather than put POA&M-specific SQL in the loader.
 
-This is also proof that **the same generic `build_oscal_graph()` works for POA&M**. We did not write a POA&M-specific graph builder.
+### Next step only
 
-### Next step only: validate this graph
-
-Don't write anything yet. Add one temporary cell immediately below your POA&M graph test:
+In your temporary `POAM_CONFIG`, add these two values:
 
 ```python
-# ============================================================
-# POA&M Graph Validation
-# READ ONLY
-# ============================================================
+POAM_CONFIG["DIM_PK_COLUMN"] = "PK_DIM_OSCAL_POAM_ELEMENT_HASH"
+POAM_CONFIG["FACT_PK_COLUMN"] = "PK_FACT_OSCAL_POAM_DEPENDENCY_HASH"
+```
 
-POAM_CONFIG = dict(CONFIG)
+So that section becomes:
 
-POAM_CONFIG["OSCAL_MODEL"] = "POAM"
-
+```python
 POAM_CONFIG["TARGET_DIM"] = (
     "RTX_ENTERPRISESERVICES_DEV."
     "ES_ESC_GRC_CURATED."
@@ -46,41 +38,21 @@ POAM_CONFIG["TARGET_FACT"] = (
     "FACT_OSCAL_POAM_DEPENDENCY"
 )
 
+POAM_CONFIG["DIM_PK_COLUMN"] = "PK_DIM_OSCAL_POAM_ELEMENT_HASH"
+POAM_CONFIG["FACT_PK_COLUMN"] = "PK_FACT_OSCAL_POAM_DEPENDENCY_HASH"
+
 POAM_CONFIG["EXECUTE_WRITES"] = False
-
-
-poam_validation = validate_and_load_oscal(
-    canonical_nodes_df=poam_nodes_df,
-    canonical_edges_df=poam_edges_df,
-    config=POAM_CONFIG
-)
 ```
 
-We want:
+**Just add those two lines for now. Don't run with `True`.**
 
-```text
-Nodes               : 3099
-Edges               : 2563
-Null node keys      : 0
-Duplicate node keys : 0
-Null edge keys      : 0
-Duplicate edge keys : 0
-Missing parents     : 0
-Missing children    : 0
+After that, we'll make one small generic change inside `validate_and_load_oscal()` so it uses:
 
-Validation PASSED
-
-EXECUTE_WRITES = False
-No DIM/FACT changes were made.
+```python
+config["DIM_PK_COLUMN"]
+config["FACT_PK_COLUMN"]
 ```
 
-**Do not turn writes on yet.**
+instead of assuming the SSP PK names.
 
-After this passes, our next step is specifically to make the loader recognize the POA&M PK names:
-
-```text
-PK_DIM_OSCAL_POAM_ELEMENT_HASH
-PK_FACT_OSCAL_POAM_DEPENDENCY_HASH
-```
-
-without hardcoding POA&M logic into the mapper. That is the only remaining piece before we can load these 3,099 / 2,563 rows.
+That will make the same loader work for **SSP, POA&M, and the models we add later**.
