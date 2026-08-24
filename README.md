@@ -1,86 +1,101 @@
-This is a very useful result. Now we can say something much stronger about the **actual Archer data**, not just the OSCAL registry.
+Yes — understood. For POA&M we will use only these target columns.
 
-Your raw Authorization Package has:
-
-```text
-Populated raw fields     : 393
-Already present in mapping: 388
-Populated but unmapped     : 5
-```
-
-The only populated source fields outside the mapping are:
+**DIM_OSCAL_POAM_ELEMENT**
 
 ```text
-INHERENT_RISK_OVERALL_SCORE                         2165 records
-FIELD_31745                                         2165
-FIELD_31744                                          531
-HELPER_BUSINESS_CRITICALITY_MOST_RECENT_OVERALL_SCORE 13
-FIELD_31747                                            6
+PK_DIM_OSCAL_POAM_ELEMENT_HASH
+ELEMENT_TYPE
+OSCAL_UUID
+METADATA_JSON
+SOURCE_SYSTEM_NAME
+SOURCE_TABLE_NAME
+SOURCE_RECORD_ID
+DW_LOAD_TIMESTAMP
+DW_PIPELINE_RUN_ID
 ```
 
-So we should **not start exploding hundreds of fields again**. We have reduced the actual source-data gap to these five.
+**FACT_OSCAL_POAM_DEPENDENCY**
 
-Also, don't automatically map these five into SSP. Names like `HELPER_...` or risk scores may be Archer operational/calculated fields rather than OSCAL SSP content. And `FIELD_31745`, etc. are opaque, so we need to see what they actually contain before deciding.
+```text
+PK_FACT_OSCAL_POAM_DEPENDENCY_HASH
+FK_SOURCE_ELEMENT_HASH
+FK_TARGET_ELEMENT_HASH
+DEPENDENCY_TYPE
+SOURCE_OSCAL_UUID
+TARGET_OSCAL_UUID
+```
 
-### Next step only: inspect these five
+Ignore the other diagram FKs/indexes.
 
-Run this read-only cell:
+And yes — **before touching the POA&M registry or mapper configuration, we need to discover the POA&M paths from your mapping CSV.** The root we're looking for is:
+
+```text
+plan-of-action-and-milestones
+```
+
+### Next step only: inventory every POA&M mapping/path
+
+Run this read-only cell in the reference notebook:
 
 ```python
 # ============================================================
-# Inspect populated unmapped Archer fields
+# POA&M Mapping / Path Inventory
 # READ ONLY
 # ============================================================
 
-UNMAPPED_FIELDS = [
-    "INHERENT_RISK_OVERALL_SCORE",
-    "FIELD_31745",
-    "FIELD_31744",
-    "HELPER_BUSINESS_CRITICALITY_MOST_RECENT_OVERALL_SCORE",
-    "FIELD_31747"
-]
+from snowflake.snowpark.functions import col
 
-for field_name in UNMAPPED_FIELDS:
+POAM_ROOT = "plan-of-action-and-milestones"
 
-    print("\n" + "=" * 80)
-    print("FIELD:", field_name)
+poam_mapping_df = (
+    canonical_mapping_df
+    .filter(
+        (col("OSCAL_MODEL") == "POA&M")
+        |
+        col("OSCAL_ELEMENT_PATH").startswith(POAM_ROOT)
+    )
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_MODEL",
+        "OSCAL_ELEMENT_PATH",
+        "MAPPING_TYPE"
+    )
+    .distinct()
+    .sort(
+        "OSCAL_ELEMENT_PATH",
+        "SOURCE_FIELD_NAME"
+    )
+)
 
-    samples = 0
+print("=== POA&M MAPPING INVENTORY ===")
+print("POA&M mapping rows:", poam_mapping_df.count())
 
-    for record in source_df.to_local_iterator():
+poam_mapping_df.show(200, truncate=False)
 
-        source_obj = _parse_source_json(record)
+print("\n=== DISTINCT POA&M PATHS ===")
 
-        value = resolve_json_path(
-            source_obj,
-            field_name
-        )
-
-        if value in (None, "", [], {}):
-            continue
-
-        print(
-            "SOURCE_RECORD_ID:",
-            record["SOURCE_RECORD_ID"]
-        )
-        print("TYPE :", type(value).__name__)
-        print("VALUE:", str(value)[:1000])
-
-        samples += 1
-
-        if samples >= 5:
-            break
-
-    print("Samples found:", samples)
+(
+    poam_mapping_df
+    .select("OSCAL_ELEMENT_PATH")
+    .distinct()
+    .sort("OSCAL_ELEMENT_PATH")
+    .show(200, truncate=False)
+)
 ```
 
-Then we classify each one as either:
+This will tell us exactly whether the CSV contains only:
 
 ```text
-Should map to SSP
-Should map to another OSCAL model
-Archer helper/calculated field — intentionally excluded
-Unknown — mapping team needs to identify it
+plan-of-action-and-milestones.poam-items[]
 ```
 
-One important clarification: this 393-vs-388 audit proves **top-level Archer field coverage**. Our separate SSP path audit already proved the mapped SSP hierarchy has `0` missing structural nodes. Together, these two checks are getting us very close to genuinely saying: **we examined the actual data and the SSP mapping end-to-end**, rather than simply trusting the CSV.
+or whether it goes deeper, for example:
+
+```text
+plan-of-action-and-milestones.metadata...
+plan-of-action-and-milestones.poam-items[].title
+plan-of-action-and-milestones.poam-items[].description
+...
+```
+
+**Do not create POA&M registry rows yet.** Show me this output first. Then we'll derive the POA&M hierarchy from the actual paths, just like we did for SSP.
