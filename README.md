@@ -1,14 +1,12 @@
-# Cell 8C — Inspect component reference identities
+# Cell 8D — Validate stable identity for component references
 # READ ONLY
 
 component_fields = [
-    "SOFTWARE",
-    "HARDWARE",
-    "INTERCONNECTIONS",
-    "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM"
+    m["SOURCE_FIELD_NAME"]
+    for m in component_mappings
 ]
 
-samples = 0
+refs = []
 
 for record in source_df.to_local_iterator():
 
@@ -24,6 +22,8 @@ for record in source_df.to_local_iterator():
 
     if not isinstance(source_obj, dict):
         continue
+
+    parent_id = str(record["SOURCE_RECORD_ID"])
 
     for field in component_fields:
 
@@ -44,20 +44,31 @@ for record in source_df.to_local_iterator():
                 content_id = ref
                 level_id = None
 
-            print(
-                "PARENT:", record["SOURCE_RECORD_ID"],
-                "| FIELD:", field,
-                "| CONTENT_ID:", content_id,
-                "| LEVEL_ID:", level_id
-            )
+            if content_id is not None:
+                refs.append(
+                    (parent_id, field, str(content_id),
+                     None if level_id is None else str(level_id))
+                )
 
-            samples += 1
 
-            if samples >= 20:
-                break
+# Check ContentId reused with different LevelIds
+content_levels = {}
 
-        if samples >= 20:
-            break
+for parent_id, field, content_id, level_id in refs:
+    content_levels.setdefault(content_id, set()).add(level_id)
 
-    if samples >= 20:
-        break
+multi_level_ids = {
+    cid: levels
+    for cid, levels in content_levels.items()
+    if len(levels) > 1
+}
+
+print("Total reference occurrences:", len(refs))
+print("Distinct ContentIds:", len(content_levels))
+print("References missing LevelId:",
+      sum(1 for r in refs if r[3] is None))
+print("ContentIds appearing with multiple LevelIds:",
+      len(multi_level_ids))
+
+for cid, levels in list(multi_level_ids.items())[:10]:
+    print("Collision:", cid, levels)
