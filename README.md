@@ -1,1 +1,62 @@
-SS
+INSERT INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+(
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER,
+    IS_ACTIVE
+)
+VALUES
+(
+    'SSP',
+    'system-security-plan',
+    'system-security-plan',
+    NULL,
+    FALSE,
+    'SINGLETON',
+    1,
+    TRUE
+),
+(
+    'SSP',
+    'system-security-plan.metadata',
+    'metadata',
+    'system-security-plan',
+    FALSE,
+    'SINGLETON',
+    2,
+    TRUE
+),
+(
+    'SSP',
+    'system-security-plan.system-characteristics',
+    'system-characteristics',
+    'system-security-plan',
+    FALSE,
+    'SINGLETON',
+    2,
+    TRUE
+),
+(
+    'SSP',
+    'system-security-plan.system-implementation',
+    'system-implementation',
+    'system-security-plan',
+    FALSE,
+    'SINGLETON',
+    2,
+    TRUE
+),
+(
+    'SSP',
+    'system-security-plan.control-implementation',
+    'control-implementation',
+    'system-security-plan',
+    FALSE,
+    'SINGLETON',
+    2,
+    FALSE
+);
