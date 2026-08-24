@@ -1,27 +1,35 @@
-Yes. Since you are back in the **development/reference notebook**, do **not change any existing SSP cells**. Add **one new temporary cell at the very bottom**.
-
-Call it something like:
+Perfect — those three counts are exactly right:
 
 ```text
-POA&M Prep — Reference Graph
+POA&M source packages : 536
+POA&M mapping rows    : 1
+POA&M registry rows   : 2
 ```
 
-Paste this:
+So **stop changing the dev/reference notebook now**. That notebook has done its job: we proved which records participate.
+
+### Next step: test POA&M with the generic mapper
+
+Go to **`NB_ARCHER_OSCAL_MAPPER_V1`**. Keep:
+
+```python
+"EXECUTE_WRITES": False
+```
+
+Do **not change Cells 1–7 yet**.
+
+Add one temporary Python cell at the bottom and paste:
 
 ```python
 # ============================================================
-# POA&M Prep — Reference Graph
-# DEV / READ ONLY
+# POA&M Graph Test
+# READ ONLY
 # ============================================================
 
 from snowflake.snowpark.functions import col
 
-
-# ------------------------------------------------------------
-# 1. Find Authorization Packages that actually contain POAMS
-# ------------------------------------------------------------
-
-poam_source_ids = []
+# Only Authorization Packages containing POAMS
+poam_ids = []
 
 for record in source_df.to_local_iterator():
 
@@ -29,28 +37,14 @@ for record in source_df.to_local_iterator():
     poams = resolve_json_path(source_obj, "POAMS")
 
     if poams not in (None, "", [], {}):
-        poam_source_ids.append(
-            str(record["SOURCE_RECORD_ID"])
-        )
+        poam_ids.append(str(record["SOURCE_RECORD_ID"]))
 
-
-# ------------------------------------------------------------
-# 2. Filter source to only packages containing POA&M refs
-# ------------------------------------------------------------
 
 poam_source_df = (
     source_df
-    .filter(
-        col("SOURCE_RECORD_ID").isin(
-            *poam_source_ids
-        )
-    )
+    .filter(col("SOURCE_RECORD_ID").isin(*poam_ids))
 )
 
-
-# ------------------------------------------------------------
-# 3. POA&M mappings only
-# ------------------------------------------------------------
 
 poam_mapping_df = (
     canonical_mapping_df
@@ -62,12 +56,8 @@ poam_mapping_df = (
 )
 
 
-# ------------------------------------------------------------
-# 4. Active POA&M registry only
-# ------------------------------------------------------------
-
 poam_registry_df = (
-    session.table(CONFIG["REGISTRY_TABLE"])
+    session.table(CONFIG["ELEMENT_REGISTRY_TABLE"])
     .filter(
         (col("OSCAL_MODEL_KEY") == "POAM")
         & (col("IS_ACTIVE") == True)
@@ -75,40 +65,47 @@ poam_registry_df = (
 )
 
 
-# ------------------------------------------------------------
-# 5. Verify
-# ------------------------------------------------------------
+poam_nodes_df, poam_edges_df = build_oscal_graph(
+    source_df=poam_source_df,
+    canonical_mapping_df=poam_mapping_df,
+    element_registry_df=poam_registry_df,
+    model_key="POAM",
+    source_system=CONFIG["SOURCE_SYSTEM_NAME"],
+    source_table=CONFIG["SOURCE_TABLE_NAME"]
+)
 
-print("=== POA&M DEV INPUTS ===")
-print("Source packages with POAMS :", poam_source_df.count())
-print("POA&M mapping rows         :", poam_mapping_df.count())
-print("POA&M registry rows        :", poam_registry_df.count())
+
+print("\n=== POA&M GRAPH TEST ===")
+print("Nodes :", poam_nodes_df.count())
+print("Edges :", poam_edges_df.count())
+
+poam_nodes_df.group_by("ELEMENT_TYPE").count().show()
+
+poam_edges_df.group_by(
+    "SOURCE_NODE_PATH",
+    "TARGET_NODE_PATH"
+).count().show()
 ```
 
-We expect exactly:
+Based on the data we already proved, I expect roughly:
 
 ```text
-Source packages with POAMS : 536
-POA&M mapping rows         : 1
-POA&M registry rows        : 2
+536 plan-of-action-and-milestones roots
+2563 poam-items[]
+
+Total nodes = 3099
+Total edges = 2563
 ```
 
-### What we are doing
-
-We are **not changing SSP** and not writing anything yet.
-
-We're preparing:
+Conceptually:
 
 ```text
-536 Authorization Packages containing POAMS
+536 POA&M roots
+   │
+   └── 2,563 parent_of relationships
             ↓
-plan-of-action-and-milestones
-            ↓
-poam-items[]
-            ↓
-{"ContentId": ..., "LevelId": 346}
+       POA&M reference items
+       {ContentId, LevelId}
 ```
 
-And importantly, the other **1,629 Authorization Packages will not get empty POA&M roots**.
-
-Run this one cell and show me the three counts. Then we'll feed these three dataframes into the same generic graph builder — no separate POA&M mapping code.
+**Do not load the POA&M DIM/FACT yet.** First I want this generic graph-builder test to return approximately **3,099 nodes / 2,563 edges**. Then we handle the POA&M target-column names cleanly without changing the graph logic.
