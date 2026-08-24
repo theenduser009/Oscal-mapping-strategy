@@ -1,321 +1,363 @@
-Yes — **this inspection finally gave us the key answer.** And it changes one important assumption in a good way.
+Yes — this is much closer, but I would **not freeze this registry yet**. I caught a few design issues that are worth fixing now so this really is our last architectural rewrite.
 
-Your CSV’s `OSCAL_MODEL` column is **not actually a clean model identifier**. It is mixing model names and mapping sections:
+The biggest positive: the AI correctly recognized the unambiguous SSP structure:
+
+```text
+system-security-plan
+├── metadata
+├── system-characteristics
+├── system-implementation
+└── control-implementation
+```
+
+And it correctly did **not** automatically turn `document-ids[]` or `components[]` into nodes. Good.
+
+But I want these corrections before we implement it.
+
+### 1. Add a real canonical model key
+
+The registry needs:
+
+```text
+OSCAL_MODEL_KEY
+```
+
+Example:
+
+```text
+SSP
+POAM
+ASSESSMENT_PLAN
+ASSESSMENT_RESULTS
+PROFILE
+```
+
+Because the CSV's current `OSCAL_MODEL` is really a raw mapping section:
 
 ```text
 SSP - Metadata
 SSP - System Characteristics
-SSP - System Implementation
-SSP - Control Implementation
-System Security Plan
-Assessment Results
-Security Assessment Plan
-POA&M
-Profile
-TBD
 ...
 ```
 
-So we should **never again do**:
-
-```python
-col("OSCAL_MODEL") == "SSP"
-```
-
-That was the reason for the zero rows.
-
-### What IS reliable
-
-The strongest metadata we have is `OSCAL_ELEMENT_PATH`.
-
-For example:
+So production should work like:
 
 ```text
-system-security-plan.metadata.last-modified
-system-security-plan.metadata.props
-system-security-plan.system-characteristics.description
-system-security-plan.system-implementation.components[]
-plan-of-action-and-milestones.poam-items[]
-assessment-results.results[].findings[]
-profile.imports[]
+CONFIG["OSCAL_MODEL"] = "SSP"
+        ↓
+element_registry.OSCAL_MODEL_KEY = "SSP"
+        ↓
+ROOT_NODE_PATH = system-security-plan
 ```
 
-From this, the **first path segment gives us the OSCAL root/model family**:
-
-```text
-system-security-plan.*              → root = system-security-plan
-plan-of-action-and-milestones.*     → root = plan-of-action-and-milestones
-assessment-results.*                → root = assessment-results
-security-assessment-plan.*          → root = security-assessment-plan
-profile.*                           → root = profile
-```
-
-That part can be generic.
+That makes the engine truly reusable.
 
 ---
 
-## But here is the production-grade distinction we need
+### 2. `INSTANCE_KEY_RULE = "content_id"` is not right
 
-The existing CSV is excellent for:
-
-> **FIELD MAPPING**
-
-It tells us:
+The standardized engine uses:
 
 ```text
-Archer field
-      ↓
-OSCAL element path
+SOURCE_RECORD_ID
 ```
 
-But it is **not enough by itself to safely define every node boundary**.
+and source record identity is already part of the node identity.
 
-For example:
+For singleton nodes, use something like:
+
+```text
+INSTANCE_KEY_RULE = "SINGLETON"
+```
+
+Then later:
+
+```text
+components[]
+```
+
+might have:
+
+```text
+INSTANCE_KEY_RULE = <stable component identifier>
+```
+
+We should decide that only when we inspect its actual source representation.
+
+---
+
+### 3. `PROCESS_ORDER` should represent hierarchy depth
+
+The AI has:
+
+```text
+root                   1
+metadata               2
+system-characteristics 3
+system-implementation  4
+```
+
+That incorrectly implies the siblings depend on one another.
+
+They don't.
+
+It should be:
+
+```text
+system-security-plan        1
+
+metadata                    2
+system-characteristics      2
+system-implementation       2
+control-implementation      2
+```
+
+Later:
+
+```text
+component                   3
+prop                        4
+```
+
+etc.
+
+That makes `PROCESS_ORDER` generic.
+
+---
+
+### 4. It forgot `control-implementation` in the candidate rows
+
+The analysis itself found:
+
+```text
+SSP - Control Implementation
+→ system-security-plan.control-implementation.*
+```
+
+and even says it is a child of root.
+
+So if we're accepting those raw mapping groups as evidence of a node boundary, it should also be in the candidate registry.
+
+---
+
+### 5. Most important: add a node creation rule
+
+This directly prevents **the exact root problem we suffered before**.
+
+The registry needs one additional column:
+
+```text
+NODE_CREATION_RULE
+```
+
+Conceptually:
+
+```text
+system-security-plan
+    ALWAYS_PER_SOURCE_RECORD
+
+metadata
+    WHEN_MAPPED_VALUE_EXISTS
+
+system-characteristics
+    WHEN_MAPPED_VALUE_EXISTS
+
+system-implementation
+    WHEN_MAPPED_VALUE_EXISTS
+
+control-implementation
+    WHEN_MAPPED_VALUE_EXISTS
+```
+
+Later a collection might have:
+
+```text
+components[]
+    PER_COLLECTION_INSTANCE
+```
+
+Why this matters:
+
+If the generic builder only creates nodes when it finds direct field mappings, the SSP root could disappear **again**, because most mappings belong to children.
+
+With:
+
+```text
+NODE_CREATION_RULE = ALWAYS_PER_SOURCE_RECORD
+```
+
+the registry explicitly tells the engine:
+
+> Create the root for every source record, even if its own payload has no direct field mapping.
+
+That's the production-grade fix to the mistake we made earlier.
+
+---
+
+### 6. Relationship type belongs in metadata too
+
+Add:
+
+```text
+DEPENDENCY_TYPE
+```
+
+Root:
+
+```text
+NULL
+```
+
+Children eventually get the approved relationship value.
+
+We don't need to decide today whether the exact value is:
+
+```text
+parent_of
+contains
+```
+
+or something else.
+
+But the **column should exist**, because we specifically don't want relationship type hardcoded in Python later.
+
+---
+
+## Therefore I would freeze the registry contract as
+
+```text
+OSCAL_MODEL_KEY
+ROOT_NODE_PATH
+NODE_PATH
+ELEMENT_TYPE
+PARENT_NODE_PATH
+DEPENDENCY_TYPE
+IS_COLLECTION
+INSTANCE_KEY_RULE
+NODE_CREATION_RULE
+PROCESS_ORDER
+IS_ACTIVE
+```
+
+And SSP initially looks conceptually like:
+
+| Model | Node                                          | Parent | Collection | Instance Rule | Creation Rule            | Order |
+| ----- | --------------------------------------------- | ------ | ---------- | ------------- | ------------------------ | ----: |
+| SSP   | `system-security-plan`                        | NULL   | False      | SINGLETON     | ALWAYS_PER_SOURCE_RECORD |     1 |
+| SSP   | `system-security-plan.metadata`               | root   | False      | SINGLETON     | WHEN_MAPPED_VALUE_EXISTS |     2 |
+| SSP   | `system-security-plan.system-characteristics` | root   | False      | SINGLETON     | WHEN_MAPPED_VALUE_EXISTS |     2 |
+| SSP   | `system-security-plan.system-implementation`  | root   | False      | SINGLETON     | WHEN_MAPPED_VALUE_EXISTS |     2 |
+| SSP   | `system-security-plan.control-implementation` | root   | False      | SINGLETON     | WHEN_MAPPED_VALUE_EXISTS |     2 |
+
+We **do not add `components[]` yet**.
+
+We **do not add `import-profile` yet** because the mapping inspection hasn't actually proven it in the current CSV.
+
+---
+
+## And here is the really nice part
+
+Once this registry exists, we don't have to guess where every mapping belongs.
+
+For:
 
 ```text
 system-security-plan.metadata.document-ids[].identifier
 ```
 
-Should NOT necessarily produce:
+we compare it to registered node prefixes.
 
-```text
-metadata
-document-ids
-identifier
-```
-
-as three DIM nodes.
-
-It likely belongs inside the `metadata` payload.
-
-But:
-
-```text
-system-security-plan.system-implementation.components[]
-```
-
-may legitimately represent repeated `component` DIM nodes.
-
-That distinction cannot safely be guessed just because a path contains `.` or `[]`.
-
-### So our final metadata architecture should have TWO metadata datasets
-
-```text
-                 Existing Mapping CSV
-                    FIELD MAPPING
-                         │
-                         │
-                         ▼
-                 canonical_mapping_df
-
-
-               OSCAL Element Registry
-                 STRUCTURE/HIERARCHY
-                         │
-                         ▼
-                 element_registry_df
-```
-
-Then both feed the engine:
-
-```text
-canonical_mapping_df
-        +
-element_registry_df
-        ↓
-    build_nodes()
-        ↓
-canonical_nodes_df
-        ↓
-build_dependencies()
-        ↓
-canonical_edges_df
-```
-
-This is the piece that prevents us from ever having the SSP-root problem again.
-
----
-
-## The element registry is small
-
-It would contain rows such as:
-
-| MODEL_ROOT           | NODE_PATH                                   | ELEMENT_TYPE           | PARENT_NODE_PATH     | COLLECTION | ORDER |
-| -------------------- | ------------------------------------------- | ---------------------- | -------------------- | ---------- | ----: |
-| system-security-plan | system-security-plan                        | system-security-plan   | NULL                 | No         |     1 |
-| system-security-plan | system-security-plan.metadata               | metadata               | system-security-plan | No         |     2 |
-| system-security-plan | system-security-plan.system-characteristics | system-characteristics | system-security-plan | No         |     2 |
-| system-security-plan | system-security-plan.system-implementation  | system-implementation  | system-security-plan | No         |     2 |
-
-And later, when confirmed:
-
-```text
-system-security-plan.system-implementation.components[]
-```
-
-could be:
-
-```text
-PARENT_NODE_PATH =
-system-security-plan.system-implementation
-```
-
-Now the relationship is automatic.
-
-There is no:
-
-```python
-if SSP:
-    connect metadata to root
-```
-
-Instead:
-
-```text
-metadata.PARENT_NODE_PATH
-        =
-system-security-plan
-```
-
-and the generic edge builder does the rest.
-
----
-
-## This also answers your original root question
-
-For every model:
-
-```text
-PARENT_NODE_PATH = NULL
-```
-
-means:
-
-**ROOT**
-
-So:
+It matches:
 
 ```text
 system-security-plan
+system-security-plan.metadata
 ```
 
-becomes the SSP root.
-
-And:
+The **deepest registered node prefix** is:
 
 ```text
 system-security-plan.metadata
 ```
 
-knows its parent is:
+Therefore:
 
 ```text
-system-security-plan
+OWNER_NODE_PATH =
+system-security-plan.metadata
+
+FIELD_RELATIVE_PATH =
+document-ids[].identifier
 ```
 
-That's all FACT needs.
+Perfect.
 
----
-
-### One other important thing from your output
-
-You have:
+Similarly:
 
 ```text
-608 total mappings
-416 = TBD
+system-security-plan.system-characteristics.security-impact-level.security-objective-integrity
 ```
 
-That's okay.
+gets owned by:
 
-We **keep all 608 mappings** in the raw mapping layer.
+```text
+system-security-plan.system-characteristics
+```
 
-We do not throw TBD away.
+without making `security-impact-level` another DIM node.
 
-But the production engine should process only mappings that have a usable, approved OSCAL path. TBD/unresolved mappings remain visible for governance and future completion.
+And later, if we deliberately add:
 
-So we are not allowing unfinished mappings to block the engine.
+```text
+system-security-plan.system-implementation.components[]
+```
 
----
+to the registry, the exact same matching algorithm automatically starts treating components as separate nodes.
 
-# What I want the other AI to do next
+**That's the reusable design we've been trying to reach.**
 
-Don't let it build nodes yet.
+### Tell the other AI this exact thing
 
-Give it this exact prompt:
-
-> The inspection is complete and it revealed the correct architecture.
+> The candidate registry is close, but make these architecture corrections before generating any implementation:
 >
-> Important findings:
+> 1. Add `OSCAL_MODEL_KEY`. This is the canonical model selector such as `SSP`, `POAM`, etc. Do not use raw CSV `OSCAL_MODEL` values such as `SSP - Metadata` as the runtime model key.
 >
-> * `OSCAL_MODEL` is NOT a canonical model identifier. It contains section/category values such as `SSP - Metadata`, `SSP - System Characteristics`, `SSP - System Implementation`, `SSP - Control Implementation`, `System Security Plan`, `Assessment Results`, `POA&M`, etc.
-> * Therefore NEVER filter with `OSCAL_MODEL == "SSP"`.
-> * Preserve the original `OSCAL_MODEL` value as mapping metadata, conceptually `OSCAL_MODEL_RAW` or `MAPPING_SECTION`.
-> * `OSCAL_ELEMENT_PATH` is the authoritative OSCAL target path.
-> * The first path segment can deterministically identify `ROOT_NODE_PATH`.
+> 2. For singleton nodes use `INSTANCE_KEY_RULE = "SINGLETON"`, not `"content_id"`. Source record identity is already represented separately by `SOURCE_RECORD_ID`.
 >
-> Examples:
+> 3. `PROCESS_ORDER` represents hierarchy depth, not sibling sequence. Root = 1. All direct SSP children = 2.
 >
-> `system-security-plan.metadata.last-modified`
-> → ROOT_NODE_PATH = `system-security-plan`
+> 4. Add the unambiguous `system-security-plan.control-implementation` child because the mapping inspection showed the `SSP - Control Implementation` path group.
 >
-> `assessment-results.results[].findings[]`
-> → ROOT_NODE_PATH = `assessment-results`
+> 5. Add `NODE_CREATION_RULE` to the registry. Supported conceptual policies for now:
 >
-> `plan-of-action-and-milestones.poam-items[]`
-> → ROOT_NODE_PATH = `plan-of-action-and-milestones`
+>    * `ALWAYS_PER_SOURCE_RECORD`
+>    * `WHEN_MAPPED_VALUE_EXISTS`
+>    * later `PER_COLLECTION_INSTANCE`
 >
-> Do NOT infer every dot-separated segment or every `[]` segment as a DIM node.
+>    SSP root must use `ALWAYS_PER_SOURCE_RECORD` so we never repeat the earlier missing-root failure.
 >
-> The existing CSV is FIELD-MAPPING metadata.
+> 6. Add nullable `DEPENDENCY_TYPE` so relationship semantics are metadata-driven rather than hardcoded in Python. Do not choose its final child value yet.
 >
-> We will use a separate `element_registry_df` as STRUCTURAL metadata that explicitly defines node boundaries and parent-child relationships.
+> Final proposed schema:
 >
-> For the next step only:
->
-> 1. Create a proposed schema for `element_registry_df` with:
->
+> `OSCAL_MODEL_KEY`
 > `ROOT_NODE_PATH`
 > `NODE_PATH`
 > `ELEMENT_TYPE`
 > `PARENT_NODE_PATH`
+> `DEPENDENCY_TYPE`
 > `IS_COLLECTION`
 > `INSTANCE_KEY_RULE`
+> `NODE_CREATION_RULE`
 > `PROCESS_ORDER`
 > `IS_ACTIVE`
 >
-> 2. Using the current mapping dataframe, inspect ONLY rows whose valid `OSCAL_ELEMENT_PATH` starts with:
+> Show the corrected five SSP registry rows only.
 >
-> `system-security-plan`
->
-> 3. Group/show those paths by their existing raw `OSCAL_MODEL` value:
->
-> `System Security Plan`
-> `SSP - Metadata`
-> `SSP - System Characteristics`
-> `SSP - System Implementation`
-> `SSP - Control Implementation`
->
-> 4. For each group, show the distinct OSCAL paths and their longest common path prefix.
->
-> 5. Propose candidate registry nodes only where the node boundary is unambiguous.
->
-> At minimum we already expect to validate candidates such as:
->
-> `system-security-plan`
-> `system-security-plan.metadata`
-> `system-security-plan.system-characteristics`
-> `system-security-plan.system-implementation`
->
-> Do NOT assume `import-profile`, `components[]`, `props[]`, or control-implementation node boundaries until the actual paths prove them.
->
-> Do NOT create `canonical_nodes_df`.
+> Do NOT create them as a hardcoded production Python list yet.
+> Do NOT build nodes.
 > Do NOT build FACT.
-> Do NOT MERGE.
 > Do NOT modify Cells 1 or 2.
->
-> Show the candidate `element_registry_df` proposal and STOP.
+> STOP after showing the corrected registry rows.
 
-This is the right turn. **We're no longer trying to make Python discover OSCAL structure magically. Mapping metadata handles fields; structural metadata handles nodes/relationships. The generic engine consumes both.**
-
-That design will carry us beyond SSP without rewriting the engine.
+And one more important decision: **I don't want these registry rows permanently hardcoded in Python.** Once we approve these five rows, we should make them structural metadata — likely a small second CSV/table such as `oscal_element_registry` — so adding elements/models is a metadata change, exactly as we intended.
