@@ -1,103 +1,91 @@
-Yes — this output is useful, and **Cell 8 has finished its job. We do not need to revisit it.** ✅
+Yes — **Cell 9 now.** We’ll register only the two collections we have actually confirmed from the mapping and raw values.
 
-From the actual mapping dataframe, the SSP structure we have discovered so far is:
+Use a **SQL cell**:
+
+```sql
+-- ============================================================
+-- Cell 9 — Register Confirmed SSP Child Collections
+-- ============================================================
+
+MERGE INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY t
+USING (
+
+    SELECT
+        'SSP' AS OSCAL_MODEL_KEY,
+        'system-security-plan.metadata.document-ids[]' AS NODE_PATH,
+        'document-ids' AS ELEMENT_TYPE,
+        'system-security-plan.metadata' AS PARENT_NODE_PATH,
+        TRUE AS IS_COLLECTION,
+        'VALUE' AS INSTANCE_KEY_RULE,
+        3 AS PROCESS_ORDER,
+        TRUE AS IS_ACTIVE
+
+    UNION ALL
+
+    SELECT
+        'SSP',
+        'system-security-plan.system-characteristics.system-ids[]',
+        'system-ids',
+        'system-security-plan.system-characteristics',
+        TRUE,
+        'VALUE',
+        3,
+        TRUE
+
+) s
+
+ON  t.OSCAL_MODEL_KEY = s.OSCAL_MODEL_KEY
+AND t.NODE_PATH = s.NODE_PATH
+
+WHEN MATCHED THEN UPDATE SET
+    t.ELEMENT_TYPE      = s.ELEMENT_TYPE,
+    t.PARENT_NODE_PATH  = s.PARENT_NODE_PATH,
+    t.IS_COLLECTION     = s.IS_COLLECTION,
+    t.INSTANCE_KEY_RULE = s.INSTANCE_KEY_RULE,
+    t.PROCESS_ORDER     = s.PROCESS_ORDER,
+    t.IS_ACTIVE         = s.IS_ACTIVE
+
+WHEN NOT MATCHED THEN INSERT (
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER,
+    IS_ACTIVE
+)
+VALUES (
+    s.OSCAL_MODEL_KEY,
+    s.NODE_PATH,
+    s.ELEMENT_TYPE,
+    s.PARENT_NODE_PATH,
+    s.IS_COLLECTION,
+    s.INSTANCE_KEY_RULE,
+    s.PROCESS_ORDER,
+    s.IS_ACTIVE
+);
+```
+
+Why `VALUE`? Because these two source values are scalars:
 
 ```text
-system-security-plan                         ACTIVE
-│
-├── metadata                                ACTIVE
-│   ├── document-ids[]                      NOT REGISTERED
-│   └── responsible-parties[]               NOT REGISTERED
-│
-├── system-characteristics                  ACTIVE
-│   ├── props[]                             NOT REGISTERED
-│   └── system-ids[]                        NOT REGISTERED
-│
-└── system-implementation                   ACTIVE
-    └── components[]                        ACTIVE
+TRACKING_ID → 565187
+SAP_ID      → "565187-Information System"
 ```
 
-And importantly, Cell 8 found **21 actual SSP mapping paths**. It did **not** show `control-implementation`, `back-matter`, or `import-profile` among these current SSP paths, so we should not invent them.
+Our existing collection helper already uses the scalar itself as the instance identity. We're **not changing Cell 5**.
 
-### What we need next
-
-We have exactly **four unresolved collection nodes**:
+After this, SSP registry becomes:
 
 ```text
-metadata.document-ids[]
-metadata.responsible-parties[]
-system-characteristics.props[]
-system-characteristics.system-ids[]
+system-security-plan
+├── metadata
+│   └── document-ids[]          ← NEW
+├── system-characteristics
+│   └── system-ids[]            ← NEW
+└── system-implementation
+    └── components[]
 ```
 
-We should **not blindly assign `CONTENT_ID`** like we did for `components[]`. These could contain normal OSCAL values/objects rather than Archer `{ContentId, LevelId}` references.
-
-So the next step is one single read-only inspection — **all four together**, not four more cells.
-
-Run this as the next temporary cell:
-
-```python
-# ============================================================
-# Inspect Remaining SSP Collection Nodes
-# READ ONLY — one-time inspection
-# ============================================================
-
-from snowflake.snowpark.functions import col
-
-collection_paths = [
-    "system-security-plan.metadata.document-ids[]",
-    "system-security-plan.metadata.responsible-parties[]",
-    "system-security-plan.system-characteristics.props[]",
-    "system-security-plan.system-characteristics.system-ids[]"
-]
-
-for node_path in collection_paths:
-
-    print("\n" + "=" * 80)
-    print("NODE:", node_path)
-
-    mappings = (
-        canonical_mapping_df
-        .filter(col("OSCAL_ELEMENT_PATH").startswith(node_path))
-        .select(
-            "SOURCE_FIELD_NAME",
-            "OSCAL_ELEMENT_PATH"
-        )
-        .collect()
-    )
-
-    for m in mappings:
-
-        source_field = m["SOURCE_FIELD_NAME"]
-
-        print("\nSOURCE FIELD:", source_field)
-        print("OSCAL PATH:", m["OSCAL_ELEMENT_PATH"])
-
-        samples = 0
-
-        for record in source_df.to_local_iterator():
-
-            source_obj = _parse_source_json(record)
-            value = resolve_json_path(source_obj, source_field)
-
-            if value in (None, "", [], {}):
-                continue
-
-            print("TYPE:", type(value).__name__)
-            print("VALUE:", str(value)[:700])
-
-            samples += 1
-
-            if samples >= 2:
-                break
-
-        print("Samples found:", samples)
-```
-
-This answers only one question:
-
-**What are these four collections actually made of?**
-
-Then we can set the correct registry identity for all four at once and continue the SSP hierarchy through DIM + FACT using the existing engine.
-
-No changes to Cells 3–7. No more guessing.
+Run **only Cell 9** and send me the inserted/updated result. Then we'll run the existing engine and see whether these two deeper levels materialize correctly.
