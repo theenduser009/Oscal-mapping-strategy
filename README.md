@@ -1,90 +1,83 @@
-Perfect. This is exactly what we wanted to see. `POAMS` has the same reusable reference shape as `components[]`:
+Perfect. ✅
+
+Your result proves `CONTENT_ID` is a safe instance key for POA&M:
 
 ```text
-[
-  {"ContentId": 566742, "LevelId": 346},
-  {"ContentId": 566746, "LevelId": 346},
-  ...
-]
+POA&M references:                 2563
+Unique source record + ContentId: 2563
+LevelId collisions:                  0
 ```
 
-So **no new mapping logic is needed**. The same generic collection engine can handle it. ✅
+So **no Python changes. No Cell 4/5 changes.**
 
-Before registering POA&M, do one tiny check—same one that proved `ContentId` for components.
+### Next: add POA&M to the registry
 
-### Cell 10 — POA&M identity check
+Run this SQL:
 
-```python
-# Cell 10 — Validate POA&M collection identity
-# READ ONLY
+```sql
+MERGE INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY t
+USING (
+    SELECT
+        'POAM' AS OSCAL_MODEL_KEY,
+        'plan-of-action-and-milestones' AS NODE_PATH,
+        'plan-of-action-and-milestones' AS ELEMENT_TYPE,
+        NULL AS PARENT_NODE_PATH,
+        FALSE AS IS_COLLECTION,
+        'SINGLETON' AS INSTANCE_KEY_RULE,
+        1 AS PROCESS_ORDER,
+        TRUE AS IS_ACTIVE
 
-poam_refs = []
+    UNION ALL
 
-for record in source_df.to_local_iterator():
+    SELECT
+        'POAM',
+        'plan-of-action-and-milestones.poam-items[]',
+        'poam-items',
+        'plan-of-action-and-milestones',
+        TRUE,
+        'CONTENT_ID',
+        2,
+        TRUE
+) s
+ON  t.OSCAL_MODEL_KEY = s.OSCAL_MODEL_KEY
+AND t.NODE_PATH = s.NODE_PATH
 
-    source_obj = _parse_source_json(record)
-    values = resolve_json_path(source_obj, "POAMS")
+WHEN MATCHED THEN UPDATE SET
+    t.ELEMENT_TYPE      = s.ELEMENT_TYPE,
+    t.PARENT_NODE_PATH  = s.PARENT_NODE_PATH,
+    t.IS_COLLECTION     = s.IS_COLLECTION,
+    t.INSTANCE_KEY_RULE = s.INSTANCE_KEY_RULE,
+    t.PROCESS_ORDER     = s.PROCESS_ORDER,
+    t.IS_ACTIVE         = s.IS_ACTIVE
 
-    if not values:
-        continue
-
-    if not isinstance(values, list):
-        values = [values]
-
-    for item in values:
-
-        if not isinstance(item, dict):
-            continue
-
-        content_id = item.get("ContentId")
-        level_id = item.get("LevelId")
-
-        if content_id is not None:
-            poam_refs.append(
-                (
-                    str(record["SOURCE_RECORD_ID"]),
-                    str(content_id),
-                    None if level_id is None else str(level_id)
-                )
-            )
-
-
-content_levels = {}
-
-for parent_id, content_id, level_id in poam_refs:
-    content_levels.setdefault(content_id, set()).add(level_id)
-
-
-real_collisions = {
-    cid: {x for x in levels if x is not None}
-    for cid, levels in content_levels.items()
-    if len({x for x in levels if x is not None}) > 1
-}
-
-
-unique_instances = {
-    (parent_id, content_id)
-    for parent_id, content_id, level_id in poam_refs
-}
-
-print("POA&M reference occurrences:", len(poam_refs))
-print("Unique source record + ContentId:", len(unique_instances))
-print("Multiple NON-NULL LevelId collisions:", len(real_collisions))
+WHEN NOT MATCHED THEN INSERT (
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER,
+    IS_ACTIVE
+)
+VALUES (
+    s.OSCAL_MODEL_KEY,
+    s.NODE_PATH,
+    s.ELEMENT_TYPE,
+    s.PARENT_NODE_PATH,
+    s.IS_COLLECTION,
+    s.INSTANCE_KEY_RULE,
+    s.PROCESS_ORDER,
+    s.IS_ACTIVE
+);
 ```
 
-What I care about is the last line.
-
-If it says:
+That gives us:
 
 ```text
-Multiple NON-NULL LevelId collisions: 0
+plan-of-action-and-milestones
+        │
+        └── poam-items[]  × 2,563 occurrences
 ```
 
-then POA&M registry can simply use:
-
-```text
-NODE_PATH         = plan-of-action-and-milestones.poam-items[]
-INSTANCE_KEY_RULE = CONTENT_ID
-```
-
-No new Python. No cardinality logic. No Cell 4/5 changes. **That will be the real proof that our engine is reusable beyond SSP.**
+**Stop after running this.** Next we switch `CONFIG` to POAM and point it at the correct POA&M DIM/FACT tables — without changing the engine.
