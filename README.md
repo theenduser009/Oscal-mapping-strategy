@@ -1,173 +1,103 @@
-Yes. **Next step is Cell 8 only**: build a read-only SSP hierarchy inventory from the CSV and compare it with the registry.
+Yes — this output is useful, and **Cell 8 has finished its job. We do not need to revisit it.** ✅
 
-It uses only `OSCAL_ELEMENT_PATH` + registry — no cardinality logic, no writes.
+From the actual mapping dataframe, the SSP structure we have discovered so far is:
+
+```text
+system-security-plan                         ACTIVE
+│
+├── metadata                                ACTIVE
+│   ├── document-ids[]                      NOT REGISTERED
+│   └── responsible-parties[]               NOT REGISTERED
+│
+├── system-characteristics                  ACTIVE
+│   ├── props[]                             NOT REGISTERED
+│   └── system-ids[]                        NOT REGISTERED
+│
+└── system-implementation                   ACTIVE
+    └── components[]                        ACTIVE
+```
+
+And importantly, Cell 8 found **21 actual SSP mapping paths**. It did **not** show `control-implementation`, `back-matter`, or `import-profile` among these current SSP paths, so we should not invent them.
+
+### What we need next
+
+We have exactly **four unresolved collection nodes**:
+
+```text
+metadata.document-ids[]
+metadata.responsible-parties[]
+system-characteristics.props[]
+system-characteristics.system-ids[]
+```
+
+We should **not blindly assign `CONTENT_ID`** like we did for `components[]`. These could contain normal OSCAL values/objects rather than Archer `{ContentId, LevelId}` references.
+
+So the next step is one single read-only inspection — **all four together**, not four more cells.
+
+Run this as the next temporary cell:
 
 ```python
 # ============================================================
-# Cell 8 — SSP Hierarchy Inventory
-# READ ONLY
+# Inspect Remaining SSP Collection Nodes
+# READ ONLY — one-time inspection
 # ============================================================
 
-from collections import defaultdict
 from snowflake.snowpark.functions import col
 
-SSP_ROOT = "system-security-plan"
-
-
-# ------------------------------------------------------------
-# 1. Get every distinct SSP mapping path
-# ------------------------------------------------------------
-
-ssp_paths = [
-    r["OSCAL_ELEMENT_PATH"]
-    for r in (
-        canonical_mapping_df
-        .filter(
-            col("OSCAL_ELEMENT_PATH").startswith(
-                SSP_ROOT
-            )
-        )
-        .select("OSCAL_ELEMENT_PATH")
-        .distinct()
-        .collect()
-    )
-    if r["OSCAL_ELEMENT_PATH"]
+collection_paths = [
+    "system-security-plan.metadata.document-ids[]",
+    "system-security-plan.metadata.responsible-parties[]",
+    "system-security-plan.system-characteristics.props[]",
+    "system-security-plan.system-characteristics.system-ids[]"
 ]
 
+for node_path in collection_paths:
 
-# ------------------------------------------------------------
-# 2. Current SSP registry
-# ------------------------------------------------------------
+    print("\n" + "=" * 80)
+    print("NODE:", node_path)
 
-registry_rows = (
-    element_registry_df
-    .filter(
-        col("OSCAL_MODEL_KEY") == "SSP"
-    )
-    .collect()
-)
-
-registry = {
-    r["NODE_PATH"]: r
-    for r in registry_rows
-}
-
-
-# ------------------------------------------------------------
-# 3. Discover structural candidates
-#
-# Candidate rule:
-#   - SSP root
-#   - direct child of SSP root
-#   - any repeated [] branch
-#
-# This does NOT automatically make them DIM nodes.
-# ------------------------------------------------------------
-
-candidate_counts = defaultdict(int)
-
-for full_path in ssp_paths:
-
-    parts = full_path.split(".")
-
-    for depth in range(1, len(parts) + 1):
-
-        prefix = ".".join(
-            parts[:depth]
+    mappings = (
+        canonical_mapping_df
+        .filter(col("OSCAL_ELEMENT_PATH").startswith(node_path))
+        .select(
+            "SOURCE_FIELD_NAME",
+            "OSCAL_ELEMENT_PATH"
         )
-
-        is_root = (
-            prefix == SSP_ROOT
-        )
-
-        is_direct_child = (
-            depth == 2
-        )
-
-        is_collection = (
-            "[]" in parts[depth - 1]
-        )
-
-        if (
-            is_root
-            or is_direct_child
-            or is_collection
-        ):
-            candidate_counts[prefix] += 1
-
-
-# ------------------------------------------------------------
-# 4. Build readable hierarchy report
-# ------------------------------------------------------------
-
-rows = []
-
-for node_path in sorted(
-    candidate_counts.keys()
-):
-
-    parts = node_path.split(".")
-
-    parent_path = (
-        ".".join(parts[:-1])
-        if len(parts) > 1
-        else None
+        .collect()
     )
 
-    registry_row = registry.get(
-        node_path
-    )
+    for m in mappings:
 
-    rows.append({
-        "NODE_PATH": node_path,
-        "PARENT_PATH": parent_path,
-        "IS_COLLECTION": "[]" in node_path,
-        "REGISTERED": registry_row is not None,
-        "ACTIVE": (
-            registry_row["IS_ACTIVE"]
-            if registry_row is not None
-            else None
-        ),
-        "MAPPING_COUNT": candidate_counts[
-            node_path
-        ]
-    })
+        source_field = m["SOURCE_FIELD_NAME"]
 
+        print("\nSOURCE FIELD:", source_field)
+        print("OSCAL PATH:", m["OSCAL_ELEMENT_PATH"])
 
-# ------------------------------------------------------------
-# 5. Output
-# ------------------------------------------------------------
+        samples = 0
 
-print("=== SSP Hierarchy Inventory ===")
-print("Distinct SSP mapping paths:", len(ssp_paths))
-print("Structural candidates:", len(rows))
+        for record in source_df.to_local_iterator():
 
-for r in rows:
+            source_obj = _parse_source_json(record)
+            value = resolve_json_path(source_obj, source_field)
 
-    status = (
-        "ACTIVE"
-        if r["ACTIVE"] is True
-        else
-        "INACTIVE"
-        if r["ACTIVE"] is False
-        else
-        "NOT REGISTERED"
-    )
+            if value in (None, "", [], {}):
+                continue
 
-    print(
-        "\n",
-        r["NODE_PATH"],
-        "\n  Parent:",
-        r["PARENT_PATH"],
-        "\n  Collection:",
-        r["IS_COLLECTION"],
-        "\n  Registry:",
-        status,
-        "\n  Mapping paths:",
-        r["MAPPING_COUNT"]
-    )
+            print("TYPE:", type(value).__name__)
+            print("VALUE:", str(value)[:700])
+
+            samples += 1
+
+            if samples >= 2:
+                break
+
+        print("Samples found:", samples)
 ```
 
-Run Cell 8 and send me the output.
+This answers only one question:
 
-Then we’ll identify the **missing SSP nodes only** and add those to the registry. We will **not modify Cells 3–7**.
+**What are these four collections actually made of?**
+
+Then we can set the correct registry identity for all four at once and continue the SSP hierarchy through DIM + FACT using the existing engine.
+
+No changes to Cells 3–7. No more guessing.
