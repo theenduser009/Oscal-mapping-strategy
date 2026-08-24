@@ -1,27 +1,11 @@
-Perfect. ✅ Cell 2 is correct.
-
-And one correction from me: **12 active SSP registry rows is the correct count**, not 11. The active SSP structure is now:
+Yep — this one is straightforward. **My Cell 3 used normalized column names, but your new `mapping_df` preserved the exact CSV header casing.** Snowflake is telling us exactly that:
 
 ```text
-1  system-security-plan
-2  metadata
-3  system-characteristics
-4  system-implementation
-5  metadata.document-ids[]
-6  metadata.responsible-parties[]
-7  system-characteristics.props[]
-8  system-characteristics.system-ids[]
-9  system-characteristics.authorization-boundary
-10 system-characteristics.security-impact-level
-11 system-characteristics.status
-12 system-implementation.components[]
+I looked for: ARCHER_FIELD_NAME
+Actual:       "Archer_Field_Name"
 ```
 
-`control-implementation` is inactive, so it isn't included.
-
-## Next: Cell 3 — Canonicalize the mapping
-
-This is the clean production version of the mapping normalization we already proved:
+So **replace Cell 3 only** with this. Do not touch Cells 1–2.
 
 ```python
 # ============================================================
@@ -33,16 +17,16 @@ from snowflake.snowpark.functions import col
 
 canonical_mapping_df = (
     mapping_df
-    .select(
-        col("ARCHER_FIELD_NAME").alias("SOURCE_FIELD_NAME"),
-        col("OSCAL_ELEMENT_PATH"),
-        col("OSCAL_MODEL"),
-        col("MAPPING_TYPE"),
-        col("TRANSFORMATION_LOGIC")
-    )
     .filter(
-        col("SOURCE_FIELD_NAME").is_not_null()
-        & col("OSCAL_ELEMENT_PATH").is_not_null()
+        col('"Archer_Field_Name"').is_not_null()
+        & col('"OSCAL_Element_Path"').is_not_null()
+    )
+    .select(
+        col('"Archer_Field_Name"').alias("SOURCE_FIELD_NAME"),
+        col('"OSCAL_Element_Path"').alias("OSCAL_ELEMENT_PATH"),
+        col('"OSCAL_Model"').alias("OSCAL_MODEL"),
+        col('"Mapping_Type"').alias("MAPPING_TYPE"),
+        col('"Transformation_Logic"').alias("TRANSFORMATION_LOGIC")
     )
 )
 
@@ -54,11 +38,33 @@ print("Active registry rows   :", element_registry_df.count())
 print("\nCell 3 complete - canonical mapping ready")
 ```
 
-Expected:
+These names come directly from the error you showed:
+
+```text
+"Archer_Field_Name"
+"OSCAL_Model"
+"OSCAL_Element_Path"
+"Mapping_Type"
+"Transformation_Logic"
+```
+
+We then deliberately alias them into our standard production names:
+
+```text
+SOURCE_FIELD_NAME
+OSCAL_ELEMENT_PATH
+OSCAL_MODEL
+MAPPING_TYPE
+TRANSFORMATION_LOGIC
+```
+
+That way **everything after Cell 3 uses one clean canonical naming convention**, regardless of how the CSV headers are written.
+
+Expected result:
 
 ```text
 Canonical mapping rows: 608
 Active registry rows   : 12
 ```
 
-Run **Cell 3 only**. Then we move the proven generic helper functions into the production notebook.
+Run just this corrected Cell 3.
