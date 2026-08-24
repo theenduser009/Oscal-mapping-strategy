@@ -1,640 +1,711 @@
-Yes. Cell 3 is now correct. ✅
+Perfect. Now **Cell 5 only** — this is where the proven graph-building logic becomes the reusable production function.
 
-Now **Cell 4 only**: move the **already-proven generic helper logic** into the production notebook. No SSP-specific element names appear here.
+Nothing writes to Snowflake here.
 
 ```python
 # ============================================================
-# Cell 4 — Generic OSCAL Mapping Functions
+# Cell 5 — Generic OSCAL Graph Builder
 # PRODUCTION / REUSABLE
 # ============================================================
 
-import hashlib
-import json
-import re
+from snowflake.snowpark.functions import col, parse_json
+from snowflake.snowpark.types import (
+    StructType,
+    StructField,
+    StringType,
+    BinaryType,
+    IntegerType
+)
 
 
-# ------------------------------------------------------------
-# A. Generic row helper
-# ------------------------------------------------------------
-
-def _row_to_dict(row):
-    if row is None:
-        return {}
-
-    if isinstance(row, dict):
-        return row
-
-    if hasattr(row, "as_dict"):
-        return row.as_dict()
-
-    if hasattr(row, "_asdict"):
-        return row._asdict()
-
-    return dict(row)
-
-
-# ------------------------------------------------------------
-# B. Frozen deterministic identity contract
-# DO NOT CHANGE
-# ------------------------------------------------------------
-
-def build_node_seed(source_system, source_table, content_id, node_type):
-    cid = content_id.strip() if content_id is not None else ""
-    return f"{source_system}|{source_table}|{cid}|{node_type}"
-
-
-def compute_node_key(seed):
-    return hashlib.md5(seed.encode("utf-8")).digest()
-
-
-def compute_node_uuid(seed):
-    return hashlib.md5(seed.encode("utf-8")).hexdigest().lower()
-
-
-def build_edge_seed(
-    source_node_key_hex,
-    target_node_key_hex,
-    edge_type="parent_of"
-):
-    return (
-        f"{source_node_key_hex}::"
-        f"{target_node_key_hex}::"
-        f"{edge_type}"
-    )
-
-
-def compute_edge_key(seed):
-    return hashlib.md5(seed.encode("utf-8")).digest()
-
-
-# ------------------------------------------------------------
-# C. Generic JSON/path helpers
-# ------------------------------------------------------------
-
-def is_collection_node(node_path):
-    return "[]" in str(node_path)
-
-
-def resolve_json_path(obj, path):
-
-    if obj is None or not path:
-        return None
-
-    # Archer commonly stores the source field directly
-    if isinstance(obj, dict) and path in obj:
-        return obj[path]
-
-    current = obj
-
-    for token in str(path).split("."):
-
-        if not isinstance(current, dict):
-            return None
-
-        if token in current:
-            current = current[token]
-            continue
-
-        # Case/format insensitive fallback
-        expected = re.sub(
-            r"[^a-z0-9]",
-            "",
-            token.lower()
-        )
-
-        found = False
-
-        for key, value in current.items():
-
-            normalized = re.sub(
-                r"[^a-z0-9]",
-                "",
-                str(key).lower()
-            )
-
-            if normalized == expected:
-                current = value
-                found = True
-                break
-
-        if not found:
-            return None
-
-    return current
-
-
-# ------------------------------------------------------------
-# D. Resolve mapping ownership from registry
-# ------------------------------------------------------------
-
-def get_mappings_for_node(
+def build_oscal_graph(
+    source_df,
     canonical_mapping_df,
     element_registry_df,
-    node_path,
-    oscal_model_key=None
+    model_key,
+    source_system,
+    source_table
 ):
 
-    registry_rows = element_registry_df.collect()
+    # ========================================================
+    # A. Load active registry for requested model
+    # ========================================================
 
-    registry_paths = [
-        r["NODE_PATH"]
-        for r in registry_rows
-        if r["NODE_PATH"]
-    ]
-
-    # Deepest registered path owns the mapping
-    registry_paths = sorted(
-        registry_paths,
-        key=lambda p: len(str(p).split(".")),
-        reverse=True
+    registry_rows = (
+        element_registry_df
+        .filter(
+            col("OSCAL_MODEL_KEY") == model_key
+        )
+        .order_by(
+            col("PROCESS_ORDER"),
+            col("NODE_PATH")
+        )
+        .collect()
     )
 
-    result = []
-
-    for row in canonical_mapping_df.collect():
-
-        mapping = _row_to_dict(row)
-
-        full_path = mapping.get(
-            "OSCAL_ELEMENT_PATH"
+    if not registry_rows:
+        raise ValueError(
+            f"No active registry rows for model {model_key}"
         )
 
-        if not full_path:
+    registry_by_path = {
+        row["NODE_PATH"]: row
+        for row in registry_rows
+    }
+
+
+    # ========================================================
+    # B. Resolve mapping ownership once
+    # ========================================================
+
+    mappings_by_node = {}
+
+    for registry_row in registry_rows:
+
+        node_path = registry_row["NODE_PATH"]
+
+        mappings_by_node[node_path] = (
+            get_mappings_for_node(
+                canonical_mapping_df,
+                element_registry_df,
+                node_path,
+                model_key
+            )
+        )
+
+
+    # ========================================================
+    # C. Build nodes + edges
+    # ========================================================
+
+    node_rows = []
+    edge_rows = []
+
+    for source_record in source_df.to_local_iterator():
+
+        raw_record_id = source_record["SOURCE_RECORD_ID"]
+
+        if raw_record_id is None:
             continue
 
-        owner = None
+        source_record_id = str(
+            raw_record_id
+        ).strip()
 
-        for registered_path in registry_paths:
-
-            if (
-                full_path == registered_path
-                or full_path.startswith(
-                    registered_path + "."
-                )
-            ):
-                owner = registered_path
-                break
-
-        if owner != node_path:
+        if not source_record_id:
             continue
 
-        relative_path = full_path[
-            len(owner):
-        ].lstrip(".")
 
-        mapping["OWNER_NODE_PATH"] = owner
-        mapping["FIELD_RELATIVE_PATH"] = relative_path
+        # Nodes created for this Archer record
+        record_nodes = {}
 
-        result.append(mapping)
 
-    return result
+        # ====================================================
+        # C1. Build direct nodes
+        # ====================================================
 
+        for registry_row in registry_rows:
 
-# ------------------------------------------------------------
-# E. Generic nested payload builder
-# ------------------------------------------------------------
+            node_path = registry_row["NODE_PATH"]
+            element_type = registry_row["ELEMENT_TYPE"]
+            parent_path = registry_row["PARENT_NODE_PATH"]
+            process_order = registry_row["PROCESS_ORDER"]
 
-def set_nested_path(container, path_segments, value):
+            is_collection = registry_row["IS_COLLECTION"]
 
-    if isinstance(path_segments, str):
-        path_segments = [
-            p for p in path_segments.split(".")
-            if p
-        ]
-
-    if not path_segments:
-        return
-
-    current = container
-
-    for index, segment in enumerate(path_segments):
-
-        is_last = (
-            index == len(path_segments) - 1
-        )
-
-        is_array = segment.endswith("[]")
-
-        key = (
-            segment[:-2]
-            if is_array
-            else segment
-        )
-
-        if is_last:
-
-            if is_array:
-                current[key] = (
-                    value
-                    if isinstance(value, list)
-                    else [value]
-                )
-            else:
-                current[key] = value
-
-            return
-
-        next_segment = path_segments[index + 1]
-        next_is_array = next_segment.endswith("[]")
-
-        if key not in current:
-            current[key] = [] if is_array else {}
-
-        if is_array:
-
-            if not isinstance(current[key], list):
-                current[key] = []
-
-            if not current[key]:
-                current[key].append({})
-
-            current = current[key][0]
-
-        else:
-
-            if not isinstance(current[key], dict):
-                current[key] = {}
-
-            current = current[key]
-
-
-def build_element_payload(
-    source_record,
-    mappings,
-    source_json_field="CURATED_JSON"
-):
-
-    record = _row_to_dict(source_record)
-
-    source_obj = record.get(
-        source_json_field
-    )
-
-    if isinstance(source_obj, str):
-        try:
-            source_obj = json.loads(source_obj)
-        except json.JSONDecodeError:
-            source_obj = {}
-
-    if not isinstance(source_obj, dict):
-        source_obj = {}
-
-    payload = {}
-
-    for mapping in mappings:
-
-        source_field = mapping.get(
-            "SOURCE_FIELD_NAME"
-        )
-
-        relative_path = mapping.get(
-            "FIELD_RELATIVE_PATH"
-        )
-
-        if not source_field:
-            continue
-
-        value = resolve_json_path(
-            source_obj,
-            source_field
-        )
-
-        if value in (None, "", [], {}):
-            continue
-
-        # Collection root mappings are handled
-        # by collection extraction logic below.
-        if not relative_path:
-            continue
-
-        set_nested_path(
-            payload,
-            relative_path,
-            value
-        )
-
-    return payload
-
-
-# ------------------------------------------------------------
-# F. Generic collection helpers
-# ------------------------------------------------------------
-
-def _normalize_key_name(value):
-    return re.sub(
-        r"[^a-z0-9]",
-        "",
-        str(value).lower()
-    )
-
-
-def _get_instance_key(
-    item,
-    instance_key_rule,
-    source_field=None
-):
-
-    if item is None:
-        return None
-
-    rule = str(
-        instance_key_rule or ""
-    ).strip()
-
-    # SOURCE FIELD + scalar value
-    if (
-        _normalize_key_name(rule)
-        == _normalize_key_name(
-            "SOURCE_FIELD_NAME+VALUE"
-        )
-    ):
-
-        if not source_field:
-            return None
-
-        if isinstance(item, (dict, list)):
-            return None
-
-        return f"{source_field}|{item}"
-
-    # SOURCE FIELD + nested item ID
-    if (
-        _normalize_key_name(rule)
-        == _normalize_key_name(
-            "SOURCE_FIELD_NAME+ID"
-        )
-    ):
-
-        if (
-            not isinstance(item, dict)
-            or not source_field
-        ):
-            return None
-
-        expected = _normalize_key_name("ID")
-
-        for key, value in item.items():
-
-            if (
-                _normalize_key_name(key)
-                == expected
-            ):
-                if value is None:
-                    return None
-
-                return (
-                    f"{source_field}|{value}"
-                )
-
-        return None
-
-    # Dictionary key identity
-    # Example: CONTENT_ID -> ContentId
-    if isinstance(item, dict):
-
-        expected = _normalize_key_name(
-            rule
-        )
-
-        for key, value in item.items():
-
-            if (
-                _normalize_key_name(key)
-                == expected
-            ):
-                return value
-
-        return None
-
-    # Scalar identity
-    # Example: VALUE
-    return item
-
-
-def _parse_source_json(source_record):
-
-    record = _row_to_dict(source_record)
-
-    value = record.get("CURATED_JSON")
-
-    if isinstance(value, str):
-
-        try:
-            return json.loads(value)
-
-        except json.JSONDecodeError:
-            return {}
-
-    if isinstance(value, (dict, list)):
-        return value
-
-    return {}
-
-
-def _extract_collection_items(
-    value,
-    item_path
-):
-
-    path = str(
-        item_path or "$"
-    ).strip()
-
-    # Existing direct collection behavior
-    if path in ("", "$"):
-
-        return (
-            value
-            if isinstance(value, list)
-            else [value]
-        )
-
-    if path.startswith("$."):
-        path = path[2:]
-
-    current = [value]
-
-    for token in path.split("."):
-
-        token = token.strip()
-
-        if not token:
-            continue
-
-        is_array = token.endswith("[]")
-
-        key_name = (
-            token[:-2]
-            if is_array
-            else token
-        )
-
-        next_values = []
-
-        for obj in current:
-
-            if not isinstance(obj, dict):
-                continue
-
-            child = None
-
-            if key_name in obj:
-                child = obj[key_name]
-
-            else:
-
-                expected = _normalize_key_name(
-                    key_name
-                )
-
-                for key, candidate in obj.items():
-
-                    if (
-                        _normalize_key_name(key)
-                        == expected
-                    ):
-                        child = candidate
-                        break
-
-            if child in (
-                None,
-                "",
-                [],
-                {}
-            ):
-                continue
-
-            if (
-                is_array
-                and isinstance(child, list)
-            ):
-                next_values.extend(child)
-
-            else:
-                next_values.append(child)
-
-        current = next_values
-
-    return current
-
-
-def _get_collection_instances(
-    source_record,
-    mappings,
-    instance_key_rule,
-    item_path="$"
-):
-
-    source_obj = _parse_source_json(
-        source_record
-    )
-
-    instances = {}
-
-    for mapping in mappings:
-
-        source_field = mapping.get(
-            "SOURCE_FIELD_NAME"
-        )
-
-        if not source_field:
-            continue
-
-        value = resolve_json_path(
-            source_obj,
-            source_field
-        )
-
-        if value in (
-            None,
-            "",
-            [],
-            {}
-        ):
-            continue
-
-        items = _extract_collection_items(
-            value,
-            item_path
-        )
-
-        for item in items:
-
-            instance_key = _get_instance_key(
-                item,
-                instance_key_rule,
-                source_field
+            instance_key_rule = (
+                registry_row["INSTANCE_KEY_RULE"]
             )
 
-            if instance_key is None:
-                continue
+            item_path = (
+                registry_row["ITEM_PATH"]
+                or "$"
+            )
 
-            instance_key = str(
-                instance_key
-            ).strip()
+            mappings = mappings_by_node.get(
+                node_path,
+                []
+            )
 
-            if not instance_key:
-                continue
 
-            if instance_key not in instances:
+            # ------------------------------------------------
+            # Collection node
+            # ------------------------------------------------
 
-                instances[instance_key] = {
-                    "INSTANCE_KEY":
-                        instance_key,
-                    "PAYLOAD":
-                        item
-                }
+            if (
+                is_collection
+                or is_collection_node(node_path)
+            ):
+
+                instances = _get_collection_instances(
+                    source_record,
+                    mappings,
+                    instance_key_rule,
+                    item_path
+                )
+
+                for instance in instances:
+
+                    instance_key = instance[
+                        "INSTANCE_KEY"
+                    ]
+
+                    payload = instance[
+                        "PAYLOAD"
+                    ]
+
+
+                    # Preserve frozen singleton identity
+                    # and extend it for collection instances.
+                    base_seed = build_node_seed(
+                        source_system,
+                        source_table,
+                        source_record_id,
+                        element_type
+                    )
+
+                    seed = (
+                        f"{base_seed}|"
+                        f"{node_path}|"
+                        f"{instance_key}"
+                    )
+
+                    node_key = compute_node_key(seed)
+                    node_uuid = compute_node_uuid(seed)
+
+                    payload_json = json.dumps(
+                        payload,
+                        default=str,
+                        separators=(",", ":")
+                    )
+
+
+                    node_instance = {
+                        "NODE_KEY": node_key,
+                        "OSCAL_UUID": node_uuid,
+                        "ELEMENT_TYPE": element_type,
+                        "NODE_PATH": node_path,
+                        "PARENT_NODE_PATH": parent_path,
+                        "INSTANCE_KEY": instance_key
+                    }
+
+
+                    record_nodes.setdefault(
+                        node_path,
+                        []
+                    ).append(
+                        node_instance
+                    )
+
+
+                    node_rows.append((
+                        node_key,
+                        element_type,
+                        node_uuid,
+                        payload_json,
+                        source_system,
+                        source_table,
+                        source_record_id,
+                        model_key,
+                        node_path,
+                        parent_path,
+                        process_order
+                    ))
+
+
+            # ------------------------------------------------
+            # Singleton node
+            # ------------------------------------------------
 
             else:
 
-                existing = instances[
-                    instance_key
-                ]["PAYLOAD"]
+                payload = build_element_payload(
+                    source_record,
+                    mappings
+                )
 
-                # Preserve richer dictionary payload
-                if (
-                    not isinstance(
-                        existing,
-                        dict
+                is_root = (
+                    parent_path is None
+                )
+
+
+                # Root always exists.
+                # Other singleton nodes only exist when
+                # mapped payload exists.
+                if not is_root and not payload:
+                    continue
+
+
+                seed = build_node_seed(
+                    source_system,
+                    source_table,
+                    source_record_id,
+                    element_type
+                )
+
+                node_key = compute_node_key(seed)
+                node_uuid = compute_node_uuid(seed)
+
+                payload_json = json.dumps(
+                    payload,
+                    default=str,
+                    separators=(",", ":")
+                )
+
+
+                node_instance = {
+                    "NODE_KEY": node_key,
+                    "OSCAL_UUID": node_uuid,
+                    "ELEMENT_TYPE": element_type,
+                    "NODE_PATH": node_path,
+                    "PARENT_NODE_PATH": parent_path,
+                    "INSTANCE_KEY": None
+                }
+
+
+                record_nodes.setdefault(
+                    node_path,
+                    []
+                ).append(
+                    node_instance
+                )
+
+
+                node_rows.append((
+                    node_key,
+                    element_type,
+                    node_uuid,
+                    payload_json,
+                    source_system,
+                    source_table,
+                    source_record_id,
+                    model_key,
+                    node_path,
+                    parent_path,
+                    process_order
+                ))
+
+
+        # ====================================================
+        # C2. Create missing structural singleton parents
+        # ====================================================
+
+        created_paths = list(
+            record_nodes.keys()
+        )
+
+        for created_path in created_paths:
+
+            current_path = created_path
+
+            while True:
+
+                current_registry = (
+                    registry_by_path.get(
+                        current_path
                     )
-                    and isinstance(
-                        item,
-                        dict
+                )
+
+                if current_registry is None:
+                    break
+
+
+                parent_path = current_registry[
+                    "PARENT_NODE_PATH"
+                ]
+
+                if parent_path is None:
+                    break
+
+
+                if parent_path in record_nodes:
+
+                    current_path = parent_path
+                    continue
+
+
+                parent_registry = (
+                    registry_by_path.get(
+                        parent_path
+                    )
+                )
+
+                if parent_registry is None:
+                    break
+
+
+                # Current production engine deliberately
+                # does not infer nested collection lineage.
+                if (
+                    parent_registry["IS_COLLECTION"]
+                    or is_collection_node(
+                        parent_path
                     )
                 ):
-                    instances[
-                        instance_key
-                    ]["PAYLOAD"] = item
+                    raise ValueError(
+                        "Nested collection parent requires "
+                        "instance relationship metadata: "
+                        f"{parent_path}"
+                    )
 
-    return list(
-        instances.values()
+
+                parent_element_type = (
+                    parent_registry[
+                        "ELEMENT_TYPE"
+                    ]
+                )
+
+                parent_parent_path = (
+                    parent_registry[
+                        "PARENT_NODE_PATH"
+                    ]
+                )
+
+                parent_process_order = (
+                    parent_registry[
+                        "PROCESS_ORDER"
+                    ]
+                )
+
+
+                seed = build_node_seed(
+                    source_system,
+                    source_table,
+                    source_record_id,
+                    parent_element_type
+                )
+
+                node_key = compute_node_key(seed)
+                node_uuid = compute_node_uuid(seed)
+
+
+                node_instance = {
+                    "NODE_KEY": node_key,
+                    "OSCAL_UUID": node_uuid,
+                    "ELEMENT_TYPE":
+                        parent_element_type,
+                    "NODE_PATH":
+                        parent_path,
+                    "PARENT_NODE_PATH":
+                        parent_parent_path,
+                    "INSTANCE_KEY":
+                        None
+                }
+
+
+                record_nodes[parent_path] = [
+                    node_instance
+                ]
+
+
+                # Structural parent exists because its
+                # descendant exists, but has no direct payload.
+                node_rows.append((
+                    node_key,
+                    parent_element_type,
+                    node_uuid,
+                    "{}",
+                    source_system,
+                    source_table,
+                    source_record_id,
+                    model_key,
+                    parent_path,
+                    parent_parent_path,
+                    parent_process_order
+                ))
+
+
+                current_path = parent_path
+
+
+        # ====================================================
+        # C3. Build parent -> child FACT relationships
+        # ====================================================
+
+        for child_path, child_nodes in (
+            record_nodes.items()
+        ):
+
+            child_registry = (
+                registry_by_path.get(
+                    child_path
+                )
+            )
+
+            if child_registry is None:
+                continue
+
+
+            parent_path = child_registry[
+                "PARENT_NODE_PATH"
+            ]
+
+            if parent_path is None:
+                continue
+
+
+            parent_nodes = record_nodes.get(
+                parent_path,
+                []
+            )
+
+            if not parent_nodes:
+                continue
+
+
+            # Current supported relationship:
+            # singleton parent -> singleton/collection child
+            if len(parent_nodes) != 1:
+
+                raise ValueError(
+                    "Collection parent relationship "
+                    "requires instance-level "
+                    f"relationship metadata: {parent_path}"
+                )
+
+
+            parent_node = parent_nodes[0]
+
+
+            for child_node in child_nodes:
+
+                parent_key = parent_node[
+                    "NODE_KEY"
+                ]
+
+                child_key = child_node[
+                    "NODE_KEY"
+                ]
+
+                dependency_type = "parent_of"
+
+
+                edge_seed = build_edge_seed(
+                    parent_key.hex().upper(),
+                    child_key.hex().upper(),
+                    dependency_type
+                )
+
+                edge_key = compute_edge_key(
+                    edge_seed
+                )
+
+
+                edge_rows.append((
+                    edge_key,
+                    parent_key,
+                    child_key,
+                    dependency_type,
+                    parent_node["OSCAL_UUID"],
+                    child_node["OSCAL_UUID"],
+                    source_record_id,
+                    parent_path,
+                    child_path
+                ))
+
+
+    # ========================================================
+    # D. Canonical Nodes DataFrame
+    # ========================================================
+
+    node_schema = StructType([
+        StructField(
+            "NODE_KEY",
+            BinaryType()
+        ),
+        StructField(
+            "ELEMENT_TYPE",
+            StringType()
+        ),
+        StructField(
+            "OSCAL_UUID",
+            StringType()
+        ),
+        StructField(
+            "ELEMENT_JSON_TEXT",
+            StringType()
+        ),
+        StructField(
+            "SOURCE_SYSTEM_NAME",
+            StringType()
+        ),
+        StructField(
+            "SOURCE_TABLE_NAME",
+            StringType()
+        ),
+        StructField(
+            "SOURCE_RECORD_ID",
+            StringType()
+        ),
+        StructField(
+            "OSCAL_MODEL_KEY",
+            StringType()
+        ),
+        StructField(
+            "NODE_PATH",
+            StringType()
+        ),
+        StructField(
+            "PARENT_NODE_PATH",
+            StringType()
+        ),
+        StructField(
+            "PROCESS_ORDER",
+            IntegerType()
+        )
+    ])
+
+
+    canonical_nodes_raw_df = (
+        session.create_dataframe(
+            node_rows,
+            schema=node_schema
+        )
     )
 
 
+    canonical_nodes_df = (
+        canonical_nodes_raw_df
+        .select(
+            col("NODE_KEY"),
+            col("ELEMENT_TYPE"),
+            col("OSCAL_UUID"),
+            parse_json(
+                col("ELEMENT_JSON_TEXT")
+            ).alias("ELEMENT_JSON"),
+            col("SOURCE_SYSTEM_NAME"),
+            col("SOURCE_TABLE_NAME"),
+            col("SOURCE_RECORD_ID"),
+            col("OSCAL_MODEL_KEY"),
+            col("NODE_PATH"),
+            col("PARENT_NODE_PATH"),
+            col("PROCESS_ORDER")
+        )
+    )
+
+
+    # ========================================================
+    # E. Canonical Edges DataFrame
+    # ========================================================
+
+    edge_schema = StructType([
+        StructField(
+            "EDGE_KEY",
+            BinaryType()
+        ),
+        StructField(
+            "SOURCE_NODE_KEY",
+            BinaryType()
+        ),
+        StructField(
+            "TARGET_NODE_KEY",
+            BinaryType()
+        ),
+        StructField(
+            "DEPENDENCY_TYPE",
+            StringType()
+        ),
+        StructField(
+            "SOURCE_OSCAL_UUID",
+            StringType()
+        ),
+        StructField(
+            "TARGET_OSCAL_UUID",
+            StringType()
+        ),
+        StructField(
+            "SOURCE_RECORD_ID",
+            StringType()
+        ),
+        StructField(
+            "SOURCE_NODE_PATH",
+            StringType()
+        ),
+        StructField(
+            "TARGET_NODE_PATH",
+            StringType()
+        )
+    ])
+
+
+    canonical_edges_df = (
+        session.create_dataframe(
+            edge_rows,
+            schema=edge_schema
+        )
+    )
+
+
+    return (
+        canonical_nodes_df,
+        canonical_edges_df
+    )
+
+
+# ============================================================
+# F. Execute builder for configured model
+# READ ONLY
+# ============================================================
+
+canonical_nodes_df, canonical_edges_df = (
+    build_oscal_graph(
+        source_df=source_df,
+        canonical_mapping_df=canonical_mapping_df,
+        element_registry_df=element_registry_df,
+        model_key=CONFIG["OSCAL_MODEL"],
+        source_system=CONFIG["SOURCE_SYSTEM_NAME"],
+        source_table=CONFIG["SOURCE_TABLE_NAME"]
+    )
+)
+
+
+# ============================================================
+# G. Production baseline check
+# ============================================================
+
+node_count = canonical_nodes_df.count()
+edge_count = canonical_edges_df.count()
+
+print("=== OSCAL Graph Build ===")
+print("Model           :", CONFIG["OSCAL_MODEL"])
+print("Canonical nodes :", node_count)
+print("Canonical edges :", edge_count)
+
+print("\n=== Nodes by Element Type ===")
+
+canonical_nodes_df.group_by(
+    "ELEMENT_TYPE"
+).count().sort(
+    "ELEMENT_TYPE"
+).show()
+
+print("\n=== Edges by Relationship ===")
+
+canonical_edges_df.group_by(
+    "SOURCE_NODE_PATH",
+    "TARGET_NODE_PATH"
+).count().sort(
+    "SOURCE_NODE_PATH",
+    "TARGET_NODE_PATH"
+).show()
+
 print(
-    "Cell 4 complete - generic OSCAL functions ready"
+    "\nCell 5 complete - "
+    "generic OSCAL graph built"
 )
 ```
 
-This Cell 4 contains the exact concepts we already proved in the SSP notebook:
+### Our acceptance test
+
+For SSP, **the new production notebook must reproduce the exact proven baseline**:
 
 ```text
-Deterministic node/edge identities
-Mapping-path ownership
-Nested payload creation
-CONTENT_ID
-VALUE
-SOURCE_FIELD_NAME + ID
-SOURCE_FIELD_NAME + VALUE
-ITEM_PATH
+Canonical nodes : 92,880
+Canonical edges : 90,715
 ```
 
-There are **no element names like metadata, props, components, responsible-parties, SSP, etc. inside the logic**.
+This is the important test: same 2,165 Archer records, same 608 mappings, same 12 active registry nodes, same generic identity rules → **same graph from the clean mapper notebook**.
 
-Run **Cell 4 only**. It should simply finish with:
+`EXECUTE_WRITES` is still `False`, so Cell 5 cannot change your target tables.
 
-```text
-Cell 4 complete - generic OSCAL functions ready
-```
-
-Then Cell 5 will finally be the clean `build_oscal_graph()` function using these helpers.
+Run Cell 5 only. If we get **92,880 / 90,715**, we freeze the graph-builder function and move to the reusable validation/load function.
