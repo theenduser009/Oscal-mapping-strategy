@@ -1,22 +1,14 @@
-INSERT INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-(
-    OSCAL_MODEL_KEY,
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    PROCESS_ORDER,
-    IS_ACTIVE
+# Cell 8F — Expected component node count
+# READ ONLY
+
+unique_parent_component = {
+    (parent_id, content_id)
+    for parent_id, field, content_id, level_id in refs
+}
+
+print("Reference occurrences:", len(refs))
+print("Unique SSP + ContentId:", len(unique_parent_component))
+print(
+    "Duplicate references within same SSP:",
+    len(refs) - len(unique_parent_component)
 )
-VALUES
-(
-    'SSP',
-    'system-security-plan.system-implementation.components[]',
-    'components',
-    'system-security-plan.system-implementation',
-    TRUE,
-    'CONTENT_ID',
-    3,
-    FALSE
-);
