@@ -1,58 +1,70 @@
-Next: **remove the hardcoded 5 SSP registry rows from Cell 3 and load them from the Snowflake metadata table.**
-
-### 1. Add one CONFIG entry in Cell 1
-
-```python
-"ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
-```
-
-That is the only Cell 1 change.
-
-### 2. In Cell 3, delete the hardcoded `element_registry_data = [...]` block
-
-Replace that whole registry-creation section with:
-
-```python
 # ============================================================
-# Element Registry — structural metadata from Snowflake
+# Cell 8 — Inspect First Collection Node
+# READ ONLY
 # ============================================================
 
-element_registry_df = (
-    session.table(CONFIG["ELEMENT_REGISTRY_TABLE"])
+collection_path = (
+    "system-security-plan.system-implementation.components[]"
+)
+
+# Find mapping rows targeting components[]
+component_mappings = (
+    canonical_mapping_df
     .filter(
-        col("OSCAL_MODEL_KEY") == CONFIG["OSCAL_MODEL"]
+        col("OSCAL_ELEMENT_PATH") == collection_path
     )
+    .collect()
 )
 
-print(
-    "Element registry rows:",
-    element_registry_df.count()
-)
+print("Mappings found:", len(component_mappings))
 
-element_registry_df.sort(
-    col("PROCESS_ORDER"),
-    col("NODE_PATH")
-).show()
-```
+for m in component_mappings:
+    print(
+        "SOURCE_FIELD_NAME:",
+        m["SOURCE_FIELD_NAME"],
+        "| CARDINALITY:",
+        m["CARDINALITY"],
+        "| MAPPING_TYPE:",
+        m["MAPPING_TYPE"]
+    )
 
-That's it.
 
-Now the architecture becomes:
+# Inspect actual source values
+if component_mappings:
 
-```text
-Mapping CSV
-    ↓
-canonical_mapping_df
+    source_field = component_mappings[0]["SOURCE_FIELD_NAME"]
 
-Snowflake OSCAL_ELEMENT_REGISTRY
-    ↓
-element_registry_df
+    samples = 0
 
-        BOTH
-         ↓
-generic engine
-```
+    for record in source_df.to_local_iterator():
 
-So SSP structure is no longer hardcoded in Python.
+        raw_json = record["CURATED_JSON"]
 
-Run **Cell 1 → Cell 3** and show me the registry output. We should see the rows from `RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY`.
+        if isinstance(raw_json, str):
+            try:
+                source_obj = json.loads(raw_json)
+            except Exception:
+                continue
+        else:
+            source_obj = raw_json
+
+        if not isinstance(source_obj, dict):
+            continue
+
+        value = resolve_json_path(
+            source_obj,
+            source_field
+        )
+
+        if value not in (None, "", [], {}):
+
+            print("\nSOURCE_RECORD_ID:", record["SOURCE_RECORD_ID"])
+            print("VALUE TYPE:", type(value).__name__)
+            print("VALUE:", str(value)[:1000])
+
+            samples += 1
+
+        if samples >= 5:
+            break
+
+print("\nInspection complete.")
