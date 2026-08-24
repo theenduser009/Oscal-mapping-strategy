@@ -1,86 +1,79 @@
-Great — this result gives us the answer cleanly. ✅
-
-```text
-Mapped prop fields:              10
-Total prop instances:        12,028
-Maximum items from one field:     9
-Multi-value occurrences:        929
-```
-
-So **`SOURCE_FIELD_NAME` alone is not enough**. One field such as `INFORMATION_CLASSIFICATION` can produce several values for the same SSP.
-
-For `props[]`, the correct deterministic instance identity is therefore:
-
-```text
-SOURCE_FIELD_NAME + VALUE
-```
-
-Example:
-
-```text
-INFORMATION_CLASSIFICATION | 162484
-INFORMATION_CLASSIFICATION | 162486
-INFORMATION_CLASSIFICATION | 162488
-```
-
-Those must become three separate `props[]` nodes.
-
-### Next step: one generic enhancement
-
-We already support:
-
-```text
-CONTENT_ID
-VALUE
-SOURCE_FIELD_NAME+ID
-```
-
-Now add support for:
-
-```text
-SOURCE_FIELD_NAME+VALUE
-```
-
-Inside your existing `_get_instance_key()` in Cell 5, add this block **immediately after**:
-
-```python
-rule = str(instance_key_rule or "").strip()
-```
-
-Add:
-
-```python
-# Generic identity for collections where
-# one mapped source field can contain multiple scalar values.
-if _normalize_key_name(rule) == _normalize_key_name("SOURCE_FIELD_NAME+VALUE"):
-
-    if not source_field:
-        return None
-
-    if isinstance(item, (dict, list)):
-        return None
-
-    return f"{source_field}|{item}"
-```
-
-Nothing else in Cell 5 changes.
-
-Then **do not register `props[]` yet**. Rerun Cell 5 first.
-
-Because `props[]` is still inactive/not registered, our baseline must remain exactly:
+Perfect. ✅ The compatibility check passed again:
 
 ```text
 Nodes: 76,083
 Edges: 73,918
 ```
 
-If those stay identical, we have safely added the final generic identity pattern needed by the currently mapped SSP branches.
+So the new `SOURCE_FIELD_NAME+VALUE` logic did **not** affect anything already working.
 
-Then we register `props[]` with:
+### Next step: register `props[]`
 
-```text
-ITEM_PATH         = $
-INSTANCE_KEY_RULE = SOURCE_FIELD_NAME+VALUE
+Use this SQL cell:
+
+```sql
+MERGE INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY t
+USING (
+    SELECT
+        'SSP' AS OSCAL_MODEL_KEY,
+        'system-security-plan.system-characteristics.props[]' AS NODE_PATH,
+        'props' AS ELEMENT_TYPE,
+        'system-security-plan.system-characteristics' AS PARENT_NODE_PATH,
+        TRUE AS IS_COLLECTION,
+        'SOURCE_FIELD_NAME+VALUE' AS INSTANCE_KEY_RULE,
+        3 AS PROCESS_ORDER,
+        TRUE AS IS_ACTIVE,
+        '$' AS ITEM_PATH
+) s
+
+ON  t.OSCAL_MODEL_KEY = s.OSCAL_MODEL_KEY
+AND t.NODE_PATH = s.NODE_PATH
+
+WHEN MATCHED THEN UPDATE SET
+    t.ELEMENT_TYPE      = s.ELEMENT_TYPE,
+    t.PARENT_NODE_PATH  = s.PARENT_NODE_PATH,
+    t.IS_COLLECTION     = s.IS_COLLECTION,
+    t.INSTANCE_KEY_RULE = s.INSTANCE_KEY_RULE,
+    t.PROCESS_ORDER     = s.PROCESS_ORDER,
+    t.IS_ACTIVE         = s.IS_ACTIVE,
+    t.ITEM_PATH         = s.ITEM_PATH
+
+WHEN NOT MATCHED THEN INSERT (
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER,
+    IS_ACTIVE,
+    ITEM_PATH
+)
+VALUES (
+    s.OSCAL_MODEL_KEY,
+    s.NODE_PATH,
+    s.ELEMENT_TYPE,
+    s.PARENT_NODE_PATH,
+    s.IS_COLLECTION,
+    s.INSTANCE_KEY_RULE,
+    s.PROCESS_ORDER,
+    s.IS_ACTIVE,
+    s.ITEM_PATH
+);
 ```
 
-and the engine should create those **12,028 prop instances automatically**.
+This means:
+
+```text
+FINANCIAL_SYSTEM | 80647
+MISSION_CRITICAL | 80651
+INFORMATION_CLASSIFICATION | 162484
+INFORMATION_CLASSIFICATION | 162486
+...
+```
+
+Each becomes a distinct `props[]` instance.
+
+And importantly, we're **following the mapping exactly as provided**. We are not inventing OSCAL `name`, `value`, or transformation semantics.
+
+Run only this registry MERGE. Then refresh **Cell 3** and run **Cell 5 unchanged**. The prop scan found 12,028 source occurrences; Cell 5 will tell us the authoritative node count after its deterministic de-duplication.
