@@ -1,229 +1,136 @@
-Yes — I see what it did, and **I would not accept this as Cell 1 yet**.
+Yes. I read both screenshots carefully. **We are very close, but I want three small corrections before we freeze Cell 1.** These are exactly the kinds of things that would otherwise force another refactor later.
 
-It understood the overall direction, but it already started drifting into “put everything reusable into initialization.” That gets us right back toward another giant notebook cell.
+The overall Cell 1 structure is now correct: imports, session, CONFIG, no functions, no DIM/FACT writes. Keep that.
 
-The good news: much of the code it pulled forward is useful. We just need to organize it correctly **before we start running/building anything**.
+### 1. Remove `ROOT_NODE_PATH_PREFIX`
 
-### What it got right
+This line should **not** exist in Cell 1:
 
-From your screenshots, it correctly carried forward several useful pieces:
-
-* `get_active_session()`
-* CONFIG concept
-* approved MD5 identity helpers
-* `load_source()`
-* `resolve_json_path()`
-* `set_nested_path()`
-* transformation helper concept
-* the ~6-cell production structure
-* no DIM/FACT write yet
-
-So this is **not wasted work**.
-
-### But there are 3 things I want corrected now
-
-**1. Cell 1 is becoming too big.**
-
-Your screenshot literally says:
-
-> `Cell 1 – Initialization`
-
-but then contains:
-
-```text
-CONFIG
-identity functions
-source loader
-JSON resolver
-nested payload builder
-transform logic
+```python
+ROOT_NODE_PATH_PREFIX = "system-security-plan"
 ```
 
-No. Cell 1 should remain boring and stable:
+That makes the supposedly generic engine SSP-specific again.
+
+The root must come later from `element_registry_df`:
 
 ```text
-imports
-session
-CONFIG
-constants
+system-security-plan
+PARENT_NODE_PATH = NULL
 ```
 
-That's it.
+For POA&M the root will be different. We should never hardcode the root into the engine.
 
-The reusable functions belong together in our reusable-functions cell.
-
----
-
-**2. It copied the old identity seed unchanged without resolving our production issue.**
+### 2. Remove `edge_type_default = "parent_of"`
 
 I see:
 
 ```python
-def build_node_seed(source_system, source_table, content_id, node_type):
+"edge_type_default": "parent_of"
 ```
 
-with:
+Don't freeze that yet.
 
-```text
-SOURCE_SYSTEM|SOURCE_TABLE|CONTENT_ID|NODE_TYPE
+`DEPENDENCY_TYPE` should eventually be determined by relationship metadata/registry. We haven't approved that contract yet. Otherwise we may later discover that some relationships are `contains`, `references`, etc., and have to undo this.
+
+### 3. Add the model explicitly
+
+Add:
+
+```python
+"OSCAL_MODEL": "SSP",
 ```
 
-That's our **prototype identity contract**.
+This is the clean generic way to say:
 
-We can preserve it temporarily for compatibility, but we already identified that this cannot distinguish:
+> This run is processing SSP.
 
-```text
-component #1
-component #2
-component #3
+Then later exactly the same engine can run:
+
+```python
+"OSCAL_MODEL": "POAM"
 ```
 
-inside the same source record.
-
-We should **not change it today**, because changing identity impacts existing hashes.
-
-But we also must **not declare it production-final**.
-
-Mark it clearly:
-
-```text
-LEGACY / V1 IDENTITY — retained for compatibility
-```
-
-Then after `element_registry_df` is defined, we approve the repeated-node identity strategy deliberately.
+without changing Python logic.
 
 ---
 
-**3. This part is NOT okay:**
+### One more cleanup I recommend
 
-I can see:
-
-```python
-if logic in ["TBD", "", "PENDING", "TODO"]:
-    return "TBD_TRANSFORM"
-```
-
-That must not go into production.
-
-Why?
-
-Suppose Archer says:
-
-```text
-John Smith
-```
-
-and mapping transformation is TBD.
-
-This function would potentially put:
-
-```text
-"TBD_TRANSFORM"
-```
-
-into the OSCAL payload.
-
-That's **fabricated target data**.
-
-We specifically decided incomplete/TBD mapping metadata should not cause us to invent transformations.
-
-For now it should either:
+I would also remove these from Cell 1 for now:
 
 ```python
-return value
+SEED_SEPARATOR = "|"
+EDGE_SEED_SEPARATOR = "::"
+LEGACY_SEED_FORMAT = ...
 ```
 
-for pass-through behavior when allowed,
+Why? Your **existing approved identity functions already define those exact formats themselves**. Having them both in constants **and** hardcoded inside the functions gives us two sources of truth.
 
-or the mapping should be flagged/skipped separately.
+We are preserving the old functions unchanged for compatibility, so let the functions own their V1 format for now.
 
-But **never replace the source value with the literal string `"TBD_TRANSFORM"`**.
+`identity_version = "v1_legacy_singleton"` is good. **Keep that.**
 
-That is the biggest thing I caught in these screenshots.
+`node_uuid_policy = "md5_32char_lowercase_hex"` is also okay to keep because it documents the current identity contract.
 
 ---
 
-## So don't throw this away
+## Final Cell 1 contract
 
-Tell the other AI exactly this:
-
-> Good start, but stop before generating any more cells.
->
-> We need to reorganize what you produced.
->
-> **Correction 1 — Cell 1**
->
-> Cell 1 must contain ONLY:
->
-> * imports
-> * `session = get_active_session()`
-> * CONFIG
-> * stable constants
->
-> Do not place identity helpers, source loading, JSON resolver, nested payload builder, or transformation functions in Cell 1.
->
-> Those functions will move into the reusable-functions cell later.
->
-> **Correction 2 — existing identity functions**
->
-> Preserve the existing MD5 identity helpers for now because they are already approved/proven by the prototype.
->
-> However, explicitly label the current seed:
->
-> `SOURCE_SYSTEM|SOURCE_TABLE|CONTENT_ID|NODE_TYPE`
->
-> as the **existing/legacy singleton identity contract**, not the final repeated-node production identity.
->
-> Do NOT modify the seed yet.
->
-> We will finalize repeated-node identity only after `canonical_mapping_df` and `element_registry_df` exist, because elements such as `components[]`, `props[]`, etc. require instance context.
->
-> **Correction 3 — apply_transform**
->
-> Remove this behavior:
->
-> `return "TBD_TRANSFORM"`
->
-> Never insert an invented string into OSCAL data because transformation metadata says TBD/PENDING/TODO.
->
-> For now, do not finalize `apply_transform()` at all. Preserve it as a future reusable helper and wait until canonical mapping metadata determines how unresolved transformations should be handled.
->
-> **Correction 4 — do not implement more functions yet**
->
-> For the new notebook, give me ONLY the cleaned Cell 1 now.
->
-> Cell 1 should contain imports, session, CONFIG, and stable constants only.
->
-> Do not generate Cell 2.
-> Do not generate canonical mapping code.
-> Do not build SSP root.
-> Do not build DIM or FACT.
->
-> Show the corrected Cell 1 and STOP.
-
-### One more thing I noticed
-
-Your CONFIG currently still points specifically to:
-
-```text
-DIM_OSCAL_SSP_ELEMENT
-FACT_OSCAL_SSP_DEPENDENCY
-```
-
-That is **fine right now** because SSP is our first implementation/test case.
-
-We do **not** need to redesign that today.
-
-Later, when we prove the metadata engine, we can decide whether configuration becomes:
+I want Cell 1 to be this simple conceptually:
 
 ```python
-MODEL_CONFIG["SSP"]
-MODEL_CONFIG["POAM"]
-MODEL_CONFIG["ASSESSMENT_PLAN"]
+# imports
+
+session = get_active_session()
+
+CONFIG = {
+    "RUN_ID": "<bind-run-id>",
+    "OSCAL_MODEL": "SSP",
+
+    "SOURCE_SYSTEM_NAME": "ARCHER",
+    "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+    "RAW_TABLE": "...",
+
+    "TARGET_DIM": "...DIM_OSCAL_SSP_ELEMENT",
+    "TARGET_FACT": "...FACT_OSCAL_SSP_DEPENDENCY",
+
+    "identity_version": "v1_legacy_singleton",
+    "node_uuid_policy": "md5_32char_lowercase_hex"
+}
 ```
 
-But I'm deliberately **not changing that now**. That's exactly the kind of premature refactoring that has been exhausting us.
+That's enough.
 
-So: **keep CONFIG, clean Cell 1, preserve useful functions but move them out, kill `"TBD_TRANSFORM"`, and then stop.**
+Notice what is deliberately **NOT** there:
 
-This is the kind of checking we want: catch structural problems **before** we have 20 cells depending on them.
+```text
+system-security-plan root path
+metadata path
+import-profile path
+parent relationship
+edge/dependency type
+mapping rules
+node builders
+hash functions
+JSON functions
+```
+
+Those belong to metadata/functions later.
+
+### Send this to the other AI
+
+> Cell 1 is almost approved. Make ONLY these final corrections:
+>
+> 1. Add `"OSCAL_MODEL": "SSP"` to CONFIG.
+> 2. Remove `ROOT_NODE_PATH_PREFIX = "system-security-plan"`. Root must come from `element_registry_df`, not hardcoded configuration.
+> 3. Remove `"edge_type_default": "parent_of"`. Dependency type will be metadata-driven and has not been approved yet.
+> 4. Remove `SEED_SEPARATOR`, `EDGE_SEED_SEPARATOR`, and `LEGACY_SEED_FORMAT` from Cell 1 because the existing approved V1 identity functions already own those formats. Do not create two sources of truth.
+> 5. Keep `identity_version = "v1_legacy_singleton"` and `node_uuid_policy = "md5_32char_lowercase_hex"` for compatibility.
+> 6. Do not add any functions or SSP paths.
+>
+> Show the corrected Cell 1 only and STOP.
+
+After those changes, **I will consider Cell 1 frozen**. We don't come back and remodel it unless an actual technical requirement forces us to.
+
+Then Cell 2 has exactly one job: **load `source_df` and the actual mapping CSV as `mapping_df` — no transformations yet.**
