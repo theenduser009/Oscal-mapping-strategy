@@ -1,104 +1,84 @@
-Great — **Cell 1 only.** This is the clean production configuration cell. No mapping logic, no registry logic, no transformation logic yet.
+Cell 1 is clean. ✅ `SSP`, source, registry, targets, run ID, and `EXECUTE_WRITES=False` are all correct.
+
+Now **Cell 2 only**. Its job is purely to load the three production inputs:
+
+1. Archer raw records
+2. Archer→OSCAL mapping CSV
+3. Active registry for the configured model
+
+We are reusing the exact mapping-file approach that already worked in the SSP notebook.
 
 ```python
 # ============================================================
-# Cell 1 — Production Configuration
-# NB_ARCHER_OSCAL_MAPPER_V1
+# Cell 2 — Load Production Inputs
 # ============================================================
 
-import uuid
+import pandas as pd
 
-from snowflake.snowpark.context import get_active_session
-
-session = get_active_session()
+from snowflake.snowpark.functions import col
 
 
-CONFIG = {
+# ------------------------------------------------------------
+# A. Load Archer source
+# ------------------------------------------------------------
 
-    # --------------------------------------------------------
-    # Runtime
-    # --------------------------------------------------------
-    "RUN_ID": str(uuid.uuid4()),
-
-    # --------------------------------------------------------
-    # OSCAL model being processed
-    # --------------------------------------------------------
-    "OSCAL_MODEL": "SSP",
-
-    # --------------------------------------------------------
-    # Source
-    # --------------------------------------------------------
-    "SOURCE_SYSTEM_NAME": "ARCHER",
-    "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
-
-    "RAW_TABLE":
-        "RTX_RAW_DEV.ES_ESC_GRC."
-        "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
-
-    # --------------------------------------------------------
-    # Structural metadata
-    # --------------------------------------------------------
-    "REGISTRY_TABLE":
-        "RTX_RAW_DEV.ES_ESC_GRC."
-        "OSCAL_ELEMENT_REGISTRY",
-
-    # --------------------------------------------------------
-    # Curated targets
-    # --------------------------------------------------------
-    "TARGET_DIM":
-        "RTX_ENTERPRISESERVICES_DEV."
-        "ES_ESC_GRC_CURATED."
-        "DIM_OSCAL_SSP_ELEMENT",
-
-    "TARGET_FACT":
-        "RTX_ENTERPRISESERVICES_DEV."
-        "ES_ESC_GRC_CURATED."
-        "FACT_OSCAL_SSP_DEPENDENCY",
-
-    # --------------------------------------------------------
-    # Execution safety
-    # Start production notebook in read-only mode
-    # --------------------------------------------------------
-    "EXECUTE_WRITES": False
-}
+source_df = (
+    session.table(CONFIG["RAW_TABLE"])
+    .select(
+        col("CONTENT_ID").cast("string").alias("SOURCE_RECORD_ID"),
+        col("CURATED_JSON")
+    )
+)
 
 
-print("=== OSCAL Mapper Configuration ===")
-print("Model       :", CONFIG["OSCAL_MODEL"])
-print("Source      :", CONFIG["RAW_TABLE"])
-print("Registry    :", CONFIG["REGISTRY_TABLE"])
-print("Target DIM  :", CONFIG["TARGET_DIM"])
-print("Target FACT :", CONFIG["TARGET_FACT"])
-print("Run ID      :", CONFIG["RUN_ID"])
-print("Writes      :", CONFIG["EXECUTE_WRITES"])
+# ------------------------------------------------------------
+# B. Load Archer -> OSCAL mapping CSV
+# ------------------------------------------------------------
+
+mapping_pdf = pd.read_csv(
+    "archer_to_oscal_mapping (4).csv",
+    encoding="cp1252",
+    dtype=str
+)
+
+mapping_df = session.create_dataframe(mapping_pdf)
+
+
+# ------------------------------------------------------------
+# C. Load active registry for configured OSCAL model
+# ------------------------------------------------------------
+
+element_registry_df = (
+    session.table(CONFIG["REGISTRY_TABLE"])
+    .filter(
+        (col("OSCAL_MODEL_KEY") == CONFIG["OSCAL_MODEL"])
+        & (col("IS_ACTIVE") == True)
+    )
+)
+
+
+# ------------------------------------------------------------
+# D. Input verification
+# ------------------------------------------------------------
+
+print("=== OSCAL Mapper Inputs ===")
+print("Source records :", source_df.count())
+print("Mapping rows   :", mapping_df.count())
+print("Registry rows  :", element_registry_df.count())
+
+print("\nActive model   :", CONFIG["OSCAL_MODEL"])
 ```
 
-### Why Cell 1 is intentionally boring
-
-It only answers:
+For our known SSP baseline, we expect approximately:
 
 ```text
-What model am I running?
-Where is my source?
-Where is my registry?
-Where do DIM/FACT go?
-What is this pipeline run?
-Am I allowed to write?
+Source records : 2165
+Mapping rows   : 608
+Registry rows  : 11
 ```
 
-Nothing SSP-specific is hardcoded into the **mapper logic**. SSP-specific table names are configuration values, which we can later replace when another model runs.
+The registry count may be `11` now because `control-implementation` was deactivated and the confirmed SSP nodes remain active.
 
-And I deliberately set:
+**One thing:** if the new notebook doesn't see `"archer_to_oscal_mapping (4).csv"` directly, don't change anything else. Show me that error and we'll reuse the **exact file reference/import mechanism from the old notebook** rather than inventing another loading method.
 
-```python
-"EXECUTE_WRITES": False
-```
-
-because our first production run should reproduce the known baseline **without touching the tables**:
-
-```text
-92,880 nodes
-90,715 edges
-```
-
-Run **Cell 1 only**. If it runs cleanly, next we build **Cell 2: source + mapping + registry inputs**.
+Run Cell 2 only.
