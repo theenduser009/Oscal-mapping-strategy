@@ -1,120 +1,120 @@
-Perfect. ✅ Cell 6 is now proven and should be frozen.
+Perfect — this proves the **clean production execution path** works end-to-end in dry-run mode:
 
-We are at the final production step: **Cell 7 = one orchestrator function**. This is what Matillion will eventually call conceptually.
+```text
+Nodes      : 92,880
+Edges      : 90,715
+Validation : PASSED
+Writes     : False
+```
 
-For now, keep `EXECUTE_WRITES=False`.
+So yes: **freeze Cells 1–5.** The old SSP notebook is now reference/evidence only, not part of production execution.
+
+### Next step: add post-load verification — without creating another cell
+
+Put this function at the **bottom of Cell 6**, after `validate_and_load_oscal()`:
 
 ```python
-# ============================================================
-# Cell 7 — Production OSCAL Mapper Orchestrator
-# ============================================================
-
-def run_oscal_mapping(
-    source_df,
-    canonical_mapping_df,
-    element_registry_df,
+def verify_oscal_load(
+    canonical_nodes_df,
+    canonical_edges_df,
     config
 ):
     """
-    Execute one complete metadata-driven OSCAL mapping run.
-
-    Flow:
-        1. Build canonical OSCAL graph
-        2. Validate graph
-        3. Load DIM/FACT only when EXECUTE_WRITES=True
-
-    Returns:
-        canonical_nodes_df
-        canonical_edges_df
-        load_result
+    Verify that every node/edge produced by this run
+    exists in the target DIM/FACT tables.
     """
 
-    print("=" * 70)
-    print("OSCAL MAPPING RUN")
-    print("Model :", config["OSCAL_MODEL"])
-    print("Run ID:", config["RUN_ID"])
-    print("=" * 70)
+    expected_dim = canonical_nodes_df.count()
+    expected_fact = canonical_edges_df.count()
 
-    # --------------------------------------------------------
-    # 1. Build graph
-    # --------------------------------------------------------
-
-    nodes_df, edges_df = build_oscal_graph(
-        source_df=source_df,
-        canonical_mapping_df=canonical_mapping_df,
-        element_registry_df=element_registry_df,
-        model_key=config["OSCAL_MODEL"],
-        source_system=config["SOURCE_SYSTEM_NAME"],
-        source_table=config["SOURCE_TABLE_NAME"]
+    canonical_nodes_df.select(
+        col("NODE_KEY").alias("PK_OSCAL_SSP_ELEMENT_HASH")
+    ).create_or_replace_temp_view(
+        "TMP_OSCAL_VERIFY_DIM"
     )
 
-    # --------------------------------------------------------
-    # 2. Validate / optionally load
-    # --------------------------------------------------------
-
-    result = validate_and_load_oscal(
-        canonical_nodes_df=nodes_df,
-        canonical_edges_df=edges_df,
-        config=config
+    canonical_edges_df.select(
+        col("EDGE_KEY").alias("PK_FACT_OSCAL_DEPENDENCY_HASH")
+    ).create_or_replace_temp_view(
+        "TMP_OSCAL_VERIFY_FACT"
     )
 
-    print("\n" + "=" * 70)
-    print("OSCAL MAPPING RUN COMPLETE")
-    print("Nodes :", result["nodes"])
-    print("Edges :", result["edges"])
-    print("Writes:", result["writes_executed"])
-    print("=" * 70)
+    dim_matches = session.sql(f"""
+        SELECT COUNT(*) AS CNT
+        FROM TMP_OSCAL_VERIFY_DIM s
+        JOIN {config["TARGET_DIM"]} t
+          ON s.PK_OSCAL_SSP_ELEMENT_HASH
+           = t.PK_OSCAL_SSP_ELEMENT_HASH
+    """).collect()[0]["CNT"]
 
-    return nodes_df, edges_df, result
+    fact_matches = session.sql(f"""
+        SELECT COUNT(*) AS CNT
+        FROM TMP_OSCAL_VERIFY_FACT s
+        JOIN {config["TARGET_FACT"]} t
+          ON s.PK_FACT_OSCAL_DEPENDENCY_HASH
+           = t.PK_FACT_OSCAL_DEPENDENCY_HASH
+    """).collect()[0]["CNT"]
 
+    print("\n=== Post-Load Verification ===")
+    print("DIM expected :", expected_dim)
+    print("DIM matched  :", dim_matches)
+    print("FACT expected:", expected_fact)
+    print("FACT matched :", fact_matches)
 
-# ============================================================
-# Execute configured model
-# ============================================================
+    if (
+        dim_matches != expected_dim
+        or fact_matches != expected_fact
+    ):
+        raise ValueError(
+            "OSCAL post-load verification FAILED"
+        )
 
-final_nodes_df, final_edges_df, run_result = run_oscal_mapping(
-    source_df=source_df,
-    canonical_mapping_df=canonical_mapping_df,
-    element_registry_df=element_registry_df,
-    config=CONFIG
+    print("LOAD VERIFIED")
+
+    return {
+        "dim_expected": expected_dim,
+        "dim_matched": dim_matches,
+        "fact_expected": expected_fact,
+        "fact_matched": fact_matches
+    }
+```
+
+Then in **Cell 7**, immediately after:
+
+```python
+result = validate_and_load_oscal(
+    canonical_nodes_df=nodes_df,
+    canonical_edges_df=edges_df,
+    config=config
 )
 ```
 
-Expected result:
+add:
+
+```python
+if result["writes_executed"]:
+    result["verification"] = verify_oscal_load(
+        nodes_df,
+        edges_df,
+        config
+    )
+```
+
+That's all.
+
+Keep:
+
+```python
+"EXECUTE_WRITES": False
+```
+
+for this run and use **Run All** again. It should still finish at:
 
 ```text
-OSCAL MAPPING RUN
-Model : SSP
-
 Nodes : 92880
 Edges : 90715
-
-Null node keys      : 0
-Duplicate node keys : 0
-Null edge keys      : 0
-Duplicate edge keys : 0
-Missing parents     : 0
-Missing children    : 0
-
 Validation PASSED
-
-EXECUTE_WRITES = False
-No DIM/FACT changes were made.
-
-OSCAL MAPPING RUN COMPLETE
-Nodes : 92880
-Edges : 90715
 Writes: False
 ```
 
-This is the important architectural milestone: the caller no longer needs to understand `props[]`, `responsible-parties[]`, `components[]`, SSP hierarchy, hashes, or parent/child FACT construction.
-
-Eventually the caller simply runs:
-
-```python
-run_oscal_mapping(...)
-```
-
-while the **mapping CSV + element registry drive the model**.
-
-Run Cell 7. If it reproduces **92,880 / 90,715**, we freeze it. Then we do one final cleanup pass so Cells 5 and 6 only define functions rather than also executing them independently.
+The verification won't execute yet. Once that passes, the next move is turning writes on for the first production-mapper test.
