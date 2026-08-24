@@ -1,34 +1,40 @@
-Good — that means **`system-implementation` is complete for the current mapping too.** ✅
+Good — but one important correction before we move on.
 
-So far:
+This output shows only:
 
 ```text
-system-security-plan
-├── metadata                  ← still need final structural check
-├── system-characteristics    ✅ complete
-└── system-implementation     ✅ complete
-    └── components[]
+REGISTERED | system-security-plan.metadata.document-ids[]
 ```
 
-### Next step: check `metadata`
+It does **not** show `responsible-parties[]` because the little structural-prefix check excludes the final path itself. In your mapping, `responsible-parties[]` is itself the final mapped path, so the check misses it.
 
-Run the same structural-prefix check with:
+We already know it is registered and working:
+
+```text
+metadata
+├── document-ids[]          ✅
+└── responsible-parties[]   ✅
+```
+
+So instead of continuing branch-by-branch with more cells, I want to do **one final SSP-wide structural audit** that catches both intermediate objects **and terminal `[]` collections**.
+
+Run this next:
 
 ```python
 # ============================================================
-# Remaining Metadata Structural Nodes
+# Final SSP Structural Registry Audit
 # READ ONLY
 # ============================================================
 
 from snowflake.snowpark.functions import col
 
-BASE = "system-security-plan.metadata"
+ROOT = "system-security-plan"
 
 mapped_paths = [
     r["OSCAL_ELEMENT_PATH"]
     for r in (
         canonical_mapping_df
-        .filter(col("OSCAL_ELEMENT_PATH").startswith(BASE + "."))
+        .filter(col("OSCAL_ELEMENT_PATH").startswith(ROOT))
         .select("OSCAL_ELEMENT_PATH")
         .distinct()
         .collect()
@@ -46,39 +52,41 @@ registered_paths = {
     )
 }
 
-candidates = set()
+candidates = {ROOT}
 
 for full_path in mapped_paths:
     parts = full_path.split(".")
 
+    # All intermediate structural parents
     for i in range(2, len(parts)):
-        prefix = ".".join(parts[:i])
+        candidates.add(".".join(parts[:i]))
 
-        if prefix.startswith(BASE + "."):
-            candidates.add(prefix)
+    # Terminal collection paths are structural nodes too
+    if full_path.endswith("[]"):
+        candidates.add(full_path)
 
-print("=== Remaining Metadata Structural Nodes ===")
 
-if not candidates:
-    print("No deeper structural nodes found in current mapping.")
-else:
-    for path in sorted(candidates):
-        status = (
-            "REGISTERED"
-            if path in registered_paths
-            else "NOT REGISTERED"
-        )
+print("=== FINAL SSP STRUCTURAL AUDIT ===")
 
-        print(status, "|", path)
+missing = []
+
+for path in sorted(candidates):
+    status = "REGISTERED" if path in registered_paths else "NOT REGISTERED"
+
+    print(status, "|", path)
+
+    if status == "NOT REGISTERED":
+        missing.append(path)
+
+print("\nMissing structural nodes:", len(missing))
 ```
 
-We already expect at least:
+This is better than doing metadata, system-implementation, system-characteristics one at a time.
+
+The key output is simply:
 
 ```text
-metadata.document-ids[]          REGISTERED
-metadata.responsible-parties[]   REGISTERED
+Missing structural nodes: ?
 ```
 
-But we’ll trust the output, not assumptions.
-
-If there are no `NOT REGISTERED` rows, then **metadata is complete too**, and we’ll be very close to saying the entire mapped SSP hierarchy has been exhausted.
+If it says `0`, then **every structural node represented by the current SSP mapping is registered**. At that point we can confidently stop hierarchy discovery and move to the production wrapper.
