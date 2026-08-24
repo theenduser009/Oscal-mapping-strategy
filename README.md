@@ -1,14 +1,14 @@
-# Cell 8B — Inspect ALL component source fields
+# Cell 8C — Inspect component reference identities
+# READ ONLY
 
 component_fields = [
-    m["SOURCE_FIELD_NAME"]
-    for m in component_mappings
+    "SOFTWARE",
+    "HARDWARE",
+    "INTERCONNECTIONS",
+    "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM"
 ]
 
-stats = {
-    field: {"count": 0, "samples": []}
-    for field in component_fields
-}
+samples = 0
 
 for record in source_df.to_local_iterator():
 
@@ -27,23 +27,37 @@ for record in source_df.to_local_iterator():
 
     for field in component_fields:
 
-        value = resolve_json_path(
-            source_obj,
-            field
-        )
+        values = resolve_json_path(source_obj, field)
 
-        if value not in (None, "", [], {}):
+        if not values:
+            continue
 
-            stats[field]["count"] += 1
+        if not isinstance(values, list):
+            values = [values]
 
-            if len(stats[field]["samples"]) < 2:
-                stats[field]["samples"].append(value)
+        for ref in values:
 
+            if isinstance(ref, dict):
+                content_id = ref.get("ContentId")
+                level_id = ref.get("LevelId")
+            else:
+                content_id = ref
+                level_id = None
 
-for field, info in stats.items():
+            print(
+                "PARENT:", record["SOURCE_RECORD_ID"],
+                "| FIELD:", field,
+                "| CONTENT_ID:", content_id,
+                "| LEVEL_ID:", level_id
+            )
 
-    print("\nFIELD:", field)
-    print("Records with value:", info["count"])
+            samples += 1
 
-    for sample in info["samples"]:
-        print("Sample:", str(sample)[:500])
+            if samples >= 20:
+                break
+
+        if samples >= 20:
+            break
+
+    if samples >= 20:
+        break
