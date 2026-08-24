@@ -1,577 +1,338 @@
 # ============================================================
-# Cell 4 — Reusable Functions
+# Cell 5 — Build Canonical Nodes + Relationships
 # ============================================================
-# Cells 1–3 are frozen.
+# Uses frozen Cells 1–4.
 #
-# This cell defines reusable mechanics only.
+# OUTPUT:
+#   canonical_nodes_df
+#   canonical_edges_df
 #
-# NO node construction
-# NO canonical_nodes_df
-# NO canonical_edges_df
-# NO DIM / FACT writes
 # NO MERGE
-# NO identity redesign
+# NO DIM/FACT writes
 # ============================================================
 
-import hashlib
 import json
 
-from snowflake.snowpark.functions import col
+from snowflake.snowpark.functions import col, parse_json
+from snowflake.snowpark.types import (
+    StructType,
+    StructField,
+    StringType,
+    BinaryType,
+    IntegerType
+)
 
 
 # ============================================================
-# A. IDENTITY HELPERS — FROZEN V1 CONTRACT
+# 1. Active registry for selected OSCAL model
 # ============================================================
 
-def build_node_seed(source_system, source_table, content_id, node_type):
-    """
-    Frozen singleton V1 node identity.
+model_key = CONFIG["OSCAL_MODEL"]
 
-    Format:
-    SOURCE_SYSTEM|SOURCE_TABLE|CONTENT_ID|NODE_TYPE
-    """
-    cid = content_id.strip() if content_id is not None else ""
+registry_rows = (
+    element_registry_df
+    .filter(
+        (col("OSCAL_MODEL_KEY") == model_key)
+        & (col("IS_ACTIVE") == True)
+    )
+    .order_by(
+        col("PROCESS_ORDER"),
+        col("NODE_PATH")
+    )
+    .collect()
+)
 
-    return (
-        f"{source_system}|"
-        f"{source_table}|"
-        f"{cid}|"
-        f"{node_type}"
+if not registry_rows:
+    raise ValueError(
+        f"No active registry rows found for model: {model_key}"
     )
 
 
-def compute_node_key(seed):
-    """
-    MD5 digest bytes -> BINARY(16)
-    """
-    return hashlib.md5(
-        seed.encode("utf-8")
-    ).digest()
+# ============================================================
+# 2. Preload mappings once per registered node
+# ============================================================
 
+mappings_by_node = {}
 
-def compute_node_uuid(seed):
-    """
-    Deterministic 32-character lowercase MD5 hex.
-    """
-    return hashlib.md5(
-        seed.encode("utf-8")
-    ).hexdigest().lower()
+for registry_row in registry_rows:
 
+    node_path = registry_row["NODE_PATH"]
 
-def build_edge_seed(
-    source_node_key_hex,
-    target_node_key_hex,
-    edge_type="parent_of"
-):
-    """
-    Frozen directional edge identity.
-
-    SOURCE = parent
-    TARGET = child
-
-    Format:
-    SOURCE_KEY_HEX::TARGET_KEY_HEX::EDGE_TYPE
-    """
-    return (
-        f"{source_node_key_hex}::"
-        f"{target_node_key_hex}::"
-        f"{edge_type}"
+    mappings_by_node[node_path] = get_mappings_for_node(
+        canonical_mapping_df,
+        element_registry_df,
+        node_path,
+        oscal_model_key=model_key
     )
 
 
-def compute_edge_key(seed):
-    """
-    MD5 digest bytes -> BINARY(16)
-    """
-    return hashlib.md5(
-        seed.encode("utf-8")
-    ).digest()
-
-
 # ============================================================
-# B. SOURCE JSON RESOLVER
+# 3. Build canonical node + edge rows
 # ============================================================
 
-def resolve_json_path(obj, path):
-    """
-    Resolve a source field/path from CURATED_JSON.
+node_rows = []
+edge_rows = []
 
-    Current mapping CSV does not contain SOURCE_JSON_PATH,
-    therefore SOURCE_FIELD_NAME is used.
+source_system = CONFIG["SOURCE_SYSTEM_NAME"]
+source_table = CONFIG["SOURCE_TABLE_NAME"]
 
-    Supports:
-        FIELD
-        OBJECT.FIELD
-        ARRAY[]
-        ARRAY.0.FIELD
+for source_record in source_df.to_local_iterator():
 
-    For [] arrays, returns the array to the caller.
-    """
+    raw_record_id = source_record["SOURCE_RECORD_ID"]
 
-    if obj is None or not path:
-        return None
+    if raw_record_id is None:
+        continue
 
-    # Exact key first.
-    # Important in case a source key itself contains dots.
-    if isinstance(obj, dict) and path in obj:
-        return obj.get(path)
+    source_record_id = str(raw_record_id).strip()
 
-    current = obj
-    parts = str(path).split(".")
+    if not source_record_id:
+        continue
 
-    for part in parts:
+    # Nodes created for THIS source record only.
+    record_nodes = {}
 
-        if current is None:
-            return None
+    # --------------------------------------------------------
+    # Build nodes
+    # --------------------------------------------------------
 
-        # Array notation: field[]
-        if part.endswith("[]"):
+    for registry_row in registry_rows:
 
-            key = part[:-2]
+        node_path = registry_row["NODE_PATH"]
+        element_type = registry_row["ELEMENT_TYPE"]
+        parent_node_path = registry_row["PARENT_NODE_PATH"]
+        process_order = registry_row["PROCESS_ORDER"]
 
-            if isinstance(current, dict):
-                current = current.get(key)
-
-            else:
-                return None
-
-            if isinstance(current, list):
-                # Caller handles the returned collection.
-                return current
-
-            return None
-
-        # Standard dictionary key
-        if isinstance(current, dict):
-            current = current.get(part)
-
-        # Numeric list index
-        elif isinstance(current, list):
-
-            try:
-                idx = int(part)
-
-                if 0 <= idx < len(current):
-                    current = current[idx]
-                else:
-                    return None
-
-            except (ValueError, TypeError):
-                return None
-
-        else:
-            return None
-
-    return current
-
-
-# ============================================================
-# C. MAPPING OWNERSHIP HELPER
-# ============================================================
-
-def _row_to_dict(row):
-    """
-    Convert Snowpark Row or dict into a normal Python dict.
-    """
-
-    if isinstance(row, dict):
-        return dict(row)
-
-    if hasattr(row, "as_dict"):
-        return row.as_dict()
-
-    if hasattr(row, "asDict"):
-        return row.asDict()
-
-    raise TypeError(
-        f"Unsupported row type: {type(row)}"
-    )
-
-
-def get_mappings_for_node(
-    canonical_mapping_df,
-    element_registry_df,
-    node_path,
-    oscal_model_key=None
-):
-    """
-    Return field mappings owned by one registered OSCAL node.
-
-    Ownership rule:
-        mapping belongs to the deepest registered NODE_PATH
-        that is a segment-safe prefix of OSCAL_ELEMENT_PATH.
-
-    Returned mappings are enriched with:
-
-        OWNER_NODE_PATH
-        FIELD_RELATIVE_PATH
-
-    Example:
-
-        OSCAL_ELEMENT_PATH:
-        system-security-plan.metadata.document-ids[].identifier
-
-        OWNER_NODE_PATH:
-        system-security-plan.metadata
-
-        FIELD_RELATIVE_PATH:
-        document-ids[].identifier
-    """
-
-    if oscal_model_key is None:
-        oscal_model_key = CONFIG["OSCAL_MODEL"]
-
-    # Get active nodes for selected OSCAL model.
-    active_node_rows = (
-        element_registry_df
-        .filter(
-            (col("OSCAL_MODEL_KEY") == oscal_model_key)
-            & (col("IS_ACTIVE") == True)
-        )
-        .select("NODE_PATH")
-        .collect()
-    )
-
-    active_node_paths = [
-        row["NODE_PATH"]
-        for row in active_node_rows
-        if row["NODE_PATH"]
-    ]
-
-    # Deepest paths first.
-    active_node_paths = sorted(
-        active_node_paths,
-        key=len,
-        reverse=True
-    )
-
-    if not active_node_paths:
-        return []
-
-    # Mapping CSV is small metadata (currently 608 rows).
-    mapping_rows = canonical_mapping_df.collect()
-
-    owned_mappings = []
-
-    for mapping_row in mapping_rows:
-
-        mapping = _row_to_dict(mapping_row)
-
-        element_path = mapping.get(
-            "OSCAL_ELEMENT_PATH"
+        mappings = mappings_by_node.get(
+            node_path,
+            []
         )
 
-        if not element_path:
+        payload = build_element_payload(
+            source_record,
+            mappings
+        )
+
+        # Generic creation rule:
+        #
+        # ROOT:
+        #   always create once per source record
+        #
+        # CHILD:
+        #   create only when mapped payload exists
+        #
+        is_root = parent_node_path is None
+
+        if not is_root and not payload:
             continue
 
-        owner_node_path = None
+        # ----------------------------------------------------
+        # Frozen V1 singleton identity
+        # ----------------------------------------------------
 
-        # Find deepest registered node.
-        for candidate_node_path in active_node_paths:
-
-            if (
-                element_path == candidate_node_path
-                or element_path.startswith(
-                    candidate_node_path + "."
-                )
-            ):
-                owner_node_path = candidate_node_path
-                break
-
-        if owner_node_path is None:
-            continue
-
-        # Only return mappings for requested node.
-        if owner_node_path != node_path:
-            continue
-
-        # Derive path relative to owner node.
-        if element_path == owner_node_path:
-
-            field_relative_path = None
-
-        else:
-
-            field_relative_path = element_path[
-                len(owner_node_path) + 1:
-            ]
-
-        enriched = dict(mapping)
-
-        enriched["OWNER_NODE_PATH"] = (
-            owner_node_path
+        seed = build_node_seed(
+            source_system,
+            source_table,
+            source_record_id,
+            element_type
         )
 
-        enriched["FIELD_RELATIVE_PATH"] = (
-            field_relative_path
-        )
+        node_key = compute_node_key(seed)
+        node_uuid = compute_node_uuid(seed)
 
-        owned_mappings.append(enriched)
-
-    return owned_mappings
-
-
-# ============================================================
-# D. TRANSFORMATION HELPER
-# ============================================================
-
-def apply_transform(
-    value,
-    mapping_type,
-    transformation_logic
-):
-    """
-    Minimal safe transformation contract.
-
-    Current behavior:
-
-      None value
-          -> None
-
-      Direct / no transform
-          -> original source value
-
-      TBD / unresolved transformation
-          -> original source value
-
-    Never fabricates placeholder target values.
-
-    Approved transformations can be added here later.
-    """
-
-    if value is None:
-        return None
-
-    return value
-
-
-# ============================================================
-# E. NESTED PAYLOAD HELPER
-# ============================================================
-
-def set_nested_path(
-    container,
-    path_segments,
-    value
-):
-    """
-    Write a value into a nested OSCAL payload.
-
-    Supports dictionary paths and basic [] array notation.
-
-    Example:
-
-        document-ids[].identifier
-
-    becomes conceptually:
-
-        {
-            "document-ids": [
-                {
-                    "identifier": value
-                }
-            ]
-        }
-    """
-
-    if not path_segments:
-        return
-
-    current = container
-
-    for i, segment in enumerate(path_segments):
-
-        is_last = (
-            i == len(path_segments) - 1
-        )
-
-        # ----------------------------
-        # Array segment: something[]
-        # ----------------------------
-        if segment.endswith("[]"):
-
-            key = segment[:-2]
-
-            if key not in current:
-                current[key] = []
-
-            if not isinstance(current[key], list):
-                current[key] = []
-
-            # Array is final destination.
-            if is_last:
-
-                if isinstance(value, list):
-                    current[key].extend(value)
-                else:
-                    current[key].append(value)
-
-                return
-
-            # Nested object inside array.
-            if len(current[key]) == 0:
-                current[key].append({})
-
-            if not isinstance(
-                current[key][0],
-                dict
-            ):
-                current[key][0] = {}
-
-            current = current[key][0]
-
-        # ----------------------------
-        # Normal object segment
-        # ----------------------------
-        else:
-
-            if is_last:
-
-                current[segment] = value
-                return
-
-            if (
-                segment not in current
-                or not isinstance(
-                    current[segment],
-                    dict
-                )
-            ):
-                current[segment] = {}
-
-            current = current[segment]
-
-
-# ============================================================
-# F. PAYLOAD BUILDING HELPER
-# ============================================================
-
-def build_element_payload(
-    source_record,
-    mappings,
-    source_json_field="CURATED_JSON"
-):
-    """
-    Build one OSCAL node payload for one source record.
-
-    Inputs:
-        source_record
-            Snowpark Row or dict containing CURATED_JSON
-
-        mappings
-            mappings returned by get_mappings_for_node()
-
-    Uses:
-        SOURCE_FIELD_NAME
-            -> source lookup
-
-        FIELD_RELATIVE_PATH
-            -> target payload location
-
-    Does NOT:
-        generate hashes
-        generate UUIDs
-        create DIM rows
-        create FACT rows
-        know target table names
-        know SSP-specific element names
-    """
-
-    payload = {}
-
-    source_record_dict = _row_to_dict(
-        source_record
-    )
-
-    json_data = source_record_dict.get(
-        source_json_field
-    )
-
-    # Snowflake VARIANT can arrive as JSON text.
-    if isinstance(json_data, str):
-
-        try:
-            source_obj = json.loads(
-                json_data
-            )
-
-        except json.JSONDecodeError:
-            source_obj = {}
-
-    elif isinstance(
-        json_data,
-        (dict, list)
-    ):
-        source_obj = json_data
-
-    else:
-        source_obj = {}
-
-    for mapping in mappings:
-
-        source_field_name = mapping.get(
-            "SOURCE_FIELD_NAME"
-        )
-
-        field_relative_path = mapping.get(
-            "FIELD_RELATIVE_PATH"
-        )
-
-        mapping_type = mapping.get(
-            "MAPPING_TYPE"
-        )
-
-        transformation_logic = mapping.get(
-            "TRANSFORMATION_LOGIC"
-        )
-
-        # A node-level mapping without a relative
-        # payload field is not written into payload.
-        if not field_relative_path:
-            continue
-
-        if not source_field_name:
-            continue
-
-        # Resolve source value.
-        source_value = resolve_json_path(
-            source_obj,
-            source_field_name
-        )
-
-        # Apply approved transformation behavior.
-        resolved_value = apply_transform(
-            source_value,
-            mapping_type,
-            transformation_logic
-        )
-
-        if resolved_value is None:
-            continue
-
-        path_segments = [
-            segment
-            for segment
-            in field_relative_path.split(".")
-            if segment
-        ]
-
-        if not path_segments:
-            continue
-
-        set_nested_path(
+        payload_json = json.dumps(
             payload,
-            path_segments,
-            resolved_value
+            default=str,
+            separators=(",", ":")
         )
 
-    return payload
+        node_rows.append(
+            (
+                node_key,
+                element_type,
+                node_uuid,
+                payload_json,
+                source_system,
+                source_table,
+                source_record_id,
+                model_key,
+                node_path,
+                parent_node_path,
+                process_order
+            )
+        )
+
+        record_nodes[node_path] = {
+            "NODE_KEY": node_key,
+            "OSCAL_UUID": node_uuid,
+            "ELEMENT_TYPE": element_type
+        }
+
+
+    # --------------------------------------------------------
+    # Build parent -> child edges for THIS source record
+    # --------------------------------------------------------
+
+    for registry_row in registry_rows:
+
+        child_path = registry_row["NODE_PATH"]
+        parent_path = registry_row["PARENT_NODE_PATH"]
+
+        # Root has no parent edge.
+        if parent_path is None:
+            continue
+
+        # Child was not created because it had no payload.
+        if child_path not in record_nodes:
+            continue
+
+        # Parent must exist for relationship.
+        if parent_path not in record_nodes:
+            continue
+
+        parent_node = record_nodes[parent_path]
+        child_node = record_nodes[child_path]
+
+        parent_key = parent_node["NODE_KEY"]
+        child_key = child_node["NODE_KEY"]
+
+        # Frozen edge contract expects HEX keys.
+        parent_key_hex = parent_key.hex().upper()
+        child_key_hex = child_key.hex().upper()
+
+        dependency_type = "parent_of"
+
+        edge_seed = build_edge_seed(
+            parent_key_hex,
+            child_key_hex,
+            dependency_type
+        )
+
+        edge_key = compute_edge_key(
+            edge_seed
+        )
+
+        edge_rows.append(
+            (
+                edge_key,
+                parent_key,
+                child_key,
+                dependency_type,
+                parent_node["OSCAL_UUID"],
+                child_node["OSCAL_UUID"],
+                source_record_id,
+                parent_path,
+                child_path
+            )
+        )
 
 
 # ============================================================
-# CELL 4 COMPLETE
+# 4. Create canonical_nodes_df
 # ============================================================
+
+node_schema = StructType([
+    StructField("NODE_KEY", BinaryType()),
+    StructField("ELEMENT_TYPE", StringType()),
+    StructField("OSCAL_UUID", StringType()),
+    StructField("ELEMENT_JSON_TEXT", StringType()),
+    StructField("SOURCE_SYSTEM_NAME", StringType()),
+    StructField("SOURCE_TABLE_NAME", StringType()),
+    StructField("SOURCE_RECORD_ID", StringType()),
+    StructField("OSCAL_MODEL_KEY", StringType()),
+    StructField("NODE_PATH", StringType()),
+    StructField("PARENT_NODE_PATH", StringType()),
+    StructField("PROCESS_ORDER", IntegerType())
+])
+
+canonical_nodes_raw_df = session.create_dataframe(
+    node_rows,
+    schema=node_schema
+)
+
+canonical_nodes_df = (
+    canonical_nodes_raw_df
+    .select(
+        col("NODE_KEY"),
+        col("ELEMENT_TYPE"),
+        col("OSCAL_UUID"),
+        parse_json(
+            col("ELEMENT_JSON_TEXT")
+        ).alias("ELEMENT_JSON"),
+        col("SOURCE_SYSTEM_NAME"),
+        col("SOURCE_TABLE_NAME"),
+        col("SOURCE_RECORD_ID"),
+        col("OSCAL_MODEL_KEY"),
+        col("NODE_PATH"),
+        col("PARENT_NODE_PATH"),
+        col("PROCESS_ORDER")
+    )
+)
+
+
+# ============================================================
+# 5. Create canonical_edges_df
+# ============================================================
+
+edge_schema = StructType([
+    StructField("EDGE_KEY", BinaryType()),
+    StructField("SOURCE_NODE_KEY", BinaryType()),
+    StructField("TARGET_NODE_KEY", BinaryType()),
+    StructField("DEPENDENCY_TYPE", StringType()),
+    StructField("SOURCE_OSCAL_UUID", StringType()),
+    StructField("TARGET_OSCAL_UUID", StringType()),
+    StructField("SOURCE_RECORD_ID", StringType()),
+    StructField("SOURCE_NODE_PATH", StringType()),
+    StructField("TARGET_NODE_PATH", StringType())
+])
+
+canonical_edges_df = session.create_dataframe(
+    edge_rows,
+    schema=edge_schema
+)
+
+
+# ============================================================
+# 6. Compact validation only
+# ============================================================
+
+print("=== Cell 5 Build Summary ===")
+print(
+    f"Source records: {source_df.count()}"
+)
+print(
+    f"Canonical nodes: {canonical_nodes_df.count()}"
+)
+print(
+    f"Canonical edges: {canonical_edges_df.count()}"
+)
+
+print("\n=== Nodes by Element Type ===")
+
+(
+    canonical_nodes_df
+    .group_by("ELEMENT_TYPE")
+    .count()
+    .sort("ELEMENT_TYPE")
+    .show()
+)
+
+print("\n=== Edges by Relationship ===")
+
+(
+    canonical_edges_df
+    .group_by(
+        "SOURCE_NODE_PATH",
+        "TARGET_NODE_PATH"
+    )
+    .count()
+    .sort(
+        "SOURCE_NODE_PATH",
+        "TARGET_NODE_PATH"
+    )
+    .show()
+)
 
 print(
-    "Cell 4 loaded - reusable functions ready"
+    "\nCell 5 complete - "
+    "canonical_nodes_df and canonical_edges_df ready"
 )
