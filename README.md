@@ -1,115 +1,99 @@
-Yes — there are several strong ways to test the FACT table beyond simply joining parent and child. Since we now have **92,880 DIM nodes and 90,715 FACT edges**, I’d run one independent integrity audit directly against the curated tables.
+Ah — **from the actual Archer data**, not just from the mapping file. Then I need to correct the statement:
 
-### Run this next — FACT integrity audit
+**We have not yet proven that every relevant SSP field present in the raw data is mapped.**
 
-```sql
-WITH EDGE_AUDIT AS (
+What we proved is:
 
-    SELECT
-        f.PK_FACT_OSCAL_DEPENDENCY_HASH,
-        f.FK_SOURCE_ELEMENT_HASH,
-        f.FK_TARGET_ELEMENT_HASH,
-        f.DEPENDENCY_TYPE,
+```text
+Current mapping CSV
+        ↓
+all SSP paths in that CSV
+        ↓
+all required structural nodes registered
+        ↓
+DIM + FACT built and verified
+```
 
-        f.SOURCE_OSCAL_UUID,
-        f.TARGET_OSCAL_UUID,
+But there could still be fields in `CURATED_JSON` that contain data and **are missing from the mapping CSV** — exactly like the case you noticed earlier.
 
-        p.OSCAL_UUID        AS PARENT_DIM_UUID,
-        p.ELEMENT_TYPE      AS PARENT_TYPE,
-        p.SOURCE_RECORD_ID  AS PARENT_RECORD_ID,
+So before calling SSP truly complete **from the data**, we should do one final raw-data coverage audit.
 
-        c.OSCAL_UUID        AS CHILD_DIM_UUID,
-        c.ELEMENT_TYPE      AS CHILD_TYPE,
-        c.SOURCE_RECORD_ID  AS CHILD_RECORD_ID
+### Next step — actual data vs mapping
 
-    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY f
+Run this read-only audit in the **reference notebook**, not the clean production mapper:
 
-    LEFT JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT p
-        ON f.FK_SOURCE_ELEMENT_HASH =
-           p.PK_OSCAL_SSP_ELEMENT_HASH
+```python
+# ============================================================
+# RAW DATA vs MAPPING COVERAGE AUDIT
+# READ ONLY
+# ============================================================
 
-    LEFT JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT c
-        ON f.FK_TARGET_ELEMENT_HASH =
-           c.PK_OSCAL_SSP_ELEMENT_HASH
+from collections import Counter
+
+# All mapped Archer source fields
+mapped_fields = {
+    str(r["SOURCE_FIELD_NAME"]).strip()
+    for r in canonical_mapping_df.select("SOURCE_FIELD_NAME").collect()
+    if r["SOURCE_FIELD_NAME"]
+}
+
+# Count every populated top-level field actually present
+# across all Archer Authorization Package records
+raw_field_counts = Counter()
+
+for record in source_df.to_local_iterator():
+
+    source_obj = _parse_source_json(record)
+
+    if not isinstance(source_obj, dict):
+        continue
+
+    for field_name, value in source_obj.items():
+
+        if value in (None, "", [], {}):
+            continue
+
+        raw_field_counts[str(field_name).strip()] += 1
+
+
+raw_fields = set(raw_field_counts.keys())
+
+unmapped_fields = sorted(
+    raw_fields - mapped_fields,
+    key=lambda x: raw_field_counts[x],
+    reverse=True
 )
 
-SELECT '1_ORPHAN_PARENT' AS TEST,
-       COUNT(*) AS ISSUE_COUNT
-FROM EDGE_AUDIT
-WHERE PARENT_DIM_UUID IS NULL
+mapped_and_present = raw_fields & mapped_fields
 
-UNION ALL
 
-SELECT '2_ORPHAN_CHILD',
-       COUNT(*)
-FROM EDGE_AUDIT
-WHERE CHILD_DIM_UUID IS NULL
+print("=== RAW DATA vs MAPPING COVERAGE ===")
 
-UNION ALL
+print("Populated fields found in raw :", len(raw_fields))
+print("Mapped fields present in raw  :", len(mapped_and_present))
+print("Populated but NOT mapped      :", len(unmapped_fields))
 
-SELECT '3_PARENT_CHILD_DIFFERENT_SOURCE_RECORD',
-       COUNT(*)
-FROM EDGE_AUDIT
-WHERE PARENT_RECORD_ID <> CHILD_RECORD_ID
+print("\n=== POPULATED UNMAPPED FIELDS ===")
 
-UNION ALL
-
-SELECT '4_SELF_REFERENCE',
-       COUNT(*)
-FROM EDGE_AUDIT
-WHERE FK_SOURCE_ELEMENT_HASH = FK_TARGET_ELEMENT_HASH
-
-UNION ALL
-
-SELECT '5_PARENT_UUID_MISMATCH',
-       COUNT(*)
-FROM EDGE_AUDIT
-WHERE SOURCE_OSCAL_UUID <> PARENT_DIM_UUID
-
-UNION ALL
-
-SELECT '6_CHILD_UUID_MISMATCH',
-       COUNT(*)
-FROM EDGE_AUDIT
-WHERE TARGET_OSCAL_UUID <> CHILD_DIM_UUID
-
-UNION ALL
-
-SELECT '7_INVALID_DEPENDENCY_TYPE',
-       COUNT(*)
-FROM EDGE_AUDIT
-WHERE DEPENDENCY_TYPE <> 'parent_of';
+for field in unmapped_fields:
+    print(
+        f"{field:60} "
+        f"records={raw_field_counts[field]}"
+    )
 ```
 
-For our design, ideally everything should return:
+This answers the question you are really asking:
+
+> **“What data actually exists in Archer that our mapping does not currently account for?”**
+
+If this produces fields like:
 
 ```text
-TEST                                      ISSUE_COUNT
-----------------------------------------------------
-1_ORPHAN_PARENT                           0
-2_ORPHAN_CHILD                            0
-3_PARENT_CHILD_DIFFERENT_SOURCE_RECORD    0
-4_SELF_REFERENCE                          0
-5_PARENT_UUID_MISMATCH                    0
-6_CHILD_UUID_MISMATCH                     0
-7_INVALID_DEPENDENCY_TYPE                 0
+NAS
+SOME_OTHER_FIELD
+...
 ```
 
-These tests prove different things. `ORPHAN_PARENT/CHILD` proves both FKs resolve to DIM. The source-record check proves we didn't accidentally connect children belonging to another Archer Authorization Package. The UUID checks are especially useful because FACT stores UUIDs as well as hashes — they prove that the hash FK and UUID describe the **same actual node**. Self-reference catches a node pointing to itself.
+then we know SSP is **not yet complete from the source-data perspective**, and you can update the mapping before we move to another OSCAL model.
 
-There is another very powerful test after this: **root reachability**. We can start from every `system-security-plan` root and recursively follow FACT to prove that every child/grandchild node is reachable through the graph:
-
-```text
-SSP
- → metadata
-    → responsible-parties[]
- → system-characteristics
-    → status
-    → props[]
- → system-implementation
-    → components[]
-```
-
-That would test the FACT table as an actual **graph**, not merely FK integrity.
-
-Run the audit above first. If all seven are `0`, then I recommend we do the recursive root-to-leaf test next — that's probably the strongest proof that the FACT design is working correctly.
+So: **mapping-side SSP = complete. Raw-data-side coverage = this is the final check we still need.**
