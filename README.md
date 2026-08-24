@@ -1,83 +1,173 @@
-Perfect. ✅
+Yes. **Next step is Cell 8 only**: build a read-only SSP hierarchy inventory from the CSV and compare it with the registry.
 
-Your result proves `CONTENT_ID` is a safe instance key for POA&M:
+It uses only `OSCAL_ELEMENT_PATH` + registry — no cardinality logic, no writes.
 
-```text
-POA&M references:                 2563
-Unique source record + ContentId: 2563
-LevelId collisions:                  0
-```
+```python
+# ============================================================
+# Cell 8 — SSP Hierarchy Inventory
+# READ ONLY
+# ============================================================
 
-So **no Python changes. No Cell 4/5 changes.**
+from collections import defaultdict
+from snowflake.snowpark.functions import col
 
-### Next: add POA&M to the registry
+SSP_ROOT = "system-security-plan"
 
-Run this SQL:
 
-```sql
-MERGE INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY t
-USING (
-    SELECT
-        'POAM' AS OSCAL_MODEL_KEY,
-        'plan-of-action-and-milestones' AS NODE_PATH,
-        'plan-of-action-and-milestones' AS ELEMENT_TYPE,
-        NULL AS PARENT_NODE_PATH,
-        FALSE AS IS_COLLECTION,
-        'SINGLETON' AS INSTANCE_KEY_RULE,
-        1 AS PROCESS_ORDER,
-        TRUE AS IS_ACTIVE
+# ------------------------------------------------------------
+# 1. Get every distinct SSP mapping path
+# ------------------------------------------------------------
 
-    UNION ALL
+ssp_paths = [
+    r["OSCAL_ELEMENT_PATH"]
+    for r in (
+        canonical_mapping_df
+        .filter(
+            col("OSCAL_ELEMENT_PATH").startswith(
+                SSP_ROOT
+            )
+        )
+        .select("OSCAL_ELEMENT_PATH")
+        .distinct()
+        .collect()
+    )
+    if r["OSCAL_ELEMENT_PATH"]
+]
 
-    SELECT
-        'POAM',
-        'plan-of-action-and-milestones.poam-items[]',
-        'poam-items',
-        'plan-of-action-and-milestones',
-        TRUE,
-        'CONTENT_ID',
-        2,
-        TRUE
-) s
-ON  t.OSCAL_MODEL_KEY = s.OSCAL_MODEL_KEY
-AND t.NODE_PATH = s.NODE_PATH
 
-WHEN MATCHED THEN UPDATE SET
-    t.ELEMENT_TYPE      = s.ELEMENT_TYPE,
-    t.PARENT_NODE_PATH  = s.PARENT_NODE_PATH,
-    t.IS_COLLECTION     = s.IS_COLLECTION,
-    t.INSTANCE_KEY_RULE = s.INSTANCE_KEY_RULE,
-    t.PROCESS_ORDER     = s.PROCESS_ORDER,
-    t.IS_ACTIVE         = s.IS_ACTIVE
+# ------------------------------------------------------------
+# 2. Current SSP registry
+# ------------------------------------------------------------
 
-WHEN NOT MATCHED THEN INSERT (
-    OSCAL_MODEL_KEY,
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    PROCESS_ORDER,
-    IS_ACTIVE
+registry_rows = (
+    element_registry_df
+    .filter(
+        col("OSCAL_MODEL_KEY") == "SSP"
+    )
+    .collect()
 )
-VALUES (
-    s.OSCAL_MODEL_KEY,
-    s.NODE_PATH,
-    s.ELEMENT_TYPE,
-    s.PARENT_NODE_PATH,
-    s.IS_COLLECTION,
-    s.INSTANCE_KEY_RULE,
-    s.PROCESS_ORDER,
-    s.IS_ACTIVE
-);
+
+registry = {
+    r["NODE_PATH"]: r
+    for r in registry_rows
+}
+
+
+# ------------------------------------------------------------
+# 3. Discover structural candidates
+#
+# Candidate rule:
+#   - SSP root
+#   - direct child of SSP root
+#   - any repeated [] branch
+#
+# This does NOT automatically make them DIM nodes.
+# ------------------------------------------------------------
+
+candidate_counts = defaultdict(int)
+
+for full_path in ssp_paths:
+
+    parts = full_path.split(".")
+
+    for depth in range(1, len(parts) + 1):
+
+        prefix = ".".join(
+            parts[:depth]
+        )
+
+        is_root = (
+            prefix == SSP_ROOT
+        )
+
+        is_direct_child = (
+            depth == 2
+        )
+
+        is_collection = (
+            "[]" in parts[depth - 1]
+        )
+
+        if (
+            is_root
+            or is_direct_child
+            or is_collection
+        ):
+            candidate_counts[prefix] += 1
+
+
+# ------------------------------------------------------------
+# 4. Build readable hierarchy report
+# ------------------------------------------------------------
+
+rows = []
+
+for node_path in sorted(
+    candidate_counts.keys()
+):
+
+    parts = node_path.split(".")
+
+    parent_path = (
+        ".".join(parts[:-1])
+        if len(parts) > 1
+        else None
+    )
+
+    registry_row = registry.get(
+        node_path
+    )
+
+    rows.append({
+        "NODE_PATH": node_path,
+        "PARENT_PATH": parent_path,
+        "IS_COLLECTION": "[]" in node_path,
+        "REGISTERED": registry_row is not None,
+        "ACTIVE": (
+            registry_row["IS_ACTIVE"]
+            if registry_row is not None
+            else None
+        ),
+        "MAPPING_COUNT": candidate_counts[
+            node_path
+        ]
+    })
+
+
+# ------------------------------------------------------------
+# 5. Output
+# ------------------------------------------------------------
+
+print("=== SSP Hierarchy Inventory ===")
+print("Distinct SSP mapping paths:", len(ssp_paths))
+print("Structural candidates:", len(rows))
+
+for r in rows:
+
+    status = (
+        "ACTIVE"
+        if r["ACTIVE"] is True
+        else
+        "INACTIVE"
+        if r["ACTIVE"] is False
+        else
+        "NOT REGISTERED"
+    )
+
+    print(
+        "\n",
+        r["NODE_PATH"],
+        "\n  Parent:",
+        r["PARENT_PATH"],
+        "\n  Collection:",
+        r["IS_COLLECTION"],
+        "\n  Registry:",
+        status,
+        "\n  Mapping paths:",
+        r["MAPPING_COUNT"]
+    )
 ```
 
-That gives us:
+Run Cell 8 and send me the output.
 
-```text
-plan-of-action-and-milestones
-        │
-        └── poam-items[]  × 2,563 occurrences
-```
-
-**Stop after running this.** Next we switch `CONFIG` to POAM and point it at the correct POA&M DIM/FACT tables — without changing the engine.
+Then we’ll identify the **missing SSP nodes only** and add those to the registry. We will **not modify Cells 3–7**.
