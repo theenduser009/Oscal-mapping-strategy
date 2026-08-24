@@ -1,33 +1,37 @@
-Use this exact prompt:
+Almost. **Node identity is correct now. One edge function is still wrong.**
 
-> **Do not rewrite Cell 4. Fix only the identity helpers.**
+The screenshot still has:
+
+```python
+return f"{source_node_key}|{target_node_key}|{edge_type}"
+```
+
+It must use the frozen `::` format and hex key inputs.
+
+Paste this to the other AI:
+
+> **Only fix `build_edge_seed()`. Change nothing else.**
 >
-> 1. `build_node_seed()` must be exactly:
+> Replace it with:
 >
 > ```python
-> def build_node_seed(source_system, source_table, content_id, node_type):
->     cid = content_id.strip() if content_id is not None else ""
->     return f"{source_system}|{source_table}|{cid}|{node_type}"
+> def build_edge_seed(
+>     source_node_key_hex,
+>     target_node_key_hex,
+>     edge_type="parent_of"
+> ):
+>     return f"{source_node_key_hex}::{target_node_key_hex}::{edge_type}"
 > ```
 >
-> 2. Edge identity must be directional:
+> Keep `compute_edge_key()` exactly as:
 >
-> ```text
-> parent/source -> child/target
+> ```python
+> def compute_edge_key(seed):
+>     return hashlib.md5(seed.encode("utf-8")).digest()
 > ```
 >
-> Use the frozen edge seed format:
->
-> ```text
-> SOURCE_NODE_KEY_HEX::TARGET_NODE_KEY_HEX::EDGE_TYPE
-> ```
->
-> Default `EDGE_TYPE = "parent_of"`.
->
-> `compute_edge_key()` must return MD5 digest bytes for `BINARY(16)`.
->
-> 3. Do not change any other function in Cell 4.
->
-> 4. Do not create Cell 5.
->
-> Show only the corrected identity helper section and stop.
+> Do not modify any other Cell 4 function.
+> Do not create Cell 5.
+> Show only these two functions and stop.
+
+After that, **identity section is frozen.**
