@@ -1,115 +1,142 @@
-Yes — that is exactly the design I have in mind, and I checked your latest Cell 1 against it carefully.
+Cell 2 is **mostly right**, but I would make **two corrections now before we approve it**. They matter for the reusable design.
 
-The **engine is not being built for `metadata` or even just SSP**. SSP is only the first test case. The intended behavior is:
+The source part is good:
+
+```python
+source_df = session.table(CONFIG["RAW_TABLE"]).select(
+    col("CONTENT_ID").alias("SOURCE_RECORD_ID"),
+    col("CURATED_JSON")
+)
+```
+
+That gives the clean runtime contract we wanted:
 
 ```text
-Mapping CSV
-     ↓
-canonical_mapping_df
-     ↓
-element_registry_df
-     ↓
-system-security-plan          ← discovered/configured node
-metadata                      ← discovered/configured node
-import-profile                ← discovered/configured node
-components[]                  ← discovered/configured node
-props[]                       ← discovered/configured node
-...
-     ↓
-SAME build_nodes()
-     ↓
-SAME build_dependencies()
+SOURCE_RECORD_ID
+CURATED_JSON
 ```
 
-So there will **not** be code like:
+### Correction 1 — don’t hardcode the mapping filename
+
+Right now it has:
 
 ```python
-build_metadata()
-build_ssp_root()
-build_import_profile()
-build_component()
-build_prop()
+pd.read_csv("archer_to_oscal_mapping (4).csv", ...)
 ```
 
-Instead, one generic builder receives the metadata describing the element.
+That would make the engine dependent on one particular uploaded filename. Since the CSV is our mapping source of truth, the location should come from CONFIG.
 
-And relationships are also dynamic. We will not hardcode:
+Add to Cell 1:
 
 ```python
-SSP -> metadata
+"MAPPING_FILE": "archer_to_oscal_mapping (4).csv",
 ```
 
-The registry will establish:
+Then Cell 2 uses:
+
+```python
+mapping_artifact_pdf = pd.read_csv(
+    CONFIG["MAPPING_FILE"],
+    encoding="cp1252",
+    dtype=str
+)
+```
+
+Later we can change the mapping location without rewriting Cell 2.
+
+### Correction 2 — remove `astype(str)`
+
+This line is dangerous:
+
+```python
+mapping_artifact_pdf = mapping_artifact_pdf.astype(str)
+```
+
+Because blank CSV values become literal strings such as:
 
 ```text
-NODE_PATH                         PARENT_NODE_PATH
-
-system-security-plan             NULL
-system-security-plan.metadata    system-security-plan
-system-security-plan.import...   system-security-plan
+"nan"
 ```
 
-Then the generic relationship builder creates the FACT edges.
+Then later the engine may think `"nan"` is a real mapping value.
 
-### About your current Cell 1
-
-I approve the direction shown in the screenshot.
-
-Importantly, you now have:
+Instead use:
 
 ```python
-"OSCAL_MODEL": "SSP"
+mapping_artifact_pdf = pd.read_csv(
+    CONFIG["MAPPING_FILE"],
+    encoding="cp1252",
+    dtype=str
+)
+
+mapping_artifact_pdf = mapping_artifact_pdf.where(
+    mapping_artifact_pdf.notna(),
+    None
+)
 ```
 
-and you **do not** have:
-
-```python
-ROOT_NODE_PATH_PREFIX = "system-security-plan"
-```
-
-That's exactly what we wanted.
-
-One distinction I want us both to keep very clear:
-
-**Dynamic for elements:** yes, absolutely. The CSV + element registry drive all root/child/repeated elements.
-
-**Dynamic for OSCAL models:** also the intended architecture, but right now Cell 1 selects:
-
-```python
-"OSCAL_MODEL": "SSP"
-```
-
-and the target tables are currently SSP targets:
+That gives us:
 
 ```text
-DIM_OSCAL_SSP_ELEMENT
-FACT_OSCAL_SSP_DEPENDENCY
+real value → string
+blank value → None
 ```
 
-That's okay because SSP is our first run. Later the **configuration**, not the processing code, can say something like:
+which is what we want before canonical normalization.
 
-```text
-SSP  → SSP DIM / FACT
-POAM → POAM DIM / FACT
-AP   → AP DIM / FACT
+Then:
+
+```python
+artifact_columns = list(mapping_artifact_pdf.columns)
+
+mapping_df = session.create_dataframe(
+    mapping_artifact_pdf.values.tolist(),
+    schema=artifact_columns
+)
 ```
 
-The engine functions should remain unchanged.
+is fine for now.
 
-So the production principle we're freezing is:
+### Also simplify the validation
 
-> **New element = metadata change, not Python rewrite.**
+We don't need to dump `CURATED_JSON` from:
+
+```python
+source_df.show(1)
+```
+
+That can print a huge record and starts us down the old validation rabbit hole.
+
+For Cell 2, I only want:
+
+```python
+print(f"SOURCE RECORDS: {source_df.count()}")
+print(f"MAPPING ROWS: {mapping_df.count()}")
+
+print("SOURCE COLUMNS:", source_df.columns)
+print("MAPPING COLUMNS:", mapping_df.columns)
+```
+
+That's enough.
+
+### Tell the other AI exactly this
+
+> Cell 2 is almost approved. Make ONLY these corrections:
 >
-> **New OSCAL model = configuration/mapping change, not engine rewrite.**
+> 1. Do not hardcode `"archer_to_oscal_mapping (4).csv"` inside Cell 2. Add `"MAPPING_FILE"` to CONFIG and reference `CONFIG["MAPPING_FILE"]`.
+>
+> 2. Remove `mapping_artifact_pdf.astype(str)` because it converts null/NaN values into the literal string `"nan"`.
+>
+> Read the CSV using `dtype=str`, then preserve missing values as Python `None` using:
+>
+> `mapping_artifact_pdf = mapping_artifact_pdf.where(mapping_artifact_pdf.notna(), None)`
+>
+> 3. Keep creation of `mapping_df` as a raw/unprocessed Snowpark dataframe. Do not rename mapping columns, derive paths, filter SSP, or transform mappings yet.
+>
+> 4. Keep validation minimal. Print only source row count, mapping row count, source columns, and mapping columns. Do not display full `CURATED_JSON` records.
+>
+> 5. Do not create Cell 3 yet.
+>
+> Show corrected Cell 2 only and STOP.
 
-And one more thing I'm keeping firmly in mind: repeated elements such as `components[]`, `props[]`, etc. are why we marked:
-
-```python
-"identity_version": "v1_legacy_singleton"
-```
-
-as **legacy** rather than pretending it is final. We will resolve the repeated-instance identity once the element registry exists, before we build production nodes.
-
-So yes — I am tracking the exact architecture we agreed on. **Cell 1 can now be frozen. Don't modify it again right now.**
-
-Next is **Cell 2 only: load `source_df` + the real mapping CSV into `mapping_df`, without transforming either one.**
+And yes — this stays aligned with the dynamic architecture: **Cell 2 knows nothing about `metadata`, `system-security-plan`, `import-profile`, POA&M, components, props, etc.** It only loads source + mapping. That's exactly what we want.
