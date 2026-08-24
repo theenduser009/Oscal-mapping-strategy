@@ -1,79 +1,49 @@
-Perfect. ✅ The compatibility check passed again:
+Excellent — **SSP is now fully verified for every path currently materialized from the mapping file.** ✅
 
 ```text
-Nodes: 76,083
-Edges: 73,918
+DIM  : 88,111 / 88,111
+FACT : 85,946 / 85,946
+LOAD VERIFIED
 ```
 
-So the new `SOURCE_FIELD_NAME+VALUE` logic did **not** affect anything already working.
+There is now **one cleanup item before we call SSP complete**: `control-implementation` exists in the registry, but Cell 5 produced **zero `control-implementation` nodes**.
 
-### Next step: register `props[]`
+We should not guess why. Let's ask the mapping file directly.
 
-Use this SQL cell:
+### Next step only — check control-implementation mappings
 
-```sql
-MERGE INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY t
-USING (
-    SELECT
-        'SSP' AS OSCAL_MODEL_KEY,
-        'system-security-plan.system-characteristics.props[]' AS NODE_PATH,
-        'props' AS ELEMENT_TYPE,
-        'system-security-plan.system-characteristics' AS PARENT_NODE_PATH,
-        TRUE AS IS_COLLECTION,
-        'SOURCE_FIELD_NAME+VALUE' AS INSTANCE_KEY_RULE,
-        3 AS PROCESS_ORDER,
-        TRUE AS IS_ACTIVE,
-        '$' AS ITEM_PATH
-) s
+Run this read-only cell:
 
-ON  t.OSCAL_MODEL_KEY = s.OSCAL_MODEL_KEY
-AND t.NODE_PATH = s.NODE_PATH
+```python
+from snowflake.snowpark.functions import col
 
-WHEN MATCHED THEN UPDATE SET
-    t.ELEMENT_TYPE      = s.ELEMENT_TYPE,
-    t.PARENT_NODE_PATH  = s.PARENT_NODE_PATH,
-    t.IS_COLLECTION     = s.IS_COLLECTION,
-    t.INSTANCE_KEY_RULE = s.INSTANCE_KEY_RULE,
-    t.PROCESS_ORDER     = s.PROCESS_ORDER,
-    t.IS_ACTIVE         = s.IS_ACTIVE,
-    t.ITEM_PATH         = s.ITEM_PATH
-
-WHEN NOT MATCHED THEN INSERT (
-    OSCAL_MODEL_KEY,
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    PROCESS_ORDER,
-    IS_ACTIVE,
-    ITEM_PATH
+control_paths = (
+    canonical_mapping_df
+    .filter(
+        col("OSCAL_ELEMENT_PATH").startswith(
+            "system-security-plan.control-implementation"
+        )
+    )
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_ELEMENT_PATH"
+    )
+    .distinct()
 )
-VALUES (
-    s.OSCAL_MODEL_KEY,
-    s.NODE_PATH,
-    s.ELEMENT_TYPE,
-    s.PARENT_NODE_PATH,
-    s.IS_COLLECTION,
-    s.INSTANCE_KEY_RULE,
-    s.PROCESS_ORDER,
-    s.IS_ACTIVE,
-    s.ITEM_PATH
-);
+
+print("Control-implementation mapping rows:", control_paths.count())
+control_paths.show(100, truncate=False)
 ```
 
-This means:
+There are only two possible outcomes:
 
 ```text
-FINANCIAL_SYSTEM | 80647
-MISSION_CRITICAL | 80651
-INFORMATION_CLASSIFICATION | 162484
-INFORMATION_CLASSIFICATION | 162486
-...
+> 0 rows
+→ mappings exist; we inspect why they aren't materializing.
+
+0 rows
+→ the mapping file currently has no control-implementation mapping,
+  so we should not manufacture it in Python.
 ```
 
-Each becomes a distinct `props[]` instance.
-
-And importantly, we're **following the mapping exactly as provided**. We are not inventing OSCAL `name`, `value`, or transformation semantics.
-
-Run only this registry MERGE. Then refresh **Cell 3** and run **Cell 5 unchanged**. The prop scan found 12,028 source occurrences; Cell 5 will tell us the authoritative node count after its deterministic de-duplication.
+After this, we can say whether the **current SSP mapping cycle is complete**, and then move to packaging the production mapper instead of adding more exploratory logic.
