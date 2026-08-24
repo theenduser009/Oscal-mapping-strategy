@@ -1,136 +1,115 @@
-Yes. I read both screenshots carefully. **We are very close, but I want three small corrections before we freeze Cell 1.** These are exactly the kinds of things that would otherwise force another refactor later.
+Yes — that is exactly the design I have in mind, and I checked your latest Cell 1 against it carefully.
 
-The overall Cell 1 structure is now correct: imports, session, CONFIG, no functions, no DIM/FACT writes. Keep that.
+The **engine is not being built for `metadata` or even just SSP**. SSP is only the first test case. The intended behavior is:
 
-### 1. Remove `ROOT_NODE_PATH_PREFIX`
+```text
+Mapping CSV
+     ↓
+canonical_mapping_df
+     ↓
+element_registry_df
+     ↓
+system-security-plan          ← discovered/configured node
+metadata                      ← discovered/configured node
+import-profile                ← discovered/configured node
+components[]                  ← discovered/configured node
+props[]                       ← discovered/configured node
+...
+     ↓
+SAME build_nodes()
+     ↓
+SAME build_dependencies()
+```
 
-This line should **not** exist in Cell 1:
+So there will **not** be code like:
+
+```python
+build_metadata()
+build_ssp_root()
+build_import_profile()
+build_component()
+build_prop()
+```
+
+Instead, one generic builder receives the metadata describing the element.
+
+And relationships are also dynamic. We will not hardcode:
+
+```python
+SSP -> metadata
+```
+
+The registry will establish:
+
+```text
+NODE_PATH                         PARENT_NODE_PATH
+
+system-security-plan             NULL
+system-security-plan.metadata    system-security-plan
+system-security-plan.import...   system-security-plan
+```
+
+Then the generic relationship builder creates the FACT edges.
+
+### About your current Cell 1
+
+I approve the direction shown in the screenshot.
+
+Importantly, you now have:
+
+```python
+"OSCAL_MODEL": "SSP"
+```
+
+and you **do not** have:
 
 ```python
 ROOT_NODE_PATH_PREFIX = "system-security-plan"
 ```
 
-That makes the supposedly generic engine SSP-specific again.
+That's exactly what we wanted.
 
-The root must come later from `element_registry_df`:
+One distinction I want us both to keep very clear:
+
+**Dynamic for elements:** yes, absolutely. The CSV + element registry drive all root/child/repeated elements.
+
+**Dynamic for OSCAL models:** also the intended architecture, but right now Cell 1 selects:
+
+```python
+"OSCAL_MODEL": "SSP"
+```
+
+and the target tables are currently SSP targets:
 
 ```text
-system-security-plan
-PARENT_NODE_PATH = NULL
+DIM_OSCAL_SSP_ELEMENT
+FACT_OSCAL_SSP_DEPENDENCY
 ```
 
-For POA&M the root will be different. We should never hardcode the root into the engine.
-
-### 2. Remove `edge_type_default = "parent_of"`
-
-I see:
-
-```python
-"edge_type_default": "parent_of"
-```
-
-Don't freeze that yet.
-
-`DEPENDENCY_TYPE` should eventually be determined by relationship metadata/registry. We haven't approved that contract yet. Otherwise we may later discover that some relationships are `contains`, `references`, etc., and have to undo this.
-
-### 3. Add the model explicitly
-
-Add:
-
-```python
-"OSCAL_MODEL": "SSP",
-```
-
-This is the clean generic way to say:
-
-> This run is processing SSP.
-
-Then later exactly the same engine can run:
-
-```python
-"OSCAL_MODEL": "POAM"
-```
-
-without changing Python logic.
-
----
-
-### One more cleanup I recommend
-
-I would also remove these from Cell 1 for now:
-
-```python
-SEED_SEPARATOR = "|"
-EDGE_SEED_SEPARATOR = "::"
-LEGACY_SEED_FORMAT = ...
-```
-
-Why? Your **existing approved identity functions already define those exact formats themselves**. Having them both in constants **and** hardcoded inside the functions gives us two sources of truth.
-
-We are preserving the old functions unchanged for compatibility, so let the functions own their V1 format for now.
-
-`identity_version = "v1_legacy_singleton"` is good. **Keep that.**
-
-`node_uuid_policy = "md5_32char_lowercase_hex"` is also okay to keep because it documents the current identity contract.
-
----
-
-## Final Cell 1 contract
-
-I want Cell 1 to be this simple conceptually:
-
-```python
-# imports
-
-session = get_active_session()
-
-CONFIG = {
-    "RUN_ID": "<bind-run-id>",
-    "OSCAL_MODEL": "SSP",
-
-    "SOURCE_SYSTEM_NAME": "ARCHER",
-    "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
-    "RAW_TABLE": "...",
-
-    "TARGET_DIM": "...DIM_OSCAL_SSP_ELEMENT",
-    "TARGET_FACT": "...FACT_OSCAL_SSP_DEPENDENCY",
-
-    "identity_version": "v1_legacy_singleton",
-    "node_uuid_policy": "md5_32char_lowercase_hex"
-}
-```
-
-That's enough.
-
-Notice what is deliberately **NOT** there:
+That's okay because SSP is our first run. Later the **configuration**, not the processing code, can say something like:
 
 ```text
-system-security-plan root path
-metadata path
-import-profile path
-parent relationship
-edge/dependency type
-mapping rules
-node builders
-hash functions
-JSON functions
+SSP  → SSP DIM / FACT
+POAM → POAM DIM / FACT
+AP   → AP DIM / FACT
 ```
 
-Those belong to metadata/functions later.
+The engine functions should remain unchanged.
 
-### Send this to the other AI
+So the production principle we're freezing is:
 
-> Cell 1 is almost approved. Make ONLY these final corrections:
+> **New element = metadata change, not Python rewrite.**
 >
-> 1. Add `"OSCAL_MODEL": "SSP"` to CONFIG.
-> 2. Remove `ROOT_NODE_PATH_PREFIX = "system-security-plan"`. Root must come from `element_registry_df`, not hardcoded configuration.
-> 3. Remove `"edge_type_default": "parent_of"`. Dependency type will be metadata-driven and has not been approved yet.
-> 4. Remove `SEED_SEPARATOR`, `EDGE_SEED_SEPARATOR`, and `LEGACY_SEED_FORMAT` from Cell 1 because the existing approved V1 identity functions already own those formats. Do not create two sources of truth.
-> 5. Keep `identity_version = "v1_legacy_singleton"` and `node_uuid_policy = "md5_32char_lowercase_hex"` for compatibility.
-> 6. Do not add any functions or SSP paths.
->
-> Show the corrected Cell 1 only and STOP.
+> **New OSCAL model = configuration/mapping change, not engine rewrite.**
 
-After those changes, **I will consider Cell 1 frozen**. We don't come back and remodel it unless an actual technical requirement forces us to.
+And one more thing I'm keeping firmly in mind: repeated elements such as `components[]`, `props[]`, etc. are why we marked:
 
-Then Cell 2 has exactly one job: **load `source_df` and the actual mapping CSV as `mapping_df` — no transformations yet.**
+```python
+"identity_version": "v1_legacy_singleton"
+```
+
+as **legacy** rather than pretending it is final. We will resolve the repeated-instance identity once the element registry exists, before we build production nodes.
+
+So yes — I am tracking the exact architecture we agreed on. **Cell 1 can now be frozen. Don't modify it again right now.**
+
+Next is **Cell 2 only: load `source_df` + the real mapping CSV into `mapping_df`, without transforming either one.**
