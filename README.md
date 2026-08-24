@@ -1,34 +1,28 @@
-Perfect — this tells us something important:
+Good — that means **`system-implementation` is complete for the current mapping too.** ✅
 
-**For the current mapping file, `system-characteristics` is now structurally complete.** ✅
-
-The inventory found only these deeper structural parents:
+So far:
 
 ```text
-system-characteristics
-├── authorization-boundary     REGISTERED
-├── security-impact-level      REGISTERED
-├── status                     REGISTERED
-└── system-ids[]               REGISTERED
+system-security-plan
+├── metadata                  ← still need final structural check
+├── system-characteristics    ✅ complete
+└── system-implementation     ✅ complete
+    └── components[]
 ```
 
-There are **no remaining `NOT REGISTERED` structural paths** under `system-characteristics`.
+### Next step: check `metadata`
 
-So we stop touching that branch.
-
-### Next branch: `system-implementation`
-
-Now do the exact same check against the real mapping, changing only the base path:
+Run the same structural-prefix check with:
 
 ```python
 # ============================================================
-# Remaining System Implementation Structural Nodes
+# Remaining Metadata Structural Nodes
 # READ ONLY
 # ============================================================
 
 from snowflake.snowpark.functions import col
 
-BASE = "system-security-plan.system-implementation"
+BASE = "system-security-plan.metadata"
 
 mapped_paths = [
     r["OSCAL_ELEMENT_PATH"]
@@ -57,14 +51,13 @@ candidates = set()
 for full_path in mapped_paths:
     parts = full_path.split(".")
 
-    # Proper structural prefixes only; exclude final payload field.
-    for i in range(3, len(parts)):
+    for i in range(2, len(parts)):
         prefix = ".".join(parts[:i])
 
         if prefix.startswith(BASE + "."):
             candidates.add(prefix)
 
-print("=== Remaining System Implementation Structural Nodes ===")
+print("=== Remaining Metadata Structural Nodes ===")
 
 if not candidates:
     print("No deeper structural nodes found in current mapping.")
@@ -76,11 +69,16 @@ else:
             else "NOT REGISTERED"
         )
 
-        print(status, " | ", path)
+        print(status, "|", path)
 ```
 
-This is now our method branch by branch:
+We already expect at least:
 
-**mapping paths → discover structural parents → compare registry → inspect only missing ones → register → engine builds DIM/FACT.**
+```text
+metadata.document-ids[]          REGISTERED
+metadata.responsible-parties[]   REGISTERED
+```
 
-Run this next and send me the output.
+But we’ll trust the output, not assumptions.
+
+If there are no `NOT REGISTERED` rows, then **metadata is complete too**, and we’ll be very close to saying the entire mapped SSP hierarchy has been exhausted.
