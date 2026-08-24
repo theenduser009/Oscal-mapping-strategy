@@ -1,22 +1,22 @@
-# Cell 8E — Check REAL LevelId collisions
-# READ ONLY
-
-real_level_collisions = {}
-
-for content_id, levels in content_levels.items():
-
-    non_null_levels = {
-        level for level in levels
-        if level is not None
-    }
-
-    if len(non_null_levels) > 1:
-        real_level_collisions[content_id] = non_null_levels
-
-print(
-    "ContentIds with multiple NON-NULL LevelIds:",
-    len(real_level_collisions)
+INSERT INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+(
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER,
+    IS_ACTIVE
 )
-
-for cid, levels in list(real_level_collisions.items())[:20]:
-    print(cid, levels)
+VALUES
+(
+    'SSP',
+    'system-security-plan.system-implementation.components[]',
+    'components',
+    'system-security-plan.system-implementation',
+    TRUE,
+    'CONTENT_ID',
+    3,
+    FALSE
+);
