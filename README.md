@@ -1,92 +1,104 @@
-Good — but one important correction before we move on.
-
-This output shows only:
-
-```text
-REGISTERED | system-security-plan.metadata.document-ids[]
-```
-
-It does **not** show `responsible-parties[]` because the little structural-prefix check excludes the final path itself. In your mapping, `responsible-parties[]` is itself the final mapped path, so the check misses it.
-
-We already know it is registered and working:
-
-```text
-metadata
-├── document-ids[]          ✅
-└── responsible-parties[]   ✅
-```
-
-So instead of continuing branch-by-branch with more cells, I want to do **one final SSP-wide structural audit** that catches both intermediate objects **and terminal `[]` collections**.
-
-Run this next:
+Great — **Cell 1 only.** This is the clean production configuration cell. No mapping logic, no registry logic, no transformation logic yet.
 
 ```python
 # ============================================================
-# Final SSP Structural Registry Audit
-# READ ONLY
+# Cell 1 — Production Configuration
+# NB_ARCHER_OSCAL_MAPPER_V1
 # ============================================================
 
-from snowflake.snowpark.functions import col
+import uuid
 
-ROOT = "system-security-plan"
+from snowflake.snowpark.context import get_active_session
 
-mapped_paths = [
-    r["OSCAL_ELEMENT_PATH"]
-    for r in (
-        canonical_mapping_df
-        .filter(col("OSCAL_ELEMENT_PATH").startswith(ROOT))
-        .select("OSCAL_ELEMENT_PATH")
-        .distinct()
-        .collect()
-    )
-    if r["OSCAL_ELEMENT_PATH"]
-]
+session = get_active_session()
 
-registered_paths = {
-    r["NODE_PATH"]
-    for r in (
-        element_registry_df
-        .filter(col("OSCAL_MODEL_KEY") == "SSP")
-        .select("NODE_PATH")
-        .collect()
-    )
+
+CONFIG = {
+
+    # --------------------------------------------------------
+    # Runtime
+    # --------------------------------------------------------
+    "RUN_ID": str(uuid.uuid4()),
+
+    # --------------------------------------------------------
+    # OSCAL model being processed
+    # --------------------------------------------------------
+    "OSCAL_MODEL": "SSP",
+
+    # --------------------------------------------------------
+    # Source
+    # --------------------------------------------------------
+    "SOURCE_SYSTEM_NAME": "ARCHER",
+    "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+
+    "RAW_TABLE":
+        "RTX_RAW_DEV.ES_ESC_GRC."
+        "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+
+    # --------------------------------------------------------
+    # Structural metadata
+    # --------------------------------------------------------
+    "REGISTRY_TABLE":
+        "RTX_RAW_DEV.ES_ESC_GRC."
+        "OSCAL_ELEMENT_REGISTRY",
+
+    # --------------------------------------------------------
+    # Curated targets
+    # --------------------------------------------------------
+    "TARGET_DIM":
+        "RTX_ENTERPRISESERVICES_DEV."
+        "ES_ESC_GRC_CURATED."
+        "DIM_OSCAL_SSP_ELEMENT",
+
+    "TARGET_FACT":
+        "RTX_ENTERPRISESERVICES_DEV."
+        "ES_ESC_GRC_CURATED."
+        "FACT_OSCAL_SSP_DEPENDENCY",
+
+    # --------------------------------------------------------
+    # Execution safety
+    # Start production notebook in read-only mode
+    # --------------------------------------------------------
+    "EXECUTE_WRITES": False
 }
 
-candidates = {ROOT}
 
-for full_path in mapped_paths:
-    parts = full_path.split(".")
-
-    # All intermediate structural parents
-    for i in range(2, len(parts)):
-        candidates.add(".".join(parts[:i]))
-
-    # Terminal collection paths are structural nodes too
-    if full_path.endswith("[]"):
-        candidates.add(full_path)
-
-
-print("=== FINAL SSP STRUCTURAL AUDIT ===")
-
-missing = []
-
-for path in sorted(candidates):
-    status = "REGISTERED" if path in registered_paths else "NOT REGISTERED"
-
-    print(status, "|", path)
-
-    if status == "NOT REGISTERED":
-        missing.append(path)
-
-print("\nMissing structural nodes:", len(missing))
+print("=== OSCAL Mapper Configuration ===")
+print("Model       :", CONFIG["OSCAL_MODEL"])
+print("Source      :", CONFIG["RAW_TABLE"])
+print("Registry    :", CONFIG["REGISTRY_TABLE"])
+print("Target DIM  :", CONFIG["TARGET_DIM"])
+print("Target FACT :", CONFIG["TARGET_FACT"])
+print("Run ID      :", CONFIG["RUN_ID"])
+print("Writes      :", CONFIG["EXECUTE_WRITES"])
 ```
 
-This is better than doing metadata, system-implementation, system-characteristics one at a time.
+### Why Cell 1 is intentionally boring
 
-The key output is simply:
+It only answers:
 
 ```text
-Missing structural nodes: ?
+What model am I running?
+Where is my source?
+Where is my registry?
+Where do DIM/FACT go?
+What is this pipeline run?
+Am I allowed to write?
 ```
 
-If it says `0`, then **every structural node represented by the current SSP mapping is registered**. At that point we can confidently stop hierarchy discovery and move to the production wrapper.
+Nothing SSP-specific is hardcoded into the **mapper logic**. SSP-specific table names are configuration values, which we can later replace when another model runs.
+
+And I deliberately set:
+
+```python
+"EXECUTE_WRITES": False
+```
+
+because our first production run should reproduce the known baseline **without touching the tables**:
+
+```text
+92,880 nodes
+90,715 edges
+```
+
+Run **Cell 1 only**. If it runs cleanly, next we build **Cell 2: source + mapping + registry inputs**.
