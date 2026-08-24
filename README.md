@@ -1,28 +1,35 @@
-✅ **Cell 7 passed. New verified baseline:**
+Perfect — this tells us something important:
+
+**For the current mapping file, `system-characteristics` is now structurally complete.** ✅
+
+The inventory found only these deeper structural parents:
 
 ```text
-DIM  92,880 / 92,880
-FACT 90,715 / 90,715
-LOAD VERIFIED
+system-characteristics
+├── authorization-boundary     REGISTERED
+├── security-impact-level      REGISTERED
+├── status                     REGISTERED
+└── system-ids[]               REGISTERED
 ```
 
-Now we should **not manually guess `network-architecture`, `data-flow`, `system-information`, etc.** We can make the mapping file tell us every remaining nested object under `system-characteristics`.
+There are **no remaining `NOT REGISTERED` structural paths** under `system-characteristics`.
 
-Our earlier inventory missed deeper singleton objects. This next check fixes that properly and should replace the need to visually hunt through all 32 mappings.
+So we stop touching that branch.
 
-### Next cell — remaining structural nodes under System Characteristics
+### Next branch: `system-implementation`
+
+Now do the exact same check against the real mapping, changing only the base path:
 
 ```python
 # ============================================================
-# Find remaining System Characteristics structural nodes
+# Remaining System Implementation Structural Nodes
 # READ ONLY
 # ============================================================
 
 from snowflake.snowpark.functions import col
 
-BASE = "system-security-plan.system-characteristics"
+BASE = "system-security-plan.system-implementation"
 
-# Actual mapped paths
 mapped_paths = [
     r["OSCAL_ELEMENT_PATH"]
     for r in (
@@ -35,7 +42,6 @@ mapped_paths = [
     if r["OSCAL_ELEMENT_PATH"]
 ]
 
-# Existing registry paths
 registered_paths = {
     r["NODE_PATH"]
     for r in (
@@ -46,46 +52,35 @@ registered_paths = {
     )
 }
 
-# A structural node is a proper prefix of an actual mapped path.
-# The final path segment is treated as the payload field.
 candidates = set()
 
 for full_path in mapped_paths:
     parts = full_path.split(".")
 
-    # Do not include the final leaf field
+    # Proper structural prefixes only; exclude final payload field.
     for i in range(3, len(parts)):
         prefix = ".".join(parts[:i])
 
         if prefix.startswith(BASE + "."):
             candidates.add(prefix)
 
-print("=== Remaining System Characteristics Structural Nodes ===")
+print("=== Remaining System Implementation Structural Nodes ===")
 
-for path in sorted(candidates):
-    status = (
-        "REGISTERED"
-        if path in registered_paths
-        else "NOT REGISTERED"
-    )
+if not candidates:
+    print("No deeper structural nodes found in current mapping.")
+else:
+    for path in sorted(candidates):
+        status = (
+            "REGISTERED"
+            if path in registered_paths
+            else "NOT REGISTERED"
+        )
 
-    print(status, " | ", path)
+        print(status, " | ", path)
 ```
 
-What I expect this to do is show something like:
+This is now our method branch by branch:
 
-```text
-REGISTERED     | ...authorization-boundary
-REGISTERED     | ...security-impact-level
-REGISTERED     | ...status
+**mapping paths → discover structural parents → compare registry → inspect only missing ones → register → engine builds DIM/FACT.**
 
-NOT REGISTERED | ...network-architecture
-NOT REGISTERED | ...data-flow
-...
-```
-
-**But we will use the actual output, not that expectation.**
-
-This is the better method going forward: every time we go deeper, the **real OSCAL paths in your mapping identify the structural parents automatically**. Then we check their source data and add confirmed ones to the registry.
-
-Run only this next and show me the output.
+Run this next and send me the output.
