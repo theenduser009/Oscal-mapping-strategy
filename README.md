@@ -1,63 +1,69 @@
-Perfect. ✅ Now **do not write yet**. Next we point the already-built Assessment Results graph at those new tables and run the standard loader with the write gate OFF.
-
-Add one new cell at the bottom of `NB_ARCHER_OSCAL_MAPPER_V1`:
-
-```python
-# ============================================================
-# Assessment Results — Target Validation
-# READ ONLY
-# ============================================================
-
-ASSESSMENT_RESULTS_CONFIG = dict(CONFIG)
-
-ASSESSMENT_RESULTS_CONFIG["OSCAL_MODEL"] = "ASSESSMENT_RESULTS"
-
-ASSESSMENT_RESULTS_CONFIG["TARGET_DIM"] = (
-    "RTX_ENTERPRISESERVICES_DEV."
-    "ES_ESC_GRC_CURATED."
-    "DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT"
-)
-
-ASSESSMENT_RESULTS_CONFIG["DIM_PK_COLUMN"] = (
-    "PK_DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT_HASH"
-)
-
-ASSESSMENT_RESULTS_CONFIG["TARGET_FACT"] = (
-    "RTX_ENTERPRISESERVICES_DEV."
-    "ES_ESC_GRC_CURATED."
-    "FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY"
-)
-
-ASSESSMENT_RESULTS_CONFIG["FACT_PK_COLUMN"] = (
-    "PK_FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY_HASH"
-)
-
-ASSESSMENT_RESULTS_CONFIG["EXECUTE_WRITES"] = False
-
-
-assessment_validation = validate_and_load_oscal(
-    canonical_nodes_df=assessment_nodes_df,
-    canonical_edges_df=assessment_edges_df,
-    config=ASSESSMENT_RESULTS_CONFIG
-)
-```
-
-Expected result should be:
+Yes — we **are going further down the tree**. What we just validated was only the first safe layer:
 
 ```text
-Nodes               : 4330
-Edges               : 2165
-Null node keys      : 0
-Duplicate node keys : 0
-Null edge keys      : 0
-Duplicate edge keys : 0
-Missing parents     : 0
-Missing children    : 0
-
-Validation PASSED
-
-EXECUTE_WRITES = False
-No DIM/FACT changes were made.
+assessment-results
+        ↓
+results[]
 ```
 
-Run only this and send me the output. **Do not switch `EXECUTE_WRITES` to `True` yet.**
+I stopped there intentionally because `results[]` was our first collection parent. Now we’ve proven something useful: there is exactly **one `results[]` instance per source record**, so we can continue below it without guessing which parent a child belongs to.
+
+The next safest branch is the **unambiguous `props[]` branch**:
+
+```text
+assessment-results
+   └── results[]
+         └── props[]
+```
+
+We already have **7 mappings explicitly pointing to `assessment-results.results[].props[]`**. We will **not touch** the 18 rows saying `observations[] or props[]` yet.
+
+### Next step only
+
+Add this third registry row:
+
+```sql
+INSERT INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+(
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER,
+    IS_ACTIVE,
+    ITEM_PATH
+)
+VALUES
+(
+    'ASSESSMENT_RESULTS',
+    'assessment-results.results[].props[]',
+    'props',
+    'assessment-results.results[]',
+    TRUE,
+    'SOURCE_FIELD_NAME',
+    3,
+    TRUE,
+    NULL
+);
+```
+
+Then verify:
+
+```sql
+SELECT *
+FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+WHERE OSCAL_MODEL_KEY = 'ASSESSMENT_RESULTS'
+ORDER BY PROCESS_ORDER;
+```
+
+You should now have:
+
+```text
+1  assessment-results
+2  assessment-results.results[]
+3  assessment-results.results[].props[]
+```
+
+**Do only that now.** Then we rerun the graph read-only and see whether our existing generic mapper handles `results[] → props[]` correctly before changing any Python.
