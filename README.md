@@ -1,61 +1,58 @@
-Perfect — **the third level is clean.** ✅
+Yes — **19 exact `observations[]` mappings confirmed.** ✅
 
-```text
-assessment-results            2,165
-    └── results[]             2,165
-          └── props[]         6,730
+But before we add `observations[]` to the registry, we caught an important issue: many of those score fields have the value `0`. Your current `_get_instance_key()` does **not explicitly implement `SOURCE_FIELD_NAME` for scalar values**; it eventually falls back to the value itself. That could collapse several different score fields with value `0` into one observation.
 
-Nodes                         11,060
-Edges                          8,895
-Validation PASSED
-```
+### Next step only
 
-Yes, we continue deeper. The next branch is `observations[]`, but we have to be careful because the CSV contains both:
-
-```text
-assessment-results.results[].observations[]
-```
-
-and the ambiguous:
-
-```text
-assessment-results.results[].observations[] or props[]
-```
-
-We must **not accidentally map those 18 ambiguous fields into observations**.
-
-### Next step only — isolate the clean observation mappings
-
-Run this read-only cell:
+In **Mapper V1 → Cell 4 → `_get_instance_key()`**, immediately after this:
 
 ```python
-# ============================================================
-# Assessment Results — Clean Observation Mapping Check
-# READ ONLY
-# ============================================================
-
-from snowflake.snowpark.functions import col
-
-clean_observation_mapping_df = (
-    canonical_mapping_df
-    .filter(
-        col("OSCAL_ELEMENT_PATH")
-        == "assessment-results.results[].observations[]"
-    )
-)
-
-print(
-    "Exact observation mappings:",
-    clean_observation_mapping_df.count()
-)
-
-clean_observation_mapping_df.select(
-    "SOURCE_FIELD_NAME",
-    "OSCAL_ELEMENT_PATH",
-    "MAPPING_TYPE"
-).show()
+rule = str(
+    instance_key_rule or ""
+).strip()
 ```
 
-I expect **19 exact mappings**.
+add:
 
-Once that confirms 19, we'll add `observations[]` in a way that uses only those exact mappings and leaves the 18 `"or props[]"` rows untouched for later.
+```python
+# SOURCE FIELD identity
+if (
+    _normalize_key_name(rule)
+    == _normalize_key_name("SOURCE_FIELD_NAME")
+):
+    if not source_field:
+        return None
+
+    return str(source_field).strip()
+```
+
+So it becomes:
+
+```python
+rule = str(
+    instance_key_rule or ""
+).strip()
+
+# SOURCE FIELD identity
+if (
+    _normalize_key_name(rule)
+    == _normalize_key_name("SOURCE_FIELD_NAME")
+):
+    if not source_field:
+        return None
+
+    return str(source_field).strip()
+
+# SOURCE FIELD + scalar value
+...
+```
+
+**Change nothing else.**
+
+Then rerun **Cell 4 only** and make sure you get:
+
+```text
+Cell 4 complete - generic OSCAL functions ready
+```
+
+This also makes the existing `SOURCE_FIELD_NAME` registry rule behave exactly as its name says. After that we'll safely add `observations[]` without the zero-score fields collapsing together.
