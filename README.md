@@ -1,101 +1,133 @@
-Yep — these outputs are very useful. We **should not send all 18 ambiguous fields to `observations[]` or `props[]` blindly**.
+Yes — I see exactly what happened. **Do not change AR Graph Test again.** The problem is in Cell 4.
 
-From what you showed, they split naturally:
-
-* **10 populated scalar risk/score fields** → treat as `observations[]`
-* **5 reference/list fields** → leave unresolved for now; these likely point to other Archer records/tables, similar to what we discovered with POA&M
-* **3 currently empty fields** → no nodes for now
-
-For example, these are clearly scalar measurements:
+When we moved those 10 mappings from:
 
 ```text
-TOTAL_PACKAGE_INHERENT_RISK
-TOTAL_PACKAGE_RESIDUAL_RISK
-ADJUSTED_TOTAL_RISK_SCORE
-ADJUSTED_AVERAGE_RISK_SCORE
-CURRENT_HIGHEST_DEVICE_RISK_SCORE
-CURRENT_AVERAGE_DEVICE_RISK_SCORE
-CURRENT_CONTROL_RISK_SCORE
-BASELINE_HIGHEST_DEVICE_RISK_SCORE
-BASELINE_AVERAGE_DEVICE_RISK_SCORE
-BASELINE_CONTROL_RISK_SCORE
+observations[] or props[]
 ```
 
-But these need separate reference handling later:
+to exact:
 
 ```text
-RISK_ACCEPTANCE_RBDS
-RISK_ASSESSMENT
-_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD
-_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD
-RISK_ASSESSMENT_REPORT
+observations[]
 ```
 
-For example, `RISK_ACCEPTANCE_RBDS` contains `ContentId` + `LevelId 349`, which is a strong signal that it's a reference rather than a score value.
+some records now have child observations but the logical `results[]` parent is not being created. Then the builder hits its nested-collection safety check:
 
-### Next step only
+```text
+Nested collection parent requires instance relationship metadata:
+assessment-results.results[]
+```
 
-Don't change the registry. Add a **temporary resolved Assessment Results mapping** in the notebook:
+But for Assessment Results we already established that `results[]` is **one logical instance per source record**, keyed by `SOURCE_RECORD_ID`. So it should always exist for every source row.
+
+### Change only this in Cell 4
+
+Find this section inside `_get_collection_instances()`:
 
 ```python
-# ============================================================
-# Assessment Results — Resolve Scalar Ambiguous Mappings
-# ============================================================
-
-from snowflake.snowpark.functions import col, lit, when
-
-scalar_observation_fields = [
-    "TOTAL_PACKAGE_INHERENT_RISK",
-    "TOTAL_PACKAGE_RESIDUAL_RISK",
-    "ADJUSTED_TOTAL_RISK_SCORE",
-    "ADJUSTED_AVERAGE_RISK_SCORE",
-    "CURRENT_HIGHEST_DEVICE_RISK_SCORE",
-    "CURRENT_AVERAGE_DEVICE_RISK_SCORE",
-    "CURRENT_CONTROL_RISK_SCORE",
-    "BASELINE_HIGHEST_DEVICE_RISK_SCORE",
-    "BASELINE_AVERAGE_DEVICE_RISK_SCORE",
-    "BASELINE_CONTROL_RISK_SCORE"
-]
-
-ambiguous_path = (
-    "assessment-results.results[].observations[] or props[]"
-)
-
-observation_path = (
-    "assessment-results.results[].observations[]"
-)
-
-assessment_mapping_resolved_df = (
-    assessment_mapping_df
-    .with_column(
-        "OSCAL_ELEMENT_PATH",
-        when(
-            (col("OSCAL_ELEMENT_PATH") == ambiguous_path)
-            &
-            (col("SOURCE_FIELD_NAME").isin(scalar_observation_fields)),
-            lit(observation_path)
-        ).otherwise(col("OSCAL_ELEMENT_PATH"))
+if (
+    rule
+    == _normalize_key_name(
+        "SOURCE_RECORD_ID"
     )
-)
+):
 
-print(
-    "Resolved scalar mappings:",
-    assessment_mapping_resolved_df
-    .filter(
-        (col("OSCAL_ELEMENT_PATH") == observation_path)
-        &
-        (col("SOURCE_FIELD_NAME").isin(scalar_observation_fields))
+    record = _row_to_dict(
+        source_record
     )
-    .count()
-)
+
+    raw_record_id = record.get(
+        "SOURCE_RECORD_ID"
+    )
+
+    if raw_record_id is None:
+        return []
+
+    instance_key = str(
+        raw_record_id
+    ).strip()
+
+    if not instance_key:
+        return []
+
+    # Create result only when this logical branch
+    # actually has mapped source data.
+    has_mapped_data = False
+
+    for mapping in mappings:
+
+        source_field = mapping.get(
+            "SOURCE_FIELD_NAME"
+        )
+
+        if not source_field:
+            continue
+
+        value = resolve_json_path(
+            source_obj,
+            source_field
+        )
+
+        if value not in (
+            None,
+            "",
+            [],
+            {}
+        ):
+            has_mapped_data = True
+            break
+
+    if not has_mapped_data:
+        return []
+
+    return [
+        {
+            "INSTANCE_KEY": instance_key,
+            "PAYLOAD": {}
+        }
+    ]
 ```
 
-Expected:
+Replace that entire block with:
 
-```text
-Resolved scalar mappings: 10
+```python
+if (
+    rule
+    == _normalize_key_name(
+        "SOURCE_RECORD_ID"
+    )
+):
+
+    record = _row_to_dict(
+        source_record
+    )
+
+    raw_record_id = record.get(
+        "SOURCE_RECORD_ID"
+    )
+
+    if raw_record_id is None:
+        return []
+
+    instance_key = str(
+        raw_record_id
+    ).strip()
+
+    if not instance_key:
+        return []
+
+    # One logical results[] instance per source record.
+    # Child collections such as props[] and observations[]
+    # attach to this record-scoped parent.
+    return [
+        {
+            "INSTANCE_KEY": instance_key,
+            "PAYLOAD": {}
+        }
+    ]
 ```
 
-Stop there and send me that result.
+Then rerun **Cell 4**, then **Cell 10 AR Graph Test**.
 
-If it says **10**, then we will use this resolved DataFrame in the existing graph test. Based on the source counts you showed, those 10 fields should contribute another **17,360 observation nodes**, so we have a very strong reconciliation number to test against next.
+Nothing else. This is the correct fix because `results[]` is a structural record-level parent; its existence should **not depend on which child mapping happens to remain owned by it**.
