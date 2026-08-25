@@ -1,98 +1,101 @@
-Excellent — that proves the **40,008 observation nodes are fully reconciled to the 19 exact mappings**. ✅
+Yep — these outputs are very useful. We **should not send all 18 ambiguous fields to `observations[]` or `props[]` blindly**.
 
-So this branch is now trustworthy:
+From what you showed, they split naturally:
 
-```text
-assessment-results
-    └── results[]
-          ├── props[]          6,730
-          └── observations[]  40,008   ✅ reconciled
-```
+* **10 populated scalar risk/score fields** → treat as `observations[]`
+* **5 reference/list fields** → leave unresolved for now; these likely point to other Archer records/tables, similar to what we discovered with POA&M
+* **3 currently empty fields** → no nodes for now
 
-Now **do not change the registry yet**. The next thing is to inspect the **18 ambiguous mappings** that say:
+For example, these are clearly scalar measurements:
 
 ```text
-assessment-results.results[].observations[] or props[]
+TOTAL_PACKAGE_INHERENT_RISK
+TOTAL_PACKAGE_RESIDUAL_RISK
+ADJUSTED_TOTAL_RISK_SCORE
+ADJUSTED_AVERAGE_RISK_SCORE
+CURRENT_HIGHEST_DEVICE_RISK_SCORE
+CURRENT_AVERAGE_DEVICE_RISK_SCORE
+CURRENT_CONTROL_RISK_SCORE
+BASELINE_HIGHEST_DEVICE_RISK_SCORE
+BASELINE_AVERAGE_DEVICE_RISK_SCORE
+BASELINE_CONTROL_RISK_SCORE
 ```
 
-Run this one read-only cell:
+But these need separate reference handling later:
+
+```text
+RISK_ACCEPTANCE_RBDS
+RISK_ASSESSMENT
+_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD
+_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD
+RISK_ASSESSMENT_REPORT
+```
+
+For example, `RISK_ACCEPTANCE_RBDS` contains `ContentId` + `LevelId 349`, which is a strong signal that it's a reference rather than a score value.
+
+### Next step only
+
+Don't change the registry. Add a **temporary resolved Assessment Results mapping** in the notebook:
 
 ```python
 # ============================================================
-# Assessment Results — Ambiguous Observation/Prop Profiling
-# READ ONLY
+# Assessment Results — Resolve Scalar Ambiguous Mappings
 # ============================================================
 
-from snowflake.snowpark.functions import col
+from snowflake.snowpark.functions import col, lit, when
 
-ambiguous_mapping_df = (
-    canonical_mapping_df
-    .filter(
-        col("OSCAL_ELEMENT_PATH")
-        == "assessment-results.results[].observations[] or props[]"
+scalar_observation_fields = [
+    "TOTAL_PACKAGE_INHERENT_RISK",
+    "TOTAL_PACKAGE_RESIDUAL_RISK",
+    "ADJUSTED_TOTAL_RISK_SCORE",
+    "ADJUSTED_AVERAGE_RISK_SCORE",
+    "CURRENT_HIGHEST_DEVICE_RISK_SCORE",
+    "CURRENT_AVERAGE_DEVICE_RISK_SCORE",
+    "CURRENT_CONTROL_RISK_SCORE",
+    "BASELINE_HIGHEST_DEVICE_RISK_SCORE",
+    "BASELINE_AVERAGE_DEVICE_RISK_SCORE",
+    "BASELINE_CONTROL_RISK_SCORE"
+]
+
+ambiguous_path = (
+    "assessment-results.results[].observations[] or props[]"
+)
+
+observation_path = (
+    "assessment-results.results[].observations[]"
+)
+
+assessment_mapping_resolved_df = (
+    assessment_mapping_df
+    .with_column(
+        "OSCAL_ELEMENT_PATH",
+        when(
+            (col("OSCAL_ELEMENT_PATH") == ambiguous_path)
+            &
+            (col("SOURCE_FIELD_NAME").isin(scalar_observation_fields)),
+            lit(observation_path)
+        ).otherwise(col("OSCAL_ELEMENT_PATH"))
     )
 )
 
-ambiguous_rows = ambiguous_mapping_df.collect()
-
-print("=== AMBIGUOUS OBSERVATION / PROP MAPPINGS ===")
-print("Mapping rows:", len(ambiguous_rows))
-
-for mapping_row in ambiguous_rows:
-
-    field = mapping_row["SOURCE_FIELD_NAME"]
-
-    populated = 0
-    types_seen = set()
-    max_list_length = 0
-    samples = []
-
-    for record in source_df.to_local_iterator():
-
-        source_obj = _parse_source_json(record)
-
-        value = resolve_json_path(
-            source_obj,
-            field
-        )
-
-        if value in (
-            None,
-            "",
-            [],
-            {}
-        ):
-            continue
-
-        populated += 1
-        types_seen.add(
-            type(value).__name__
-        )
-
-        if isinstance(value, list):
-            max_list_length = max(
-                max_list_length,
-                len(value)
-            )
-
-        if len(samples) < 2:
-            samples.append(value)
-
-    print("\nFIELD        :", field)
-    print("POPULATED    :", populated)
-    print("TYPES        :", sorted(types_seen))
-    print("MAX LIST     :", max_list_length)
-
-    for sample in samples:
-        print("SAMPLE       :", sample)
+print(
+    "Resolved scalar mappings:",
+    assessment_mapping_resolved_df
+    .filter(
+        (col("OSCAL_ELEMENT_PATH") == observation_path)
+        &
+        (col("SOURCE_FIELD_NAME").isin(scalar_observation_fields))
+    )
+    .count()
+)
 ```
 
-What we want to determine is very simple:
+Expected:
 
 ```text
-Which of those 18 really belong in observations[]?
-Which really belong in props[]?
-Which are references and need separate treatment?
+Resolved scalar mappings: 10
 ```
 
-Run that and send me the output. We won’t guess from the phrase **“or props[]”**.
+Stop there and send me that result.
+
+If it says **10**, then we will use this resolved DataFrame in the existing graph test. Based on the source counts you showed, those 10 fields should contribute another **17,360 observation nodes**, so we have a very strong reconciliation number to test against next.
