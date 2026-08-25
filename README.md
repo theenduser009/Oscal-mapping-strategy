@@ -1,44 +1,63 @@
-Yes — here is the **POA&M FACT table DDL**. This is the one to create now, with both FK columns referencing the **POA&M DIM**.
+Yes — let’s move to **model #3**. We’ll use the **same Authorization Package source** and first let the mapping CSV tell us what model has usable mappings next.
 
-```sql
-CREATE OR REPLACE TABLE
-RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_POAM_DEPENDENCY
-(
-    PK_FACT_OSCAL_POAM_DEPENDENCY_HASH BINARY(16) NOT NULL,
+In the **DEV/reference notebook**, add one new Python cell at the bottom. **Read-only — no registry or mapper changes yet.**
 
-    FK_SOURCE_ELEMENT_HASH BINARY(16) NOT NULL,
-    FK_TARGET_ELEMENT_HASH BINARY(16) NOT NULL,
+```python
+# ============================================================
+# NEXT OSCAL MODEL INVENTORY
+# READ ONLY
+# ============================================================
 
-    DEPENDENCY_TYPE VARCHAR(32) NOT NULL,
+from collections import defaultdict
 
-    SOURCE_OSCAL_UUID VARCHAR(32) NOT NULL,
-    TARGET_OSCAL_UUID VARCHAR(32) NOT NULL,
+model_inventory = defaultdict(lambda: {
+    "mapping_rows": 0,
+    "roots": set()
+})
 
-    CONSTRAINT PK_FACT_OSCAL_POAM_DEPENDENCY
-        PRIMARY KEY (PK_FACT_OSCAL_POAM_DEPENDENCY_HASH),
+for row in canonical_mapping_df.collect():
 
-    CONSTRAINT FK_FACT_OSCAL_POAM_SOURCE
-        FOREIGN KEY (FK_SOURCE_ELEMENT_HASH)
-        REFERENCES RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_POAM_ELEMENT
-        (PK_DIM_OSCAL_POAM_ELEMENT_HASH),
+    model = row["OSCAL_MODEL"]
+    path = row["OSCAL_ELEMENT_PATH"]
 
-    CONSTRAINT FK_FACT_OSCAL_POAM_TARGET
-        FOREIGN KEY (FK_TARGET_ELEMENT_HASH)
-        REFERENCES RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_POAM_ELEMENT
-        (PK_DIM_OSCAL_POAM_ELEMENT_HASH)
-);
+    if model is None or path is None:
+        continue
+
+    model = str(model).strip()
+    path = str(path).strip()
+
+    if not model or not path:
+        continue
+
+    root = path.split(".")[0]
+
+    model_inventory[model]["mapping_rows"] += 1
+    model_inventory[model]["roots"].add(root)
+
+
+print("=== OSCAL MODEL / ROOT INVENTORY ===")
+
+for model in sorted(model_inventory):
+
+    print("\nMODEL       :", model)
+    print("MAPPING ROWS:", model_inventory[model]["mapping_rows"])
+
+    for root in sorted(model_inventory[model]["roots"]):
+        print("ROOT        :", root)
 ```
 
-Relationship is:
+We’re looking for output roughly like:
 
 ```text
-DIM_OSCAL_POAM_ELEMENT.PK_DIM_OSCAL_POAM_ELEMENT_HASH
-          ↑                         ↑
-          │                         │
-FK_SOURCE_ELEMENT_HASH     FK_TARGET_ELEMENT_HASH
-          \_______________________/
-                     │
-          FACT_OSCAL_POAM_DEPENDENCY
+MODEL       : Security Assessment Plan
+MAPPING ROWS: ...
+ROOT        : assessment-plan
+
+MODEL       : Assessment Results
+MAPPING ROWS: ...
+ROOT        : assessment-results
 ```
 
-Create this FACT table first. Then we'll go back to the mapper.
+Don’t add anything to the registry yet.
+
+**Run this cell and send me the output.** Then we’ll choose the third model based on the actual mapping data, not the diagram.
