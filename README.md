@@ -1,8 +1,8 @@
-Good — this narrows it down a lot. None of those populated fields is an obvious direct `ASSESSMENT_REFERENCE`. Most of the useful candidates are **arrays of Archer ContentIds**, so now we should test whether any of those IDs actually point back to the Authorization Package records.
+Exactly — all `AUTH_PACKAGE_MATCHES = 0`.
 
-### Next step only — READ ONLY
+That means the Finding records do **not** point directly to the Authorization Package. So our next job is to identify **what those referenced ContentIds actually belong to**.
 
-Run this:
+Do just this next, read-only:
 
 ```sql
 WITH FINDING_REFS AS (
@@ -24,31 +24,20 @@ WITH FINDING_REFS AS (
         'REQUIRED_QUESTIONNAIRES_COMPLETED',
         '889B_QUESTIONNAIRES',
         'ISSUING_AUTHORITY_FINDING',
-        'QUESTIONNAIRE_TRACKING_ID',
         '889B_QUESTIONNAIRE_FINDINGS',
         'COMPLIANCE_ENGAGEMENT'
     )
 )
 
 SELECT
-    R.REFERENCE_FIELD,
-    COUNT(*) AS TOTAL_REFERENCES,
-    COUNT(A.CONTENT_ID) AS AUTH_PACKAGE_MATCHES
-FROM FINDING_REFS R
-LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW A
-    ON TRY_TO_NUMBER(A.CONTENT_ID) = R.REFERENCED_CONTENT_ID
-WHERE R.REFERENCED_CONTENT_ID IS NOT NULL
-GROUP BY R.REFERENCE_FIELD
-ORDER BY AUTH_PACKAGE_MATCHES DESC,
-         TOTAL_REFERENCES DESC;
+    REFERENCE_FIELD,
+    REFERENCED_CONTENT_ID
+FROM FINDING_REFS
+WHERE REFERENCED_CONTENT_ID IS NOT NULL
+ORDER BY REFERENCE_FIELD
+LIMIT 50;
 ```
 
-This answers exactly one question:
+Send me that output.
 
-> **Does any Finding relationship field directly point to an Authorization Package `CONTENT_ID`?**
-
-If `AUTH_PACKAGE_MATCHES > 0`, we found our direct bridge.
-
-If they are all `0`, that is also useful — it means Findings connect **through another Archer entity**, very likely Questionnaire/Engagement, and we trace that next.
-
-No mapper or registry changes yet. Show me this result.
+Then we’ll take a few of those referenced IDs and search across your Archer raw tables to identify **which entity/table owns them**. That will reveal the actual relationship path to Assessment Results.
