@@ -1,75 +1,41 @@
-Yep — next we prove the `findings[]` source before touching the registry.
+Yes — this is much better. 🔥 `ARCHER_CONTENT_FINDINGS_RAW` clearly looks like the **actual Finding entity**. I can see real Finding attributes such as `FINDING_ID`, `FINDING_NAME`, `FINDING_RATING`, remediation fields, and—most importantly—`ASSESSMENT_REFERENCES`.
 
-Add **one new READ ONLY cell** after your reconciliation cell:
+That `ASSESSMENT_REFERENCES` field is the first thing we should investigate. It may be the bridge back to the Assessment Result / Authorization Package.
 
-```python
-# ============================================================
-# Assessment Results — Findings Source Check
-# READ ONLY
-# ============================================================
+### Next step only
 
-from snowflake.snowpark.functions import col
+Run this **read-only SQL**:
 
-findings_mapping_df = (
-    canonical_mapping_df
-    .filter(
-        col("OSCAL_ELEMENT_PATH")
-        == "assessment-results.results[].findings[]"
-    )
-)
-
-findings_rows = findings_mapping_df.collect()
-
-print("=== ASSESSMENT RESULTS FINDINGS CHECK ===")
-print("Mapping rows:", len(findings_rows))
-
-for mapping in findings_rows:
-
-    field = mapping["SOURCE_FIELD_NAME"]
-
-    populated = 0
-    types_seen = set()
-    max_list_length = 0
-    samples = []
-
-    for record in source_df.to_local_iterator():
-
-        source_obj = _parse_source_json(record)
-
-        value = resolve_json_path(
-            source_obj,
-            field
-        )
-
-        if value in (None, "", [], {}):
-            continue
-
-        populated += 1
-        types_seen.add(type(value).__name__)
-
-        if isinstance(value, list):
-            max_list_length = max(
-                max_list_length,
-                len(value)
-            )
-
-        if len(samples) < 5:
-            samples.append(value)
-
-    print("\nFIELD       :", field)
-    print("POPULATED   :", populated)
-    print("TYPES       :", sorted(types_seen))
-    print("MAX LIST    :", max_list_length)
-
-    for sample in samples:
-        print("SAMPLE      :", sample)
+```sql
+SELECT
+    CONTENT_ID,
+    CURATED_JSON:"FINDING_ID"              AS FINDING_ID,
+    CURATED_JSON:"FINDING_ID_TEXT"         AS FINDING_ID_TEXT,
+    CURATED_JSON:"ASSESSMENT_REFERENCES"   AS ASSESSMENT_REFERENCES,
+    CURATED_JSON:"ARCHER_REFERENCE"        AS ARCHER_REFERENCE,
+    CURATED_JSON:"SOURCE"                  AS SOURCE
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_FINDINGS_RAW
+WHERE CURATED_JSON IS NOT NULL
+LIMIT 20;
 ```
 
-I expect it may show:
+What I want to see is whether `ASSESSMENT_REFERENCES` contains something like:
 
 ```text
-FIELD     : FINDINGS
-POPULATED : 0
+[
+  {
+    "ContentId": 123456,
+    "LevelId": ...
+  }
+]
 ```
 
-If that is what we get, **we do not add `findings[]` to the registry yet**. That tells us the Authorization Package raw table cannot currently construct that branch, and then we’ll identify which Archer raw table actually owns the Finding records.
+If it does, **do not change Cell 4 yet**. We will first prove what that `ContentId` points to. That will tell us exactly how to build:
+
+```text
+Assessment Result
+      ↓
+Finding
+```
+
+Send me that result.
