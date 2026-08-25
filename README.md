@@ -1,129 +1,50 @@
-Perfect — this is **exactly the result we wanted.** ✅
+Yes — **FACT should have the two FK relationships.** I meant **no FK inside the DIM**.
+
+For Assessment Results:
 
 ```text
-Assessment Results graph
-
-assessment-results : 2,165
-results[]           : 2,165
---------------------------------
-Total nodes         : 4,330
-
-assessment-results → results[]
-Edges               : 2,165
+DIM
+PK_DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT_HASH
+           ▲                         ▲
+           │                         │
+FACT.FK_SOURCE_ELEMENT_HASH   FACT.FK_TARGET_ELEMENT_HASH
 ```
 
-So the new generic `SOURCE_RECORD_ID` rule is working correctly: **one logical `results[]` instance per Authorization Package record**.
+So use this FACT DDL:
 
-We have **not** created `observations[]`, `props[]`, or `findings[]` yet. That is intentional.
+```sql
+CREATE OR REPLACE TABLE
+RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY
+(
+    PK_FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY_HASH BINARY(16) NOT NULL,
 
-### Next step only: validate this graph
+    FK_SOURCE_ELEMENT_HASH BINARY(16) NOT NULL,
+    FK_TARGET_ELEMENT_HASH BINARY(16) NOT NULL,
 
-Add one new read-only cell:
+    DEPENDENCY_TYPE    VARCHAR(32) NOT NULL,
+    SOURCE_OSCAL_UUID  VARCHAR(32) NOT NULL,
+    TARGET_OSCAL_UUID  VARCHAR(32) NOT NULL,
 
-```python
-# ============================================================
-# Assessment Results — Graph Validation
-# READ ONLY
-# ============================================================
+    CONSTRAINT PK_FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY
+        PRIMARY KEY (
+            PK_FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY_HASH
+        ),
 
-from snowflake.snowpark.functions import col
+    CONSTRAINT FK_ASSESSMENT_RESULTS_SOURCE
+        FOREIGN KEY (FK_SOURCE_ELEMENT_HASH)
+        REFERENCES RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT
+        (PK_DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT_HASH),
 
-node_keys_df = (
-    assessment_nodes_df
-    .select(col("NODE_KEY"))
-    .distinct()
-)
-
-null_node_keys = (
-    assessment_nodes_df
-    .filter(col("NODE_KEY").is_null())
-    .count()
-)
-
-duplicate_node_keys = (
-    assessment_nodes_df
-    .group_by("NODE_KEY")
-    .count()
-    .filter(col("COUNT") > 1)
-    .count()
-)
-
-null_edge_keys = (
-    assessment_edges_df
-    .filter(col("EDGE_KEY").is_null())
-    .count()
-)
-
-duplicate_edge_keys = (
-    assessment_edges_df
-    .group_by("EDGE_KEY")
-    .count()
-    .filter(col("COUNT") > 1)
-    .count()
-)
-
-missing_parents = (
-    assessment_edges_df
-    .select(
-        col("SOURCE_NODE_KEY").alias("NODE_KEY")
-    )
-    .join(
-        node_keys_df,
-        ["NODE_KEY"],
-        "left_anti"
-    )
-    .count()
-)
-
-missing_children = (
-    assessment_edges_df
-    .select(
-        col("TARGET_NODE_KEY").alias("NODE_KEY")
-    )
-    .join(
-        node_keys_df,
-        ["NODE_KEY"],
-        "left_anti"
-    )
-    .count()
-)
-
-print("=== ASSESSMENT RESULTS VALIDATION ===")
-print("Nodes               :", assessment_nodes_df.count())
-print("Edges               :", assessment_edges_df.count())
-print("Null node keys      :", null_node_keys)
-print("Duplicate node keys :", duplicate_node_keys)
-print("Null edge keys      :", null_edge_keys)
-print("Duplicate edge keys :", duplicate_edge_keys)
-print("Missing parents     :", missing_parents)
-print("Missing children    :", missing_children)
-
-if (
-    null_node_keys == 0
-    and duplicate_node_keys == 0
-    and null_edge_keys == 0
-    and duplicate_edge_keys == 0
-    and missing_parents == 0
-    and missing_children == 0
-):
-    print("\nValidation PASSED")
-else:
-    print("\nValidation FAILED")
+    CONSTRAINT FK_ASSESSMENT_RESULTS_TARGET
+        FOREIGN KEY (FK_TARGET_ELEMENT_HASH)
+        REFERENCES RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT
+        (PK_DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT_HASH)
+);
 ```
 
-Expected:
+So yes:
 
-```text
-Nodes               : 4330
-Edges               : 2165
-Null node keys      : 0
-Duplicate node keys : 0
-Null edge keys      : 0
-Duplicate edge keys : 0
-Missing parents     : 0
-Missing children    : 0
+**DIM:** PK only.
+**FACT:** PK + **2 FKs back to the same DIM** — one for parent/source and one for child/target.
 
-Validation PASSED
-```
-
-Run only this and show me the result.
+That matches our graph design.
