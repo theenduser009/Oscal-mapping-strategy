@@ -1,114 +1,245 @@
-Yes — now we have the exact picture. This is important.
-
-Your 45 Assessment Results mappings break down as:
+Yes — now I can see the whole relevant section. This confirms we **do not need to replace `build_oscal_graph()`**. Its current behavior is correct:
 
 ```text
-1   → assessment-results.results[].findings[]
-19  → assessment-results.results[].observations[]
-18  → assessment-results.results[].observations[] or props[]
-7   → assessment-results.results[].props[]
+singleton parent → collection child     ✅ supported
+collection parent → collection child    ⛔ deliberately blocked
 ```
 
-Two things matter before we touch the registry:
+For Assessment Results, our first step is only:
 
-1. `observations[] or props[]` is **not a real executable OSCAL path**. It is a mapping/design choice recorded in the CSV. We eventually have to resolve those 18 rows to one real branch.
-2. More importantly, everything sits underneath `results[]`, but there is **no direct mapping that creates/identifies a `results[]` instance**. Because `results[]` is itself a collection, we cannot safely assume how many result instances belong to each Authorization Package.
+```text
+assessment-results            singleton
+        ↓
+assessment-results.results[]  collection
+```
 
-So **do not change the mapper or registry yet.**
+So the only missing generic capability is: **create one `results[]` instance using `SOURCE_RECORD_ID`.**
 
-### Next step — inspect the actual source data for all 45 fields
+### Replace only `_get_collection_instances()` with this full function
 
-Add one read-only cell:
+Do **not** change `_get_instance_key()` or `build_oscal_graph()`.
 
 ```python
-# ============================================================
-# Assessment Results — Source Data Profile
-# READ ONLY
-# ============================================================
+def _get_collection_instances(
+    source_record,
+    mappings,
+    instance_key_rule,
+    item_path="$"
+):
+    """
+    Return collection instances for one source record.
 
-assessment_mapping_rows = (
-    assessment_results_paths
-    .select(
-        "SOURCE_FIELD_NAME",
-        "OSCAL_ELEMENT_PATH",
-        "MAPPING_TYPE"
+    Supported patterns:
+
+    1. Normal source collection
+       Example:
+           POAMS -> [{"ContentId": 123}, {"ContentId": 456}]
+       INSTANCE_KEY_RULE = CONTENT_ID
+
+    2. Record-scoped synthetic collection
+       Example:
+           assessment-results.results[]
+       There is no physical results[] array in Archer.
+       One logical result instance represents the source record.
+       INSTANCE_KEY_RULE = SOURCE_RECORD_ID
+    """
+
+    source_obj = _parse_source_json(source_record)
+
+    rule = _normalize_key_name(
+        instance_key_rule or ""
     )
-    .collect()
-)
 
-profiles = []
+    # ========================================================
+    # A. Record-scoped logical collection
+    #    One collection instance per source record.
+    # ========================================================
 
-for m in assessment_mapping_rows:
+    if rule == _normalize_key_name("SOURCE_RECORD_ID"):
 
-    field = m["SOURCE_FIELD_NAME"]
-    path = m["OSCAL_ELEMENT_PATH"]
-    mapping_type = m["MAPPING_TYPE"]
+        record = _row_to_dict(source_record)
 
-    populated = 0
-    value_types = set()
-    max_list_length = 0
-    samples = []
+        raw_record_id = record.get(
+            "SOURCE_RECORD_ID"
+        )
 
-    for record in source_df.to_local_iterator():
+        if raw_record_id is None:
+            return []
 
-        source_obj = _parse_source_json(record)
-        value = resolve_json_path(source_obj, field)
+        instance_key = str(
+            raw_record_id
+        ).strip()
 
-        if value in (None, "", [], {}):
-            continue
+        if not instance_key:
+            return []
 
-        populated += 1
-        value_types.add(type(value).__name__)
+        # Do not create an empty logical result when none of
+        # the mappings owned by this node have source data.
+        has_mapped_data = False
 
-        if isinstance(value, list):
-            max_list_length = max(
-                max_list_length,
-                len(value)
+        for mapping in mappings:
+
+            source_field = mapping.get(
+                "SOURCE_FIELD_NAME"
             )
 
-        if len(samples) < 2:
-            samples.append(str(value)[:250])
+            if not source_field:
+                continue
 
-    profiles.append({
-        "field": field,
-        "path": path,
-        "mapping_type": mapping_type,
-        "populated": populated,
-        "types": ",".join(sorted(value_types)),
-        "max_list_length": max_list_length,
-        "samples": samples
-    })
+            value = resolve_json_path(
+                source_obj,
+                source_field
+            )
 
+            if value not in (
+                None,
+                "",
+                [],
+                {}
+            ):
+                has_mapped_data = True
+                break
 
-print("=== ASSESSMENT RESULTS SOURCE PROFILE ===")
+        if not has_mapped_data:
+            return []
 
-for p in profiles:
+        # Structural payload intentionally empty.
+        #
+        # The actual observations / props / findings are
+        # separate deeper OSCAL structures. We are NOT
+        # collapsing those values into the results[] node.
+        return [
+            {
+                "INSTANCE_KEY": instance_key,
+                "PAYLOAD": {}
+            }
+        ]
 
-    print("\nFIELD       :", p["field"])
-    print("PATH        :", p["path"])
-    print("MAPPING TYPE:", p["mapping_type"])
-    print("POPULATED   :", p["populated"])
-    print("TYPES       :", p["types"])
-    print("MAX LIST    :", p["max_list_length"])
+    # ========================================================
+    # B. Existing physical collection behavior
+    #    Keep SSP / POA&M behavior unchanged.
+    # ========================================================
 
-    for sample in p["samples"]:
-        print("SAMPLE      :", sample)
+    instances = {}
+
+    for mapping in mappings:
+
+        source_field = mapping.get(
+            "SOURCE_FIELD_NAME"
+        )
+
+        if not source_field:
+            continue
+
+        value = resolve_json_path(
+            source_obj,
+            source_field
+        )
+
+        if value in (
+            None,
+            "",
+            [],
+            {}
+        ):
+            continue
+
+        items = _extract_collection_items(
+            value,
+            item_path
+        )
+
+        for item in items:
+
+            instance_key = _get_instance_key(
+                item,
+                instance_key_rule,
+                source_field
+            )
+
+            if instance_key is None:
+                continue
+
+            instance_key = str(
+                instance_key
+            ).strip()
+
+            if not instance_key:
+                continue
+
+            if instance_key not in instances:
+
+                instances[instance_key] = {
+                    "INSTANCE_KEY": instance_key,
+                    "PAYLOAD": item
+                }
+
+            else:
+
+                existing = instances[
+                    instance_key
+                ]["PAYLOAD"]
+
+                # Preserve richer dictionary representation
+                # when the same logical reference appears
+                # through multiple mapped source fields.
+                if (
+                    not isinstance(existing, dict)
+                    and isinstance(item, dict)
+                ):
+                    instances[
+                        instance_key
+                    ]["PAYLOAD"] = item
+
+    return list(
+        instances.values()
+    )
 ```
 
-What I'm particularly looking for is something like:
+### Why I want the payload `{}` right now
+
+This is intentional.
+
+We discovered fields like:
 
 ```text
-FINDINGS
-TYPE: list
-SAMPLE: [{"ContentId": ..., "LevelId": ...}]
-
-SECURITY_COMPLIANCE_SCORE
-TYPE: int / float
-
-RISK_ASSESSMENT
-TYPE: list or scalar
+ANTIVIRUS_SCORE
+VULNERABILITY_SCORE
+TOTAL_PACKAGE_RISK_SCORE
+RISK_ASSESSMENT_REPORT
+...
 ```
 
-That will tell us whether `results[]` should effectively be **one result per Authorization Package**, and which of those ambiguous 18 fields should become `observations[]` versus `props[]`.
+are mapped deeper under:
 
-Run this cell and show me the output, especially `FINDINGS` and a few of the score/risk fields. We won't touch the working generic mapper until the data answers that question.
+```text
+results[].observations[]
+results[].props[]
+```
+
+and 18 mappings even say:
+
+```text
+observations[] or props[]
+```
+
+We should **not shove those values into `results[]`** just to make the node nonempty. The `results[]` node is currently a structural parent.
+
+And importantly, **leave this existing protection exactly as it is**:
+
+```python
+if len(parent_nodes) != 1:
+    raise ValueError(...)
+```
+
+We are not ready to enable nested collection relationships yet.
+
+### After replacing the function
+
+Rerun Cell 4 only. It should simply end with:
+
+```text
+Cell 4 complete - generic OSCAL functions ready
+```
+
+**Do not insert Assessment Results registry rows yet.** After Cell 4 succeeds, tell me `correct`, and I'll give you the exact two registry INSERT rows next.
