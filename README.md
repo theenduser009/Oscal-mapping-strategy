@@ -1,63 +1,65 @@
-Yes — let’s move to **model #3**. We’ll use the **same Authorization Package source** and first let the mapping CSV tell us what model has usable mappings next.
+Yes — I’m thinking the same thing looking at this output. This inventory gives us a much clearer priority.
 
-In the **DEV/reference notebook**, add one new Python cell at the bottom. **Read-only — no registry or mapper changes yet.**
-
-```python
-# ============================================================
-# NEXT OSCAL MODEL INVENTORY
-# READ ONLY
-# ============================================================
-
-from collections import defaultdict
-
-model_inventory = defaultdict(lambda: {
-    "mapping_rows": 0,
-    "roots": set()
-})
-
-for row in canonical_mapping_df.collect():
-
-    model = row["OSCAL_MODEL"]
-    path = row["OSCAL_ELEMENT_PATH"]
-
-    if model is None or path is None:
-        continue
-
-    model = str(model).strip()
-    path = str(path).strip()
-
-    if not model or not path:
-        continue
-
-    root = path.split(".")[0]
-
-    model_inventory[model]["mapping_rows"] += 1
-    model_inventory[model]["roots"].add(root)
-
-
-print("=== OSCAL MODEL / ROOT INVENTORY ===")
-
-for model in sorted(model_inventory):
-
-    print("\nMODEL       :", model)
-    print("MAPPING ROWS:", model_inventory[model]["mapping_rows"])
-
-    for root in sorted(model_inventory[model]["roots"]):
-        print("ROOT        :", root)
-```
-
-We’re looking for output roughly like:
+The strongest **model #3 candidate is Assessment Results**:
 
 ```text
-MODEL       : Security Assessment Plan
-MAPPING ROWS: ...
-ROOT        : assessment-plan
-
-MODEL       : Assessment Results
-MAPPING ROWS: ...
-ROOT        : assessment-results
+Assessment Results        38 mappings
+Extension Properties       7 mappings
+                           ──
+assessment-results root   ~45 mappings potentially
 ```
 
-Don’t add anything to the registry yet.
+Compare that with:
 
-**Run this cell and send me the output.** Then we’ll choose the third model based on the actual mapping data, not the diagram.
+```text
+Security Assessment Plan   3 mappings
+Profile                    2 mappings
+POA&M                      1 mapping   ✅ already done
+```
+
+Also, just like SSP was split across labels such as `SSP - Metadata`, `SSP - System Characteristics`, etc., we should **not assume `OSCAL_MODEL` alone defines the complete model**. The important thing is the actual `OSCAL_ELEMENT_PATH`.
+
+So I would go next with:
+
+```text
+assessment-results
+```
+
+But **do not register anything yet**.
+
+### Next step only
+
+Let's inventory every path underneath `assessment-results`, including those labeled `Extension Properties`.
+
+Run:
+
+```python
+from snowflake.snowpark.functions import col
+
+assessment_results_paths = (
+    canonical_mapping_df
+    .filter(
+        col("OSCAL_ELEMENT_PATH").startswith(
+            "assessment-results"
+        )
+    )
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_MODEL",
+        "OSCAL_ELEMENT_PATH",
+        "MAPPING_TYPE"
+    )
+    .sort("OSCAL_ELEMENT_PATH")
+)
+
+print(
+    "Assessment-results mapping rows:",
+    assessment_results_paths.count()
+)
+
+assessment_results_paths.show()
+```
+
+That will tell us the **real branch structure** for Assessment Results before we touch the registry.
+
+Send me that output next.
