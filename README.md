@@ -1,106 +1,98 @@
-Yes — this is looking very clean. ✅ The new level worked exactly as intended.
+Excellent — that proves the **40,008 observation nodes are fully reconciled to the 19 exact mappings**. ✅
 
-Your Assessment Results tree is now:
-
-```text
-assessment-results                 2,165
-    └── results[]                  2,165
-          ├── props[]              6,730
-          └── observations[]      40,008
-```
-
-And the relationships match exactly:
+So this branch is now trustworthy:
 
 ```text
-assessment-results → results[]          2,165
-results[] → props[]                     6,730
-results[] → observations[]             40,008
-
-Total nodes                            51,068
-Total edges                            48,903
+assessment-results
+    └── results[]
+          ├── props[]          6,730
+          └── observations[]  40,008   ✅ reconciled
 ```
 
-Most importantly, both validations passed with **0 null keys, 0 duplicates, 0 missing parents, 0 missing children**, and your target-validation cell also passed with `EXECUTE_WRITES=False`. Excellent.
+Now **do not change the registry yet**. The next thing is to inspect the **18 ambiguous mappings** that say:
 
-Before going another level down, I want **one small proof** that those `40,008` observation nodes correspond exactly to populated source occurrences across the 19 clean mappings.
+```text
+assessment-results.results[].observations[] or props[]
+```
 
-Run this read-only cell:
+Run this one read-only cell:
 
 ```python
 # ============================================================
-# Assessment Results — Observation Coverage Reconciliation
+# Assessment Results — Ambiguous Observation/Prop Profiling
 # READ ONLY
 # ============================================================
 
 from snowflake.snowpark.functions import col
 
-observation_fields = [
-    row["SOURCE_FIELD_NAME"]
-    for row in (
-        clean_observation_mapping_df
-        .select("SOURCE_FIELD_NAME")
-        .distinct()
-        .collect()
+ambiguous_mapping_df = (
+    canonical_mapping_df
+    .filter(
+        col("OSCAL_ELEMENT_PATH")
+        == "assessment-results.results[].observations[] or props[]"
     )
-]
+)
 
-field_counts = {
-    field: 0
-    for field in observation_fields
-}
+ambiguous_rows = ambiguous_mapping_df.collect()
 
-for record in source_df.to_local_iterator():
+print("=== AMBIGUOUS OBSERVATION / PROP MAPPINGS ===")
+print("Mapping rows:", len(ambiguous_rows))
 
-    source_obj = _parse_source_json(record)
+for mapping_row in ambiguous_rows:
 
-    for field in observation_fields:
+    field = mapping_row["SOURCE_FIELD_NAME"]
+
+    populated = 0
+    types_seen = set()
+    max_list_length = 0
+    samples = []
+
+    for record in source_df.to_local_iterator():
+
+        source_obj = _parse_source_json(record)
 
         value = resolve_json_path(
             source_obj,
             field
         )
 
-        if value not in (
+        if value in (
             None,
             "",
             [],
             {}
         ):
-            field_counts[field] += 1
+            continue
 
+        populated += 1
+        types_seen.add(
+            type(value).__name__
+        )
 
-expected_observations = sum(
-    field_counts.values()
-)
+        if isinstance(value, list):
+            max_list_length = max(
+                max_list_length,
+                len(value)
+            )
 
-actual_observations = (
-    assessment_nodes_df
-    .filter(
-        col("ELEMENT_TYPE")
-        == "observations"
-    )
-    .count()
-)
+        if len(samples) < 2:
+            samples.append(value)
 
-print("=== OBSERVATION RECONCILIATION ===")
-print("Clean mapped fields       :", len(observation_fields))
-print("Expected from source      :", expected_observations)
-print("Actual observation nodes  :", actual_observations)
+    print("\nFIELD        :", field)
+    print("POPULATED    :", populated)
+    print("TYPES        :", sorted(types_seen))
+    print("MAX LIST     :", max_list_length)
 
-if expected_observations == actual_observations:
-    print("\nOBSERVATION COVERAGE MATCHED")
-else:
-    print("\nOBSERVATION COVERAGE MISMATCH")
+    for sample in samples:
+        print("SAMPLE       :", sample)
 ```
 
-I expect:
+What we want to determine is very simple:
 
 ```text
-Clean mapped fields       : 19
-Expected from source      : 40008
-Actual observation nodes  : 40008
-
-OBSERVATION COVERAGE MATCHED
+Which of those 18 really belong in observations[]?
+Which really belong in props[]?
+Which are references and need separate treatment?
 ```
 
-Do just this next. Then we can decide how to handle the remaining **ambiguous `observations[] or props[]` mappings** before moving farther down the Assessment Results tree.
+Run that and send me the output. We won’t guess from the phrase **“or props[]”**.
