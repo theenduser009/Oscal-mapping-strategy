@@ -1,65 +1,69 @@
-Yes — I’m thinking the same thing looking at this output. This inventory gives us a much clearer priority.
+Great — **45 Assessment Results mappings**. And this is the first model where we need to be extra careful before registering anything.
 
-The strongest **model #3 candidate is Assessment Results**:
-
-```text
-Assessment Results        38 mappings
-Extension Properties       7 mappings
-                           ──
-assessment-results root   ~45 mappings potentially
-```
-
-Compare that with:
+From your output I can already see this shape:
 
 ```text
-Security Assessment Plan   3 mappings
-Profile                    2 mappings
-POA&M                      1 mapping   ✅ already done
+assessment-results
+    └── results[]
+          ├── findings[]
+          └── observations[]
 ```
 
-Also, just like SSP was split across labels such as `SSP - Metadata`, `SSP - System Characteristics`, etc., we should **not assume `OSCAL_MODEL` alone defines the complete model**. The important thing is the actual `OSCAL_ELEMENT_PATH`.
+That means we have a **collection inside a collection**. SSP and POA&M did not require that pattern.
 
-So I would go next with:
+Our current generic mapper safely handles:
+
+```text
+singleton → collection
+```
+
+but we deliberately did **not** implement:
+
+```text
+collection → collection
+```
+
+until we had real data proving how the child instance belongs to the correct parent instance.
+
+So **do not add Assessment Results to the registry yet.**
+
+### Next step only
+
+Your `.show()` displayed only part of the 45 rows. Run this read-only summary:
+
+```python
+# ============================================================
+# Assessment Results — Structural Path Inventory
+# READ ONLY
+# ============================================================
+
+print("=== ASSESSMENT RESULTS DISTINCT PATHS ===")
+
+(
+    assessment_results_paths
+    .group_by("OSCAL_ELEMENT_PATH")
+    .count()
+    .sort("OSCAL_ELEMENT_PATH")
+    .show()
+)
+```
+
+I want to see every distinct structure under:
 
 ```text
 assessment-results
 ```
 
-But **do not register anything yet**.
+especially whether we have paths such as:
 
-### Next step only
-
-Let's inventory every path underneath `assessment-results`, including those labeled `Extension Properties`.
-
-Run:
-
-```python
-from snowflake.snowpark.functions import col
-
-assessment_results_paths = (
-    canonical_mapping_df
-    .filter(
-        col("OSCAL_ELEMENT_PATH").startswith(
-            "assessment-results"
-        )
-    )
-    .select(
-        "SOURCE_FIELD_NAME",
-        "OSCAL_MODEL",
-        "OSCAL_ELEMENT_PATH",
-        "MAPPING_TYPE"
-    )
-    .sort("OSCAL_ELEMENT_PATH")
-)
-
-print(
-    "Assessment-results mapping rows:",
-    assessment_results_paths.count()
-)
-
-assessment_results_paths.show()
+```text
+assessment-results.results[]
+assessment-results.results[].findings[]
+assessment-results.results[].observations[]
+assessment-results.results[].risks[]
+assessment-results.results[].reviewed-controls
 ```
 
-That will tell us the **real branch structure** for Assessment Results before we touch the registry.
+Send me that output.
 
-Send me that output next.
+Then we inspect the actual Archer fields behind `results[]` and determine **what identifies one result instance** before touching the registry or mapper.
