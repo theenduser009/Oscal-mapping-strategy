@@ -1,69 +1,64 @@
-Great — **45 Assessment Results mappings**. And this is the first model where we need to be extra careful before registering anything.
-
-From your output I can already see this shape:
+Yes — this is the important result. We have **45 Assessment Results mappings**, but one path is visibly ambiguous/truncated:
 
 ```text
-assessment-results
-    └── results[]
-          ├── findings[]
-          └── observations[]
+assessment-results.results[].findings[]        1
+assessment-results.results[].observations[]   19
+assessment-results.results[].observations[] or ...   18
+assessment-results.results[].props[]           7
 ```
 
-That means we have a **collection inside a collection**. SSP and POA&M did not require that pattern.
-
-Our current generic mapper safely handles:
-
-```text
-singleton → collection
-```
-
-but we deliberately did **not** implement:
-
-```text
-collection → collection
-```
-
-until we had real data proving how the child instance belongs to the correct parent instance.
-
-So **do not add Assessment Results to the registry yet.**
+So **do not add anything to the registry yet**. We first need the exact text of that third path. It may contain an alternate mapping such as `observations[] or risks[]`, and we cannot let the engine interpret that as a real OSCAL path.
 
 ### Next step only
 
-Your `.show()` displayed only part of the 45 rows. Run this read-only summary:
+Run this read-only cell:
 
 ```python
 # ============================================================
-# Assessment Results — Structural Path Inventory
+# Assessment Results — Exact Paths
 # READ ONLY
 # ============================================================
 
-print("=== ASSESSMENT RESULTS DISTINCT PATHS ===")
-
-(
+rows = (
     assessment_results_paths
-    .group_by("OSCAL_ELEMENT_PATH")
-    .count()
-    .sort("OSCAL_ELEMENT_PATH")
-    .show()
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_MODEL",
+        "OSCAL_ELEMENT_PATH",
+        "MAPPING_TYPE"
+    )
+    .sort(
+        "OSCAL_ELEMENT_PATH",
+        "SOURCE_FIELD_NAME"
+    )
+    .collect()
 )
+
+print("=== ASSESSMENT RESULTS EXACT MAPPINGS ===")
+
+for r in rows:
+    print(
+        "\nSOURCE_FIELD_NAME :", r["SOURCE_FIELD_NAME"],
+        "\nOSCAL_MODEL       :", r["OSCAL_MODEL"],
+        "\nOSCAL_ELEMENT_PATH:", repr(r["OSCAL_ELEMENT_PATH"]),
+        "\nMAPPING_TYPE      :", r["MAPPING_TYPE"]
+    )
 ```
 
-I want to see every distinct structure under:
+`repr()` is intentional — it will show the **complete path exactly as stored in the CSV**, without Snowpark `.show()` truncating it.
+
+The bigger issue we're investigating is:
 
 ```text
 assessment-results
+    ↓
+results[]                 ← we still need to determine its instance identity
+       ↓
+       findings[]
+       observations[]
+       props[]
 ```
 
-especially whether we have paths such as:
+That is our first **collection-under-collection** case, so we will establish the actual hierarchy from the data before touching the generic mapper.
 
-```text
-assessment-results.results[]
-assessment-results.results[].findings[]
-assessment-results.results[].observations[]
-assessment-results.results[].risks[]
-assessment-results.results[].reviewed-controls
-```
-
-Send me that output.
-
-Then we inspect the actual Archer fields behind `results[]` and determine **what identifies one result instance** before touching the registry or mapper.
+Run this and show me the exact paths, especially those 18 ambiguous rows.
