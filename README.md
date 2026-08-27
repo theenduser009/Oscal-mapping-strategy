@@ -1,40 +1,64 @@
-Yes. That's the best way to do it. One branch, all the way to the end, validate it, then repeat the pattern.
+Yes — let’s move.
 
-Let's take this branch because we already know where your current graph stops:
+Since Cells 1–7 stay frozen, we’ll extend the SSP registry template without breaking the current mapper. Because components[] is a collection and our current engine does not yet hydrate a child element beneath a collection parent, add the component row as inactive structural metadata first.
 
-system-security-plan
-    ↓
-system-implementation
-    ↓
-components
-    ↓
-???
+Run this SQL:
 
-We will finish only this branch first.
+INSERT INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+(
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER,
+    IS_ACTIVE,
+    ITEM_PATH
+)
+SELECT
+    'SSP',
+    'system-security-plan.system-implementation.components[].component',
+    'component',
+    'system-security-plan.system-implementation.components[]',
+    FALSE,
+    'CONTENT_ID',
+    4,
+    FALSE,          -- template only for now; do NOT let mapper process it yet
+    '$'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+    WHERE OSCAL_MODEL_KEY = 'SSP'
+      AND NODE_PATH =
+          'system-security-plan.system-implementation.components[].component'
+);
 
-Step 1 — find what data actually exists under components
-
-Before changing the registry, CSV, or notebook, let's inspect the SSP DIM rows that were created for components.
-
-Run:
+Then verify:
 
 SELECT
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
     ELEMENT_TYPE,
-    SOURCE_RECORD_ID,
-    OSCAL_UUID,
-    METADATA_JSON
-FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
-WHERE ELEMENT_TYPE = 'components'
-LIMIT 20;
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER,
+    IS_ACTIVE,
+    ITEM_PATH
+FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+WHERE OSCAL_MODEL_KEY = 'SSP'
+  AND NODE_PATH ILIKE '%system-implementation%component%'
+ORDER BY PROCESS_ORDER, NODE_PATH;
 
-I specifically want to see what METADATA_JSON contains for those components nodes.
+We want to see conceptually:
 
-Then we'll determine whether the next node should be:
+system-implementation
+        ↓
+components[]               ACTIVE
+        ↓
+component                  INACTIVE/template
 
-components
-   ↓
-component
+The FALSE is intentional. Do not turn component active yet, because otherwise our existing mapper can hit the nested-collection relationship problem again.
 
-and what is actually inside each component — title, description, purpose, props, links, etc.
-
-Don't change anything yet. Run only this query and show me the result. Then we'll take this single branch to its true endpoint.
+Once this row is there, we immediately go one level below Component and register its OSCAL structure (props, links, responsible-roles, protocols, etc.). We can build the complete SSP template first and then solve hydration separately.
