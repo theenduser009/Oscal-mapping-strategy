@@ -1,60 +1,52 @@
-Yes — this output already tells us something important. 👍
+Yes — this confirms it. 👍
 
-The node test worked. Right now Cell 5 generated only:
+The canonical graph currently has only one edge in this branch:
 
-components   → 14792
-props        → 15120
+system-implementation
+        ↓
+     components[]
 
-But it generated zero nodes for:
+There is no:
 
-component
-links
-responsible-roles
-protocols
+components[] → component
+component → props[]
+component → links[]
+component → responsible-roles[]
+component → protocols[]
 
-So we have found the real issue: the SSP component branch is not being traversed all the way down yet. This is not just a FACT problem.
+So now we should stop looking at FACT. The problem is upstream in registry-driven graph construction.
 
-The second error is only from my diagnostic filter. Snowpark is treating the path string incorrectly in .contains(). Don't change Cells 1–7.
+And I noticed something important in your earlier registry screenshot: the component registry row may actually be inactive. If that is true, it explains a lot of what we're seeing.
 
-Replace only the edges diagnostic with this:
+Next — one read-only check
 
-print("=== COMPONENT BRANCH EDGES ===")
+Run this SQL against the registry:
 
-final_edges_df.filter(
-    col("SOURCE_NODE_PATH").like(
-        "%system-security-plan.system-implementation.components%"
-    )
-    |
-    col("TARGET_NODE_PATH").like(
-        "%system-security-plan.system-implementation.components%"
-    )
-).group_by(
-    "SOURCE_NODE_PATH",
-    "TARGET_NODE_PATH"
-).count().sort(
-    "SOURCE_NODE_PATH",
-    "TARGET_NODE_PATH"
-).show()
+SELECT
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    ITEM_PATH,
+    PROCESS_ORDER,
+    IS_ACTIVE
+FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+WHERE OSCAL_MODEL_KEY = 'SSP'
+  AND NODE_PATH ILIKE '%system-implementation%components%'
+ORDER BY PROCESS_ORDER, NODE_PATH;
 
-Run just that.
+I want to see all 6 rows with IS_ACTIVE clearly visible.
 
-But we already have our first major finding:
+We are specifically checking whether:
 
-Registry expects:
-components[]
-   ↓
-component
-   ├── props[]
-   ├── links[]
-   ├── responsible-roles[]
-   └── protocols[]
+components[]                                      ACTIVE?
+components[].component                            ACTIVE?
+components[].component.props[]                    ACTIVE?
+components[].component.links[]                    ACTIVE?
+components[].component.responsible-roles[]        ACTIVE?
+components[].component.protocols[]                ACTIVE?
 
-Actual generated nodes:
-components ✅
-props      ✅
-component  ❌
-links      ❌
-responsible-roles ❌
-protocols  ❌
+If component = FALSE, do not change Cell 4 or Cell 5 yet. That may be the exact reason the tree is breaking.
 
-That is exactly where we need to focus next. Do not modify Cell 5 yet. Send me the edge output from this corrected query first, and then we'll trace why Cell 4/5 skips component.
+Send me that result next. We're finally at the exact break point. 😊
