@@ -1,20 +1,41 @@
-SELECT
-    p.ELEMENT_TYPE AS PARENT,
-    c.ELEMENT_TYPE AS CHILD,
-    COUNT(*) AS CNT
-FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY f
+Agreed. Cells 1–7 stay frozen. We work only in new SSP discovery cells.
 
-JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT p
-  ON f.FK_SOURCE_ELEMENT_HASH = p.PK_OSCAL_SSP_ELEMENT_HASH
+Next step — inspect COMPONENTS
 
-JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT c
-  ON f.FK_TARGET_ELEMENT_HASH = c.PK_OSCAL_SSP_ELEMENT_HASH
+Add one new cell and run:
 
-WHERE p.ELEMENT_TYPE = 'system-implementation'
-  AND p.SOURCE_RECORD_ID = '5193'
+# ============================================================
+# SSP — COMPONENTS Discovery
+# READ ONLY
+# ============================================================
 
-GROUP BY
-    p.ELEMENT_TYPE,
-    c.ELEMENT_TYPE
+samples = 0
 
-ORDER BY CHILD;
+for record in source_df.to_local_iterator():
+
+    source_obj = _parse_source_json(record)
+
+    components = resolve_json_path(
+        source_obj,
+        "COMPONENTS"
+    )
+
+    if components in (None, "", [], {}):
+        continue
+
+    print("\nSOURCE_RECORD_ID:", record["SOURCE_RECORD_ID"])
+    print("TYPE:", type(components).__name__)
+    print("COMPONENTS:", str(components)[:3000])
+
+    samples += 1
+
+    if samples >= 3:
+        break
+
+print("\nSamples found:", samples)
+
+We need only one answer from this:
+
+Does COMPONENTS contain actual component objects, or references like ContentId / LevelId?
+
+Send me the output and we'll immediately take the next step.
