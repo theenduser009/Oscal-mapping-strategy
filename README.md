@@ -1,64 +1,53 @@
-Yes — let’s move.
+Perfect. This confirms the registry is already built for this branch. Don’t insert anything else yet.
 
-Since Cells 1–7 stay frozen, we’ll extend the SSP registry template without breaking the current mapper. Because components[] is a collection and our current engine does not yet hydrate a child element beneath a collection parent, add the component row as inactive structural metadata first.
+I can see these 6 registered nodes:
 
-Run this SQL:
+system-security-plan.system-implementation.components[]
+    │
+    └── component
+          ├── props[]
+          ├── links[]
+          ├── responsible-roles[]
+          └── protocols[]
 
-INSERT INTO RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-(
-    OSCAL_MODEL_KEY,
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    PROCESS_ORDER,
-    IS_ACTIVE,
-    ITEM_PATH
-)
+And importantly, your PARENT_NODE_PATH relationships look correct.
+
+So now we need to answer only one question:
+
+> Did the mapper actually create these six element types in DIM, or is the registry ahead of the loaded graph?
+
+
+
+Run this next:
+
 SELECT
-    'SSP',
-    'system-security-plan.system-implementation.components[].component',
+    ELEMENT_TYPE,
+    COUNT(*) AS ROW_COUNT
+FROM RTX_ENTERPRISESERVICES_DEV.ES_ES_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+WHERE ELEMENT_TYPE IN (
+    'components',
     'component',
-    'system-security-plan.system-implementation.components[]',
-    FALSE,
-    'CONTENT_ID',
-    4,
-    FALSE,          -- template only for now; do NOT let mapper process it yet
-    '$'
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-    WHERE OSCAL_MODEL_KEY = 'SSP'
-      AND NODE_PATH =
-          'system-security-plan.system-implementation.components[].component'
-);
+    'props',
+    'links',
+    'responsible-roles',
+    'protocols'
+)
+GROUP BY ELEMENT_TYPE
+ORDER BY ELEMENT_TYPE;
 
-Then verify:
+How we'll interpret it
 
-SELECT
-    OSCAL_MODEL_KEY,
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    PROCESS_ORDER,
-    IS_ACTIVE,
-    ITEM_PATH
-FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-WHERE OSCAL_MODEL_KEY = 'SSP'
-  AND NODE_PATH ILIKE '%system-implementation%component%'
-ORDER BY PROCESS_ORDER, NODE_PATH;
+If you get:
 
-We want to see conceptually:
+components          50,000
+component           0 / missing
+props               0 / missing
+links               0 / missing
+responsible-roles   0 / missing
+protocols           0 / missing
 
-system-implementation
-        ↓
-components[]               ACTIVE
-        ↓
-component                  INACTIVE/template
+then we've found the exact break: the mapper stops at components[] even though the deeper hierarchy exists in the registry.
 
-The FALSE is intentional. Do not turn component active yet, because otherwise our existing mapper can hit the nested-collection relationship problem again.
+If component, props, links, etc. already have rows, then they're being created and we'll inspect the FACT edges instead.
 
-Once this row is there, we immediately go one level below Component and register its OSCAL structure (props, links, responsible-roles, protocols, etc.). We can build the complete SSP template first and then solve hydration separately.
+Run only this now and show me the result. Then we'll follow the branch exactly one level at a time.
