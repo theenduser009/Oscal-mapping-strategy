@@ -1,50 +1,62 @@
-Good — now we found something important.
+Start with a read-only branch audit of the SSP component path.
 
-Your DIM currently contains only:
+We already know the notebook baseline is healthy and the graph validates. The open question is specifically why the relationship tree stops at:
 
-components    53,484
-props          1,202
+system-implementation → components
 
-But these registered element types are not loaded:
+instead of continuing through:
 
-component
-links
-responsible-roles
-protocols
+components → component → props / links / responsible-roles / protocols
 
-So the registry is ahead of the actual graph.
+So the next step is not to change Cells 1–7. Add one temporary diagnostic cell after Cell 7 and inspect what the graph builder actually produced for that branch.
 
-But before touching the notebook, we need to know which props those 1,202 rows belong to. They may come from another SSP branch, not from component.
+Use this:
 
-Next — check the FACT relationships
+from snowflake.snowpark.functions import col
 
-Run only this:
+print("=== COMPONENT BRANCH NODES ===")
 
-SELECT DISTINCT
-       p.ELEMENT_TYPE AS PARENT,
-       c.ELEMENT_TYPE AS CHILD,
-       f.DEPENDENCY_TYPE
-FROM RTX_ENTERPRISESERVICES_DEV.ES_ES_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY f
+final_nodes_df.filter(
+    col("ELEMENT_TYPE").isin(
+        "components",
+        "component",
+        "props",
+        "links",
+        "responsible-roles",
+        "protocols"
+    )
+).group_by(
+    "ELEMENT_TYPE"
+).count().sort(
+    "ELEMENT_TYPE"
+).show()
 
-JOIN RTX_ENTERPRISESERVICES_DEV.ES_ES_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT p
-  ON f.FK_SOURCE_ELEMENT_HASH = p.PK_OSCAL_SSP_ELEMENT_HASH
 
-JOIN RTX_ENTERPRISESERVICES_DEV.ES_ES_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT c
-  ON f.FK_TARGET_ELEMENT_HASH = c.PK_OSCAL_SSP_ELEMENT_HASH
+print("=== COMPONENT BRANCH EDGES ===")
 
-WHERE p.ELEMENT_TYPE IN ('components', 'component')
-   OR c.ELEMENT_TYPE IN ('components', 'component')
+final_edges_df.filter(
+    col("SOURCE_NODE_PATH").contains(
+        "system-security-plan.system-implementation.components"
+    )
+    |
+    col("TARGET_NODE_PATH").contains(
+        "system-security-plan.system-implementation.components"
+    )
+).group_by(
+    "SOURCE_NODE_PATH",
+    "TARGET_NODE_PATH"
+).count().sort(
+    "SOURCE_NODE_PATH",
+    "TARGET_NODE_PATH"
+).show()
 
-ORDER BY PARENT, CHILD;
+Keep EXECUTE_WRITES = False.
 
-We're specifically looking to see whether the graph currently says:
+This will tell us exactly whether the problem is:
 
-system-implementation
-        ↓
-    components
-        ↓
-        ???
+the deeper nodes are not being created, or
 
-I suspect we'll see system-implementation → components and then nothing below components.
+the nodes exist but Cell 5 is not creating their parent→child edges.
 
-If so, we've located the precise stopping point. Then we fix that one branch rather than changing random notebook cells.
+
+Run only this and send me the output. Then we’ll know the exact next code change.
