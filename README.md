@@ -1,46 +1,32 @@
-Start with a read-only branch audit of the SSP component path.
+Yes — this output already tells us something important. 👍
 
-We already know the notebook baseline is healthy and the graph validates. The open question is specifically why the relationship tree stops at:
+The node test worked. Right now Cell 5 generated only:
 
-system-implementation → components
+components   → 14792
+props        → 15120
 
-instead of continuing through:
+But it generated zero nodes for:
 
-components → component → props / links / responsible-roles / protocols
+component
+links
+responsible-roles
+protocols
 
-So the next step is not to change Cells 1–7. Add one temporary diagnostic cell after Cell 7 and inspect what the graph builder actually produced for that branch.
+So we have found the real issue: the SSP component branch is not being traversed all the way down yet. This is not just a FACT problem.
 
-Use this:
+The second error is only from my diagnostic filter. Snowpark is treating the path string incorrectly in .contains(). Don't change Cells 1–7.
 
-from snowflake.snowpark.functions import col
-
-print("=== COMPONENT BRANCH NODES ===")
-
-final_nodes_df.filter(
-    col("ELEMENT_TYPE").isin(
-        "components",
-        "component",
-        "props",
-        "links",
-        "responsible-roles",
-        "protocols"
-    )
-).group_by(
-    "ELEMENT_TYPE"
-).count().sort(
-    "ELEMENT_TYPE"
-).show()
-
+Replace only the edges diagnostic with this:
 
 print("=== COMPONENT BRANCH EDGES ===")
 
 final_edges_df.filter(
-    col("SOURCE_NODE_PATH").contains(
-        "system-security-plan.system-implementation.components"
+    col("SOURCE_NODE_PATH").like(
+        "%system-security-plan.system-implementation.components%"
     )
     |
-    col("TARGET_NODE_PATH").contains(
-        "system-security-plan.system-implementation.components"
+    col("TARGET_NODE_PATH").like(
+        "%system-security-plan.system-implementation.components%"
     )
 ).group_by(
     "SOURCE_NODE_PATH",
@@ -50,13 +36,25 @@ final_edges_df.filter(
     "TARGET_NODE_PATH"
 ).show()
 
-Keep EXECUTE_WRITES = False.
+Run just that.
 
-This will tell us exactly whether the problem is:
+But we already have our first major finding:
 
-the deeper nodes are not being created, or
+Registry expects:
+components[]
+   ↓
+component
+   ├── props[]
+   ├── links[]
+   ├── responsible-roles[]
+   └── protocols[]
 
-the nodes exist but Cell 5 is not creating their parent→child edges.
+Actual generated nodes:
+components ✅
+props      ✅
+component  ❌
+links      ❌
+responsible-roles ❌
+protocols  ❌
 
-
-Run only this and send me the output. Then we’ll know the exact next code change.
+That is exactly where we need to focus next. Do not modify Cell 5 yet. Send me the edge output from this corrected query first, and then we'll trace why Cell 4/5 skips component.
