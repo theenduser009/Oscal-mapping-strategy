@@ -1,41 +1,45 @@
-Agreed. Cells 1–7 stay frozen. We work only in new SSP discovery cells.
+Good — Samples found: 0 means the problem is simply that COMPONENTS is not the Archer source-field name in source_df. We shouldn't guess it.
 
-Next step — inspect COMPONENTS
+Since the graph already contains system-implementation → components, let's ask the mapping itself which Archer field(s) created that node.
 
-Add one new cell and run:
+Run this next — READ ONLY
 
 # ============================================================
-# SSP — COMPONENTS Discovery
+# SSP — Find mappings that created components[]
 # READ ONLY
 # ============================================================
 
-samples = 0
-
-for record in source_df.to_local_iterator():
-
-    source_obj = _parse_source_json(record)
-
-    components = resolve_json_path(
-        source_obj,
-        "COMPONENTS"
+component_mappings = (
+    canonical_mapping_df
+    .filter(
+        col("OSCAL_ELEMENT_PATH").contains(
+            "system-implementation.components"
+        )
     )
+)
 
-    if components in (None, "", [], {}):
-        continue
+component_mappings.select(
+    "SOURCE_FIELD_NAME",
+    "OSCAL_ELEMENT_PATH",
+    "MAPPING_TYPE"
+).show(100, truncate=False)
 
-    print("\nSOURCE_RECORD_ID:", record["SOURCE_RECORD_ID"])
-    print("TYPE:", type(components).__name__)
-    print("COMPONENTS:", str(components)[:3000])
+This should tell us something like:
 
-    samples += 1
+SOURCE_FIELD_NAME       OSCAL_ELEMENT_PATH
+---------------------   --------------------------------------------
+<actual Archer field>   ...system-implementation.components[]
 
-    if samples >= 3:
-        break
+Don't change anything else.
 
-print("\nSamples found:", samples)
+Once we know the actual source field name, we'll inspect that field's raw value and continue:
 
-We need only one answer from this:
+system-implementation
+        ↓
+components[]
+        ↓
+component
+        ↓
+props[] / links[] / ...
 
-Does COMPONENTS contain actual component objects, or references like ContentId / LevelId?
-
-Send me the output and we'll immediately take the next step.
+That gets us back onto the real SSP data instead of guessing field names.
