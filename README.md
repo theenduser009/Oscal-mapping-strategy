@@ -1,45 +1,25 @@
-Good — Samples found: 0 means the problem is simply that COMPONENTS is not the Archer source-field name in source_df. We shouldn't guess it.
+Yep — now the error tells us exactly what's wrong. The column is quoted/case-sensitive.
 
-Since the graph already contains system-implementation → components, let's ask the mapping itself which Archer field(s) created that node.
+Snowflake says the actual identifiers are:
 
-Run this next — READ ONLY
+"SOURCE_FIELD_NAME", "OSCAL_ELEMENT_PATH", "OSCAL_MODEL", "MAPPING_TYPE", "TRANSFORMATION_LOGIC"
 
-# ============================================================
-# SSP — Find mappings that created components[]
-# READ ONLY
-# ============================================================
+So Snowpark's col("OSCAL_ELEMENT_PATH") is resolving incorrectly against this quoted dataframe.
 
-component_mappings = (
-    canonical_mapping_df
-    .filter(
-        col("OSCAL_ELEMENT_PATH").contains(
-            "system-implementation.components"
-        )
+Use this instead — only change this test cell:
+
+# READ ONLY — test SSP component mappings
+
+component_mappings = canonical_mapping_df.filter(
+    canonical_mapping_df['"OSCAL_ELEMENT_PATH"'].contains(
+        "system-implementation.components"
     )
 )
 
-component_mappings.select(
-    "SOURCE_FIELD_NAME",
-    "OSCAL_ELEMENT_PATH",
-    "MAPPING_TYPE"
-).show(100, truncate=False)
+component_mappings.show()
 
-This should tell us something like:
+Do not change anything else yet.
 
-SOURCE_FIELD_NAME       OSCAL_ELEMENT_PATH
----------------------   --------------------------------------------
-<actual Archer field>   ...system-implementation.components[]
+Also, important correction from my last response: SOURCE_FIELD_NAME does exist. The error itself confirms it. The issue is the quoted identifier, not a missing column.
 
-Don't change anything else.
-
-Once we know the actual source field name, we'll inspect that field's raw value and continue:
-
-system-implementation
-        ↓
-components[]
-        ↓
-component
-        ↓
-props[] / links[] / ...
-
-That gets us back onto the real SSP data instead of guessing field names.
+Run this and show me the result. If it returns 0, that's actually useful—we'll then inspect the exact SSP paths present in the canonical mapping rather than guessing another path.
