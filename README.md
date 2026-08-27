@@ -1,54 +1,49 @@
-Yes — I see it. 👍
+Yes! This result isolates the problem nicely. 🔎
 
-After rerunning, the result is still:
+After the fresh run, the component branch contains only:
 
-Nodes : 59,232
-Edges : 56,419
+ELEMENT_TYPE    COUNT
+components      4792
 
-Null node keys      : 0
-Duplicate node keys : 0
-Null edge keys      : 0
-Duplicate edge keys : 0
-Missing parents     : 0
-Missing children    : 0
+So build_oscal_graph() is not creating:
 
-Validation PASSED
-Writes: False
+component
+props
+links
+responsible-roles
+protocols
 
-So refreshing the registry did not change the graph. That tells us the issue is not stale element_registry_df.
+That means the registry itself is no longer our main suspect. The issue is inside the graph builder's collection → child handling. This also fits the code you showed earlier: Cell 5 has explicit restrictions around nested collection lineage and parent instances.
 
-Next step — one diagnostic only
+Next step only
 
-Now we need to determine whether those deeper component paths are actually being processed by build_oscal_graph().
+Before changing the whole Cell 5 function, I want to inspect the metadata values the builder is actually receiving for these six registry rows.
 
-Add one temporary Python cell after Cell 7:
+Run this read-only cell:
 
 from snowflake.snowpark.functions import col
 
-print("=== COMPONENT BRANCH AFTER FRESH RUN ===")
-
 (
-    final_nodes_df
+    element_registry_df
     .filter(
         col("NODE_PATH").like(
             "system-security-plan.system-implementation.components%"
         )
     )
-    .group_by("NODE_PATH", "ELEMENT_TYPE")
-    .count()
-    .sort("NODE_PATH")
+    .select(
+        "NODE_PATH",
+        "ELEMENT_TYPE",
+        "PARENT_NODE_PATH",
+        "IS_COLLECTION",
+        "INSTANCE_KEY_RULE",
+        "ITEM_PATH",
+        "PROCESS_ORDER",
+        "IS_ACTIVE"
+    )
+    .sort("PROCESS_ORDER", "NODE_PATH")
     .show(50)
 )
 
-This is read-only.
+Send me that output.
 
-I expect this to tell us immediately whether the fresh graph contains:
-
-components[]
-components[].component
-components[].component.props[]
-components[].component.links[]
-components[].component.responsible-roles[]
-components[].component.protocols[]
-
-Send me that output. Don't modify Cell 5 yet. We're narrowing this down properly now. 🔎
+Don't change Cell 5 yet. Once I see IS_ACTIVE, PROCESS_ORDER, ITEM_PATH, and INSTANCE_KEY_RULE for all six, we can determine exactly why the builder stops at components[] and then I'll give you the corrected whole Cell 5 function, not little patches.
