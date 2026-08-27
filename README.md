@@ -1,53 +1,50 @@
-Perfect. This confirms the registry is already built for this branch. Don’t insert anything else yet.
+Good — now we found something important.
 
-I can see these 6 registered nodes:
+Your DIM currently contains only:
 
-system-security-plan.system-implementation.components[]
-    │
-    └── component
-          ├── props[]
-          ├── links[]
-          ├── responsible-roles[]
-          └── protocols[]
+components    53,484
+props          1,202
 
-And importantly, your PARENT_NODE_PATH relationships look correct.
+But these registered element types are not loaded:
 
-So now we need to answer only one question:
+component
+links
+responsible-roles
+protocols
 
-> Did the mapper actually create these six element types in DIM, or is the registry ahead of the loaded graph?
+So the registry is ahead of the actual graph.
 
+But before touching the notebook, we need to know which props those 1,202 rows belong to. They may come from another SSP branch, not from component.
 
+Next — check the FACT relationships
 
-Run this next:
+Run only this:
 
-SELECT
-    ELEMENT_TYPE,
-    COUNT(*) AS ROW_COUNT
-FROM RTX_ENTERPRISESERVICES_DEV.ES_ES_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
-WHERE ELEMENT_TYPE IN (
-    'components',
-    'component',
-    'props',
-    'links',
-    'responsible-roles',
-    'protocols'
-)
-GROUP BY ELEMENT_TYPE
-ORDER BY ELEMENT_TYPE;
+SELECT DISTINCT
+       p.ELEMENT_TYPE AS PARENT,
+       c.ELEMENT_TYPE AS CHILD,
+       f.DEPENDENCY_TYPE
+FROM RTX_ENTERPRISESERVICES_DEV.ES_ES_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY f
 
-How we'll interpret it
+JOIN RTX_ENTERPRISESERVICES_DEV.ES_ES_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT p
+  ON f.FK_SOURCE_ELEMENT_HASH = p.PK_OSCAL_SSP_ELEMENT_HASH
 
-If you get:
+JOIN RTX_ENTERPRISESERVICES_DEV.ES_ES_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT c
+  ON f.FK_TARGET_ELEMENT_HASH = c.PK_OSCAL_SSP_ELEMENT_HASH
 
-components          50,000
-component           0 / missing
-props               0 / missing
-links               0 / missing
-responsible-roles   0 / missing
-protocols           0 / missing
+WHERE p.ELEMENT_TYPE IN ('components', 'component')
+   OR c.ELEMENT_TYPE IN ('components', 'component')
 
-then we've found the exact break: the mapper stops at components[] even though the deeper hierarchy exists in the registry.
+ORDER BY PARENT, CHILD;
 
-If component, props, links, etc. already have rows, then they're being created and we'll inspect the FACT edges instead.
+We're specifically looking to see whether the graph currently says:
 
-Run only this now and show me the result. Then we'll follow the branch exactly one level at a time.
+system-implementation
+        ↓
+    components
+        ↓
+        ???
+
+I suspect we'll see system-implementation → components and then nothing below components.
+
+If so, we've located the precise stopping point. Then we fix that one branch rather than changing random notebook cells.
