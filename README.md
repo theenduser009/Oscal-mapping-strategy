@@ -1,45 +1,40 @@
-You're right. We don't need to debug Cell 17 right now. That isn't answering the question you actually care about.
+Yes. That's the best way to do it. One branch, all the way to the end, validate it, then repeat the pattern.
 
-Your goal is:
+Let's take this branch because we already know where your current graph stops:
 
-For SSP, prove what has already been mapped end-to-end, identify where the graph currently stops, then identify exactly what still needs to be added.
+system-security-plan
+    ↓
+system-implementation
+    ↓
+components
+    ↓
+???
 
-From what we've already established, your loaded SSP graph currently has at least:
+We will finish only this branch first.
 
-system-security-plan → metadata
-→ system-characteristics
-→ system-implementation
+Step 1 — find what data actually exists under components
 
-And the OSCAL model tells us system-implementation continues into things such as:
+Before changing the registry, CSV, or notebook, let's inspect the SSP DIM rows that were created for components.
 
-components[] → component
-users[] → system-user
-inventory-items[] → inventory-item
+Run:
 
-Then those elements can themselves continue deeper. So we should inspect the DIM + FACT that you already loaded, not the CSV first. That tells us what the mapper actually produced.
+SELECT
+    ELEMENT_TYPE,
+    SOURCE_RECORD_ID,
+    OSCAL_UUID,
+    METADATA_JSON
+FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+WHERE ELEMENT_TYPE = 'components'
+LIMIT 20;
 
-Do this first
+I specifically want to see what METADATA_JSON contains for those components nodes.
 
-Run this in Snowflake SQL — not the notebook:
+Then we'll determine whether the next node should be:
 
-SELECT DISTINCT
-       p.ELEMENT_TYPE AS PARENT,
-       c.ELEMENT_TYPE AS CHILD,
-       f.DEPENDENCY_TYPE
-FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY f
+components
+   ↓
+component
 
-JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT p
-  ON f.FK_SOURCE_ELEMENT_HASH = p.PK_OSCAL_SSP_ELEMENT_HASH
+and what is actually inside each component — title, description, purpose, props, links, etc.
 
-JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT c
-  ON f.FK_TARGET_ELEMENT_HASH = c.PK_OSCAL_SSP_ELEMENT_HASH
-
-ORDER BY PARENT, CHILD;
-
-This is our inventory of what is already mapped.
-
-Don't change the notebook, registry, CSV, or mapper yet.
-
-Send me that result (screenshots are fine). Then share the other details you mentioned. I'll compare actual loaded SSP graph vs expected OSCAL SSP tree and we'll make a simple checklist:
-
-Already mapped → Missing → Need CSV mapping → Registry-only structural node → Next action.
+Don't change anything yet. Run only this query and show me the result. Then we'll take this single branch to its true endpoint.
