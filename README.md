@@ -1,41 +1,35 @@
-Yes — next step is to stop touching the core blindly and prove exactly what the active registry is feeding into the mapper for the SSP component branch.
+Yep — this confirms it. The mapper currently sees only 2 active registry nodes in the component branch:
 
-Run this one read-only check in the notebook:
+components[]              True   CONTENT_ID   $   order 3
+components[].component    False  CONTENT_ID   $   order 4
 
-from snowflake.snowpark.functions import col
+So props[], links[], responsible-roles[], and protocols[] are not entering element_registry_df at all. That is why the fresh run still gives only the existing component branch.
 
-(
-    element_registry_df
-    .filter(
-        col("NODE_PATH").like(
-            "system-security-plan.system-implementation.components%"
-        )
-    )
-    .select(
-        "NODE_PATH",
-        "ELEMENT_TYPE",
-        "PARENT_NODE_PATH",
-        "IS_COLLECTION",
-        "INSTANCE_KEY_RULE",
-        "ITEM_PATH",
-        "PROCESS_ORDER",
-        "IS_ACTIVE"
-    )
-    .sort("PROCESS_ORDER", "NODE_PATH")
-    .show(50)
-)
+Next step — don't change mapper code
 
-What I want to see is whether the notebook currently has all of these active:
+We need to activate those four registry rows first.
 
-components[]
-components[].component
-component.props[]
-component.links[]
-component.responsible-roles[]
-component.protocols[]
+Run this SQL SELECT only so we verify their current status before changing anything:
 
-If the notebook shows only components[] and component, then the immediate fix is registry activation, not Cell 5.
+SELECT
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    ITEM_PATH,
+    PROCESS_ORDER,
+    IS_ACTIVE
+FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+WHERE OSCAL_MODEL_KEY = 'SSP'
+  AND NODE_PATH IN (
+    'system-security-plan.system-implementation.components[].component.props[]',
+    'system-security-plan.system-implementation.components[].component.links[]',
+    'system-security-plan.system-implementation.components[].component.responsible-roles[]',
+    'system-security-plan.system-implementation.components[].component.protocols[]'
+  )
+ORDER BY PROCESS_ORDER, NODE_PATH;
 
-If it shows all six, then we go straight to the next issue: mapping ownership / instance creation below component.
+Send me that output.
 
-Do only this now and send me the result.
+Don't UPDATE anything yet. I want to verify IS_ACTIVE, ITEM_PATH, parent, and process order before we activate them. This is the exact next step.
