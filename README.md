@@ -1,24 +1,31 @@
-Good. Next, only validate one real components[] instance. We want to prove that CONTENT_ID is actually becoming the collection instance identity.
+Right — don’t rely on registry_rows. We already have element_registry_df, which is safer anyway.
 
-Run this Python cell:
+Use this corrected read-only cell:
 
 import json
+from snowflake.snowpark.functions import col
 
 components_path = (
     "system-security-plan.system-implementation.components[]"
 )
 
-# Get registry configuration
-component_registry = [
-    r for r in registry_rows
-    if r["NODE_PATH"] == components_path
-][0]
+# Pull registry row directly from element_registry_df
+component_registry = (
+    element_registry_df
+    .filter(col("NODE_PATH") == components_path)
+    .collect()[0]
+)
 
 instance_key_rule = component_registry["INSTANCE_KEY_RULE"]
 item_path = component_registry["ITEM_PATH"] or "$"
 
-# Get mappings owned by components[]
-mappings = mappings_by_node.get(components_path, [])
+# Get mappings directly
+mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    components_path,
+    CONFIG["OSCAL_MODEL"]
+)
 
 print("NODE:", components_path)
 print("INSTANCE_KEY_RULE:", instance_key_rule)
@@ -26,7 +33,7 @@ print("ITEM_PATH:", item_path)
 print("OWNED MAPPINGS:", len(mappings))
 
 # Find first source record that actually produces component instances
-for source_record in source_records:
+for source_record in source_df.to_local_iterator():
 
     instances = _get_collection_instances(
         source_record,
@@ -55,12 +62,6 @@ for source_record in source_records:
 
         break
 
-What we're looking for
+This avoids registry_rows and source_records completely.
 
-Because the registry says:
-
-INSTANCE_KEY_RULE = CONTENT_ID
-
-the output should show a real component identity, not NULL, not a generated sequence, and not the parent SSP ID.
-
-Send me the output from this cell. Then we'll know whether the 4,792 component nodes are not only unique structurally, but are being identified correctly.
+Run this one. The key thing I want to see next is the INSTANCE_KEY for that first component.
