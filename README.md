@@ -1,50 +1,35 @@
-Perfect. Run this read-only check for the system-characteristics parent itself:
+Excellent. ✅ system-characteristics is structurally validated.
 
-from snowflake.snowpark.functions import col
-
-sc_path = "system-security-plan.system-characteristics"
-
-print("=== SYSTEM CHARACTERISTICS GRAPH CHECK ===")
-
-sc_df = final_nodes_df.filter(
-    col("NODE_PATH") == sc_path
-)
-
-print("Total system-characteristics nodes:")
-print(sc_df.count())
-
-print("Distinct NODE_KEYs:")
-print(
-    sc_df
-    .select("NODE_KEY")
-    .distinct()
-    .count()
-)
-
-print("Null NODE_KEYs:")
-print(
-    sc_df
-    .filter(col("NODE_KEY").is_null())
-    .count()
-)
-
-print("\nEdges into system-characteristics:")
-(
-    final_edges_df
-    .filter(col("TARGET_NODE_PATH") == sc_path)
-    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
-    .count()
-    .show()
-)
-
-I expect something close to:
-
-Total nodes:        2813
-Distinct NODE_KEYs: 2813
-Null NODE_KEYs:        0
+We now have:
 
 system-security-plan
-→ system-characteristics
-Edges: 2813
+└── system-characteristics          2,813 ✅
+    ├── authorization-boundary          ✅ payload
+    ├── security-impact-level           ✅ payload
+    ├── status                       2,813 ✅
+    ├── system-ids[]                 2,813 ✅
+    └── props[]                     15,120 ✅
 
-If that matches, we can consider the system-characteristics branch structurally closed out and move to the next SSP branch.
+And the parent itself is clean: 2,813 nodes = 2,813 distinct keys = 0 null keys = 2,813 incoming edges.
+
+So I would stop testing this branch now rather than over-validating it.
+
+Next
+
+Let's identify the next active direct child of system-security-plan from your registry instead of guessing from OSCAL.
+
+Run:
+
+SELECT
+    NODE_PATH,
+    ELEMENT_TYPE,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    PROCESS_ORDER
+FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+WHERE OSCAL_MODEL_KEY = 'SSP'
+  AND PARENT_NODE_PATH = 'system-security-plan'
+  AND IS_ACTIVE = TRUE
+ORDER BY PROCESS_ORDER, NODE_PATH;
+
+Send me that result. Then we'll pick the next SSP branch from what your mapper is actually configured to process.
