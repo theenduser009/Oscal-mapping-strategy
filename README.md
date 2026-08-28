@@ -1,54 +1,112 @@
-Yes — this is much more useful. The Archer Authorization Package clearly contains enough material to continue SSP without touching the problematic Hardware/component reference branch.
+Excellent — this is the result we needed. 33 mappings exist for system-characteristics, and now the structure is much clearer.
 
-Based on these fields, I would work on system-characteristics next. Your source has strong candidates for that branch: AUTHORIZATION_BOUNDARY_DESCRIPTION, SECURITY_CATEGORY, INFORMATION_TYPES, MISSION_PURPOSE, OPERATIONAL_STATUS, INFORMATION_SYSTEM_TYPE, SYSTEM_HOSTING_ENVIRONMENT, SYSTEM_ENVIRONMENT, CONNECTIVITY, MISSION_CRITICAL, and others.
+The important thing is: we should not create 33 registry nodes. Many of those mappings are leaf values owned by a smaller number of structural OSCAL nodes.
 
-And importantly, your registry already has children under system-characteristics: authorization-boundary, security-impact-level, status, system-ids[], and props[].
+From your screenshot, the meaningful structure is roughly:
 
-Next step — only validation
+system-security-plan
+└── system-characteristics
+    ├── authorization-boundary
+    │   └── description
+    ├── props[]
+    ├── security-impact-level
+    │   ├── security-objective-availability
+    │   ├── security-objective-confidentiality
+    │   └── security-objective-integrity
+    ├── status
+    │   ├── state
+    │   └── remarks
+    └── system-ids[]
+        └── id
 
-Don't activate anything and don't modify the mapper yet.
+Your existing registry already has the major structural nodes:
 
-Let's determine which CSV mappings already point into system-characteristics, including paths we may not yet have registered.
+authorization-boundary, props[], security-impact-level, status, and system-ids[].
 
-Run this in the notebook:
+So don't add anything yet.
 
-from snowflake.snowpark.functions import col
+Next validation
 
-rows = (
+We need to answer one question before touching the registry:
+
+> Does the current mapper correctly assign all 33 mappings to those existing registry nodes?
+
+
+
+Run this read-only cell:
+
+branch = "system-security-plan.system-characteristics"
+
+registry_paths = [
+    r["NODE_PATH"]
+    for r in element_registry_df
+        .filter(col("NODE_PATH").like(branch + "%"))
+        .select("NODE_PATH")
+        .collect()
+]
+
+mapping_rows = (
     canonical_mapping_df
-    .filter(
-        col("OSCAL_ELEMENT_PATH")
-        .like("%system-characteristics%")
-    )
+    .filter(col("OSCAL_ELEMENT_PATH").like(branch + "%"))
     .select(
         "SOURCE_FIELD_NAME",
-        "OSCAL_ELEMENT_PATH",
-        "MAPPING_TYPE",
-        "TRANSFORMATION_LOGIC"
+        "OSCAL_ELEMENT_PATH"
     )
-    .sort("OSCAL_ELEMENT_PATH", "SOURCE_FIELD_NAME")
     .collect()
 )
 
-print("SYSTEM-CHARACTERISTICS MAPPINGS:", len(rows))
-print("=" * 100)
+print("=== OWNERSHIP CHECK ===")
 
-for r in rows:
-    print(
-        f"{r['SOURCE_FIELD_NAME']}  -->  "
-        f"{r['OSCAL_ELEMENT_PATH']}  |  "
-        f"{r['MAPPING_TYPE']}  |  "
-        f"{r['TRANSFORMATION_LOGIC']}"
+for m in mapping_rows:
+
+    mapping_path = m["OSCAL_ELEMENT_PATH"]
+
+    candidates = [
+        p for p in registry_paths
+        if mapping_path == p
+        or mapping_path.startswith(p + ".")
+    ]
+
+    owner = (
+        max(candidates, key=len)
+        if candidates
+        else "NO OWNER"
     )
 
-Why this is the right move
+    print(
+        f"{m['SOURCE_FIELD_NAME']} "
+        f"--> {owner}"
+    )
 
-The 418-field inventory tells us what Archer contains. Now the CSV tells us what your approved mapping says those fields should become.
+What I expect
 
-We should not independently decide, for example, that MISSION_PURPOSE belongs at some OSCAL path if your mapping team has already specified one.
+For example:
 
-So our sequence is now very clean:
+AUTHORIZATION_BOUNDARY_DESCRIPTION
+--> ...system-characteristics.authorization-boundary
 
-Archer actual data → mapping CSV → OSCAL registry → mapper
+CNSS_AVAILABILITY_RATING
+--> ...security-impact-level
 
-Send me the output of that one cell. Then we'll compare the mapped paths against those 5 registered system-characteristics children and immediately identify what registry branches are missing.
+OPERATIONAL_STATUS
+--> ...status
+
+SAP_ID
+--> ...system-ids[]
+
+CRITICAL_INFRASTRUCTURE
+--> ...props[]
+
+And fields mapped directly to:
+
+...system-characteristics.description
+...system-characteristics.system-name
+...system-characteristics
+
+should be owned by the system-characteristics node itself.
+
+The key result we're looking for is NO OWNER.
+
+If there are zero NO OWNER mappings, we do not need more registry nodes for these leaf fields. Then our next move is to inspect the actual generated system-characteristics payload from one Archer record.
+
+Send me that output. We're finally testing the mapper's ownership logic rather than guessing at the OSCAL tree.
