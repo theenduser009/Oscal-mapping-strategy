@@ -1,44 +1,44 @@
-Great. Next we validate status.
+Perfect — status payload is working too. ✅
 
-Run this read-only cell:
+Now do the same structural validation we used for system-ids[] and props[]: count the status nodes, count incoming edges, and verify uniqueness.
 
 from snowflake.snowpark.functions import col
-import json
 
 status_path = "system-security-plan.system-characteristics.status"
 
-# Find one record with status-related source data
-test_record = (
-    source_df
-    .filter(col("SOURCE_RECORD_ID") == "565189")
-    .collect()[0]
+print("=== STATUS GRAPH CHECK ===")
+
+status_df = final_nodes_df.filter(
+    col("NODE_PATH") == status_path
 )
 
-mappings = get_mappings_for_node(
-    canonical_mapping_df,
-    element_registry_df,
-    status_path,
-    CONFIG["OSCAL_MODEL"]
+print("Total status nodes:")
+print(status_df.count())
+
+print("Distinct NODE_KEYs:")
+print(
+    status_df
+    .select("NODE_KEY")
+    .distinct()
+    .count()
 )
 
-payload = build_element_payload(
-    test_record,
-    mappings
+print("Null NODE_KEYs:")
+print(
+    status_df
+    .filter(col("NODE_KEY").is_null())
+    .count()
 )
 
-print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
-print("NODE:", status_path)
-print("OWNED MAPPINGS:", len(mappings))
-print("PAYLOAD:")
-print(json.dumps(payload, indent=2, default=str))
+print("\nEdges into status:")
+(
+    final_edges_df
+    .filter(col("TARGET_NODE_PATH") == status_path)
+    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
+    .count()
+    .show()
+)
 
-We already saw 565189 produce a status value earlier, so I expect something like:
+What I expect is a clean result: total nodes = distinct keys, null keys = 0, and the edge count should line up with the status nodes that actually exist.
 
-OWNED MAPPINGS: 3
-
-PAYLOAD:
-{
-  "state": [80661]
-}
-
-Run that first. If it matches, the next check will be status node count + edge count + uniqueness, just like we did for system-ids[] and props[].
+Run that next and send me the numbers.
