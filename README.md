@@ -1,54 +1,40 @@
-Good. Let's validate system-ids[] next, but read-only and one thing at a time.
+Perfect — that confirms the system-ids[] payload itself is correct.
 
-Run this notebook cell:
+Now the next important check is whether the graph builder is treating system-ids[] correctly as a collection node and creating the expected DIM node and FACT edge.
+
+Run this read-only cell:
 
 from snowflake.snowpark.functions import col
-import json
 
-node_path = "system-security-plan.system-characteristics.system-ids[]"
-
-mappings = get_mappings_for_node(
-    canonical_mapping_df,
-    element_registry_df,
-    node_path,
-    CONFIG["OSCAL_MODEL"]
+system_ids_path = (
+    "system-security-plan.system-characteristics.system-ids[]"
 )
 
-print("NODE:", node_path)
-print("OWNED MAPPINGS:", len(mappings))
+print("=== SYSTEM IDS GRAPH CHECK ===")
 
-for m in mappings:
-    print(
-        m["SOURCE_FIELD_NAME"],
-        "->",
-        m["OSCAL_ELEMENT_PATH"],
-        "| relative:",
-        m["FIELD_RELATIVE_PATH"]
-    )
-
-# Test the known record
-test_record = (
-    source_df
-    .filter(col("SOURCE_RECORD_ID") == "565189")
-    .collect()[0]
+# Node count
+(
+    final_nodes_df
+    .filter(col("NODE_PATH") == system_ids_path)
+    .group_by("NODE_PATH", "ELEMENT_TYPE")
+    .count()
+    .show()
 )
 
-payload = build_element_payload(test_record, mappings)
+# Edge count into system-ids[]
+(
+    final_edges_df
+    .filter(col("TARGET_NODE_PATH") == system_ids_path)
+    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
+    .count()
+    .show()
+)
 
-print("\nSOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
-print("PAYLOAD:")
-print(json.dumps(payload, indent=2, default=str))
+What I want to verify next is:
 
-We expect approximately:
+system-characteristics
+→ system-ids[]
 
-NODE: ...system-ids[]
-OWNED MAPPINGS: 1
+and that the node count and edge count make sense relative to how many source records actually have SAP_ID.
 
-SAP_ID -> ...system-ids[].id | relative: id
-
-PAYLOAD:
-{
-  "id": "565189-Information System"
-}
-
-For now, don't test counts or change the mapper. First confirm this ownership/payload result. Then we'll check whether system-ids[] being marked as a collection is actually producing the correct DIM node + FACT edge behavior.
+If that looks good, then system-ids[] is fully validated and we can move to props[], which is the more interesting collection because it owns multiple Archer extension properties.
