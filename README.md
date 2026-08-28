@@ -1,35 +1,24 @@
-Yep — this confirms it. The mapper currently sees only 2 active registry nodes in the component branch:
+Exactly — that explains the behavior.
 
-components[]              True   CONTENT_ID   $   order 3
-components[].component    False  CONTENT_ID   $   order 4
+Because Cell 2 loads registry rows with:
 
-So props[], links[], responsible-roles[], and protocols[] are not entering element_registry_df at all. That is why the fresh run still gives only the existing component branch.
+(col("OSCAL_MODEL_KEY") == CONFIG["OSCAL_MODEL"])
+& (col("IS_ACTIVE") == True)
 
-Next step — don't change mapper code
+those four child nodes are being excluded from element_registry_df. That is why the mapper only built components and not props, links, responsible-roles, or protocols.
 
-We need to activate those four registry rows first.
+The next move is to activate those four registry rows, then rerun from Cell 2 onward.
 
-Run this SQL SELECT only so we verify their current status before changing anything:
-
-SELECT
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    ITEM_PATH,
-    PROCESS_ORDER,
-    IS_ACTIVE
-FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+UPDATE RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+SET IS_ACTIVE = TRUE
 WHERE OSCAL_MODEL_KEY = 'SSP'
   AND NODE_PATH IN (
     'system-security-plan.system-implementation.components[].component.props[]',
     'system-security-plan.system-implementation.components[].component.links[]',
     'system-security-plan.system-implementation.components[].component.responsible-roles[]',
     'system-security-plan.system-implementation.components[].component.protocols[]'
-  )
-ORDER BY PROCESS_ORDER, NODE_PATH;
+  );
 
-Send me that output.
+Then rerun Cell 2 → Cell 3 → Cell 7. Keep EXECUTE_WRITES = False.
 
-Don't UPDATE anything yet. I want to verify IS_ACTIVE, ITEM_PATH, parent, and process order before we activate them. This is the exact next step.
+What I expect next is that Cell 7 will either successfully create those child nodes, or it will expose the next real limitation: the collection-parent relationship logic in Cell 5. That is the part we were approaching before.
