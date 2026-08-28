@@ -1,54 +1,44 @@
-Excellent — this is exactly what we wanted to see. 🎯
+Great. Next we validate status.
 
-Your result is:
+Run this read-only cell:
 
-props[] nodes = 15,120
-system-characteristics → props[] edges = 15,120
+from snowflake.snowpark.functions import col
+import json
 
-So props[] is not being collapsed to one prop per Authorization Package. The mapper is correctly generating multiple property instances.
+status_path = "system-security-plan.system-characteristics.status"
 
-That means we can mark this branch structurally validated:
-
-system-characteristics
-        │
-        ├── system-ids[]       2,813 nodes / 2,813 edges ✅
-        │
-        └── props[]           15,120 nodes / 15,120 edges ✅
-
-One important validation before we leave props[]
-
-We need to ensure those 15,120 nodes are unique, not duplicate graph nodes.
-
-Run this next:
-
-print("=== PROPS UNIQUENESS CHECK ===")
-
-props_df = final_nodes_df.filter(
-    col("NODE_PATH") == props_path
+# Find one record with status-related source data
+test_record = (
+    source_df
+    .filter(col("SOURCE_RECORD_ID") == "565189")
+    .collect()[0]
 )
 
-print("Total props:")
-print(props_df.count())
-
-print("Distinct PKs:")
-print(
-    props_df
-    .select("PK_ELEMENT_HASH")
-    .distinct()
-    .count()
+mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    status_path,
+    CONFIG["OSCAL_MODEL"]
 )
 
-print("Null PKs:")
-print(
-    props_df
-    .filter(col("PK_ELEMENT_HASH").is_null())
-    .count()
+payload = build_element_payload(
+    test_record,
+    mappings
 )
 
-Expected:
+print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
+print("NODE:", status_path)
+print("OWNED MAPPINGS:", len(mappings))
+print("PAYLOAD:")
+print(json.dumps(payload, indent=2, default=str))
 
-Total props:      15120
-Distinct PKs:     15120
-Null PKs:             0
+We already saw 565189 produce a status value earlier, so I expect something like:
 
-If we get that, props[] is done and we move to the next SSP child branch.
+OWNED MAPPINGS: 3
+
+PAYLOAD:
+{
+  "state": [80661]
+}
+
+Run that first. If it matches, the next check will be status node count + edge count + uniqueness, just like we did for system-ids[] and props[].
