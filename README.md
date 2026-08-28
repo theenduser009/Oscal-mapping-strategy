@@ -1,23 +1,21 @@
-Perfect — status payload is working too. ✅
-
-Now do the same structural validation we used for system-ids[] and props[]: count the status nodes, count incoming edges, and verify uniqueness.
+Perfect. Run this read-only check for the system-characteristics parent itself:
 
 from snowflake.snowpark.functions import col
 
-status_path = "system-security-plan.system-characteristics.status"
+sc_path = "system-security-plan.system-characteristics"
 
-print("=== STATUS GRAPH CHECK ===")
+print("=== SYSTEM CHARACTERISTICS GRAPH CHECK ===")
 
-status_df = final_nodes_df.filter(
-    col("NODE_PATH") == status_path
+sc_df = final_nodes_df.filter(
+    col("NODE_PATH") == sc_path
 )
 
-print("Total status nodes:")
-print(status_df.count())
+print("Total system-characteristics nodes:")
+print(sc_df.count())
 
 print("Distinct NODE_KEYs:")
 print(
-    status_df
+    sc_df
     .select("NODE_KEY")
     .distinct()
     .count()
@@ -25,20 +23,28 @@ print(
 
 print("Null NODE_KEYs:")
 print(
-    status_df
+    sc_df
     .filter(col("NODE_KEY").is_null())
     .count()
 )
 
-print("\nEdges into status:")
+print("\nEdges into system-characteristics:")
 (
     final_edges_df
-    .filter(col("TARGET_NODE_PATH") == status_path)
+    .filter(col("TARGET_NODE_PATH") == sc_path)
     .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
     .count()
     .show()
 )
 
-What I expect is a clean result: total nodes = distinct keys, null keys = 0, and the edge count should line up with the status nodes that actually exist.
+I expect something close to:
 
-Run that next and send me the numbers.
+Total nodes:        2813
+Distinct NODE_KEYs: 2813
+Null NODE_KEYs:        0
+
+system-security-plan
+→ system-characteristics
+Edges: 2813
+
+If that matches, we can consider the system-characteristics branch structurally closed out and move to the next SSP branch.
