@@ -1,40 +1,81 @@
-Good — that narrows it down a lot.
+Yes! This output finally gives us something concrete.
 
-If ELEMENT_JSON for components[].component is empty, then the deeper nodes cannot be built from that parent payload. So the issue is not activation and not the graph validator. It’s that the component node itself has no usable payload feeding child extraction.
+INTERCONNECTIONS is not empty. It contains real Archer references such as:
 
-Next step only: inspect the raw Archer fields that map to the component branch for a few source records.
+{'ContentId': 572500, 'LevelId': 354}
+{'ContentId': 942238, 'LevelId': 354}
+{'ContentId': 942258, 'LevelId': 354}
+...
 
-Run this read-only cell:
+And INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM contains reference IDs like:
 
-from snowflake.snowpark.functions import col
+[942565]
 
-component_fields = [
-    "SUBSYSTEMS",
-    "SOFTWARE",
-    "HARDWARE",
-    "INTERCONNECTIONS",
-    "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM",
-    "SAP_INTAKE_FORM_INTERCONNECTIONS"
-]
+So the raw data is good. The problem is now narrowed to mapping ownership / payload construction between components[] and components[].component. We should not change Cell 5 yet.
 
-for record in source_df.limit(5).to_local_iterator():
-    print("\nSOURCE_RECORD_ID:", record["SOURCE_RECORD_ID"])
+Run only this next diagnostic cell:
 
-    obj = _parse_source_json(record)
+# ================================================================
+# READ ONLY - diagnose component mapping ownership + payload
+# ================================================================
 
-    for field in component_fields:
-        value = resolve_json_path(obj, field)
-        print(field, "=>", value)
+components_path = (
+    "system-security-plan.system-implementation.components[]"
+)
 
-What I need from the output is whether those six fields contain:
+component_path = (
+    "system-security-plan.system-implementation.components[].component"
+)
 
-IDs/references only,
+for path in [components_path, component_path]:
 
-dictionaries,
+    print("\n================================================")
+    print("NODE:", path)
+    print("================================================")
 
-arrays,
+    owned = get_mappings_for_node(
+        canonical_mapping_df,
+        element_registry_df,
+        path,
+        CONFIG["OSCAL_MODEL"]
+    )
 
-or empty/null values.
+    print("Owned mappings:", len(owned))
+
+    for m in owned:
+        print(
+            m.get("SOURCE_FIELD_NAME"),
+            "=>",
+            m.get("OSCAL_ELEMENT_PATH"),
+            "| relative:",
+            m.get("FIELD_RELATIVE_PATH")
+        )
 
 
-That tells us whether components[] should be built from reference IDs or whether we must follow those references into another Archer raw table.
+# Test one real source record
+record = next(source_df.to_local_iterator())
+
+print("\n================================================")
+print("TEST RECORD:", record["SOURCE_RECORD_ID"])
+print("================================================")
+
+component_mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    component_path,
+    CONFIG["OSCAL_MODEL"]
+)
+
+component_payload = build_element_payload(
+    record,
+    component_mappings
+)
+
+print("COMPONENT PAYLOAD:")
+print(component_payload)
+
+This will answer the exact question we need now:
+
+Does components[].component actually own the INTERCONNECTIONS mapping, and if it does, why isn't that data appearing in ELEMENT_JSON?
+
+Send me that output. We are now tracing the exact break instead of changing code blindly.
