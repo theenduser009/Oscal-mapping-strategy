@@ -1,79 +1,54 @@
-Yes — this is the better approach. Instead of asking “what branches happen to be in our registry?”, we should use the official NIST OSCAL SSP structure as the master tree, then compare our registry/mapping against it.
+Yes — this is a great branch to work on. Your result shows only the control-implementation root is currently registered, so this is exactly where we can extend the SSP graph properly from the NIST structure instead of guessing.
 
-The current NIST OSCAL reference lists v1.2.3 as the latest release. At the SSP root, system-security-plan has these major branches: metadata, import-profile, system-characteristics, system-implementation, control-implementation, and optional back-matter. 
-
-Conceptually:
-
-system-security-plan
-│
-├── metadata
-│
-├── import-profile
-│
-├── system-characteristics
-│
-├── system-implementation
-│
-├── control-implementation
-│
-└── back-matter
-
-NIST describes them roughly like this: system-characteristics holds the system description, information types, impact levels, boundaries and related characteristics; system-implementation describes how the system is implemented, including components/users/inventory; and control-implementation describes how controls are satisfied. 
-
-Where I want us to work next
-
-We already spent time under:
-
-system-security-plan
-└── system-implementation
-    └── components[]
-
-and hit the Archer cross-table-reference problem.
-
-We also checked:
-
-system-security-plan
-└── system-characteristics
-
-but our registry currently stops at the children we saw.
-
-So rather than inventing another branch, let’s interrogate the official NIST SSP hierarchy branch-by-branch and build our registry from that.
-
-The strongest next candidate is:
+According to the NIST SSP model, control-implementation has three direct children: a required description, optional set-parameters[], and required implemented-requirements[]. The important branch for us is implemented-requirements[], because each instance represents one control such as AC-1, AC-2, etc. 
 
 system-security-plan
 └── control-implementation
+    ├── description
+    ├── set-parameters[]
+    └── implemented-requirements[]
+         ├── set-parameters[]
+         ├── responsible-roles[]
+         ├── statements[]
+         │    └── by-components[]
+         └── by-components[]
 
-because this is a major SSP branch, and NIST defines it specifically as the section describing how the system satisfies controls. It goes deeper into structures such as implemented requirements and component-level implementation information. 
+NIST specifically says an implemented-requirement describes how the system satisfies an individual control. It can contain statements, and both the implemented requirement itself and its statements can contain by-component structures describing which system component implements that control/statement. 
 
-Before touching the mapper, run this against our registry:
+So I would not add everything yet. First let's determine whether Archer actually gives us data that can populate this branch.
 
-SELECT
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    ITEM_PATH,
-    PROCESS_ORDER,
-    IS_ACTIVE
-FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-WHERE OSCAL_MODEL_KEY = 'SSP'
-  AND NODE_PATH ILIKE 'system-security-plan.control-implementation%'
-ORDER BY PROCESS_ORDER, NODE_PATH;
+Run this against your mapping CSV:
 
-Why this is the next check
+from snowflake.snowpark.functions import col
 
-We're answering one very specific question:
+(
+    canonical_mapping_df
+    .filter(
+        col("OSCAL_ELEMENT_PATH")
+        .like("system-security-plan.control-implementation%")
+    )
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_ELEMENT_PATH",
+        "MAPPING_TYPE",
+        "TRANSFORMATION_LOGIC"
+    )
+    .sort("OSCAL_ELEMENT_PATH")
+    .show(100)
+)
 
-> How much of the official NIST control-implementation hierarchy have we actually registered?
+This is the immediate next step.
 
+We want to answer:
 
+Do we already have Archer mappings for:
+control-implementation
+→ implemented-requirements[]
+→ statements[]
+→ by-components[] ?
 
-If it returns only the root, we expand the registry using the NIST SSP model.
+If those mappings exist, we register the NIST nodes and run the mapper.
 
-If it returns several levels, we inspect those levels and find the first missing NIST child.
+If they don't, do not add registry rows blindly yet — we'll inspect the Archer fields and decide which source data maps to each NIST structure.
 
-If it returns nothing, then we've discovered a major SSP branch we haven't modeled yet.
-
-Send me only that query result next. Then I'll line it up against the NIST SSP tree and tell you the exact next registry nodes to add — no mapper modification yet.
+Send me that output next. This branch is promising because it gives us a real deep hierarchy to test the node/edge mapper against.
