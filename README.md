@@ -1,52 +1,54 @@
-Yes — this is a clean pass. 🎯
+Excellent — this is exactly what we wanted to see. 🎯
 
-Your result shows:
+Your result is:
 
-system-ids[] nodes = 2813
-system-characteristics → system-ids[] edges = 2813
+props[] nodes = 15,120
+system-characteristics → props[] edges = 15,120
 
-That is especially strong because your Authorization Package source has 2,813 records. So structurally:
+So props[] is not being collapsed to one prop per Authorization Package. The mapper is correctly generating multiple property instances.
 
-2813 source records
-      ↓
-2813 system-characteristics
-      ↓
-2813 system-ids[] nodes
-      ↓
-2813 parent → child edges
+That means we can mark this branch structurally validated:
 
-So we can mark system-ids[] as validated: payload ownership works, node generation works, and parent-child edge generation works.
+system-characteristics
+        │
+        ├── system-ids[]       2,813 nodes / 2,813 edges ✅
+        │
+        └── props[]           15,120 nodes / 15,120 edges ✅
 
-Next: props[]
+One important validation before we leave props[]
 
-This one is more important because it's a true extension-property collection. Your mapping showed roughly 10 Archer fields owned by props[], including PACKAGE_TYPE, FISMA_REPORTABLE, MISSION_CRITICAL, etc.
+We need to ensure those 15,120 nodes are unique, not duplicate graph nodes.
 
-Before changing anything, let's inspect what the graph currently generated.
+Run this next:
 
-Run only:
+print("=== PROPS UNIQUENESS CHECK ===")
 
-from snowflake.snowpark.functions import col
-
-props_path = "system-security-plan.system-characteristics.props[]"
-
-print("=== PROPS GRAPH CHECK ===")
-
-(
-    final_nodes_df
-    .filter(col("NODE_PATH") == props_path)
-    .group_by("NODE_PATH", "ELEMENT_TYPE")
-    .count()
-    .show()
+props_df = final_nodes_df.filter(
+    col("NODE_PATH") == props_path
 )
 
-(
-    final_edges_df
-    .filter(col("TARGET_NODE_PATH") == props_path)
-    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
+print("Total props:")
+print(props_df.count())
+
+print("Distinct PKs:")
+print(
+    props_df
+    .select("PK_ELEMENT_HASH")
+    .distinct()
     .count()
-    .show()
 )
 
-Don't change the mapper yet.
+print("Null PKs:")
+print(
+    props_df
+    .filter(col("PK_ELEMENT_HASH").is_null())
+    .count()
+)
 
-This result is going to be interesting: if we get only 2813 props[] nodes despite potentially multiple populated extension properties per Authorization Package, we need to examine whether we're incorrectly collapsing multiple OSCAL prop objects into one node.
+Expected:
+
+Total props:      15120
+Distinct PKs:     15120
+Null PKs:             0
+
+If we get that, props[] is done and we move to the next SSP child branch.
