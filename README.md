@@ -1,54 +1,60 @@
-Perfect. ✅ metadata parent is fully validated.
+Perfect — document-ids[] is behaving cleanly too. ✅
 
-Your numbers line up exactly:
+For the test record, you have:
 
-Metadata nodes:             2,813
-Distinct NODE_KEYs:         2,813
-Null NODE_KEYs:                 0
-SSP → metadata edges:       2,813
+NODE: system-security-plan.metadata.document-ids[]
+OWNED MAPPINGS: 1
 
-So now:
+TRACKING_ID
+→ system-security-plan.metadata.document-ids[].identifier
 
-system-security-plan
-└── metadata                  ✅
-    ├── document-ids[]
-    └── responsible-parties[]
+and the payload:
 
-Next: document-ids[]
+{
+  "identifier": 565189
+}
 
-Because this is a collection with INSTANCE_KEY_RULE = VALUE, before counting graph nodes I want to see what mappings/payload are actually producing those values.
+That matches the registry setup pretty well: document-ids[] is a collection and its INSTANCE_KEY_RULE = VALUE, so the collection instance can be keyed by the actual identifier value.
+
+Next I want to validate the graph structure for this collection — node count, uniqueness, null keys, and incoming edges.
 
 Run this:
 
-import json
+from snowflake.snowpark.functions import col
 
-node_path = "system-security-plan.metadata.document-ids[]"
+doc_ids_path = "system-security-plan.metadata.document-ids[]"
 
-mappings = get_mappings_for_node(
-    canonical_mapping_df,
-    element_registry_df,
-    node_path,
-    CONFIG["OSCAL_MODEL"]
+print("=== DOCUMENT IDS GRAPH CHECK ===")
+
+doc_ids_df = final_nodes_df.filter(
+    col("NODE_PATH") == doc_ids_path
 )
 
-print("NODE:", node_path)
-print("OWNED MAPPINGS:", len(mappings))
+print("Total document-id nodes:")
+print(doc_ids_df.count())
 
-for m in mappings:
-    print(
-        m["SOURCE_FIELD_NAME"],
-        "->",
-        m["OSCAL_ELEMENT_PATH"],
-        "| relative:",
-        m["FIELD_RELATIVE_PATH"]
-    )
-
-payload = build_element_payload(
-    test_record,
-    mappings
+print("Distinct NODE_KEYs:")
+print(
+    doc_ids_df
+    .select("NODE_KEY")
+    .distinct()
+    .count()
 )
 
-print("\nPAYLOAD:")
-print(json.dumps(payload, indent=2, default=str))
+print("Null NODE_KEYs:")
+print(
+    doc_ids_df
+    .filter(col("NODE_KEY").is_null())
+    .count()
+)
 
-Don't change anything yet. I specifically want to inspect what document-ids[] contains and why VALUE is being used as its key before we declare its graph correct.
+print("\nEdges into document-ids[]:")
+(
+    final_edges_df
+    .filter(col("TARGET_NODE_PATH") == doc_ids_path)
+    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
+    .count()
+    .show()
+)
+
+I expect the counts to be very close to the number of Authorization Package records with a usable TRACKING_ID. If total nodes = distinct keys, null keys = 0, and edge count matches the node count, then document-ids[] is validated and we move to the more interesting responsible-parties[] collection.
