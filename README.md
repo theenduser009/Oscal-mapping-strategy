@@ -1,25 +1,6 @@
-Yes! This result isolates the problem nicely. 🔎
+Yes — next step is to stop touching the core blindly and prove exactly what the active registry is feeding into the mapper for the SSP component branch.
 
-After the fresh run, the component branch contains only:
-
-ELEMENT_TYPE    COUNT
-components      4792
-
-So build_oscal_graph() is not creating:
-
-component
-props
-links
-responsible-roles
-protocols
-
-That means the registry itself is no longer our main suspect. The issue is inside the graph builder's collection → child handling. This also fits the code you showed earlier: Cell 5 has explicit restrictions around nested collection lineage and parent instances.
-
-Next step only
-
-Before changing the whole Cell 5 function, I want to inspect the metadata values the builder is actually receiving for these six registry rows.
-
-Run this read-only cell:
+Run this one read-only check in the notebook:
 
 from snowflake.snowpark.functions import col
 
@@ -44,6 +25,17 @@ from snowflake.snowpark.functions import col
     .show(50)
 )
 
-Send me that output.
+What I want to see is whether the notebook currently has all of these active:
 
-Don't change Cell 5 yet. Once I see IS_ACTIVE, PROCESS_ORDER, ITEM_PATH, and INSTANCE_KEY_RULE for all six, we can determine exactly why the builder stops at components[] and then I'll give you the corrected whole Cell 5 function, not little patches.
+components[]
+components[].component
+component.props[]
+component.links[]
+component.responsible-roles[]
+component.protocols[]
+
+If the notebook shows only components[] and component, then the immediate fix is registry activation, not Cell 5.
+
+If it shows all six, then we go straight to the next issue: mapping ownership / instance creation below component.
+
+Do only this now and send me the result.
