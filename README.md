@@ -1,8 +1,15 @@
-Yep — I see the issue. Your query returned 1 row: components[] itself, not children beneath components[].
+Perfect — now we’ve found the next real level. ✅
 
-That happened because the WHERE clause in the screenshot uses an OR, so it includes the node itself.
+Your registry shows:
 
-Run this exact query instead:
+system-security-plan.system-implementation.components[]
+    └── component
+
+And component is not a collection (IS_COLLECTION = FALSE). That makes sense: components[] is the collection container, and each individual item beneath it is represented by the singleton component node.
+
+Next step
+
+Now query the children of that component node:
 
 SELECT
     NODE_PATH,
@@ -15,12 +22,15 @@ SELECT
 FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
 WHERE OSCAL_MODEL_KEY = 'SSP'
   AND PARENT_NODE_PATH =
-      'system-security-plan.system-implementation.components[]'
+      'system-security-plan.system-implementation.components[].component'
   AND IS_ACTIVE = TRUE
 ORDER BY PROCESS_ORDER, NODE_PATH;
 
-No OR NODE_PATH = ... this time.
+Based on what we saw earlier, I expect things like:
 
-If this returns 0 rows, that's meaningful: your registry currently has no registered children below components[], so the mapper cannot traverse any deeper on this branch yet.
+props[]
+links[]
+responsible-roles[]
+protocols[]
 
-Run it and show me the result.
+Run just that and show me the result. Then we’ll continue one level deeper without changing the mapper.
