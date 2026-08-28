@@ -1,28 +1,54 @@
-I’d not activate system-implementation or add control-implementation nodes yet.
+Yes — this is much more useful. The Archer Authorization Package clearly contains enough material to continue SSP without touching the problematic Hardware/component reference branch.
 
-Since control-implementation has zero mappings, the safest next move is to let the Archer data tell us which SSP branch is actually supported. The inactive registry flag is useful here—it prevents the mapper from manufacturing structure we haven’t proven.
+Based on these fields, I would work on system-characteristics next. Your source has strong candidates for that branch: AUTHORIZATION_BOUNDARY_DESCRIPTION, SECURITY_CATEGORY, INFORMATION_TYPES, MISSION_PURPOSE, OPERATIONAL_STATUS, INFORMATION_SYSTEM_TYPE, SYSTEM_HOSTING_ENVIRONMENT, SYSTEM_ENVIRONMENT, CONNECTIVITY, MISSION_CRITICAL, and others.
 
-Run one read-only inventory query against CURATED_JSON across the Authorization Package table:
+And importantly, your registry already has children under system-characteristics: authorization-boundary, security-impact-level, status, system-ids[], and props[].
 
-SELECT
-    f.value::STRING AS ARCHER_FIELD,
-    COUNT(*) AS RECORD_COUNT
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW a,
-LATERAL FLATTEN(INPUT => OBJECT_KEYS(a.CURATED_JSON)) f
-GROUP BY f.value::STRING
-ORDER BY RECORD_COUNT DESC, ARCHER_FIELD;
+Next step — only validation
 
-This will give us the actual Archer fields and how commonly they occur.
+Don't activate anything and don't modify the mapper yet.
 
-Then we can classify them against the official SSP branches:
+Let's determine which CSV mappings already point into system-characteristics, including paths we may not yet have registered.
 
-metadata
-import-profile
-system-characteristics
-system-implementation
-control-implementation
-back-matter
+Run this in the notebook:
 
-My decision: keep everything inactive/unchanged for now, inspect the raw field inventory first, and then choose the strongest NIST SSP branch supported by real data. That avoids another long detour like the Hardware/component branch.
+from snowflake.snowpark.functions import col
 
-Send me that output and I’ll tell you exactly which branch I would tackle next.
+rows = (
+    canonical_mapping_df
+    .filter(
+        col("OSCAL_ELEMENT_PATH")
+        .like("%system-characteristics%")
+    )
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_ELEMENT_PATH",
+        "MAPPING_TYPE",
+        "TRANSFORMATION_LOGIC"
+    )
+    .sort("OSCAL_ELEMENT_PATH", "SOURCE_FIELD_NAME")
+    .collect()
+)
+
+print("SYSTEM-CHARACTERISTICS MAPPINGS:", len(rows))
+print("=" * 100)
+
+for r in rows:
+    print(
+        f"{r['SOURCE_FIELD_NAME']}  -->  "
+        f"{r['OSCAL_ELEMENT_PATH']}  |  "
+        f"{r['MAPPING_TYPE']}  |  "
+        f"{r['TRANSFORMATION_LOGIC']}"
+    )
+
+Why this is the right move
+
+The 418-field inventory tells us what Archer contains. Now the CSV tells us what your approved mapping says those fields should become.
+
+We should not independently decide, for example, that MISSION_PURPOSE belongs at some OSCAL path if your mapping team has already specified one.
+
+So our sequence is now very clean:
+
+Archer actual data → mapping CSV → OSCAL registry → mapper
+
+Send me the output of that one cell. Then we'll compare the mapped paths against those 5 registered system-characteristics children and immediately identify what registry branches are missing.
