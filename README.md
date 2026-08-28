@@ -1,35 +1,51 @@
-Excellent. ✅ system-characteristics is structurally validated.
-
-We now have:
+Great — this is very clean. We now know exactly what your active metadata graph contains:
 
 system-security-plan
-└── system-characteristics          2,813 ✅
-    ├── authorization-boundary          ✅ payload
-    ├── security-impact-level           ✅ payload
-    ├── status                       2,813 ✅
-    ├── system-ids[]                 2,813 ✅
-    └── props[]                     15,120 ✅
+└── metadata                         SINGLETON
+    ├── document-ids[]               COLLECTION / VALUE
+    └── responsible-parties[]        COLLECTION / SOURCE_FIELD_NAME+ID
 
-And the parent itself is clean: 2,813 nodes = 2,813 distinct keys = 0 null keys = 2,813 incoming edges.
+Notice something important: there are no deeper active children below those two in your registry. So this branch is much smaller than system-characteristics.
 
-So I would stop testing this branch now rather than over-validating it.
+Let's validate metadata itself first, exactly like we did before. Run:
 
-Next
+from snowflake.snowpark.functions import col
 
-Let's identify the next active direct child of system-security-plan from your registry instead of guessing from OSCAL.
+metadata_path = "system-security-plan.metadata"
 
-Run:
+print("=== METADATA GRAPH CHECK ===")
 
-SELECT
-    NODE_PATH,
-    ELEMENT_TYPE,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    PROCESS_ORDER
-FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-WHERE OSCAL_MODEL_KEY = 'SSP'
-  AND PARENT_NODE_PATH = 'system-security-plan'
-  AND IS_ACTIVE = TRUE
-ORDER BY PROCESS_ORDER, NODE_PATH;
+metadata_df = final_nodes_df.filter(
+    col("NODE_PATH") == metadata_path
+)
 
-Send me that result. Then we'll pick the next SSP branch from what your mapper is actually configured to process.
+print("Total metadata nodes:")
+print(metadata_df.count())
+
+print("Distinct NODE_KEYs:")
+print(
+    metadata_df
+    .select("NODE_KEY")
+    .distinct()
+    .count()
+)
+
+print("Null NODE_KEYs:")
+print(
+    metadata_df
+    .filter(col("NODE_KEY").is_null())
+    .count()
+)
+
+print("\nEdges into metadata:")
+(
+    final_edges_df
+    .filter(col("TARGET_NODE_PATH") == metadata_path)
+    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
+    .count()
+    .show()
+)
+
+Because metadata is SINGLETON under each SSP, I expect roughly 2,813 metadata nodes and 2,813 SSP → metadata edges.
+
+Run only this first. Then we'll inspect document-ids[] and responsible-parties[] individually, because their instance-key rules are different and we should validate them differently.
