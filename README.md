@@ -1,33 +1,63 @@
-Great. Next, find one record where the security-impact-level source fields are actually populated.
+Excellent — this is exactly what we needed.
 
-Run this SQL first:
+For CONTENT_ID 866211, we can see:
 
-SELECT
-    CONTENT_ID,
-    CURATED_JSON:CNSS_CONFIDENTIALITY_RATING            AS CONFIDENTIALITY,
-    CURATED_JSON:CNSS_INTEGRITY_RATING                  AS INTEGRITY,
-    CURATED_JSON:CNSS_AVAILABILITY_RATING               AS AVAILABILITY,
-    CURATED_JSON:CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE AS CONF_OVERRIDE,
-    CURATED_JSON:INTEGRITY_CONTROL_CATEGORY_OVERRIDE       AS INT_OVERRIDE,
-    CURATED_JSON:AVAILABILITY_CONTROL_CATEGORY_OVERRIDE    AS AVAIL_OVERRIDE,
-    CURATED_JSON:RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY AS REC_CONF,
-    CURATED_JSON:RECOMMENDED_INTEGRITY_CONTROL_CATEGORY       AS REC_INT,
-    CURATED_JSON:RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY    AS REC_AVAIL
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
-WHERE
-       CURATED_JSON:CNSS_CONFIDENTIALITY_RATING IS NOT NULL
-    OR CURATED_JSON:CNSS_INTEGRITY_RATING IS NOT NULL
-    OR CURATED_JSON:CNSS_AVAILABILITY_RATING IS NOT NULL
-    OR CURATED_JSON:CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE IS NOT NULL
-    OR CURATED_JSON:INTEGRITY_CONTROL_CATEGORY_OVERRIDE IS NOT NULL
-    OR CURATED_JSON:AVAILABILITY_CONTROL_CATEGORY_OVERRIDE IS NOT NULL
-    OR CURATED_JSON:RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY IS NOT NULL
-    OR CURATED_JSON:RECOMMENDED_INTEGRITY_CONTROL_CATEGORY IS NOT NULL
-    OR CURATED_JSON:RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY IS NOT NULL
-LIMIT 20;
+CNSS_CONFIDENTIALITY_RATING = null
+CNSS_INTEGRITY_RATING       = null
+CNSS_AVAILABILITY_RATING    = null
 
-Pick a CONTENT_ID where several columns are populated, then send me that result. After that I’ll give you the exact read-only notebook cell to build only:
+CONF_OVERRIDE  = [80654]
+INT_OVERRIDE   = [80654]
+AVAIL_OVERRIDE = [80654]
 
-system-security-plan.system-characteristics.security-impact-level
+So security-impact-level absolutely has source data. Let's test 866211.
 
-No mapper changes yet.
+Run this notebook cell:
+
+from snowflake.snowpark.functions import col
+import json
+
+# Test a record with populated security-impact source fields
+test_record = (
+    source_df
+    .filter(col("SOURCE_RECORD_ID") == "866211")
+    .collect()[0]
+)
+
+node_path = (
+    "system-security-plan.system-characteristics.security-impact-level"
+)
+
+mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    node_path,
+    CONFIG["OSCAL_MODEL"]
+)
+
+payload = build_element_payload(
+    test_record,
+    mappings
+)
+
+print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
+print("NODE:", node_path)
+print("OWNED MAPPINGS:", len(mappings))
+print("PAYLOAD:")
+print(json.dumps(payload, indent=2, default=str))
+
+What we're testing
+
+We already know this node has 12 owned mappings.
+
+Therefore for 866211, I do not expect {} anymore. Some payload should be generated from those override values.
+
+If it still returns:
+
+{}
+
+then we've found an actual mapper/mapping-path problem.
+
+If it produces fields under security-impact-level, then this branch is functioning too.
+
+Run exactly that and show me the result.
