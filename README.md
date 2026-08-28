@@ -1,34 +1,40 @@
-Yep — the screenshot confirms it. All six component-branch registry rows are active now, including props[], links[], responsible-roles[], and protocols[].
+Good — that narrows it down a lot.
 
-So we can stop touching IS_ACTIVE. That is not the problem.
+If ELEMENT_JSON for components[].component is empty, then the deeper nodes cannot be built from that parent payload. So the issue is not activation and not the graph validator. It’s that the component node itself has no usable payload feeding child extraction.
 
-The next thing to prove is whether the mapper actually has data available to create those deeper children. Your CSV inspection already showed mappings for components[] / components[].component, but not mappings owned by props[], links[], etc.
+Next step only: inspect the raw Archer fields that map to the component branch for a few source records.
 
-Next step only: inspect one component payload
-
-Run this read-only cell after Cell 7:
+Run this read-only cell:
 
 from snowflake.snowpark.functions import col
 
-(
-    final_nodes_df
-    .filter(
-        col("NODE_PATH") ==
-        "system-security-plan.system-implementation.components[].component"
-    )
-    .select(
-        "SOURCE_RECORD_ID",
-        "ELEMENT_TYPE",
-        "NODE_PATH",
-        "ELEMENT_JSON"
-    )
-    .show(5, truncate=False)
-)
+component_fields = [
+    "SUBSYSTEMS",
+    "SOFTWARE",
+    "HARDWARE",
+    "INTERCONNECTIONS",
+    "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM",
+    "SAP_INTAKE_FORM_INTERCONNECTIONS"
+]
 
-I want to see what is actually inside ELEMENT_JSON for a component.
+for record in source_df.limit(5).to_local_iterator():
+    print("\nSOURCE_RECORD_ID:", record["SOURCE_RECORD_ID"])
 
-That will answer the key question:
+    obj = _parse_source_json(record)
 
-Are props, links, responsible-roles, and protocols physically present inside the component payload, or do we need to obtain them from another Archer source/reference?
+    for field in component_fields:
+        value = resolve_json_path(obj, field)
+        print(field, "=>", value)
 
-Don't change Cell 5 or the registry again yet. Send me that output and we'll make the next decision from evidence.
+What I need from the output is whether those six fields contain:
+
+IDs/references only,
+
+dictionaries,
+
+arrays,
+
+or empty/null values.
+
+
+That tells us whether components[] should be built from reference IDs or whether we must follow those references into another Archer raw table.
