@@ -1,30 +1,66 @@
-Yep. Next we validate system-implementation, but first only inspect its registry children—no mapper changes yet.
+Perfect. This registry piece looks structurally right:
 
-Run this SQL:
+system-implementation → IS_COLLECTION = FALSE, SINGLETON
 
-SELECT
-    NODE_PATH,
-    ELEMENT_TYPE,
-    PARENT_NODE_PATH,
-    IS_COLLECTION,
-    INSTANCE_KEY_RULE,
-    ITEM_PATH,
-    PROCESS_ORDER
-FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-WHERE OSCAL_MODEL_KEY = 'SSP'
-  AND (
-       NODE_PATH = 'system-security-plan.system-implementation'
-       OR PARENT_NODE_PATH = 'system-security-plan.system-implementation'
-  )
-  AND IS_ACTIVE = TRUE
-ORDER BY PROCESS_ORDER, NODE_PATH;
+components[] → child of system-implementation
 
-This will show us:
+IS_COLLECTION = TRUE
+
+INSTANCE_KEY_RULE = CONTENT_ID
+
+ITEM_PATH = $
+
+
+Now only validate system-implementation first before touching components[].
+
+Run this Python cell:
+
+from snowflake.snowpark.functions import col
+
+print("=== SYSTEM IMPLEMENTATION GRAPH CHECK ===")
+
+si_path = "system-security-plan.system-implementation"
+
+si_df = final_nodes_df.filter(
+    col("NODE_PATH") == si_path
+)
+
+print("Total system-implementation nodes:")
+print(si_df.count())
+
+print("Distinct NODE_KEYs:")
+print(
+    si_df
+    .select("NODE_KEY")
+    .distinct()
+    .count()
+)
+
+print("Null NODE_KEYs:")
+print(
+    si_df
+    .filter(col("NODE_KEY").is_null())
+    .count()
+)
+
+print("\nEdges into system-implementation:")
+(
+    final_edges_df
+    .filter(col("TARGET_NODE_PATH") == si_path)
+    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
+    .count()
+    .show()
+)
+
+Based on everything we've seen so far, I would expect something around:
+
+Total system-implementation nodes: 2813
+Distinct NODE_KEYs:                2813
+Null NODE_KEYs:                    0
 
 system-security-plan
-└── system-implementation
-    ├── child 1
-    ├── child 2
-    └── ...
+    → system-implementation
 
-Don't change anything yet. Send me the result/screenshot. Then we'll validate the first child exactly like we did with metadata.
+But don't assume 2813—let the mapper prove it.
+
+Send me that output. Then components[] is the interesting one, because CONTENT_ID collection identity needs a different validation than the singleton nodes we've been checking.
