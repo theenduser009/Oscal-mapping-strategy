@@ -1,35 +1,43 @@
-Aha — this gives us the answer. Do not change the mapper.
+Run just this read-only notebook cell. It picks CONTENT_ID = 565422 and tests only the authorization-boundary payload.
 
-For these 20 records:
+from snowflake.snowpark.functions import col
+import json
 
-AUTHORIZATION_BOUNDARY_DESCRIPTION → NULL
+test_record = (
+    source_df
+    .filter(col("SOURCE_RECORD_ID") == "565422")
+    .collect()[0]
+)
 
-CNSS_CONFIDENTIALITY_RATING → NULL
+node_path = (
+    "system-security-plan.system-characteristics.authorization-boundary"
+)
 
-CNSS_INTEGRITY_RATING → NULL
+mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    node_path,
+    CONFIG["OSCAL_MODEL"]
+)
 
-CNSS_AVAILABILITY_RATING → NULL
+payload = build_element_payload(
+    test_record,
+    mappings
+)
 
-SECURITY_CATEGORY → populated ("DFARS")
+print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
+print("NODE:", node_path)
+print("OWNED MAPPINGS:", len(mappings))
+print("PAYLOAD:")
+print(json.dumps(payload, indent=2, default=str))
 
+Expected result should be roughly:
 
-That explains why security-impact-level showed {} even though it owns 12 mappings: the particular mapped fields that belong inside its child structure are null. Meanwhile SECURITY_CATEGORY is mapped at the system-characteristics level as security-sensitivity-level, which is why you already saw:
+OWNED MAPPINGS: 1
 
-"security-sensitivity-level": "DFARS"
+PAYLOAD:
+{
+  "description": "Corporate network DT ..."
+}
 
-So that part is behaving correctly.
-
-Next: let's test authorization-boundary properly
-
-Your earlier field-count list says AUTHORIZATION_BOUNDARY_DESCRIPTION has 2,522 populated records, so they definitely exist. Our OR query was just being satisfied first by SECURITY_CATEGORY.
-
-Run only this:
-
-SELECT
-    CONTENT_ID,
-    CURATED_JSON:AUTHORIZATION_BOUNDARY_DESCRIPTION AS AUTH_BOUNDARY
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
-WHERE CURATED_JSON:AUTHORIZATION_BOUNDARY_DESCRIPTION IS NOT NULL
-LIMIT 10;
-
-Don't modify anything else yet. Show me that result, and we'll validate authorization-boundary against one of those records.
+Run that and send me the output.
