@@ -1,32 +1,11 @@
-Excellent — this is exactly what we needed.
-
-For CONTENT_ID 866211, we can see:
-
-CNSS_CONFIDENTIALITY_RATING = null
-CNSS_INTEGRITY_RATING       = null
-CNSS_AVAILABILITY_RATING    = null
-
-CONF_OVERRIDE  = [80654]
-INT_OVERRIDE   = [80654]
-AVAIL_OVERRIDE = [80654]
-
-So security-impact-level absolutely has source data. Let's test 866211.
+Good. Let's validate system-ids[] next, but read-only and one thing at a time.
 
 Run this notebook cell:
 
 from snowflake.snowpark.functions import col
 import json
 
-# Test a record with populated security-impact source fields
-test_record = (
-    source_df
-    .filter(col("SOURCE_RECORD_ID") == "866211")
-    .collect()[0]
-)
-
-node_path = (
-    "system-security-plan.system-characteristics.security-impact-level"
-)
+node_path = "system-security-plan.system-characteristics.system-ids[]"
 
 mappings = get_mappings_for_node(
     canonical_mapping_df,
@@ -35,29 +14,41 @@ mappings = get_mappings_for_node(
     CONFIG["OSCAL_MODEL"]
 )
 
-payload = build_element_payload(
-    test_record,
-    mappings
-)
-
-print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
 print("NODE:", node_path)
 print("OWNED MAPPINGS:", len(mappings))
+
+for m in mappings:
+    print(
+        m["SOURCE_FIELD_NAME"],
+        "->",
+        m["OSCAL_ELEMENT_PATH"],
+        "| relative:",
+        m["FIELD_RELATIVE_PATH"]
+    )
+
+# Test the known record
+test_record = (
+    source_df
+    .filter(col("SOURCE_RECORD_ID") == "565189")
+    .collect()[0]
+)
+
+payload = build_element_payload(test_record, mappings)
+
+print("\nSOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
 print("PAYLOAD:")
 print(json.dumps(payload, indent=2, default=str))
 
-What we're testing
+We expect approximately:
 
-We already know this node has 12 owned mappings.
+NODE: ...system-ids[]
+OWNED MAPPINGS: 1
 
-Therefore for 866211, I do not expect {} anymore. Some payload should be generated from those override values.
+SAP_ID -> ...system-ids[].id | relative: id
 
-If it still returns:
+PAYLOAD:
+{
+  "id": "565189-Information System"
+}
 
-{}
-
-then we've found an actual mapper/mapping-path problem.
-
-If it produces fields under security-impact-level, then this branch is functioning too.
-
-Run exactly that and show me the result.
+For now, don't test counts or change the mapper. First confirm this ownership/payload result. Then we'll check whether system-ids[] being marked as a collection is actually producing the correct DIM node + FACT edge behavior.
