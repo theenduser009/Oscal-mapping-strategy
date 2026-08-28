@@ -1,32 +1,35 @@
-Yes — exactly. Before choosing status or anything else, let’s first see which current SSP children themselves have children.
+Good — that tells us the currently loaded SSP graph stops at those five nodes.
 
-Run this read-only SQL:
+So right now:
 
-SELECT DISTINCT
-    p.ELEMENT_TYPE AS PARENT,
-    c.ELEMENT_TYPE AS CHILD
-FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY f
+system-characteristics
+├── authorization-boundary   ← leaf in current graph
+├── props                    ← leaf in current graph
+├── security-impact-level    ← leaf in current graph
+├── status                   ← leaf in current graph
+└── system-ids               ← leaf in current graph
 
-JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT p
-    ON f.FK_SOURCE_ELEMENT_HASH = p.PK_OSCAL_SSP_ELEMENT_HASH
+That does not necessarily mean OSCAL ends there. It only means the loaded DIM/FACT graph has no deeper edges from those nodes.
 
-JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT c
-    ON f.FK_TARGET_ELEMENT_HASH = c.PK_OSCAL_SSP_ELEMENT_HASH
+Next, instead of picking blindly, let’s compare these current leaves against the registry. Run:
 
-WHERE p.ELEMENT_TYPE IN (
-    'authorization-boundary',
-    'props',
-    'security-impact-level',
-    'status',
-    'system-ids'
-)
+SELECT
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    IS_ACTIVE
+FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+WHERE OSCAL_MODEL_KEY = 'SSP'
+  AND (
+       NODE_PATH ILIKE '%authorization-boundary%'
+    OR NODE_PATH ILIKE '%security-impact-level%'
+    OR NODE_PATH ILIKE '%status%'
+    OR NODE_PATH ILIKE '%system-ids%'
+    OR NODE_PATH ILIKE '%system-characteristics%props%'
+  )
+ORDER BY PROCESS_ORDER, NODE_PATH;
 
-ORDER BY
-    PARENT,
-    CHILD;
+This tells us which of those are true terminal registry nodes versus nodes that have deeper registered structure we haven’t generated yet.
 
-If this returns rows, those are the branches that continue deeper.
-
-If it returns nothing for one of those element types, that element is currently a leaf in your loaded SSP graph.
-
-Run this first and send me the result. Then we’ll pick only a branch that actually goes deeper.
+That’s the clean next step.
