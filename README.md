@@ -1,54 +1,28 @@
-Yes — this is a great branch to work on. Your result shows only the control-implementation root is currently registered, so this is exactly where we can extend the SSP graph properly from the NIST structure instead of guessing.
+I’d not activate system-implementation or add control-implementation nodes yet.
 
-According to the NIST SSP model, control-implementation has three direct children: a required description, optional set-parameters[], and required implemented-requirements[]. The important branch for us is implemented-requirements[], because each instance represents one control such as AC-1, AC-2, etc. 
+Since control-implementation has zero mappings, the safest next move is to let the Archer data tell us which SSP branch is actually supported. The inactive registry flag is useful here—it prevents the mapper from manufacturing structure we haven’t proven.
 
-system-security-plan
-└── control-implementation
-    ├── description
-    ├── set-parameters[]
-    └── implemented-requirements[]
-         ├── set-parameters[]
-         ├── responsible-roles[]
-         ├── statements[]
-         │    └── by-components[]
-         └── by-components[]
+Run one read-only inventory query against CURATED_JSON across the Authorization Package table:
 
-NIST specifically says an implemented-requirement describes how the system satisfies an individual control. It can contain statements, and both the implemented requirement itself and its statements can contain by-component structures describing which system component implements that control/statement. 
+SELECT
+    f.value::STRING AS ARCHER_FIELD,
+    COUNT(*) AS RECORD_COUNT
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW a,
+LATERAL FLATTEN(INPUT => OBJECT_KEYS(a.CURATED_JSON)) f
+GROUP BY f.value::STRING
+ORDER BY RECORD_COUNT DESC, ARCHER_FIELD;
 
-So I would not add everything yet. First let's determine whether Archer actually gives us data that can populate this branch.
+This will give us the actual Archer fields and how commonly they occur.
 
-Run this against your mapping CSV:
+Then we can classify them against the official SSP branches:
 
-from snowflake.snowpark.functions import col
-
-(
-    canonical_mapping_df
-    .filter(
-        col("OSCAL_ELEMENT_PATH")
-        .like("system-security-plan.control-implementation%")
-    )
-    .select(
-        "SOURCE_FIELD_NAME",
-        "OSCAL_ELEMENT_PATH",
-        "MAPPING_TYPE",
-        "TRANSFORMATION_LOGIC"
-    )
-    .sort("OSCAL_ELEMENT_PATH")
-    .show(100)
-)
-
-This is the immediate next step.
-
-We want to answer:
-
-Do we already have Archer mappings for:
+metadata
+import-profile
+system-characteristics
+system-implementation
 control-implementation
-→ implemented-requirements[]
-→ statements[]
-→ by-components[] ?
+back-matter
 
-If those mappings exist, we register the NIST nodes and run the mapper.
+My decision: keep everything inactive/unchanged for now, inspect the raw field inventory first, and then choose the strongest NIST SSP branch supported by real data. That avoids another long detour like the Hardware/component branch.
 
-If they don't, do not add registry rows blindly yet — we'll inspect the Archer fields and decide which source data maps to each NIST structure.
-
-Send me that output next. This branch is promising because it gives us a real deep hierarchy to test the node/edge mapper against.
+Send me that output and I’ll tell you exactly which branch I would tackle next.
