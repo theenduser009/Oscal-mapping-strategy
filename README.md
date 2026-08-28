@@ -1,63 +1,42 @@
-Yes! This is a good result. We finally have actual Archer data successfully becoming an OSCAL system-characteristics payload.
+Yes — this result is very useful.
 
-For source record 565189, your mapper produced:
+For record 565189, three things stand out immediately:
 
-system-name                 = OpenVMS Server
-system-name-short           = Application
-description                 = OpenVMS primary function...
-date-authorized             = 2017-07-19
-security-sensitivity-level  = DPARs
+authorization-boundary has 1 owned mapping but payload is {} → the source value for that record is probably null/empty.
 
-So the basic mechanism is working:
+security-impact-level has 12 owned mappings but payload is {} → same story for this record, or the mapped source fields are not present/populated.
 
-Archer field → CSV mapping → registry ownership → OSCAL payload.
+status is working and produced state: [80661].
 
-There is one thing I want to flag, but not fix yet:
+system-ids[] is working and produced an id.
 
-"INFORMATION_SYSTEM_TYPE": [
-    80643
-]
+props[] is working, but the payload is still using Archer field names like PACKAGE_TYPE and PACKAGE_TYPE_HELPER_CALC, which confirms we need to handle extension-property semantics separately later.
 
-Because its CSV path terminates at system-characteristics and is marked Extension Property, your generic builder preserves the Archer field name. That may ultimately need to become an OSCAL prop, but we shouldn't change generic mapper logic based on one field yet.
 
-Next: test all 5 children together
+So the mapper is not broadly broken. The branch is being built, but some child payloads are empty because this particular record does not carry those source values.
 
-Run this read-only cell. This will tell us exactly what each child node produces for the same record 565189:
+The best next step is not code change. We should find a record where AUTHORIZATION_BOUNDARY_DESCRIPTION and at least one security-impact source field are populated, then rerun the same child test against that one record.
 
-# ================================================================
-# READ ONLY - system-characteristics child payload validation
-# ================================================================
+Run this read-only SQL:
 
-child_paths = [
-    "system-security-plan.system-characteristics.authorization-boundary",
-    "system-security-plan.system-characteristics.security-impact-level",
-    "system-security-plan.system-characteristics.status",
-    "system-security-plan.system-characteristics.system-ids[]",
-    "system-security-plan.system-characteristics.props[]"
-]
+SELECT
+    CONTENT_ID,
+    CURATED_JSON:AUTHORIZATION_BOUNDARY_DESCRIPTION AS AUTH_BOUNDARY,
+    CURATED_JSON:CNSS_CONFIDENTIALITY_RATING       AS CONFIDENTIALITY,
+    CURATED_JSON:CNSS_INTEGRITY_RATING             AS INTEGRITY,
+    CURATED_JSON:CNSS_AVAILABILITY_RATING          AS AVAILABILITY,
+    CURATED_JSON:SECURITY_CATEGORY                  AS SECURITY_CATEGORY
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
+WHERE
+       CURATED_JSON:AUTHORIZATION_BOUNDARY_DESCRIPTION IS NOT NULL
+    OR CURATED_JSON:CNSS_CONFIDENTIALITY_RATING IS NOT NULL
+    OR CURATED_JSON:CNSS_INTEGRITY_RATING IS NOT NULL
+    OR CURATED_JSON:CNSS_AVAILABILITY_RATING IS NOT NULL
+    OR CURATED_JSON:SECURITY_CATEGORY IS NOT NULL
+LIMIT 20;
 
-print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
+Pick one CONTENT_ID from that result where several of those columns are populated.
 
-for node_path in child_paths:
+Then we rerun the exact same payload test against that record.
 
-    mappings = get_mappings_for_node(
-        canonical_mapping_df,
-        element_registry_df,
-        node_path,
-        CONFIG["OSCAL_MODEL"]
-    )
-
-    payload = build_element_payload(
-        test_record,
-        mappings
-    )
-
-    print("\n" + "=" * 90)
-    print("NODE:", node_path)
-    print("OWNED MAPPINGS:", len(mappings))
-    print("PAYLOAD:")
-    print(json.dumps(payload, indent=2, default=str))
-
-Don't change the registry, CSV, or mapper yet.
-
-This result will be especially useful because we can see whether security-impact-level, status, system-ids[], props[], and authorization-boundary are actually populated. Then we'll fix only what the evidence shows is wrong.
+That will tell us whether authorization-boundary and security-impact-level are functioning correctly before we touch any mapper logic.
