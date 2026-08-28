@@ -1,78 +1,77 @@
-Great. Run this read-only impact check next. It does not write anything.
+Good — now we finally have the full Cell 4, and I would not change it yet.
+
+The missing piece is not the code anymore. It is this:
+
+What exactly is inside TRANSFORMATION_LOGIC for the Direct/Transform rows?
+
+We should not invent transformation behavior. First inspect the actual rules your CSV defines.
+
+Run this one read-only cell:
 
 from snowflake.snowpark.functions import col
 
-print("=== TARGET IMPACT CHECK ===")
+print("=== DIRECT / TRANSFORM RULES ===")
 
-dim_table = CONFIG["TARGET_DIM"]
-fact_table = CONFIG["TARGET_FACT"]
-
-dim_pk = CONFIG.get(
-    "DIM_PK_COLUMN",
-    "PK_OSCAL_SSP_ELEMENT_HASH"
-)
-
-fact_pk = CONFIG.get(
-    "FACT_PK_COLUMN",
-    "PK_FACT_OSCAL_DEPENDENCY_HASH"
-)
-
-# Recreate the exact key sets that would be loaded
-dim_keys_df = final_nodes_df.select(
-    col("NODE_KEY").alias(dim_pk)
-)
-
-fact_keys_df = final_edges_df.select(
-    col("EDGE_KEY").alias(fact_pk)
-)
-
-# DIM impact
-dim_existing = (
-    dim_keys_df
-    .join(
-        session.table(dim_table).select(col(dim_pk)),
-        dim_pk,
-        "inner"
+(
+    canonical_mapping_df
+    .filter(
+        col("MAPPING_TYPE") == "Direct/Transform"
     )
-    .count()
-)
-
-dim_new = (
-    dim_keys_df.count()
-    - dim_existing
-)
-
-# FACT impact
-fact_existing = (
-    fact_keys_df
-    .join(
-        session.table(fact_table).select(col(fact_pk)),
-        fact_pk,
-        "inner"
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_ELEMENT_PATH",
+        "MAPPING_TYPE",
+        "TRANSFORMATION_LOGIC"
     )
-    .count()
+    .sort(
+        "OSCAL_ELEMENT_PATH",
+        "SOURCE_FIELD_NAME"
+    )
+    .show(100)
 )
 
-fact_new = (
-    fact_keys_df.count()
-    - fact_existing
+If the output is too wide, run this instead:
+
+rows = (
+    canonical_mapping_df
+    .filter(
+        col("MAPPING_TYPE") == "Direct/Transform"
+    )
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_ELEMENT_PATH",
+        "TRANSFORMATION_LOGIC"
+    )
+    .collect()
 )
 
-print("\nDIM")
-print("Would process :", dim_keys_df.count())
-print("Already exist :", dim_existing)
-print("Would insert  :", dim_new)
+for r in rows:
+    print(
+        r["SOURCE_FIELD_NAME"],
+        "->",
+        r["OSCAL_ELEMENT_PATH"],
+        "| LOGIC:",
+        r["TRANSFORMATION_LOGIC"]
+    )
 
-print("\nFACT")
-print("Would process :", fact_keys_df.count())
-print("Already exist :", fact_existing)
-print("Would insert  :", fact_new)
+Why this is the next step
 
-print("\nEXECUTE_WRITES =", CONFIG["EXECUTE_WRITES"])
+Right now we know:
 
-This tells us, before DML:
+Direct             ✅ implemented
+Direct/Transform   ❌ copied directly today
+Reference          ⏸ Phase 2
 
-DIM:  how many will MATCH vs INSERT
-FACT: how many will MATCH vs INSERT
+But before I modify Cell 4, I need to know whether TRANSFORMATION_LOGIC contains things like:
 
-Keep EXECUTE_WRITES = False. Send me those four numbers, and then we can decide whether the first DEV write is safe.
+map ID → label
+take first value
+convert date
+normalize Yes/No
+lookup security category
+strip HTML
+concatenate fields
+
+Each needs different behavior.
+
+So do not touch Cell 4 yet. Run this and send me the transformation-rule output. Then we can design one controlled transformation handler instead of creating another week of patches.
