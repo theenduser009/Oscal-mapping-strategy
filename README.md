@@ -1,112 +1,93 @@
-Excellent — this is the result we needed. 33 mappings exist for system-characteristics, and now the structure is much clearer.
+Perfect — this is the confirmation we wanted.
 
-The important thing is: we should not create 33 registry nodes. Many of those mappings are leaf values owned by a smaller number of structural OSCAL nodes.
+There are no NO OWNER rows in that output. So the current registry is sufficient to own all 33 system-characteristics mappings.
 
-From your screenshot, the meaningful structure is roughly:
+That means we should not add more registry nodes right now.
 
-system-security-plan
-└── system-characteristics
-    ├── authorization-boundary
-    │   └── description
-    ├── props[]
-    ├── security-impact-level
-    │   ├── security-objective-availability
-    │   ├── security-objective-confidentiality
-    │   └── security-objective-integrity
-    ├── status
-    │   ├── state
-    │   └── remarks
-    └── system-ids[]
-        └── id
-
-Your existing registry already has the major structural nodes:
-
-authorization-boundary, props[], security-impact-level, status, and system-ids[].
-
-So don't add anything yet.
-
-Next validation
-
-We need to answer one question before touching the registry:
-
-> Does the current mapper correctly assign all 33 mappings to those existing registry nodes?
-
-
-
-Run this read-only cell:
-
-branch = "system-security-plan.system-characteristics"
-
-registry_paths = [
-    r["NODE_PATH"]
-    for r in element_registry_df
-        .filter(col("NODE_PATH").like(branch + "%"))
-        .select("NODE_PATH")
-        .collect()
-]
-
-mapping_rows = (
-    canonical_mapping_df
-    .filter(col("OSCAL_ELEMENT_PATH").like(branch + "%"))
-    .select(
-        "SOURCE_FIELD_NAME",
-        "OSCAL_ELEMENT_PATH"
-    )
-    .collect()
-)
-
-print("=== OWNERSHIP CHECK ===")
-
-for m in mapping_rows:
-
-    mapping_path = m["OSCAL_ELEMENT_PATH"]
-
-    candidates = [
-        p for p in registry_paths
-        if mapping_path == p
-        or mapping_path.startswith(p + ".")
-    ]
-
-    owner = (
-        max(candidates, key=len)
-        if candidates
-        else "NO OWNER"
-    )
-
-    print(
-        f"{m['SOURCE_FIELD_NAME']} "
-        f"--> {owner}"
-    )
-
-What I expect
-
-For example:
-
-AUTHORIZATION_BOUNDARY_DESCRIPTION
---> ...system-characteristics.authorization-boundary
-
-CNSS_AVAILABILITY_RATING
---> ...security-impact-level
-
-OPERATIONAL_STATUS
---> ...status
+The ownership is behaving exactly as expected:
 
 SAP_ID
---> ...system-ids[]
+→ system-ids[]
 
-CRITICAL_INFRASTRUCTURE
---> ...props[]
+AUTHORIZATION_BOUNDARY_DESCRIPTION
+→ authorization-boundary
 
-And fields mapped directly to:
+OPERATIONAL_STATUS / AUTHORIZATION_DECISION / AUTHORIZATION_COMMENTS
+→ status
 
-...system-characteristics.description
-...system-characteristics.system-name
-...system-characteristics
+CNSS_* / *_CONTROL_CATEGORY_*
+→ security-impact-level
 
-should be owned by the system-characteristics node itself.
+CRITICAL_INFRASTRUCTURE / INFORMATION_CLASSIFICATION / PACKAGE_TYPE...
+→ props[]
 
-The key result we're looking for is NO OWNER.
+MISSION_PURPOSE / INFORMATION_SYSTEM_TYPE / AUTHORIZATION_PACKAGE_NAME / ACRONYM
+→ system-characteristics
 
-If there are zero NO OWNER mappings, we do not need more registry nodes for these leaf fields. Then our next move is to inspect the actual generated system-characteristics payload from one Archer record.
+Now the next question is more important:
 
-Send me that output. We're finally testing the mapper's ownership logic rather than guessing at the OSCAL tree.
+> Does the mapper actually build a correct system-characteristics payload from real Archer data?
+
+
+
+Let's test one real record only, read-only.
+
+Run this next:
+
+# ================================================================
+# READ ONLY - inspect generated system-characteristics payload
+# ================================================================
+
+system_characteristics_path = (
+    "system-security-plan.system-characteristics"
+)
+
+# Pick one source row
+test_record = next(source_df.to_local_iterator())
+
+print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
+
+# Get mappings owned directly by system-characteristics
+sc_mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    system_characteristics_path,
+    CONFIG["OSCAL_MODEL"]
+)
+
+print("Owned mappings:", len(sc_mappings))
+
+for m in sc_mappings:
+    print(
+        m["SOURCE_FIELD_NAME"],
+        "->",
+        m["OSCAL_ELEMENT_PATH"],
+        "| relative:",
+        m["FIELD_RELATIVE_PATH"]
+    )
+
+# Build payload
+sc_payload = build_element_payload(
+    test_record,
+    sc_mappings
+)
+
+print("\n=== SYSTEM CHARACTERISTICS PAYLOAD ===")
+print(json.dumps(sc_payload, indent=2, default=str))
+
+What we want to see is something along the lines of:
+
+{
+  "description": "...",
+  "system-name": "...",
+  "short-name": "...",
+  ...
+}
+
+or whatever values exist for that selected Archer record.
+
+If that payload looks good, then we test the child nodes next:
+
+authorization-boundary → status → security-impact-level → system-ids[] → props[].
+
+That will tell us whether this whole SSP branch is genuinely ready before we even think about EXECUTE_WRITES=True.
