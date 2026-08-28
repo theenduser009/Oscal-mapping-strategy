@@ -1,36 +1,42 @@
-Perfect. This registry piece looks structurally right:
+Yes — this passes cleanly. And the 944 is important; we should use the actual result rather than expecting 2,813.
 
-system-implementation → IS_COLLECTION = FALSE, SINGLETON
+Your validation shows:
 
-components[] → child of system-implementation
+system-implementation nodes = 944
+Distinct NODE_KEYs          = 944
+Null NODE_KEYs              = 0
+Edges SSP → implementation  = 944
 
-IS_COLLECTION = TRUE
+So the mapper created exactly one unique system-implementation node for each applicable SSP record, and every one has its parent edge. The other SSP records simply didn't produce this element.
 
+Next: validate components[]
+
+This is more important because your registry says:
+
+IS_COLLECTION     = TRUE
 INSTANCE_KEY_RULE = CONTENT_ID
+ITEM_PATH         = $
 
-ITEM_PATH = $
-
-
-Now only validate system-implementation first before touching components[].
-
-Run this Python cell:
+Run only this next cell:
 
 from snowflake.snowpark.functions import col
 
-print("=== SYSTEM IMPLEMENTATION GRAPH CHECK ===")
+print("=== COMPONENTS GRAPH CHECK ===")
 
-si_path = "system-security-plan.system-implementation"
-
-si_df = final_nodes_df.filter(
-    col("NODE_PATH") == si_path
+components_path = (
+    "system-security-plan.system-implementation.components[]"
 )
 
-print("Total system-implementation nodes:")
-print(si_df.count())
+components_df = final_nodes_df.filter(
+    col("NODE_PATH") == components_path
+)
+
+print("Total component nodes:")
+print(components_df.count())
 
 print("Distinct NODE_KEYs:")
 print(
-    si_df
+    components_df
     .select("NODE_KEY")
     .distinct()
     .count()
@@ -38,29 +44,25 @@ print(
 
 print("Null NODE_KEYs:")
 print(
-    si_df
+    components_df
     .filter(col("NODE_KEY").is_null())
     .count()
 )
 
-print("\nEdges into system-implementation:")
+print("\nEdges into components[]:")
 (
     final_edges_df
-    .filter(col("TARGET_NODE_PATH") == si_path)
-    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
+    .filter(col("TARGET_NODE_PATH") == components_path)
+    .group_by(
+        "SOURCE_NODE_PATH",
+        "TARGET_NODE_PATH"
+    )
     .count()
     .show()
 )
 
-Based on everything we've seen so far, I would expect something around:
+Here do not expect 944. components[] is a collection, so there may be multiple component instances underneath each of those 944 system-implementation parents.
 
-Total system-implementation nodes: 2813
-Distinct NODE_KEYs:                2813
-Null NODE_KEYs:                    0
+The critical result is:
 
-system-security-plan
-    → system-implementation
-
-But don't assume 2813—let the mapper prove it.
-
-Send me that output. Then components[] is the interesting one, because CONTENT_ID collection identity needs a different validation than the singleton nodes we've been checking.
+Total component nodes = Distinct NODE_KEYs, Null = 0, and edges should come from system-implementation → components[].
