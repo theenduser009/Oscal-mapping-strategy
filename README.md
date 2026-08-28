@@ -1,51 +1,54 @@
-Great — this is very clean. We now know exactly what your active metadata graph contains:
+Perfect. ✅ metadata parent is fully validated.
+
+Your numbers line up exactly:
+
+Metadata nodes:             2,813
+Distinct NODE_KEYs:         2,813
+Null NODE_KEYs:                 0
+SSP → metadata edges:       2,813
+
+So now:
 
 system-security-plan
-└── metadata                         SINGLETON
-    ├── document-ids[]               COLLECTION / VALUE
-    └── responsible-parties[]        COLLECTION / SOURCE_FIELD_NAME+ID
+└── metadata                  ✅
+    ├── document-ids[]
+    └── responsible-parties[]
 
-Notice something important: there are no deeper active children below those two in your registry. So this branch is much smaller than system-characteristics.
+Next: document-ids[]
 
-Let's validate metadata itself first, exactly like we did before. Run:
+Because this is a collection with INSTANCE_KEY_RULE = VALUE, before counting graph nodes I want to see what mappings/payload are actually producing those values.
 
-from snowflake.snowpark.functions import col
+Run this:
 
-metadata_path = "system-security-plan.metadata"
+import json
 
-print("=== METADATA GRAPH CHECK ===")
+node_path = "system-security-plan.metadata.document-ids[]"
 
-metadata_df = final_nodes_df.filter(
-    col("NODE_PATH") == metadata_path
+mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    node_path,
+    CONFIG["OSCAL_MODEL"]
 )
 
-print("Total metadata nodes:")
-print(metadata_df.count())
+print("NODE:", node_path)
+print("OWNED MAPPINGS:", len(mappings))
 
-print("Distinct NODE_KEYs:")
-print(
-    metadata_df
-    .select("NODE_KEY")
-    .distinct()
-    .count()
+for m in mappings:
+    print(
+        m["SOURCE_FIELD_NAME"],
+        "->",
+        m["OSCAL_ELEMENT_PATH"],
+        "| relative:",
+        m["FIELD_RELATIVE_PATH"]
+    )
+
+payload = build_element_payload(
+    test_record,
+    mappings
 )
 
-print("Null NODE_KEYs:")
-print(
-    metadata_df
-    .filter(col("NODE_KEY").is_null())
-    .count()
-)
+print("\nPAYLOAD:")
+print(json.dumps(payload, indent=2, default=str))
 
-print("\nEdges into metadata:")
-(
-    final_edges_df
-    .filter(col("TARGET_NODE_PATH") == metadata_path)
-    .group_by("SOURCE_NODE_PATH", "TARGET_NODE_PATH")
-    .count()
-    .show()
-)
-
-Because metadata is SINGLETON under each SSP, I expect roughly 2,813 metadata nodes and 2,813 SSP → metadata edges.
-
-Run only this first. Then we'll inspect document-ids[] and responsible-parties[] individually, because their instance-key rules are different and we should validate them differently.
+Don't change anything yet. I specifically want to inspect what document-ids[] contains and why VALUE is being used as its key before we declare its graph correct.
