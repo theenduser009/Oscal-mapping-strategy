@@ -1,93 +1,63 @@
-Perfect — this is the confirmation we wanted.
+Yes! This is a good result. We finally have actual Archer data successfully becoming an OSCAL system-characteristics payload.
 
-There are no NO OWNER rows in that output. So the current registry is sufficient to own all 33 system-characteristics mappings.
+For source record 565189, your mapper produced:
 
-That means we should not add more registry nodes right now.
+system-name                 = OpenVMS Server
+system-name-short           = Application
+description                 = OpenVMS primary function...
+date-authorized             = 2017-07-19
+security-sensitivity-level  = DPARs
 
-The ownership is behaving exactly as expected:
+So the basic mechanism is working:
 
-SAP_ID
-→ system-ids[]
+Archer field → CSV mapping → registry ownership → OSCAL payload.
 
-AUTHORIZATION_BOUNDARY_DESCRIPTION
-→ authorization-boundary
+There is one thing I want to flag, but not fix yet:
 
-OPERATIONAL_STATUS / AUTHORIZATION_DECISION / AUTHORIZATION_COMMENTS
-→ status
+"INFORMATION_SYSTEM_TYPE": [
+    80643
+]
 
-CNSS_* / *_CONTROL_CATEGORY_*
-→ security-impact-level
+Because its CSV path terminates at system-characteristics and is marked Extension Property, your generic builder preserves the Archer field name. That may ultimately need to become an OSCAL prop, but we shouldn't change generic mapper logic based on one field yet.
 
-CRITICAL_INFRASTRUCTURE / INFORMATION_CLASSIFICATION / PACKAGE_TYPE...
-→ props[]
+Next: test all 5 children together
 
-MISSION_PURPOSE / INFORMATION_SYSTEM_TYPE / AUTHORIZATION_PACKAGE_NAME / ACRONYM
-→ system-characteristics
-
-Now the next question is more important:
-
-> Does the mapper actually build a correct system-characteristics payload from real Archer data?
-
-
-
-Let's test one real record only, read-only.
-
-Run this next:
+Run this read-only cell. This will tell us exactly what each child node produces for the same record 565189:
 
 # ================================================================
-# READ ONLY - inspect generated system-characteristics payload
+# READ ONLY - system-characteristics child payload validation
 # ================================================================
 
-system_characteristics_path = (
-    "system-security-plan.system-characteristics"
-)
-
-# Pick one source row
-test_record = next(source_df.to_local_iterator())
+child_paths = [
+    "system-security-plan.system-characteristics.authorization-boundary",
+    "system-security-plan.system-characteristics.security-impact-level",
+    "system-security-plan.system-characteristics.status",
+    "system-security-plan.system-characteristics.system-ids[]",
+    "system-security-plan.system-characteristics.props[]"
+]
 
 print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
 
-# Get mappings owned directly by system-characteristics
-sc_mappings = get_mappings_for_node(
-    canonical_mapping_df,
-    element_registry_df,
-    system_characteristics_path,
-    CONFIG["OSCAL_MODEL"]
-)
+for node_path in child_paths:
 
-print("Owned mappings:", len(sc_mappings))
-
-for m in sc_mappings:
-    print(
-        m["SOURCE_FIELD_NAME"],
-        "->",
-        m["OSCAL_ELEMENT_PATH"],
-        "| relative:",
-        m["FIELD_RELATIVE_PATH"]
+    mappings = get_mappings_for_node(
+        canonical_mapping_df,
+        element_registry_df,
+        node_path,
+        CONFIG["OSCAL_MODEL"]
     )
 
-# Build payload
-sc_payload = build_element_payload(
-    test_record,
-    sc_mappings
-)
+    payload = build_element_payload(
+        test_record,
+        mappings
+    )
 
-print("\n=== SYSTEM CHARACTERISTICS PAYLOAD ===")
-print(json.dumps(sc_payload, indent=2, default=str))
+    print("\n" + "=" * 90)
+    print("NODE:", node_path)
+    print("OWNED MAPPINGS:", len(mappings))
+    print("PAYLOAD:")
+    print(json.dumps(payload, indent=2, default=str))
 
-What we want to see is something along the lines of:
+Don't change the registry, CSV, or mapper yet.
 
-{
-  "description": "...",
-  "system-name": "...",
-  "short-name": "...",
-  ...
-}
-
-or whatever values exist for that selected Archer record.
-
-If that payload looks good, then we test the child nodes next:
-
-authorization-boundary → status → security-impact-level → system-ids[] → props[].
-
-That will tell us whether this whole SSP branch is genuinely ready before we even think about EXECUTE_WRITES=True.
+This result will be especially useful because we can see whether security-impact-level, status, system-ids[], props[], and authorization-boundary are actually populated. Then we'll fix only what the evidence shows is wrong.
