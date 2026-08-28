@@ -1,70 +1,48 @@
-Perfect — now we have the next active level clearly. ✅
+Good catch — stop here. This result is important. The mapper produced:
 
-Under:
+components[] = 4,792 nodes   ✅
 
-system-security-plan.system-implementation.components[].component
+components[].component = 0 nodes   ❌
+Edges into component = 0           ❌
 
-you have four active collection children:
+So we should not continue to component.props[] yet.
 
-props[]
-links[]
-responsible-roles[]
-protocols[]
+The registry contains components[].component, but build_oscal_graph() is not materializing that registered non-collection child. This may actually be a modeling/registry issue, not necessarily a mapper bug: your components[] instance payload already looked like:
 
-This matches what we expected from the earlier registry work.
+{
+  "ContentId": 572500,
+  "LevelId": 354
+}
 
-The best next move is to validate component itself first, because it is the structural parent of all four collections. We should make sure its node count, uniqueness, and edges from components[] are correct before going into the children.
+That raises the key question: does .component have mappings/data of its own, or is it just an artificial wrapper between components[] and props[]/links[]/...?
 
-Run this read-only cell:
+Next step only
 
-from snowflake.snowpark.functions import col
-
-print("=== COMPONENT NODE GRAPH CHECK ===")
+Run this to see whether the mapping CSV actually owns anything at .component:
 
 component_path = (
     "system-security-plan.system-implementation.components[].component"
 )
 
-component_df = final_nodes_df.filter(
-    col("NODE_PATH") == component_path
+mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    component_path,
+    CONFIG["OSCAL_MODEL"]
 )
 
-print("Total component nodes:")
-print(component_df.count())
+print("NODE:", component_path)
+print("OWNED MAPPINGS:", len(mappings))
 
-print("Distinct NODE_KEYs:")
-print(
-    component_df
-    .select("NODE_KEY")
-    .distinct()
-    .count()
-)
-
-print("Null NODE_KEYs:")
-print(
-    component_df
-    .filter(col("NODE_KEY").is_null())
-    .count()
-)
-
-print("\nEdges into component:")
-(
-    final_edges_df
-    .filter(col("TARGET_NODE_PATH") == component_path)
-    .group_by(
-        "SOURCE_NODE_PATH",
-        "TARGET_NODE_PATH"
+for m in mappings:
+    print(
+        m["SOURCE_FIELD_NAME"],
+        "->",
+        m["OSCAL_ELEMENT_PATH"],
+        "| relative:",
+        m["FIELD_RELATIVE_PATH"]
     )
-    .count()
-    .show()
-)
 
-I expect the relationship to be:
+Don't change Cell 4 or Cell 5 yet.
 
-components[]
-    →
-component
-
-and likely the node count will align with the 4,792 component collection instances, but don’t assume it — let the output prove it.
-
-If that passes, then we’ll test the four child collections one at a time, starting with component.props[].
+Send me just the output of OWNED MAPPINGS and whatever mappings it prints. That will tell us whether .component should genuinely become 4,792 nodes or whether the registry hierarchy needs correction.
