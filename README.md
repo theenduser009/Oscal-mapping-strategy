@@ -1,43 +1,33 @@
-Run just this read-only notebook cell. It picks CONTENT_ID = 565422 and tests only the authorization-boundary payload.
+Great. Next, find one record where the security-impact-level source fields are actually populated.
 
-from snowflake.snowpark.functions import col
-import json
+Run this SQL first:
 
-test_record = (
-    source_df
-    .filter(col("SOURCE_RECORD_ID") == "565422")
-    .collect()[0]
-)
+SELECT
+    CONTENT_ID,
+    CURATED_JSON:CNSS_CONFIDENTIALITY_RATING            AS CONFIDENTIALITY,
+    CURATED_JSON:CNSS_INTEGRITY_RATING                  AS INTEGRITY,
+    CURATED_JSON:CNSS_AVAILABILITY_RATING               AS AVAILABILITY,
+    CURATED_JSON:CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE AS CONF_OVERRIDE,
+    CURATED_JSON:INTEGRITY_CONTROL_CATEGORY_OVERRIDE       AS INT_OVERRIDE,
+    CURATED_JSON:AVAILABILITY_CONTROL_CATEGORY_OVERRIDE    AS AVAIL_OVERRIDE,
+    CURATED_JSON:RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY AS REC_CONF,
+    CURATED_JSON:RECOMMENDED_INTEGRITY_CONTROL_CATEGORY       AS REC_INT,
+    CURATED_JSON:RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY    AS REC_AVAIL
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
+WHERE
+       CURATED_JSON:CNSS_CONFIDENTIALITY_RATING IS NOT NULL
+    OR CURATED_JSON:CNSS_INTEGRITY_RATING IS NOT NULL
+    OR CURATED_JSON:CNSS_AVAILABILITY_RATING IS NOT NULL
+    OR CURATED_JSON:CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE IS NOT NULL
+    OR CURATED_JSON:INTEGRITY_CONTROL_CATEGORY_OVERRIDE IS NOT NULL
+    OR CURATED_JSON:AVAILABILITY_CONTROL_CATEGORY_OVERRIDE IS NOT NULL
+    OR CURATED_JSON:RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY IS NOT NULL
+    OR CURATED_JSON:RECOMMENDED_INTEGRITY_CONTROL_CATEGORY IS NOT NULL
+    OR CURATED_JSON:RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY IS NOT NULL
+LIMIT 20;
 
-node_path = (
-    "system-security-plan.system-characteristics.authorization-boundary"
-)
+Pick a CONTENT_ID where several columns are populated, then send me that result. After that I’ll give you the exact read-only notebook cell to build only:
 
-mappings = get_mappings_for_node(
-    canonical_mapping_df,
-    element_registry_df,
-    node_path,
-    CONFIG["OSCAL_MODEL"]
-)
+system-security-plan.system-characteristics.security-impact-level
 
-payload = build_element_payload(
-    test_record,
-    mappings
-)
-
-print("SOURCE_RECORD_ID:", test_record["SOURCE_RECORD_ID"])
-print("NODE:", node_path)
-print("OWNED MAPPINGS:", len(mappings))
-print("PAYLOAD:")
-print(json.dumps(payload, indent=2, default=str))
-
-Expected result should be roughly:
-
-OWNED MAPPINGS: 1
-
-PAYLOAD:
-{
-  "description": "Corporate network DT ..."
-}
-
-Run that and send me the output.
+No mapper changes yet.
