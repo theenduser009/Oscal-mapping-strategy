@@ -1,60 +1,30 @@
-Yep. Now run only this read-only validation cell for responsible-parties[]:
+Yep. Next we validate system-implementation, but first only inspect its registry children—no mapper changes yet.
 
-from snowflake.snowpark.functions import col
+Run this SQL:
 
-print("=== RESPONSIBLE PARTIES GRAPH CHECK ===")
+SELECT
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    ITEM_PATH,
+    PROCESS_ORDER
+FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+WHERE OSCAL_MODEL_KEY = 'SSP'
+  AND (
+       NODE_PATH = 'system-security-plan.system-implementation'
+       OR PARENT_NODE_PATH = 'system-security-plan.system-implementation'
+  )
+  AND IS_ACTIVE = TRUE
+ORDER BY PROCESS_ORDER, NODE_PATH;
 
-rp_path = "system-security-plan.metadata.responsible-parties[]"
+This will show us:
 
-rp_df = final_nodes_df.filter(
-    col("NODE_PATH") == rp_path
-)
+system-security-plan
+└── system-implementation
+    ├── child 1
+    ├── child 2
+    └── ...
 
-print("Total responsible-party nodes:")
-print(rp_df.count())
-
-print("Distinct NODE_KEYs:")
-print(
-    rp_df
-    .select("NODE_KEY")
-    .distinct()
-    .count()
-)
-
-print("Null NODE_KEYs:")
-print(
-    rp_df
-    .filter(col("NODE_KEY").is_null())
-    .count()
-)
-
-print("\nEdges into responsible-parties[]:")
-(
-    final_edges_df
-    .filter(col("TARGET_NODE_PATH") == rp_path)
-    .group_by(
-        "SOURCE_NODE_PATH",
-        "TARGET_NODE_PATH"
-    )
-    .count()
-    .show()
-)
-
-What we want
-
-We do not expect 2,813 here because one SSP can produce multiple responsible-party instances.
-
-We want:
-
-Total nodes = Distinct NODE_KEYs
-Null NODE_KEYs = 0
-
-And the edge should be:
-
-system-security-plan.metadata
-    →
-system-security-plan.metadata.responsible-parties[]
-
-with the edge count matching the responsible-party node count.
-
-Run it and show me the numbers.
+Don't change anything yet. Send me the result/screenshot. Then we'll validate the first child exactly like we did with metadata.
