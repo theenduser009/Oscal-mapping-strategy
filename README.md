@@ -1,48 +1,52 @@
-Good catch — stop here. This result is important. The mapper produced:
+Yes — this aligns with what I’d expect for the write phase, and the overall pattern is sound.
 
-components[] = 4,792 nodes   ✅
+The important pieces are right: DIM merges on the deterministic node key, FACT merges on the deterministic edge key, matched rows update non-PK columns, and unmatched rows insert. That gives you the idempotent behavior we want.
 
-components[].component = 0 nodes   ❌
-Edges into component = 0           ❌
+Before turning EXECUTE_WRITES = True, I would verify only three things in Cell 6:
 
-So we should not continue to component.props[] yet.
+dim_pk really resolves to the physical DIM PK column that receives NODE_KEY.
 
-The registry contains components[].component, but build_oscal_graph() is not materializing that registered non-collection child. This may actually be a modeling/registry issue, not necessarily a mapper bug: your components[] instance payload already looked like:
+fact_pk really resolves to the physical FACT PK column that receives EDGE_KEY.
 
-{
-  "ContentId": 572500,
-  "LevelId": 354
-}
+dim_load_df and fact_load_df have no duplicate PK values before the MERGE. Snowflake MERGE can become problematic if the source temp view has duplicate keys.
 
-That raises the key question: does .component have mappings/data of its own, or is it just an artificial wrapper between components[] and props[]/links[]/...?
 
-Next step only
+So the immediate next step is not to change the merge SQL. Run one read-only pre-write validation against the actual load DataFrames:
 
-Run this to see whether the mapping CSV actually owns anything at .component:
+from snowflake.snowpark.functions import col
 
-component_path = (
-    "system-security-plan.system-implementation.components[].component"
+print("=== PRE-WRITE LOAD VALIDATION ===")
+
+print("DIM rows:", dim_load_df.count())
+print(
+    "DIM distinct PKs:",
+    dim_load_df.select(dim_pk).distinct().count()
+)
+print(
+    "DIM null PKs:",
+    dim_load_df.filter(col(dim_pk).is_null()).count()
 )
 
-mappings = get_mappings_for_node(
-    canonical_mapping_df,
-    element_registry_df,
-    component_path,
-    CONFIG["OSCAL_MODEL"]
+print()
+
+print("FACT rows:", fact_load_df.count())
+print(
+    "FACT distinct PKs:",
+    fact_load_df.select(fact_pk).distinct().count()
+)
+print(
+    "FACT null PKs:",
+    fact_load_df.filter(col(fact_pk).is_null()).count()
 )
 
-print("NODE:", component_path)
-print("OWNED MAPPINGS:", len(mappings))
+What we want is:
 
-for m in mappings:
-    print(
-        m["SOURCE_FIELD_NAME"],
-        "->",
-        m["OSCAL_ELEMENT_PATH"],
-        "| relative:",
-        m["FIELD_RELATIVE_PATH"]
-    )
+DIM rows = DIM distinct PKs
+DIM null PKs = 0
 
-Don't change Cell 4 or Cell 5 yet.
+FACT rows = FACT distinct PKs
+FACT null PKs = 0
 
-Send me just the output of OWNED MAPPINGS and whatever mappings it prints. That will tell us whether .component should genuinely become 4,792 nodes or whether the registry hierarchy needs correction.
+If that passes, then I’d be comfortable with the next step being the first DEV write with EXECUTE_WRITES = True.
+
+One thing I would not do yet is truncate either target table. With deterministic MERGE keys, the whole point is to prove the load is idempotent without destructive resets.
