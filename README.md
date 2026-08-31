@@ -1,65 +1,11 @@
-Yes. Let's build it now, but one controlled change at a time.
+Yes — here’s a clean architect-level question you can send:
 
-We know the requirement:
+> For mappings marked as Reference, such as system-security-plan.system-implementation.components[], the Archer source field does not contain the actual component payload. It only contains a LevelId and ContentId. LevelId identifies the referenced Archer content/table, and ContentId identifies the specific record in that table.
 
-Archer impact value
-      ↓
-normalize
-      ↓
-low / moderate / high
-      ↓
-OSCAL security-objective-*
+Should our OSCAL mapper resolve that reference at runtime by first using LevelId to determine the source table, then using ContentId to retrieve the referenced record and build the OSCAL component node? Or do you prefer that reference resolution happen upstream so the mapper receives an already-expanded record?
 
-Step 1 — determine the actual Archer values
+Also, should the initial components[] node represent just the Archer reference, or should it only be created after the referenced record has been resolved?
 
-Before touching Cell 4, add one temporary inspection cell after Cell 3:
 
-# ================================================================
-# Inspect FIPS-199 source values before implementing transformation
-# ================================================================
 
-FIPS_FIELDS = [
-    "CNSS_CONFIDENTIALITY_RATING",
-    "CNSS_INTEGRITY_RATING",
-    "CNSS_AVAILABILITY_RATING",
-
-    "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY",
-    "RECOMMENDED_INTEGRITY_CONTROL_CATEGORY",
-    "RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY",
-
-    "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE",
-    "INTEGRITY_CONTROL_CATEGORY_OVERRIDE",
-    "AVAILABILITY_CONTROL_CATEGORY_OVERRIDE",
-
-    "PROGRAMSITE_INTEGRITY_CONTROL_CATEGORY",
-    "PROGRAMSITE_AVAILABILITY_CONTROL_CATEGORY"
-]
-
-# Use the SSP source dataframe already created by the notebook.
-# Replace `source_df` below ONLY with the existing dataframe name
-# that contains CURATED_JSON.
-
-for field_name in FIPS_FIELDS:
-
-    print(f"\n=== {field_name} ===")
-
-    (
-        source_df
-        .select(
-            col("CURATED_JSON")[field_name]
-            .alias("VALUE")
-        )
-        .filter(col("VALUE").is_not_null())
-        .group_by("VALUE")
-        .count()
-        .sort(col("COUNT").desc())
-        .show(30)
-    )
-
-Important: don't guess source_df. Your notebook may call that DataFrame something else.
-
-We need the DataFrame that Cell 5/graph builder passes as the SSP source records containing CURATED_JSON.
-
-Once you show me the output for even one or two of these fields, we'll immediately build the normalize_fips_199() function into Cell 4 and wire Direct/Transform to it.
-
-No more graph validation right now. We're implementing the missing mapping behavior.
+That question gets directly to the architectural decision: resolve inside the mapper vs resolve upstream, and reference node vs fully materialized OSCAL node.
