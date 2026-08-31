@@ -1,65 +1,66 @@
-Perfect — now we have the Reference inventory.
+Yes — good catch. The Snowpark column syntax you used is the right syntax in your notebook:
 
-For SSP, the Reference mappings feeding system-security-plan.system-implementation.components[] are these six Archer fields:
+col("CURATED_JSON")["HARDWARE"]
 
-HARDWARE
-INTERCONNECTIONS
-INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM
-SAP_INTAKE_FORM_INTERCONNECTIONS
-SOFTWARE
-SUBSYSTEMS
+But there’s a second issue: your filter found a row, yet this line:
 
-The other two shown are for different models:
+source_obj.get("HARDWARE")
 
-FINDINGS → Assessment Results
-POAMS    → POA&M
+printed null.
 
-So we should not touch registry or Cells 1–7 yet. The next step is to inspect the physical reference structure for one SSP field first — start with HARDWARE.
+That means we should use the same resolver our mapper uses, not Python .get(), because Archer key naming/casing can differ.
 
-Run this read-only cell:
+Replace only this line:
 
-import json
-from snowflake.snowpark.functions import col
+print(json.dumps(source_obj.get("HARDWARE"), indent=2, default=str))
 
-# Find one SSP record containing a HARDWARE reference
-rows = (
-    source_df
-    .filter(
-        col("CURATED_JSON")["HARDWARE"].is_not_null()
-    )
-    .select(
-        "SOURCE_RECORD_ID",
-        "CURATED_JSON"
-    )
-    .limit(1)
-    .collect()
+with:
+
+hardware_value = resolve_json_path(
+    source_obj,
+    "HARDWARE"
 )
 
-record = rows[0]
-
-source_obj = _parse_source_json(record)
-
-print("SOURCE_RECORD_ID:", record["SOURCE_RECORD_ID"])
-print("\nHARDWARE:")
 print(
     json.dumps(
-        source_obj.get("HARDWARE"),
+        hardware_value,
         indent=2,
         default=str
     )
 )
 
-What we expect is something like:
+So the bottom of your test becomes:
 
-[
-  {
-    "ContentId": 572500,
-    "LevelId": 354
-  }
-]
+record = rows[0]
 
-That is the starting point for Tim’s design:
+source_obj = _parse_source_json(record)
 
-HARDWARE → LevelId → resolve Archer table → ContentId → fetch referenced row.
+hardware_value = resolve_json_path(
+    source_obj,
+    "HARDWARE"
+)
 
-Show me that output. Then we build the first resolver around one reference field only, prove it works, and generalize it to the other five.
+print(
+    "SOURCE_RECORD_ID:",
+    record["SOURCE_RECORD_ID"]
+)
+
+print("\nHARDWARE:")
+
+print(
+    json.dumps(
+        hardware_value,
+        indent=2,
+        default=str
+    )
+)
+
+Run that first.
+
+If it still says null, don’t change any production code. Then we’ll inspect the actual keys in that one CURATED_JSON record and find exactly how HARDWARE is represented.
+
+And yes — I’ll keep the Snowpark syntax you just confirmed:
+
+col("CURATED_JSON")["FIELD_NAME"]
+
+rather than switching you back to a syntax that doesn’t match your environment.
