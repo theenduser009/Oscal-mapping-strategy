@@ -1,58 +1,42 @@
-Right — don’t hard-code or search for a SOURCE_RECORD_ID first. Let the notebook find a record whose actual parsed CURATED_JSON contains HARDWARE.
+Yes — the rows in your screenshot are worth checking next, and I agree: the timestamp transformation should be straightforward.
 
-Run this read-only cell:
+From the screenshot, the main unfinished group is:
 
-import json
+metadata.published and metadata.last-modified
+→ Mapping_Type = Transform
+→ Convert timestamp to OSCAL DateTimeWithTimezoneDatatype
 
-found = False
+We should not mark them Done yet. We can test one real SSP record first, exactly like we did with the FIPS-199 fields.
 
-for record in source_df.collect():
+Next step only
 
-    source_obj = _parse_source_json(record)
+Let's inspect what the actual source values look like before changing any function.
 
-    hardware_value = resolve_json_path(
-        source_obj,
-        "HARDWARE"
+In a new Python cell, run:
+
+# Check actual source values for OSCAL metadata timestamps
+
+node_path = "system-security-plan.metadata"
+
+mappings = get_mappings_for_node(
+    canonical_mapping_df,
+    element_registry_df,
+    node_path,
+    CONFIG["OSCAL_MODEL"]
+)
+
+(
+    mappings
+    .filter(col("MAPPING_TYPE") == "Transform")
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_ELEMENT_PATH",
+        "OSCAL_DATA_TYPE",
+        "TRANSFORMATION_LOGIC"
     )
+    .show()
+)
 
-    if hardware_value not in (
-        None,
-        "",
-        [],
-        {}
-    ):
+Send me the output.
 
-        print(
-            "SOURCE_RECORD_ID:",
-            record["SOURCE_RECORD_ID"]
-        )
-
-        print("\nHARDWARE:")
-
-        print(
-            json.dumps(
-                hardware_value,
-                indent=2,
-                default=str
-            )
-        )
-
-        found = True
-        break
-
-
-if not found:
-    print("NO HARDWARE VALUE FOUND")
-
-This removes the questionable Snowpark JSON filter entirely.
-
-What we want next is an actual result like:
-
-[
-  {
-    "ContentId": 123456,
-    "LevelId": 354
-  }
-]
-
-Once we get that, that exact LevelId + ContentId pair becomes our first Reference traversal test. Don’t change any production cells yet.
+Then we'll pick one published / last-modified source field, inspect its real value, and determine whether our existing builder already handles it or whether we need one small timestamp-transform function. No changes yet.
