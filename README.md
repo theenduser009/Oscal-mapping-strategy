@@ -1,42 +1,31 @@
-Yes — the rows in your screenshot are worth checking next, and I agree: the timestamp transformation should be straightforward.
+Yes — registry first. You’re right. Before touching timestamp logic, we should see whether those OSCAL nodes are already registered and what their parent/collection rules are.
 
-From the screenshot, the main unfinished group is:
+Run this SQL:
 
-metadata.published and metadata.last-modified
-→ Mapping_Type = Transform
-→ Convert timestamp to OSCAL DateTimeWithTimezoneDatatype
+SELECT
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    ELEMENT_TYPE,
+    PARENT_NODE_PATH,
+    IS_COLLECTION,
+    INSTANCE_KEY_RULE,
+    ITEM_PATH,
+    PROCESS_ORDER,
+    IS_ACTIVE
+FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+WHERE OSCAL_MODEL_KEY = 'SSP'
+  AND (
+       NODE_PATH = 'system-security-plan.metadata'
+       OR NODE_PATH LIKE 'system-security-plan.metadata.%'
+  )
+ORDER BY PROCESS_ORDER, NODE_PATH;
 
-We should not mark them Done yet. We can test one real SSP record first, exactly like we did with the FIPS-199 fields.
+What I want to check specifically is whether the registry contains separate nodes for:
 
-Next step only
+system-security-plan.metadata
+system-security-plan.metadata.published
+system-security-plan.metadata.last-modified
+system-security-plan.metadata.responsible-parties[]
+system-security-plan.metadata.document-ids[]
 
-Let's inspect what the actual source values look like before changing any function.
-
-In a new Python cell, run:
-
-# Check actual source values for OSCAL metadata timestamps
-
-node_path = "system-security-plan.metadata"
-
-mappings = get_mappings_for_node(
-    canonical_mapping_df,
-    element_registry_df,
-    node_path,
-    CONFIG["OSCAL_MODEL"]
-)
-
-(
-    mappings
-    .filter(col("MAPPING_TYPE") == "Transform")
-    .select(
-        "SOURCE_FIELD_NAME",
-        "OSCAL_ELEMENT_PATH",
-        "OSCAL_DATA_TYPE",
-        "TRANSFORMATION_LOGIC"
-    )
-    .show()
-)
-
-Send me the output.
-
-Then we'll pick one published / last-modified source field, inspect its real value, and determine whether our existing builder already handles it or whether we need one small timestamp-transform function. No changes yet.
+Run this and show me the result. Then we decide whether published and last-modified are supposed to be standalone registry nodes or simply fields owned by the metadata node. No code changes until we know that.
