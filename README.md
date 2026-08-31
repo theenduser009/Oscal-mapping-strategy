@@ -1,66 +1,58 @@
-Yes — good catch. The Snowpark column syntax you used is the right syntax in your notebook:
+Right — don’t hard-code or search for a SOURCE_RECORD_ID first. Let the notebook find a record whose actual parsed CURATED_JSON contains HARDWARE.
 
-col("CURATED_JSON")["HARDWARE"]
+Run this read-only cell:
 
-But there’s a second issue: your filter found a row, yet this line:
+import json
 
-source_obj.get("HARDWARE")
+found = False
 
-printed null.
+for record in source_df.collect():
 
-That means we should use the same resolver our mapper uses, not Python .get(), because Archer key naming/casing can differ.
+    source_obj = _parse_source_json(record)
 
-Replace only this line:
-
-print(json.dumps(source_obj.get("HARDWARE"), indent=2, default=str))
-
-with:
-
-hardware_value = resolve_json_path(
-    source_obj,
-    "HARDWARE"
-)
-
-print(
-    json.dumps(
-        hardware_value,
-        indent=2,
-        default=str
+    hardware_value = resolve_json_path(
+        source_obj,
+        "HARDWARE"
     )
-)
 
-So the bottom of your test becomes:
+    if hardware_value not in (
+        None,
+        "",
+        [],
+        {}
+    ):
 
-record = rows[0]
+        print(
+            "SOURCE_RECORD_ID:",
+            record["SOURCE_RECORD_ID"]
+        )
 
-source_obj = _parse_source_json(record)
+        print("\nHARDWARE:")
 
-hardware_value = resolve_json_path(
-    source_obj,
-    "HARDWARE"
-)
+        print(
+            json.dumps(
+                hardware_value,
+                indent=2,
+                default=str
+            )
+        )
 
-print(
-    "SOURCE_RECORD_ID:",
-    record["SOURCE_RECORD_ID"]
-)
+        found = True
+        break
 
-print("\nHARDWARE:")
 
-print(
-    json.dumps(
-        hardware_value,
-        indent=2,
-        default=str
-    )
-)
+if not found:
+    print("NO HARDWARE VALUE FOUND")
 
-Run that first.
+This removes the questionable Snowpark JSON filter entirely.
 
-If it still says null, don’t change any production code. Then we’ll inspect the actual keys in that one CURATED_JSON record and find exactly how HARDWARE is represented.
+What we want next is an actual result like:
 
-And yes — I’ll keep the Snowpark syntax you just confirmed:
+[
+  {
+    "ContentId": 123456,
+    "LevelId": 354
+  }
+]
 
-col("CURATED_JSON")["FIELD_NAME"]
-
-rather than switching you back to a syntax that doesn’t match your environment.
+Once we get that, that exact LevelId + ContentId pair becomes our first Reference traversal test. Don’t change any production cells yet.
