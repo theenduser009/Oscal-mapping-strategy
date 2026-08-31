@@ -1,143 +1,29 @@
-Yes — much simpler. Replace one whole function only in Cell 4:
+Great — freeze security-impact-level now. That branch is done for this phase. ✅
 
-Find:
+Next, we should stay in the Direct/Transform bucket and find the next OSCAL path instead of jumping to Reference yet.
 
-def build_element_payload(
-    source_record,
-    mappings,
-    source_json_field="CURATED_JSON"
-):
+Run this in a new Python cell:
 
-Replace that entire function with this:
+print("=== REMAINING DIRECT/TRANSFORM PATHS ===")
 
-def build_element_payload(
-    source_record,
-    mappings,
-    source_json_field="CURATED_JSON"
-):
-
-    source_obj = _parse_source_json(
-        source_record
+(
+    canonical_mapping_df
+    .filter(
+        col("MAPPING_TYPE") == "Direct/Transform"
     )
+    .select(
+        "OSCAL_ELEMENT_PATH",
+        "SOURCE_FIELD_NAME"
+    )
+    .distinct()
+    .sort("OSCAL_ELEMENT_PATH")
+    .show(200, truncate=False)
+)
 
-    payload = {}
+We already finished the paths ending in:
 
-    # Tracks which OSCAL target paths already received a real value
-    written_paths = set()
+security-objective-confidentiality
+security-objective-integrity
+security-objective-availability
 
-    for mapping in mappings:
-
-        source_field = mapping.get(
-            "SOURCE_FIELD_NAME"
-        )
-
-        if not source_field:
-            continue
-
-        mapping_type = str(
-            mapping.get("MAPPING_TYPE") or ""
-        ).strip().lower()
-
-        value = resolve_json_path(
-            source_obj,
-            source_field
-        )
-
-        value = transform_mapping_value(
-            value,
-            mapping
-        )
-
-        relative_path = mapping.get(
-            "FIELD_RELATIVE_PATH"
-        )
-
-        relative_path = (
-            str(relative_path).strip()
-            if relative_path is not None
-            else ""
-        )
-
-        # ============================================================
-        # Mapping ends at current node
-        # ============================================================
-
-        if not relative_path:
-
-            # Direct/Transform:
-            # preserve explicit NULL
-            if (
-                mapping_type == "direct/transform"
-                and value is None
-            ):
-                if source_field not in payload:
-                    payload[source_field] = None
-
-                continue
-
-            # Other empty values are skipped
-            if value in (
-                None,
-                "",
-                [],
-                {}
-            ):
-                continue
-
-            payload[source_field] = value
-
-            continue
-
-        # ============================================================
-        # Nested OSCAL target
-        # ============================================================
-
-        # Direct/Transform NULL:
-        # keep target key as NULL, but don't overwrite a real value
-        if (
-            mapping_type == "direct/transform"
-            and value is None
-        ):
-
-            if relative_path not in written_paths:
-
-                set_nested_path(
-                    payload,
-                    relative_path.split("."),
-                    None
-                )
-
-            continue
-
-        # Normal empty values are skipped
-        if value in (
-            None,
-            "",
-            [],
-            {}
-        ):
-            continue
-
-        # Real value always wins
-        set_nested_path(
-            payload,
-            relative_path.split("."),
-            value
-        )
-
-        written_paths.add(
-            relative_path
-        )
-
-    return payload
-
-That’s it.
-
-Do not change transform_mapping_value() again.
-
-Then run only:
-
-Cell 4
-Cell 5
-
-After that, rerun your payload test. We want the three OSCAL security-objective keys to exist consistently, with null when no source value exists.
+So show me the output from that cell. We’ll pick the next Direct/Transform path and finish it, one branch at a time. No more touching this security-impact code.
