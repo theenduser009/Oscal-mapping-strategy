@@ -1,48 +1,27 @@
-Yes — what you’re seeing is expected. The temporary test cell still calls:
+Next, no more code changes yet. We should verify the other two approved Transform mappings that weren’t populated in record 565189:
 
-build_element_payload(test_record, mappings)
+INFORMATION_OWNER_IO → information-owner
 
-That tests the Cell 4 mapping function, not the Cell 5 collection builder we just changed. So it will still show the Archer-field names and the TBD fields exactly like your screenshot.
+PRIVACY_OFFICER_PO → privacy-officer
 
-Now we need to test the actual Cell 5 result. Don’t change anything else.
 
-Run this new temporary cell:
+Run this against the DIM:
 
-from snowflake.snowpark.functions import col
+SELECT
+    METADATA_JSON:"role-id"::STRING AS ROLE_ID,
+    COUNT(*) AS CNT
+FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+WHERE ELEMENT_TYPE = 'responsible-parties'
+  AND METADATA_JSON:"role-id" IS NOT NULL
+GROUP BY 1
+ORDER BY 1;
 
-(
-    canonical_nodes_df
-    .filter(
-        (col("ELEMENT_TYPE") == "responsible-parties")
-        & (col("SOURCE_RECORD_ID") == "565189")
-    )
-    .select(
-        "SOURCE_RECORD_ID",
-        "OSCAL_UUID",
-        "ELEMENT_JSON"
-    )
-    .show(50, truncate=False)
-)
+Ideally we should see all five implemented roles:
 
-This is the important test now.
+information-owner
+system-owner
+authorizing-official
+system-security-officer
+privacy-officer
 
-For record 565189, we want separate rows whose ELEMENT_JSON looks like:
-
-{
-  "role-id": "system-owner",
-  "party-ids": ["111016"]
-}
-
-{
-  "role-id": "authorizing-official",
-  "party-ids": ["217958"]
-}
-
-{
-  "role-id": "system-security-officer",
-  "party-ids": ["218665"]
-}
-
-The old test cell can be ignored now. Cell 5 is what we need to validate.
-
-Run the cell above and show me the result. If those rows look right, then we move to Cell 6 validation/load.
+Run that and show me the result. That tells us immediately whether all 5 architect-approved Transform rows are actually working across the full dataset.
