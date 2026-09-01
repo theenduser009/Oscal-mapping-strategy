@@ -1,177 +1,48 @@
-Yes — now I can see the full Cell 5 flow clearly. We only need to replace one function: _get_collection_instances(). Do not touch the node/edge building sections below it.
+Yes — what you’re seeing is expected. The temporary test cell still calls:
 
-Why? Right now that function does this:
+build_element_payload(test_record, mappings)
 
-source field
-→ UserList[]
-→ each Archer user object
-→ PAYLOAD = raw Archer user object
+That tests the Cell 4 mapping function, not the Cell 5 collection builder we just changed. So it will still show the Archer-field names and the TBD fields exactly like your screenshot.
 
-That is exactly why your DIM contains HasRead, HasUpdate, Id, etc.
+Now we need to test the actual Cell 5 result. Don’t change anything else.
 
-We want it to do:
+Run this new temporary cell:
 
-source field
-→ UserList[]
-→ each user
-→ apply Transform rule
-→ PAYLOAD = {"role-id": ..., "party-ids": [...]}
+from snowflake.snowpark.functions import col
 
-Replace _get_collection_instances() in Cell 5
+(
+    canonical_nodes_df
+    .filter(
+        (col("ELEMENT_TYPE") == "responsible-parties")
+        & (col("SOURCE_RECORD_ID") == "565189")
+    )
+    .select(
+        "SOURCE_RECORD_ID",
+        "OSCAL_UUID",
+        "ELEMENT_JSON"
+    )
+    .show(50, truncate=False)
+)
 
-Replace the whole function starting around line 121 through its return list(instances.values()) with this:
+This is the important test now.
 
-def _get_collection_instances(
-    source_record,
-    mappings,
-    instance_key_rule,
-    item_path="$"
-):
-    source_obj = _parse_source_json(source_record)
-    instances = {}
-
-    for mapping in mappings:
-
-        source_field = mapping.get("SOURCE_FIELD_NAME")
-
-        if not source_field:
-            continue
-
-        value = resolve_json_path(
-            source_obj,
-            source_field
-        )
-
-        if value in (None, "", [], {}):
-            continue
-
-        mapping_type = str(
-            mapping.get("MAPPING_TYPE") or ""
-        ).strip().lower()
-
-        # ---------------------------------------------------------
-        # TRANSFORM COLLECTIONS
-        # Example: metadata.responsible-parties[]
-        # ---------------------------------------------------------
-        if mapping_type == "transform":
-
-            # Get individual source collection items first.
-            # For responsible-parties this extracts UserList[].
-            items = _extract_collection_items(
-                value,
-                item_path
-            )
-
-            for item in items:
-
-                # Preserve the original item for identity generation
-                instance_key = _get_instance_key(
-                    item,
-                    instance_key_rule,
-                    source_field
-                )
-
-                if instance_key is None:
-                    continue
-
-                instance_key = str(instance_key).strip()
-
-                if not instance_key:
-                    continue
-
-                # Rebuild the expected Archer UserList shape so the
-                # generic Transform handler can process this one user.
-                transform_input = {
-                    "UserList": [item]
-                }
-
-                transformed = transform_mapping_value(
-                    transform_input,
-                    mapping
-                )
-
-                if transformed in (None, "", [], {}):
-                    continue
-
-                instances[instance_key] = {
-                    "INSTANCE_KEY": instance_key,
-                    "PAYLOAD": transformed
-                }
-
-            continue
-
-        # ---------------------------------------------------------
-        # EXISTING COLLECTION BEHAVIOR
-        # Direct / TBD / Reference / etc.
-        # ---------------------------------------------------------
-        items = _extract_collection_items(
-            value,
-            item_path
-        )
-
-        for item in items:
-
-            instance_key = _get_instance_key(
-                item,
-                instance_key_rule,
-                source_field
-            )
-
-            if instance_key is None:
-                continue
-
-            instance_key = str(instance_key).strip()
-
-            if not instance_key:
-                continue
-
-            if instance_key not in instances:
-
-                instances[instance_key] = {
-                    "INSTANCE_KEY": instance_key,
-                    "PAYLOAD": item
-                }
-
-            else:
-                existing = instances[instance_key]["PAYLOAD"]
-
-                if (
-                    not isinstance(existing, dict)
-                    and isinstance(item, dict)
-                ):
-                    instances[instance_key]["PAYLOAD"] = item
-
-    return list(instances.values())
-
-Why this fits your current design
-
-Your registry already says:
-
-responsible-parties[]
-IS_COLLECTION = TRUE
-INSTANCE_KEY_RULE = SOURCE_FIELD_NAME+ID
-ITEM_PATH = UserList[]
-
-So we keep all of that unchanged.
-
-For an Archer field like:
-
-INFORMATION_SYSTEM_OWNER_ISO
-User Id = 111016
-
-Cell 5 will now produce one collection instance:
+For record 565189, we want separate rows whose ELEMENT_JSON looks like:
 
 {
   "role-id": "system-owner",
   "party-ids": ["111016"]
 }
 
-and its internal node identity remains something like:
+{
+  "role-id": "authorizing-official",
+  "party-ids": ["217958"]
+}
 
-INFORMATION_SYSTEM_OWNER_ISO|111016
+{
+  "role-id": "system-security-officer",
+  "party-ids": ["218665"]
+}
 
-That is good because two different roles held by the same Archer user remain distinct responsible-party instances.
+The old test cell can be ignored now. Cell 5 is what we need to validate.
 
-The TBD rows remain on the old path, so we're not pretending they're finished.
-
-After replacing this function, run Cell 5 only. Don't run Cell 6 yet. Show me the new responsible-parties count from the Cell 5 summary.
+Run the cell above and show me the result. If those rows look right, then we move to Cell 6 validation/load.
