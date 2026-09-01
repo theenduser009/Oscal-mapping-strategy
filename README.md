@@ -1,20 +1,14 @@
-from snowflake.snowpark.functions import col
-
-(
-    canonical_mapping_df
-    .filter(
-        col("OSCAL_ELEMENT_PATH")
-        .startswith("system-security-plan.system-characteristics")
-    )
-    .select(
-        "SOURCE_FIELD_NAME",
-        "OSCAL_ELEMENT_PATH",
-        "MAPPING_TYPE"
-    )
-    .distinct()
-    .sort(
-        "OSCAL_ELEMENT_PATH",
-        "SOURCE_FIELD_NAME"
-    )
-    .show(200, 250)
-)
+SELECT
+    SOURCE_RECORD_ID,
+    METADATA_JSON
+FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+WHERE SOURCE_RECORD_ID = '565189'
+  AND ELEMENT_TYPE IN (
+      'system-characteristics',
+      'authorization-boundary',
+      'status',
+      'system-ids',
+      'security-impact-level',
+      'props'
+  )
+ORDER BY ELEMENT_TYPE;
