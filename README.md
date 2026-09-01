@@ -1,14 +1,13 @@
-SELECT
-    SOURCE_RECORD_ID,
-    METADATA_JSON
-FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
-WHERE SOURCE_RECORD_ID = '565189'
-  AND ELEMENT_TYPE IN (
-      'system-characteristics',
-      'authorization-boundary',
-      'status',
-      'system-ids',
-      'security-impact-level',
-      'props'
-  )
-ORDER BY ELEMENT_TYPE;
+(
+    canonical_mapping_df
+    .filter(col("OSCAL_ELEMENT_PATH") ==
+            "system-security-plan.system-characteristics.props[]")
+    .select(
+        "SOURCE_FIELD_NAME",
+        "OSCAL_ELEMENT_PATH",
+        "MAPPING_TYPE"
+    )
+    .distinct()
+    .sort("SOURCE_FIELD_NAME")
+    .show(100, 250)
+)
