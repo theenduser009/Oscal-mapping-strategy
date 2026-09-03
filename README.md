@@ -1,14 +1,16 @@
-Great. 0 rows from both checks is good. It means we have not found evidence that populated Archer fields are being lost because of the ARCHER_META_FIELD lookup.
+Exactly — 426 distinct fields in CURATED_JSON is a very useful baseline.
 
-Now the next validation should answer the manager's actual question:
+Now we need the SQL equivalent of the comparison we were trying to do in Python:
 
-> Which fields have data in CURATED_JSON, and how populated are they?
+> Of those 426 populated curated fields, which ones have a mapping to OSCAL, and which do not?
 
 
 
-Since RAW and CURATED_JSON are columns in the same table, we can do this entirely in Snowflake SQL.
+Since your mapping CSV is not a Snowflake table, the cleanest SQL-only way is to load the CSV into a temporary/staging table first, then compare.
 
-Run this:
+If you already loaded the mapping CSV into Snowflake somewhere, tell me that table name and I’ll give you the exact query immediately.
+
+If not, the quickest path is to create a temporary mapping table from the CSV and then run:
 
 WITH curated_fields AS (
     SELECT
@@ -24,26 +26,44 @@ WITH curated_fields AS (
 )
 
 SELECT
-    FIELD_NAME,
-    ROW_COUNT,
-    POPULATED_COUNT,
+    c.FIELD_NAME,
+    c.ROW_COUNT,
+    c.POPULATED_COUNT,
     ROUND(
-        100.0 * POPULATED_COUNT / NULLIF(ROW_COUNT, 0),
+        100.0 * c.POPULATED_COUNT / NULLIF(c.ROW_COUNT, 0),
         2
-    ) AS POPULATED_PCT
-FROM curated_fields
-ORDER BY POPULATED_COUNT DESC, FIELD_NAME;
+    ) AS POPULATED_PCT,
+    m.OSCAL_ELEMENT_PATH,
+    m.MAPPING_TYPE,
+    CASE
+        WHEN m.SOURCE_FIELD_NAME IS NULL
+            THEN 'UNMAPPED'
+        ELSE 'MAPPED'
+    END AS MAPPING_STATUS
+FROM curated_fields c
+LEFT JOIN <YOUR_MAPPING_TABLE> m
+    ON UPPER(TRIM(c.FIELD_NAME))
+     = UPPER(TRIM(m.SOURCE_FIELD_NAME))
+ORDER BY
+    MAPPING_STATUS DESC,
+    c.POPULATED_COUNT DESC,
+    c.FIELD_NAME;
 
-This gives us the actual CURATED_JSON field inventory, for example:
+That gives you exactly what management is asking for:
 
-FIELD_NAME              ROW_COUNT   POPULATED_COUNT   POPULATED_PCT
-PACKAGE_TYPE             3514        3514              100.00
+FIELD_NAME
+POPULATED_COUNT
+POPULATED_PCT
+OSCAL_ELEMENT_PATH
+MAPPING_TYPE
+MAPPED / UNMAPPED
+
+And then the most important subset is:
+
 ...
+WHERE m.SOURCE_FIELD_NAME IS NULL
+  AND c.POPULATED_COUNT > 0
 
-This is important because then we can split the fields into exactly what the team discussed:
+That is your “fields with real data but no OSCAL mapping” report.
 
-high-population fields → must ensure they have OSCAL mappings
-very sparse fields → candidate list to discuss with Josh
-zero-data fields → retirement/problem-field discussion
-
-After you run this, don't manually inspect hundreds of rows. Show me the result/count. The next SQL will compare this inventory against the mapping coverage.
+So the next thing I need from you is just the name of the Snowflake table where the mapping CSV is loaded. If there isn’t one yet, we can create a temporary table from the CSV and keep the whole validation SQL-based.
