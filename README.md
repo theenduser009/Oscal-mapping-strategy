@@ -1,6 +1,6 @@
-Yes. We can validate one CONTENT_ID exactly like the spreadsheet.
+Yes — first we should prove the mapping behavior with a SELECT only, no UPDATE yet.
 
-From your screenshot, 565189 is a good example. This query will show, for that one record, every RAW FieldID, the mapped SQL_FIELD_NAME, and whether that field name exists in CURATED_JSON.
+For one CONTENT_ID like 565189, this query shows every FieldID, its SQL_FIELD_NAME, whether the RAW inner value is null, and whether the mapped field name exists in CURATED_JSON:
 
 WITH norm AS (
     SELECT
@@ -46,23 +46,29 @@ SELECT
     SQL_FIELD_NAME,
     RAW_VALUE,
     GET(CURATED_JSON, SQL_FIELD_NAME) AS CURATED_VALUE,
+
     CASE
         WHEN SQL_FIELD_NAME IS NULL
-            THEN 'NO META FIELD MAPPING'
+            THEN 'NO_META_MAPPING'
+
+        WHEN RAW_VALUE IS NULL
+             OR IS_NULL_VALUE(RAW_VALUE)
+            THEN 'MAPPED_SOURCE_NULL'
+
         WHEN GET(CURATED_JSON, SQL_FIELD_NAME) IS NOT NULL
-            THEN 'FOUND'
-        ELSE 'NOT FOUND'
-    END AS FOUND_IN_CURATED
+            THEN 'MAPPED_AND_FOUND'
+
+        ELSE 'MAPPING_ERROR'
+    END AS MAPPING_STATUS
+
 FROM mapped
 ORDER BY TRY_TO_NUMBER(FIELD_ID);
 
-For 565189, this will let you inspect things like:
+What we want to see is mostly:
 
-23235 → INFORMATION_SYSTEM_TYPE → FOUND
+23235  INFORMATION_SYSTEM_TYPE   MAPPED_AND_FOUND
+23236  FISMA_REPORTABLE          MAPPED_SOURCE_NULL
 
-23236 → FISMA_REPORTABLE → FOUND/NOT FOUND
+and ideally zero MAPPING_ERROR rows.
 
-
-One important point: if FISMA_REPORTABLE has RAW_VALUE = NULL, then NOT FOUND may be perfectly valid. So for a fair comparison with your spreadsheet, we should probably also add a second status like RAW_POPULATED = YES/NO.
-
-Run this for 565189 first.
+Run this first. Then we’ll change the UPDATE only after this baseline is clear.
