@@ -1,65 +1,61 @@
-Yes. Let’s do one read-only gap query first against the Authorization Package raw table.
+Yes — let’s do that next.
 
-This checks: a FieldID exists in RAW_DATA, has actual values, but cannot resolve to ARCHER_META_FIELD.SQL_FIELD_NAME.
+We want to compare populated keys in CURATED_JSON against the mapping CSV’s SOURCE_FIELD_NAME. Since your mapping is already loaded as canonical_mapping_df, we can do this safely in the notebook without needing another physical mapping table.
 
-WITH norm AS (
-    SELECT
-        IFF(
-            TYPEOF(RAW_DATA) = 'ARRAY',
-            RAW_DATA[0],
-            RAW_DATA
-        ) AS obj
-    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
-    WHERE RAW_DATA IS NOT NULL
-),
+Run this read-only temporary cell:
 
-raw_fields AS (
-    SELECT
-        f.key::STRING AS FIELD_ID,
-        COUNT(*) AS OCCURRENCES,
-        COUNT_IF(
-            f.value IS NOT NULL
-            AND f.value::STRING NOT IN ('', 'null', '[]', '{}')
-        ) AS POPULATED_COUNT
-    FROM norm n,
-         LATERAL FLATTEN(
-             INPUT => n.obj:"RequestedObject":"FieldContents"
-         ) f
-    WHERE f.key IS NOT NULL
-    GROUP BY f.key::STRING
-)
+from collections import Counter
 
-SELECT
-    r.FIELD_ID,
-    r.OCCURRENCES,
-    r.POPULATED_COUNT,
-    amf.SQL_FIELD_NAME,
-    amf.LEVEL_ID,
-    CASE
-        WHEN amf.FIELD_ID IS NULL
-            THEN 'FIELD_ID NOT IN ARCHER_META_FIELD'
-        WHEN amf.SQL_FIELD_NAME IS NULL
-            THEN 'META EXISTS BUT SQL_FIELD_NAME IS NULL'
-    END AS MAPPING_GAP
-FROM raw_fields r
-LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
-    ON TRY_TO_NUMBER(amf.FIELD_ID) = TRY_TO_NUMBER(r.FIELD_ID)
-WHERE r.POPULATED_COUNT > 0
-  AND (
-      amf.FIELD_ID IS NULL
-      OR amf.SQL_FIELD_NAME IS NULL
-  )
-ORDER BY r.POPULATED_COUNT DESC;
+# 1) Count populated keys that actually exist in CURATED_JSON
+curated_counts = Counter()
 
-What this tells us
+for record in source_df.to_local_iterator():
+    source_obj = _parse_source_json(record)
 
-If this returns rows, those are real source fields containing data that may be getting lost before OSCAL mapping even begins.
+    if not isinstance(source_obj, dict):
+        continue
 
-For example:
+    for key, value in source_obj.items():
+        if value not in (None, "", [], {}):
+            curated_counts[key] += 1
 
-FIELD_ID   POPULATED_COUNT   SQL_FIELD_NAME   MAPPING_GAP
-123456     1800              NULL             META EXISTS BUT SQL_FIELD_NAME IS NULL
 
-That is exactly the kind of thing your manager was asking about: “fields that have data that we haven't mapped.”
+# 2) Get all mapped Archer source field names
+mapped_fields = {
+    row["SOURCE_FIELD_NAME"]
+    for row in canonical_mapping_df
+        .select("SOURCE_FIELD_NAME")
+        .distinct()
+        .collect()
+    if row["SOURCE_FIELD_NAME"]
+}
 
-Run only this query first. Send me the result. Then we’ll do the second comparison: fields that successfully reached CURATED_JSON but have no row in your Archer→OSCAL mapping CSV.
+
+# 3) Show populated curated fields that have NO OSCAL mapping
+gaps = [
+    (field, count)
+    for field, count in curated_counts.items()
+    if field not in mapped_fields
+]
+
+gaps.sort(key=lambda x: x[1], reverse=True)
+
+print("=== POPULATED CURATED FIELDS WITH NO OSCAL MAPPING ===")
+print("Total unmapped populated fields:", len(gaps))
+
+for field, count in gaps[:200]:
+    print(field, "=", count)
+
+This is the report we actually need for your manager.
+
+If it returns something like:
+
+FIELD_A = 2813
+FIELD_B = 2740
+FIELD_C = 1900
+
+those are fields with real data that currently have no row in the Archer→OSCAL mapping. Those deserve business review.
+
+Fields with 0 populated rows are a separate retirement/data-quality discussion with Josh.
+
+Run this and send me the output. Then we’ll split it into: high-value unmapped, sparse/problem, and already mapped.
