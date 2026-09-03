@@ -1,69 +1,92 @@
-Exactly — 426 distinct fields in CURATED_JSON is a very useful baseline.
+Exactly. We are validating only this:
 
-Now we need the SQL equivalent of the comparison we were trying to do in Python:
+Same row, same table
 
-> Of those 426 populated curated fields, which ones have a mapping to OSCAL, and which do not?
+RAW_DATA FieldID → ARCHER_META_FIELD.SQL_FIELD_NAME → that field name exists as a key in CURATED_JSON
 
+Run this read-only SQL:
 
-
-Since your mapping CSV is not a Snowflake table, the cleanest SQL-only way is to load the CSV into a temporary/staging table first, then compare.
-
-If you already loaded the mapping CSV into Snowflake somewhere, tell me that table name and I’ll give you the exact query immediately.
-
-If not, the quickest path is to create a temporary mapping table from the CSV and then run:
-
-WITH curated_fields AS (
+WITH raw_fields AS (
     SELECT
-        f.key::STRING AS FIELD_NAME,
-        COUNT(*) AS ROW_COUNT,
-        COUNT_IF(
-            f.value IS NOT NULL
-            AND f.value::STRING NOT IN ('', 'null', '[]', '{}')
-        ) AS POPULATED_COUNT
+        t.CONTENT_ID,
+        t.RAW_DATA:"RequestedObject":"Id"::NUMBER AS REQUESTED_OBJECT_ID,
+        t.RAW_DATA:"RequestedObject":"LevelId"::NUMBER AS LEVEL_ID,
+        f.key::STRING AS FIELD_ID,
+        f.value AS RAW_VALUE
     FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW t,
-         LATERAL FLATTEN(INPUT => t.CURATED_JSON) f
-    GROUP BY f.key::STRING
+         LATERAL FLATTEN(
+             INPUT => t.RAW_DATA:"RequestedObject":"FieldContents"
+         ) f
+    WHERE t.RAW_DATA IS NOT NULL
+),
+
+expected_mapping AS (
+    SELECT
+        r.CONTENT_ID,
+        r.REQUESTED_OBJECT_ID,
+        r.LEVEL_ID,
+        r.FIELD_ID,
+        r.RAW_VALUE,
+
+        /* This is the expected CURATED_JSON key */
+        COALESCE(
+            amf.SQL_FIELD_NAME,
+            'FIELD_' || r.FIELD_ID
+        ) AS EXPECTED_CURATED_KEY
+
+    FROM raw_fields r
+
+    LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
+        ON TRY_TO_NUMBER(amf.FIELD_ID)
+         = TRY_TO_NUMBER(r.FIELD_ID)
+),
+
+curated_keys AS (
+    SELECT
+        t.CONTENT_ID,
+        k.key::STRING AS CURATED_KEY
+    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW t,
+         LATERAL FLATTEN(INPUT => t.CURATED_JSON) k
+),
+
+validation AS (
+    SELECT
+        e.CONTENT_ID,
+        e.REQUESTED_OBJECT_ID,
+        e.LEVEL_ID,
+        e.FIELD_ID,
+        e.EXPECTED_CURATED_KEY,
+        e.RAW_VALUE,
+
+        CASE
+            WHEN c.CURATED_KEY IS NOT NULL
+                THEN 'FOUND_IN_CURATED'
+            ELSE 'MISSING_FROM_CURATED'
+        END AS VALIDATION_STATUS
+
+    FROM expected_mapping e
+
+    LEFT JOIN curated_keys c
+        ON c.CONTENT_ID = e.CONTENT_ID
+       AND UPPER(c.CURATED_KEY)
+         = UPPER(e.EXPECTED_CURATED_KEY)
 )
 
 SELECT
-    c.FIELD_NAME,
-    c.ROW_COUNT,
-    c.POPULATED_COUNT,
-    ROUND(
-        100.0 * c.POPULATED_COUNT / NULLIF(c.ROW_COUNT, 0),
-        2
-    ) AS POPULATED_PCT,
-    m.OSCAL_ELEMENT_PATH,
-    m.MAPPING_TYPE,
-    CASE
-        WHEN m.SOURCE_FIELD_NAME IS NULL
-            THEN 'UNMAPPED'
-        ELSE 'MAPPED'
-    END AS MAPPING_STATUS
-FROM curated_fields c
-LEFT JOIN <YOUR_MAPPING_TABLE> m
-    ON UPPER(TRIM(c.FIELD_NAME))
-     = UPPER(TRIM(m.SOURCE_FIELD_NAME))
-ORDER BY
-    MAPPING_STATUS DESC,
-    c.POPULATED_COUNT DESC,
-    c.FIELD_NAME;
+    VALIDATION_STATUS,
+    COUNT(*) AS FIELD_OCCURRENCES,
+    COUNT(DISTINCT FIELD_ID) AS DISTINCT_FIELD_IDS
+FROM validation
+GROUP BY VALIDATION_STATUS
+ORDER BY VALIDATION_STATUS;
 
-That gives you exactly what management is asking for:
+What we want
 
-FIELD_NAME
-POPULATED_COUNT
-POPULATED_PCT
-OSCAL_ELEMENT_PATH
-MAPPING_TYPE
-MAPPED / UNMAPPED
+Ideally:
 
-And then the most important subset is:
+FOUND_IN_CURATED      xxxxx     426
+MISSING_FROM_CURATED      0       0
 
-...
-WHERE m.SOURCE_FIELD_NAME IS NULL
-  AND c.POPULATED_COUNT > 0
+This is much closer to the actual question than our earlier queries because we're validating the conversion itself record-by-record, rather than bringing OSCAL/canonical mapping into it.
 
-That is your “fields with real data but no OSCAL mapping” report.
-
-So the next thing I need from you is just the name of the Snowflake table where the mapping CSV is loaded. If there isn’t one yet, we can create a temporary table from the CSV and keep the whole validation SQL-based.
+Run this one and give me just the result counts. If MISSING_FROM_CURATED is greater than 0, our next SQL will show exactly which FieldIDs/SQL field names are missing and on which records.
