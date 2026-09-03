@@ -1,30 +1,27 @@
-Yes — the confusing part is that you are seeing two different kinds of “null” representations, and Snowflake/UI can display them differently.
+Yes — you found a real loss of information in the current RAW → CURATED SQL.
 
-In your result:
+For those fields, the RAW "Value" is an object like:
 
-RAW_VALUE = null means the Archer JSON contains an explicit JSON null at "Value".
+{
+  "OtherText": null,
+  "ValuesListIds": [84046]
+}
 
-CURATED_VALUE = None usually means GET(CURATED_JSON, SQL_FIELD_NAME) returned SQL NULL because the key is not present.
+But your typed CTE currently has:
 
-CURATED_VALUE = null means the key is present in CURATED_JSON, but its value is explicit JSON null.
+WHEN 4 THEN TO_VARIANT(V:"ValuesListIds")
 
+So you are explicitly throwing away everything except ValuesListIds. That is why CURATED becomes only:
 
-So these are not the same:
+[84046]
 
-"FISMA_REPORTABLE" key missing entirely
-→ GET(...) returns SQL NULL
-→ UI may show None
+and OtherText disappears.
 
-"FISMA_REPORTABLE": null
-→ key exists
-→ GET(...) returns VARIANT JSON null
-→ UI may show null
+If the goal of CURATED_JSON is to map FieldID → SQL field name without losing the source information, then I would change Type 4 to preserve the complete object:
 
-That explains exactly what you are seeing.
+WHEN 4 THEN TO_VARIANT(V)
 
-And the 578 rows makes sense too: for CONTENT_ID = 565189, there are 578 field entries in RAW_DATA:"RequestedObject":"FieldContents". That does not mean 578 populated values. It means 578 field definitions/slots exist for that record, many with "Value": null.
-
-The most useful query now is one that distinguishes all three states clearly:
+Before changing the UPDATE, test that behavior for CONTENT_ID = 565189:
 
 WITH norm AS (
     SELECT
@@ -33,8 +30,7 @@ WITH norm AS (
             TYPEOF(t.RAW_DATA) = 'ARRAY',
             t.RAW_DATA[0],
             t.RAW_DATA
-        ) AS OBJ,
-        t.CURATED_JSON
+        ) AS OBJ
     FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW t
     WHERE TRIM(t.CONTENT_ID::STRING) = '565189'
 ),
@@ -43,8 +39,8 @@ raw_fields AS (
     SELECT
         n.CONTENT_ID,
         f.key::STRING AS FIELD_ID,
-        f.value:"Value" AS RAW_VALUE,
-        n.CURATED_JSON
+        f.value:"Type"::NUMBER AS TYPE_ID,
+        f.value:"Value" AS V
     FROM norm n,
          LATERAL FLATTEN(
              INPUT => n.OBJ:"RequestedObject":"FieldContents"
@@ -62,35 +58,33 @@ mapped AS (
 )
 
 SELECT
-    CONTENT_ID,
     FIELD_ID,
     SQL_FIELD_NAME,
-    RAW_VALUE,
+    TYPE_ID,
+    V AS RAW_VALUE,
 
-    GET(CURATED_JSON, SQL_FIELD_NAME) AS CURATED_VALUE,
+    /* CURRENT behavior */
+    V:"ValuesListIds" AS CURRENT_CURATED_LOGIC,
 
-    CASE
-        WHEN SQL_FIELD_NAME IS NULL
-            THEN 'NO_META_MAPPING'
-
-        WHEN GET(CURATED_JSON, SQL_FIELD_NAME) IS NULL
-            THEN 'KEY_NOT_PRESENT'
-
-        WHEN IS_NULL_VALUE(GET(CURATED_JSON, SQL_FIELD_NAME))
-            THEN 'KEY_PRESENT_JSON_NULL'
-
-        ELSE 'KEY_PRESENT_WITH_VALUE'
-    END AS CURATED_KEY_STATUS
+    /* PROPOSED behavior */
+    V AS PROPOSED_CURATED_LOGIC
 
 FROM mapped
-ORDER BY TRY_TO_NUMBER(FIELD_ID);
+WHERE TYPE_ID = 4
+  AND V IS NOT NULL
+ORDER BY FIELD_ID;
 
-This will remove the ambiguity.
+For something like HELPER_DEFINED_IMP_DETAILS, you should then see:
 
-The important distinction for changing the UPDATE is:
+RAW_VALUE:
+{"OtherText":null,"ValuesListIds":[84046]}
 
-KEY_NOT_PRESENT
-vs
-KEY_PRESENT_JSON_NULL
+CURRENT_CURATED_LOGIC:
+[84046]
 
-Right now your current update is producing a mix of both. That is exactly what we need to normalize in the next change.
+PROPOSED_CURATED_LOGIC:
+{"OtherText":null,"ValuesListIds":[84046]}
+
+So yes: this one needs fixing.
+
+And importantly, I would not change every type blindly. We found a specific issue: Type 4 is intentionally stripping part of the Archer value. Let's validate all Type 4 records first, then make that one precise change to the Matillion UPDATE.
