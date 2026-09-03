@@ -1,24 +1,10 @@
-Yes — that is exactly the intent. We should stay entirely inside the RAW → CURATED_JSON conversion and validate only that mapping.
+Yes — field ID → field name only. That’s the validation. Forget value transformation for now.
 
-So the flow we are checking is:
+We want to prove:
 
-RAW_DATA contains Archer FieldContents objects keyed by FieldID
+RAW_DATA FieldId → ARCHER_META_FIELD.FIELD_ID → SQL_FIELD_NAME → key exists in CURATED_JSON on the same row.
 
-→ join FieldID to ARCHER_META_FIELD.FIELD_ID
-
-→ take ARCHER_META_FIELD.SQL_FIELD_NAME
-
-→ write that field name and converted value into the same row's CURATED_JSON
-
-So the validation question is simply:
-
-> For every populated RAW_DATA field, did the correct SQL_FIELD_NAME appear in CURATED_JSON, and did the value match after the expected type conversion?
-
-
-
-The empty result from the last query tells us the key/name mapping is working for populated top-level fields. Now the next validation should check the value, not OSCAL or any canonical mapping.
-
-Run this SQL next. It shows RAW value and CURATED value side-by-side for populated fields:
+Use this SQL:
 
 WITH norm AS (
     SELECT
@@ -37,7 +23,6 @@ raw_fields AS (
     SELECT
         n.CONTENT_ID,
         f.key::STRING AS FIELD_ID,
-        f.value:"Type" AS ARCHER_TYPE,
         f.value:"Value" AS RAW_VALUE,
         n.CURATED_JSON
     FROM norm n,
@@ -52,28 +37,33 @@ mapped AS (
     SELECT
         r.CONTENT_ID,
         r.FIELD_ID,
-        r.ARCHER_TYPE,
         amf.SQL_FIELD_NAME,
-        r.RAW_VALUE,
-        GET(r.CURATED_JSON, amf.SQL_FIELD_NAME) AS CURATED_VALUE
+        r.CURATED_JSON
     FROM raw_fields r
-    JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
+    LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
         ON TRIM(amf.FIELD_ID::STRING)
          = TRIM(r.FIELD_ID::STRING)
-    WHERE amf.SQL_FIELD_NAME IS NOT NULL
 )
 
 SELECT
-    CONTENT_ID,
     FIELD_ID,
     SQL_FIELD_NAME,
-    ARCHER_TYPE,
-    RAW_VALUE,
-    CURATED_VALUE,
-    TYPEOF(RAW_VALUE) AS RAW_TYPE,
-    TYPEOF(CURATED_VALUE) AS CURATED_TYPE
+    COUNT(*) AS POPULATED_RAW_COUNT,
+    COUNT_IF(
+        SQL_FIELD_NAME IS NOT NULL
+        AND GET(CURATED_JSON, SQL_FIELD_NAME) IS NOT NULL
+    ) AS MAPPED_TO_CURATED_COUNT,
+    COUNT_IF(
+        SQL_FIELD_NAME IS NULL
+        OR GET(CURATED_JSON, SQL_FIELD_NAME) IS NULL
+    ) AS NOT_MAPPED_COUNT
 FROM mapped
-ORDER BY CONTENT_ID, FIELD_ID
-LIMIT 200;
+GROUP BY
+    FIELD_ID,
+    SQL_FIELD_NAME
+HAVING NOT_MAPPED_COUNT > 0
+ORDER BY NOT_MAPPED_COUNT DESC;
 
-This is now the right direction: no OSCAL, no CSV, no canonical mapping. We are validating only that your UPDATE correctly transforms RAW_DATA into CURATED_JSON.
+If this returns empty, then your FieldID → SQL_FIELD_NAME → CURATED_JSON key mapping is working for every populated top-level field.
+
+That’s the exact thing we’re validating right now.
