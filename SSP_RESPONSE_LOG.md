@@ -31,3 +31,21 @@ The confirmed read-only notebook cells are available at:
 ```
 
 Those counts determine which source fields need value-resolution rules and which can be excluded before the final OSCAL `props[]` transformation is designed.
+
+
+## 2026-09-03 - Access this task from a phone
+
+Yes. This Codex task can be continued from the ChatGPT mobile app using **Remote**.
+
+Setup:
+
+1. On the Windows computer, open the ChatGPT desktop app.
+2. Go to **Settings > Connections > Control this Mac or PC**.
+3. Select **Set up** or **Add** and approve remote access.
+4. Scan the displayed QR code with the phone.
+5. On the phone, sign in to the same ChatGPT account and workspace.
+6. In the ChatGPT mobile app, open **Remote**, choose the connected computer, and select this task.
+
+The computer must remain awake, online, and running the desktop app. If **Remote** is missing on the phone, update the ChatGPT mobile app first. Feature availability may vary by rollout or workspace settings.
+
+Official guide: [Remote connections](https://learn.chatgpt.com/docs/remote-connections)
