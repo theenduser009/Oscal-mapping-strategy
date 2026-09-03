@@ -1,10 +1,6 @@
-Yes — field ID → field name only. That’s the validation. Forget value transformation for now.
+Yes. We can validate one CONTENT_ID exactly like the spreadsheet.
 
-We want to prove:
-
-RAW_DATA FieldId → ARCHER_META_FIELD.FIELD_ID → SQL_FIELD_NAME → key exists in CURATED_JSON on the same row.
-
-Use this SQL:
+From your screenshot, 565189 is a good example. This query will show, for that one record, every RAW FieldID, the mapped SQL_FIELD_NAME, and whether that field name exists in CURATED_JSON.
 
 WITH norm AS (
     SELECT
@@ -16,7 +12,7 @@ WITH norm AS (
         ) AS OBJ,
         t.CURATED_JSON
     FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW t
-    WHERE t.RAW_DATA IS NOT NULL
+    WHERE TRIM(t.CONTENT_ID::STRING) = '565189'
 ),
 
 raw_fields AS (
@@ -29,14 +25,13 @@ raw_fields AS (
          LATERAL FLATTEN(
              INPUT => n.OBJ:"RequestedObject":"FieldContents"
          ) f
-    WHERE f.value:"Value" IS NOT NULL
-      AND NOT IS_NULL_VALUE(f.value:"Value")
 ),
 
 mapped AS (
     SELECT
         r.CONTENT_ID,
         r.FIELD_ID,
+        r.RAW_VALUE,
         amf.SQL_FIELD_NAME,
         r.CURATED_JSON
     FROM raw_fields r
@@ -46,24 +41,28 @@ mapped AS (
 )
 
 SELECT
+    CONTENT_ID,
     FIELD_ID,
     SQL_FIELD_NAME,
-    COUNT(*) AS POPULATED_RAW_COUNT,
-    COUNT_IF(
-        SQL_FIELD_NAME IS NOT NULL
-        AND GET(CURATED_JSON, SQL_FIELD_NAME) IS NOT NULL
-    ) AS MAPPED_TO_CURATED_COUNT,
-    COUNT_IF(
-        SQL_FIELD_NAME IS NULL
-        OR GET(CURATED_JSON, SQL_FIELD_NAME) IS NULL
-    ) AS NOT_MAPPED_COUNT
+    RAW_VALUE,
+    GET(CURATED_JSON, SQL_FIELD_NAME) AS CURATED_VALUE,
+    CASE
+        WHEN SQL_FIELD_NAME IS NULL
+            THEN 'NO META FIELD MAPPING'
+        WHEN GET(CURATED_JSON, SQL_FIELD_NAME) IS NOT NULL
+            THEN 'FOUND'
+        ELSE 'NOT FOUND'
+    END AS FOUND_IN_CURATED
 FROM mapped
-GROUP BY
-    FIELD_ID,
-    SQL_FIELD_NAME
-HAVING NOT_MAPPED_COUNT > 0
-ORDER BY NOT_MAPPED_COUNT DESC;
+ORDER BY TRY_TO_NUMBER(FIELD_ID);
 
-If this returns empty, then your FieldID → SQL_FIELD_NAME → CURATED_JSON key mapping is working for every populated top-level field.
+For 565189, this will let you inspect things like:
 
-That’s the exact thing we’re validating right now.
+23235 → INFORMATION_SYSTEM_TYPE → FOUND
+
+23236 → FISMA_REPORTABLE → FOUND/NOT FOUND
+
+
+One important point: if FISMA_REPORTABLE has RAW_VALUE = NULL, then NOT FOUND may be perfectly valid. So for a fair comparison with your spreadsheet, we should probably also add a second status like RAW_POPULATED = YES/NO.
+
+Run this for 565189 first.
