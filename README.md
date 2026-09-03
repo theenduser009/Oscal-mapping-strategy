@@ -1,70 +1,49 @@
-Yes — looking at this old RAW_DATA → CURATED_JSON SQL, I do see a place where mappings can be missed.
+Great. 0 rows from both checks is good. It means we have not found evidence that populated Archer fields are being lost because of the ARCHER_META_FIELD lookup.
 
-The top-level path is fairly safe: it flattens RequestedObject.FieldContents, joins FIELD_ID to ARCHER_META_FIELD, and falls back to FIELD_<id> if SQL_FIELD_NAME is missing.
+Now the next validation should answer the manager's actual question:
 
-But the nested-field branch is stricter. In nested_mapped you have:
+> Which fields have data in CURATED_JSON, and how populated are they?
 
-LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
-    ON TO_NUMBER(amf.FIELD_ID) = TO_NUMBER(nf.FIELD_ID)
 
-WHERE amf.SQL_FIELD_NAME IS NOT NULL
 
-That WHERE effectively turns the left join into an inner join. So if a populated nested field has no matching SQL_FIELD_NAME, that field disappears completely from CURATED_JSON.
+Since RAW and CURATED_JSON are columns in the same table, we can do this entirely in Snowflake SQL.
 
-There is also another thing worth checking: the ROW_NUMBER() logic for top-level fields chooses one metadata row per REQ_OBJ_ID + FIELD_ID. If the same Archer FIELD_ID exists for different levels, we need to confirm it is consistently choosing the correct LEVEL_ID/SQL_FIELD_NAME.
+Run this:
 
-Since you want SQL-only validation, the next query should test nested populated fields that are being dropped:
-
-WITH norm AS (
+WITH curated_fields AS (
     SELECT
-        IFF(
-            TYPEOF(RAW_DATA) = 'ARRAY',
-            RAW_DATA[0],
-            RAW_DATA
-        ) AS obj
-    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
-    WHERE TYPEOF(RAW_DATA) IN ('ARRAY','OBJECT')
-),
-
-nested_flat AS (
-    SELECT
-        n.obj:"RequestedObject":"Id"::NUMBER      AS REQ_OBJ_ID,
-        n.obj:"RequestedObject":"LevelId"::NUMBER AS LEVEL_ID,
-        f.key::STRING                            AS FIELD_ID,
-        f.path                                   AS JSON_PATH,
-        f.value                                  AS RAW_VALUE
-    FROM norm n,
-         LATERAL FLATTEN(
-             INPUT => n.obj:"RequestedObject":"FieldContents",
-             RECURSIVE => TRUE
-         ) f
-    WHERE f.key IS NOT NULL
-      AND f.path LIKE '%FieldContents%'
-      AND f.key NOT LIKE 'FieldContents'
+        f.key::STRING AS FIELD_NAME,
+        COUNT(*) AS ROW_COUNT,
+        COUNT_IF(
+            f.value IS NOT NULL
+            AND f.value::STRING NOT IN ('', 'null', '[]', '{}')
+        ) AS POPULATED_COUNT
+    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW t,
+         LATERAL FLATTEN(INPUT => t.CURATED_JSON) f
+    GROUP BY f.key::STRING
 )
 
 SELECT
-    nf.FIELD_ID,
-    nf.LEVEL_ID,
-    COUNT(*) AS OCCURRENCES,
-    COUNT_IF(
-        nf.RAW_VALUE IS NOT NULL
-        AND nf.RAW_VALUE::STRING NOT IN ('', 'null', '[]', '{}')
-    ) AS POPULATED_COUNT,
-    amf.SQL_FIELD_NAME
-FROM nested_flat nf
-LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
-    ON TRY_TO_NUMBER(amf.FIELD_ID) = TRY_TO_NUMBER(nf.FIELD_ID)
-WHERE amf.SQL_FIELD_NAME IS NULL
-GROUP BY
-    nf.FIELD_ID,
-    nf.LEVEL_ID,
-    amf.SQL_FIELD_NAME
-HAVING POPULATED_COUNT > 0
-ORDER BY POPULATED_COUNT DESC;
+    FIELD_NAME,
+    ROW_COUNT,
+    POPULATED_COUNT,
+    ROUND(
+        100.0 * POPULATED_COUNT / NULLIF(ROW_COUNT, 0),
+        2
+    ) AS POPULATED_PCT
+FROM curated_fields
+ORDER BY POPULATED_COUNT DESC, FIELD_NAME;
 
-If this returns rows, we found actual source data that your old conversion SQL drops before OSCAL mapping even starts.
+This gives us the actual CURATED_JSON field inventory, for example:
 
-If it returns zero rows too, then the missing mappings are probably not from FIELD_ID → SQL_FIELD_NAME; next we check the level-selection / ROW_NUMBER() logic.
+FIELD_NAME              ROW_COUNT   POPULATED_COUNT   POPULATED_PCT
+PACKAGE_TYPE             3514        3514              100.00
+...
 
-So run this one first. Don’t modify the conversion SQL yet.
+This is important because then we can split the fields into exactly what the team discussed:
+
+high-population fields → must ensure they have OSCAL mappings
+very sparse fields → candidate list to discuss with Josh
+zero-data fields → retirement/problem-field discussion
+
+After you run this, don't manually inspect hundreds of rows. Show me the result/count. The next SQL will compare this inventory against the mapping coverage.
