@@ -1,37 +1,85 @@
-Yep — I can read the result. And this tells us something important.
+Perfect — now we know the RAW structure. The actual value is under f.value:"Value".
 
-The output is still showing lots of rows like:
+For PIA_REQUIRED (23260), your screenshot shows "Value": null, so those records should never have been counted as populated. That explains the misleading 2813 missing count.
 
-FIELD_ID   EXPECTED_CURATED_KEY                 POPULATED_RAW_COUNT  FOUND  MISSING
-23260      PIA_REQUIRED                         2813                 0      2813
-23261      SECURITY_CATEGORY_VERSION_COMBO      2813                 0      2813
-...
+Now rerun the validation using the actual Value property:
 
-So my previous “populated” filter is still wrong for Archer's FieldContents structure. f.value itself is apparently an Archer field-content object, so the object exists on every record even when its actual inner value is empty. That's why we're still getting 2813.
+WITH norm AS (
+    SELECT
+        t.CONTENT_ID,
+        IFF(
+            TYPEOF(t.RAW_DATA) = 'ARRAY',
+            t.RAW_DATA[0],
+            t.RAW_DATA
+        ) AS OBJ,
+        t.CURATED_JSON
+    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW t
+    WHERE t.RAW_DATA IS NOT NULL
+),
 
-We should not trust these missing counts yet.
+raw_fields AS (
+    SELECT
+        n.CONTENT_ID,
+        f.key::STRING AS FIELD_ID,
+        f.value:"Value" AS RAW_VALUE,
+        n.CURATED_JSON
+    FROM norm n,
+         LATERAL FLATTEN(
+             INPUT => n.OBJ:"RequestedObject":"FieldContents"
+         ) f
 
-The right next step is much smaller: inspect the actual RAW structure for one field, PIA_REQUIRED (FIELD_ID 23260), before writing another generalized query.
+    /* ONLY actual populated Archer values */
+    WHERE f.value:"Value" IS NOT NULL
+      AND NOT IS_NULL_VALUE(f.value:"Value")
+),
 
-Run:
+expected AS (
+    SELECT
+        r.CONTENT_ID,
+        r.FIELD_ID,
+        r.RAW_VALUE,
+        r.CURATED_JSON,
+        COALESCE(
+            amf.SQL_FIELD_NAME,
+            'FIELD_' || r.FIELD_ID
+        ) AS EXPECTED_CURATED_KEY
+    FROM raw_fields r
+
+    LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
+        ON TRIM(amf.FIELD_ID::STRING)
+         = TRIM(r.FIELD_ID::STRING)
+),
+
+validation AS (
+    SELECT
+        FIELD_ID,
+        EXPECTED_CURATED_KEY,
+        COUNT(*) AS POPULATED_RAW_COUNT,
+
+        COUNT_IF(
+            GET(CURATED_JSON, EXPECTED_CURATED_KEY) IS NOT NULL
+        ) AS FOUND_COUNT,
+
+        COUNT_IF(
+            GET(CURATED_JSON, EXPECTED_CURATED_KEY) IS NULL
+        ) AS MISSING_COUNT
+
+    FROM expected
+    GROUP BY
+        FIELD_ID,
+        EXPECTED_CURATED_KEY
+)
 
 SELECT
-    t.CONTENT_ID,
-    f.key::STRING AS FIELD_ID,
-    f.value AS FIELD_CONTENT,
-    TYPEOF(f.value) AS FIELD_CONTENT_TYPE,
-    GET(t.CURATED_JSON, 'PIA_REQUIRED') AS CURATED_VALUE
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW t,
-     LATERAL FLATTEN(
-         INPUT => IFF(
-             TYPEOF(t.RAW_DATA) = 'ARRAY',
-             t.RAW_DATA[0],
-             t.RAW_DATA
-         ):"RequestedObject":"FieldContents"
-     ) f
-WHERE TRIM(f.key::STRING) = '23260'
-LIMIT 10;
+    FIELD_ID,
+    EXPECTED_CURATED_KEY,
+    POPULATED_RAW_COUNT,
+    FOUND_COUNT,
+    MISSING_COUNT
+FROM validation
+WHERE MISSING_COUNT > 0
+ORDER BY MISSING_COUNT DESC;
 
-Just run this. I want to see what FIELD_CONTENT actually looks like — e.g. whether Archer stores the real value under Value, Values, FieldValue, value, etc.
+This is the result I care about now. The earlier 406 missing number is invalid because we were counting the Archer field wrapper object instead of its "Value".
 
-Once we see that structure, I'll correct the validation query based on the actual Archer value, rather than guessing again.
+If this returns 0 rows, top-level populated RAW values are making it into CURATED_JSON. If it returns rows, we finally have a credible list of actual conversion gaps.
