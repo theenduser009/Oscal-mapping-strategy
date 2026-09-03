@@ -1,6 +1,30 @@
-Yes — first we should prove the mapping behavior with a SELECT only, no UPDATE yet.
+Yes — the confusing part is that you are seeing two different kinds of “null” representations, and Snowflake/UI can display them differently.
 
-For one CONTENT_ID like 565189, this query shows every FieldID, its SQL_FIELD_NAME, whether the RAW inner value is null, and whether the mapped field name exists in CURATED_JSON:
+In your result:
+
+RAW_VALUE = null means the Archer JSON contains an explicit JSON null at "Value".
+
+CURATED_VALUE = None usually means GET(CURATED_JSON, SQL_FIELD_NAME) returned SQL NULL because the key is not present.
+
+CURATED_VALUE = null means the key is present in CURATED_JSON, but its value is explicit JSON null.
+
+
+So these are not the same:
+
+"FISMA_REPORTABLE" key missing entirely
+→ GET(...) returns SQL NULL
+→ UI may show None
+
+"FISMA_REPORTABLE": null
+→ key exists
+→ GET(...) returns VARIANT JSON null
+→ UI may show null
+
+That explains exactly what you are seeing.
+
+And the 578 rows makes sense too: for CONTENT_ID = 565189, there are 578 field entries in RAW_DATA:"RequestedObject":"FieldContents". That does not mean 578 populated values. It means 578 field definitions/slots exist for that record, many with "Value": null.
+
+The most useful query now is one that distinguishes all three states clearly:
 
 WITH norm AS (
     SELECT
@@ -29,11 +53,8 @@ raw_fields AS (
 
 mapped AS (
     SELECT
-        r.CONTENT_ID,
-        r.FIELD_ID,
-        r.RAW_VALUE,
-        amf.SQL_FIELD_NAME,
-        r.CURATED_JSON
+        r.*,
+        amf.SQL_FIELD_NAME
     FROM raw_fields r
     LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
         ON TRIM(amf.FIELD_ID::STRING)
@@ -45,30 +66,31 @@ SELECT
     FIELD_ID,
     SQL_FIELD_NAME,
     RAW_VALUE,
+
     GET(CURATED_JSON, SQL_FIELD_NAME) AS CURATED_VALUE,
 
     CASE
         WHEN SQL_FIELD_NAME IS NULL
             THEN 'NO_META_MAPPING'
 
-        WHEN RAW_VALUE IS NULL
-             OR IS_NULL_VALUE(RAW_VALUE)
-            THEN 'MAPPED_SOURCE_NULL'
+        WHEN GET(CURATED_JSON, SQL_FIELD_NAME) IS NULL
+            THEN 'KEY_NOT_PRESENT'
 
-        WHEN GET(CURATED_JSON, SQL_FIELD_NAME) IS NOT NULL
-            THEN 'MAPPED_AND_FOUND'
+        WHEN IS_NULL_VALUE(GET(CURATED_JSON, SQL_FIELD_NAME))
+            THEN 'KEY_PRESENT_JSON_NULL'
 
-        ELSE 'MAPPING_ERROR'
-    END AS MAPPING_STATUS
+        ELSE 'KEY_PRESENT_WITH_VALUE'
+    END AS CURATED_KEY_STATUS
 
 FROM mapped
 ORDER BY TRY_TO_NUMBER(FIELD_ID);
 
-What we want to see is mostly:
+This will remove the ambiguity.
 
-23235  INFORMATION_SYSTEM_TYPE   MAPPED_AND_FOUND
-23236  FISMA_REPORTABLE          MAPPED_SOURCE_NULL
+The important distinction for changing the UPDATE is:
 
-and ideally zero MAPPING_ERROR rows.
+KEY_NOT_PRESENT
+vs
+KEY_PRESENT_JSON_NULL
 
-Run this first. Then we’ll change the UPDATE only after this baseline is clear.
+Right now your current update is producing a mix of both. That is exactly what we need to normalize in the next change.
