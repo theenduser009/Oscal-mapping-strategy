@@ -1,3 +1,15 @@
+# OSCAL Mapping Strategy
+
+## SSP notebook cells
+
+Open the [SSP Notebook Cell Library](docs/notebook-cells/README.md) to copy each verified cell in execution order.
+
+- [Cell 1 - Configuration and safety guard](docs/notebook-cells/01-configuration-and-safety.md)
+- [Cell 2 - Sample populated candidate props](docs/notebook-cells/02-sample-populated-props.md)
+- [Cell 3 - Count populated candidate props](docs/notebook-cells/03-count-populated-props.md)
+
+## Existing Type 4 SQL reference
+
 Yep — here’s the direct SQL to see the actual RAW source value and the actual CURATED_JSON value side by side for Type 4.
 
 WITH norm AS (
