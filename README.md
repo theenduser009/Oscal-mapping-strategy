@@ -1,23 +1,31 @@
-Yes — this is a different raw table, ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SECTION_RAW, and the screenshot shows the same general symptom:
+Yes — I think we should stop assuming yesterday’s update was fully correct. What your new table proves is that the old behavior still exists there: Type 4 is being reduced from the full object to only ValuesListIds.
 
-RAW contains something like:
+So first, yes, you can filter directly for Type 4 and inspect it:
 
-{
-  "OtherText": null,
-  "ValuesListIds": [175168]
-}
+SELECT
+    t.CONTENT_ID,
+    f.key::STRING AS FIELD_ID,
+    f.value:"Type"::NUMBER AS TYPE_ID,
+    f.value:"Value" AS RAW_VALUE
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SECTION_RAW t,
+     LATERAL FLATTEN(
+         INPUT => IFF(
+             TYPEOF(t.RAW_DATA) = 'ARRAY',
+             t.RAW_DATA[0],
+             t.RAW_DATA
+         ):"RequestedObject":"FieldContents"
+     ) f
+WHERE f.value:"Type"::NUMBER = 4
+  AND f.value:"Value" IS NOT NULL
+LIMIT 100;
 
-but CURATED currently has only:
+From your screenshot, those rows are definitely TYPE_ID = 4.
 
-[175168]
+What I think happened is one of these two things: either the Matillion job for this table is still using the old update SQL, or the new SQL was only tested/applied on the Authorization Package table and not propagated through the variable-driven orchestration.
 
-So if this table is using the same shared Matillion update logic, then this strongly suggests its field is also Archer Type 4 and the old logic is still doing:
+And yes, I would also check the other types before we declare the generic update done. We already know Type 4 is lossy. The safest next validation is to inventory every TYPE_ID and compare the RAW value shape against the curated shape.
 
-WHEN 4 THEN TO_VARIANT(V:"ValuesListIds")
-
-instead of preserving the whole object.
-
-I would not assume the type though. Let’s prove it for this table first with one SQL. Run this against the Authoritative Sources Section raw table:
+Run this:
 
 WITH norm AS (
     SELECT
@@ -34,9 +42,9 @@ WITH norm AS (
 raw_fields AS (
     SELECT
         n.CONTENT_ID,
-        f.key::STRING        AS FIELD_ID,
-        f.value:"Type"       AS TYPE_ID,
-        f.value:"Value"      AS RAW_VALUE,
+        f.key::STRING AS FIELD_ID,
+        f.value:"Type"::NUMBER AS TYPE_ID,
+        f.value:"Value" AS RAW_VALUE,
         n.CURATED_JSON
     FROM norm n,
          LATERAL FLATTEN(
@@ -46,10 +54,7 @@ raw_fields AS (
 
 mapped AS (
     SELECT
-        r.CONTENT_ID,
-        r.FIELD_ID,
-        r.TYPE_ID,
-        r.RAW_VALUE,
+        r.*,
         amf.SQL_FIELD_NAME,
         GET(r.CURATED_JSON, amf.SQL_FIELD_NAME) AS CURATED_VALUE
     FROM raw_fields r
@@ -59,18 +64,18 @@ mapped AS (
 )
 
 SELECT
-    CONTENT_ID,
-    FIELD_ID,
-    SQL_FIELD_NAME,
     TYPE_ID,
-    RAW_VALUE,
-    CURATED_VALUE
+    TYPEOF(RAW_VALUE) AS RAW_VALUE_TYPE,
+    TYPEOF(CURATED_VALUE) AS CURATED_VALUE_TYPE,
+    COUNT(*) AS ROW_COUNT
 FROM mapped
 WHERE RAW_VALUE IS NOT NULL
-  AND TYPEOF(RAW_VALUE) = 'OBJECT'
-  AND RAW_VALUE:"ValuesListIds" IS NOT NULL
-ORDER BY CONTENT_ID, FIELD_ID;
+GROUP BY
+    TYPE_ID,
+    TYPEOF(RAW_VALUE),
+    TYPEOF(CURATED_VALUE)
+ORDER BY TYPE_ID, ROW_COUNT DESC;
 
-This will tell us definitively whether that field is TYPE_ID = 4.
+That will tell us quickly whether Type 4 is the only suspicious transformation or whether other Archer types are also changing shape in ways we need to review.
 
-If it is, then yes: the same fix applies to this table too, and that is actually good news because your Matillion SQL is variable-driven with ${jv_raw_table_name}. One corrected generic update can handle all these Archer raw tables consistently.
+My recommendation: do not update the Matillion SQL again yet. Run this type inventory first. Then we fix only the types that are actually lossy.
