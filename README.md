@@ -1,4 +1,4 @@
-Yes — after you run the updated Matillion SQL, use this direct validation SQL against the table to check the Type 4 fix.
+Yep — here’s the direct SQL to see the actual RAW source value and the actual CURATED_JSON value side by side for Type 4.
 
 WITH norm AS (
     SELECT
@@ -23,81 +23,53 @@ raw_fields AS (
          LATERAL FLATTEN(
              INPUT => n.OBJ:"RequestedObject":"FieldContents"
          ) f
-    WHERE f.value:"Type"::NUMBER = 4
 ),
 
 mapped AS (
     SELECT
-        r.*,
+        r.CONTENT_ID,
+        r.FIELD_ID,
+        r.TYPE_ID,
         amf.SQL_FIELD_NAME,
+        r.RAW_VALUE,
         GET(r.CURATED_JSON, amf.SQL_FIELD_NAME) AS CURATED_VALUE
     FROM raw_fields r
     LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
         ON TRIM(amf.FIELD_ID::STRING)
          = TRIM(r.FIELD_ID::STRING)
-),
-
-validated AS (
-    SELECT
-        CONTENT_ID,
-        FIELD_ID,
-        SQL_FIELD_NAME,
-        RAW_VALUE,
-        CURATED_VALUE,
-
-        CASE
-            WHEN SQL_FIELD_NAME IS NULL
-                THEN 'NO_META_MAPPING'
-
-            WHEN RAW_VALUE IS NULL
-              OR IS_NULL_VALUE(RAW_VALUE)
-                THEN 'SOURCE_NULL'
-
-            WHEN CURATED_VALUE IS NULL
-                THEN 'KEY_MISSING'
-
-            WHEN RAW_VALUE = CURATED_VALUE
-                THEN 'PASS'
-
-            ELSE 'VALUE_MISMATCH'
-        END AS STATUS
-
-    FROM mapped
 )
-
-SELECT
-    STATUS,
-    COUNT(*) AS ROW_COUNT,
-    COUNT(DISTINCT FIELD_ID) AS DISTINCT_FIELDS
-FROM validated
-GROUP BY STATUS
-ORDER BY STATUS;
-
-What we want after the fix
-
-For the populated Type 4 rows, ideally:
-
-PASS              138481    7
-VALUE_MISMATCH          0    0
-KEY_MISSING             0    0
-
-There will also be SOURCE_NULL rows — that's fine.
-
-And if you want to see only failures, change the final SELECT to:
 
 SELECT
     CONTENT_ID,
     FIELD_ID,
     SQL_FIELD_NAME,
+    TYPE_ID,
     RAW_VALUE,
-    CURATED_VALUE,
-    STATUS
-FROM validated
-WHERE STATUS IN (
-    'VALUE_MISMATCH',
-    'KEY_MISSING',
-    'NO_META_MAPPING'
-)
+    CURATED_VALUE
+FROM mapped
+WHERE TYPE_ID = 4
+  AND RAW_VALUE IS NOT NULL
+  AND NOT IS_NULL_VALUE(RAW_VALUE)
 ORDER BY CONTENT_ID, FIELD_ID;
 
-If that second query returns empty, the Type 4 mapping fix passed.
+You should literally see:
+
+RAW_VALUE
+{"OtherText":null,"ValuesListIds":[175168]}
+
+CURATED_VALUE
+[175168]
+
+After you rerun the corrected Matillion update on fresh/null-curated rows, you want to see:
+
+RAW_VALUE
+{"OtherText":null,"ValuesListIds":[175168]}
+
+CURATED_VALUE
+{"OtherText":null,"ValuesListIds":[175168]}
+
+If you want to check one specific content ID, add this:
+
+AND TRIM(CONTENT_ID::STRING) = '186731'
+
+to the final WHERE.
