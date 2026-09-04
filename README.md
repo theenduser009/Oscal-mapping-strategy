@@ -1,145 +1,46 @@
-Yes — we can validate the proposed fix against the existing table without updating anything. I can’t execute against your Snowflake session from here, but this read-only query will simulate the new conversion and compare it with the current CURATED_JSON.
+Yes — this screenshot is useful. The validation is behaving exactly as expected for the old data.
 
-Run this against ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SECTION_RAW:
+What you’re seeing is:
 
-WITH norm AS (
-    SELECT
-        t.CONTENT_ID,
-        IFF(
-            TYPEOF(t.RAW_DATA) = 'ARRAY',
-            t.RAW_DATA[0],
-            t.RAW_DATA
-        ) AS OBJ,
-        t.CURATED_JSON
-    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SECTION_RAW t
-),
+RAW_VALUE:
+{"OtherText": null, "ValuesListIds": [80639]}
 
-raw_fields AS (
-    SELECT
-        n.CONTENT_ID,
-        n.CURATED_JSON,
-        f.key::STRING          AS FIELD_ID,
-        f.value:"Type"::NUMBER AS TYPE_ID,
-        f.value:"Value"        AS V
-    FROM norm n,
-         LATERAL FLATTEN(
-             INPUT => n.OBJ:"RequestedObject":"FieldContents"
-         ) f
-),
+CURRENT_CURATED_VALUE:
+[80639]
 
-mapped AS (
-    SELECT
-        r.*,
-        amf.SQL_FIELD_NAME
-    FROM raw_fields r
-    LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
-        ON TRIM(amf.FIELD_ID::STRING)
-         = TRIM(r.FIELD_ID::STRING)
-),
+EXPECTED_CURATED_VALUE:
+{"OtherText": null, "ValuesListIds": [80639]}
 
-expected AS (
-    SELECT
-        CONTENT_ID,
-        FIELD_ID,
-        SQL_FIELD_NAME,
-        TYPE_ID,
-        V AS RAW_VALUE,
+VALIDATION_STATUS:
+REVIEW
 
-        CASE
-            WHEN V IS NULL OR IS_NULL_VALUE(V)
-                THEN PARSE_JSON('null')
+That means the current curated data is still using the old Type 4 logic, while the expected value from the proposed new logic preserves the full object.
 
-            ELSE CASE TYPE_ID
-                WHEN 1 THEN TO_VARIANT(NULLIF(V::STRING, ''))
+So the new logic is doing the right thing conceptually. The reason you see REVIEW is simply because the table has not been rebuilt yet with the new SQL.
 
-                WHEN 2 THEN TO_VARIANT(
-                    TRY_TO_NUMBER(NULLIF(V::STRING, ''))
-                )
+The cleanest next step is to make the validation status more explicit for Type 4 so it doesn’t just say REVIEW. Change that part of the CASE to:
 
-                WHEN 3 THEN TO_VARIANT(
-                    TRY_TO_DATE(NULLIF(V::STRING, ''))
-                )
+CASE
+    WHEN TYPE_ID = 4
+     AND TYPEOF(RAW_VALUE) = 'OBJECT'
+     AND TYPEOF(CURRENT_CURATED_VALUE) = 'ARRAY'
+     AND EXPECTED_CURATED_VALUE = RAW_VALUE
+        THEN 'TYPE_4_OLD_LOGIC_CONFIRMED'
 
-                /* NEW FIX */
-                WHEN 4 THEN TO_VARIANT(V)
+    WHEN EXPECTED_CURATED_VALUE = CURRENT_CURATED_VALUE
+        THEN 'MATCH'
 
-                WHEN 6 THEN TO_VARIANT(
-                    TRY_TO_NUMBER(NULLIF(V::STRING, ''))
-                )
+    WHEN IS_NULL_VALUE(EXPECTED_CURATED_VALUE)
+     AND IS_NULL_VALUE(CURRENT_CURATED_VALUE)
+        THEN 'MATCH'
 
-                WHEN 8 THEN TO_VARIANT(V)
-                WHEN 9 THEN TO_VARIANT(V)
-                WHEN 11 THEN TO_VARIANT(V)
+    ELSE 'REVIEW'
+END AS VALIDATION_STATUS
 
-                WHEN 20 THEN TO_VARIANT(
-                    TRY_TO_NUMBER(NULLIF(V::STRING, ''))
-                )
+Then your rows should clearly show:
 
-                WHEN 21 THEN TO_VARIANT(
-                    TRY_TO_TIMESTAMP_NTZ(NULLIF(V::STRING, ''))
-                )
+TYPE_4_OLD_LOGIC_CONFIRMED
 
-                WHEN 22 THEN TO_VARIANT(
-                    TRY_TO_TIMESTAMP_NTZ(NULLIF(V::STRING, ''))
-                )
+instead of generic REVIEW.
 
-                WHEN 23 THEN TO_VARIANT(V)
-
-                ELSE TO_VARIANT(V)
-            END
-        END AS EXPECTED_CURATED_VALUE,
-
-        GET(CURATED_JSON, SQL_FIELD_NAME) AS CURRENT_CURATED_VALUE
-
-    FROM mapped
-    WHERE SQL_FIELD_NAME IS NOT NULL
-)
-
-SELECT
-    TYPE_ID,
-    FIELD_ID,
-    SQL_FIELD_NAME,
-    RAW_VALUE,
-    CURRENT_CURATED_VALUE,
-    EXPECTED_CURATED_VALUE,
-
-    CASE
-        WHEN TYPE_ID = 4
-         AND TYPEOF(RAW_VALUE) = 'OBJECT'
-         AND TYPEOF(CURRENT_CURATED_VALUE) = 'ARRAY'
-            THEN 'TYPE_4_FIX_REQUIRED'
-
-        WHEN EXPECTED_CURATED_VALUE = CURRENT_CURATED_VALUE
-            THEN 'MATCH'
-
-        WHEN IS_NULL_VALUE(EXPECTED_CURATED_VALUE)
-         AND IS_NULL_VALUE(CURRENT_CURATED_VALUE)
-            THEN 'MATCH'
-
-        ELSE 'REVIEW'
-    END AS VALIDATION_STATUS
-
-FROM expected
-ORDER BY
-    VALIDATION_STATUS DESC,
-    TYPE_ID,
-    CONTENT_ID,
-    FIELD_ID;
-
-For your Type 4 example, you should see:
-
-RAW:
-{"OtherText":null,"ValuesListIds":[175168]}
-
-CURRENT:
-[175168]
-
-EXPECTED:
-{"OtherText":null,"ValuesListIds":[175168]}
-
-STATUS:
-TYPE_4_FIX_REQUIRED
-
-That proves the proposed update before we touch the table.
-
-Even better: after running it, tell me the counts for MATCH, TYPE_4_FIX_REQUIRED, and REVIEW. Then we’ll know whether Type 4 is the only change needed or whether another type needs attention too.
+So yes: this is strong evidence that the new Type 4 fix is correct. I would still avoid running the full Matillion update across everything until we do one controlled rebuild/test row or small table first.
