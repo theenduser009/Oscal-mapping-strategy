@@ -1,6 +1,4 @@
-Next: do a read-only validation across the whole table to prove the proposed Type 4 behavior would preserve the full object everywhere.
-
-Run this on ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SECTION_RAW:
+Yes — here’s the SELECT-only dry run for ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SECTION_RAW. It simulates the proposed new curated value for Type 4 without updating anything.
 
 WITH norm AS (
     SELECT
@@ -29,7 +27,10 @@ raw_fields AS (
 
 mapped AS (
     SELECT
-        r.*,
+        r.CONTENT_ID,
+        r.FIELD_ID,
+        r.TYPE_ID,
+        r.RAW_VALUE,
         amf.SQL_FIELD_NAME,
         GET(r.CURATED_JSON, amf.SQL_FIELD_NAME) AS CURRENT_CURATED_VALUE
     FROM raw_fields r
@@ -38,7 +39,7 @@ mapped AS (
          = TRIM(r.FIELD_ID::STRING)
 ),
 
-validated AS (
+simulated AS (
     SELECT
         CONTENT_ID,
         FIELD_ID,
@@ -47,39 +48,60 @@ validated AS (
         RAW_VALUE,
         CURRENT_CURATED_VALUE,
 
-        /* proposed new Type 4 behavior */
-        TO_VARIANT(RAW_VALUE) AS EXPECTED_CURATED_VALUE,
-
         CASE
-            WHEN TYPE_ID = 4
-             AND TYPEOF(RAW_VALUE) = 'OBJECT'
-             AND TYPEOF(CURRENT_CURATED_VALUE) = 'ARRAY'
-                THEN 'OLD_TYPE4_LOGIC_FOUND'
+            WHEN RAW_VALUE IS NULL
+              OR IS_NULL_VALUE(RAW_VALUE)
+                THEN PARSE_JSON('null')
 
             WHEN TYPE_ID = 4
-             AND RAW_VALUE = CURRENT_CURATED_VALUE
-                THEN 'ALREADY_CORRECT'
+                THEN TO_VARIANT(RAW_VALUE)
 
-            ELSE 'REVIEW'
-        END AS STATUS
+            ELSE CURRENT_CURATED_VALUE
+        END AS PROPOSED_CURATED_VALUE
     FROM mapped
-    WHERE TYPE_ID = 4
-      AND RAW_VALUE IS NOT NULL
-      AND NOT IS_NULL_VALUE(RAW_VALUE)
+    WHERE SQL_FIELD_NAME IS NOT NULL
 )
 
 SELECT
-    STATUS,
-    COUNT(*) AS ROW_COUNT,
-    COUNT(DISTINCT FIELD_ID) AS DISTINCT_FIELDS
-FROM validated
-GROUP BY STATUS
-ORDER BY STATUS;
+    CONTENT_ID,
+    FIELD_ID,
+    SQL_FIELD_NAME,
+    TYPE_ID,
+    RAW_VALUE,
+    CURRENT_CURATED_VALUE,
+    PROPOSED_CURATED_VALUE,
 
-What I expect from the table you just showed is a large count under:
+    CASE
+        WHEN TYPE_ID = 4
+         AND TYPEOF(RAW_VALUE) = 'OBJECT'
+         AND PROPOSED_CURATED_VALUE = RAW_VALUE
+            THEN 'TYPE_4_FIX_OK'
 
-OLD_TYPE4_LOGIC_FOUND
+        WHEN TYPE_ID <> 4
+         AND PROPOSED_CURATED_VALUE = CURRENT_CURATED_VALUE
+            THEN 'UNCHANGED'
 
-because current curated values are arrays while RAW values are objects.
+        WHEN RAW_VALUE IS NULL
+          OR IS_NULL_VALUE(RAW_VALUE)
+            THEN 'SOURCE_NULL'
 
-If REVIEW = 0, then we have very strong evidence that the Type 4 fix is safe across this whole table. Then the next step is the controlled update using the new generic SQL.
+        ELSE 'REVIEW'
+    END AS VALIDATION_STATUS
+
+FROM simulated
+ORDER BY
+    TYPE_ID,
+    CONTENT_ID,
+    FIELD_ID;
+
+What you want to see:
+
+TYPE_4_FIX_OK
+
+for those 7 Type 4 fields, and mostly:
+
+UNCHANGED
+
+for the other types.
+
+That gives us a clean proof that the change fixes Type 4 without altering the rest of the existing curated behavior.
