@@ -49,3 +49,17 @@ Setup:
 The computer must remain awake, online, and running the desktop app. If **Remote** is missing on the phone, update the ChatGPT mobile app first. Feature availability may vary by rollout or workspace settings.
 
 Official guide: [Remote connections](https://learn.chatgpt.com/docs/remote-connections)
+
+
+## 2026-09-04 - Copy-friendly notebook cell pages created
+
+The repository now contains a GitHub-rendered notebook cell library:
+
+- [Cell library index](docs/notebook-cells/README.md)
+- [Cell 1 - Configuration and safety guard](docs/notebook-cells/01-configuration-and-safety.md)
+- [Cell 2 - Sample populated candidate props](docs/notebook-cells/02-sample-populated-props.md)
+- [Cell 3 - Count populated candidate props](docs/notebook-cells/03-count-populated-props.md)
+
+Each page contains a copyable Python block and navigation to the next cell. The root [README](README.md) also links to the library.
+
+All three currently completed cells were synchronized from [the complete source file](notebooks/ssp_props_read_only_cells.py). Future notebook cells will be added to this library when they are created.
