@@ -1,46 +1,85 @@
-Yes — this screenshot is useful. The validation is behaving exactly as expected for the old data.
+Next: do a read-only validation across the whole table to prove the proposed Type 4 behavior would preserve the full object everywhere.
 
-What you’re seeing is:
+Run this on ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SECTION_RAW:
 
-RAW_VALUE:
-{"OtherText": null, "ValuesListIds": [80639]}
+WITH norm AS (
+    SELECT
+        t.CONTENT_ID,
+        IFF(
+            TYPEOF(t.RAW_DATA) = 'ARRAY',
+            t.RAW_DATA[0],
+            t.RAW_DATA
+        ) AS OBJ,
+        t.CURATED_JSON
+    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SECTION_RAW t
+),
 
-CURRENT_CURATED_VALUE:
-[80639]
+raw_fields AS (
+    SELECT
+        n.CONTENT_ID,
+        f.key::STRING AS FIELD_ID,
+        f.value:"Type"::NUMBER AS TYPE_ID,
+        f.value:"Value" AS RAW_VALUE,
+        n.CURATED_JSON
+    FROM norm n,
+         LATERAL FLATTEN(
+             INPUT => n.OBJ:"RequestedObject":"FieldContents"
+         ) f
+),
 
-EXPECTED_CURATED_VALUE:
-{"OtherText": null, "ValuesListIds": [80639]}
+mapped AS (
+    SELECT
+        r.*,
+        amf.SQL_FIELD_NAME,
+        GET(r.CURATED_JSON, amf.SQL_FIELD_NAME) AS CURRENT_CURATED_VALUE
+    FROM raw_fields r
+    LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
+        ON TRIM(amf.FIELD_ID::STRING)
+         = TRIM(r.FIELD_ID::STRING)
+),
 
-VALIDATION_STATUS:
-REVIEW
+validated AS (
+    SELECT
+        CONTENT_ID,
+        FIELD_ID,
+        SQL_FIELD_NAME,
+        TYPE_ID,
+        RAW_VALUE,
+        CURRENT_CURATED_VALUE,
 
-That means the current curated data is still using the old Type 4 logic, while the expected value from the proposed new logic preserves the full object.
+        /* proposed new Type 4 behavior */
+        TO_VARIANT(RAW_VALUE) AS EXPECTED_CURATED_VALUE,
 
-So the new logic is doing the right thing conceptually. The reason you see REVIEW is simply because the table has not been rebuilt yet with the new SQL.
+        CASE
+            WHEN TYPE_ID = 4
+             AND TYPEOF(RAW_VALUE) = 'OBJECT'
+             AND TYPEOF(CURRENT_CURATED_VALUE) = 'ARRAY'
+                THEN 'OLD_TYPE4_LOGIC_FOUND'
 
-The cleanest next step is to make the validation status more explicit for Type 4 so it doesn’t just say REVIEW. Change that part of the CASE to:
+            WHEN TYPE_ID = 4
+             AND RAW_VALUE = CURRENT_CURATED_VALUE
+                THEN 'ALREADY_CORRECT'
 
-CASE
-    WHEN TYPE_ID = 4
-     AND TYPEOF(RAW_VALUE) = 'OBJECT'
-     AND TYPEOF(CURRENT_CURATED_VALUE) = 'ARRAY'
-     AND EXPECTED_CURATED_VALUE = RAW_VALUE
-        THEN 'TYPE_4_OLD_LOGIC_CONFIRMED'
+            ELSE 'REVIEW'
+        END AS STATUS
+    FROM mapped
+    WHERE TYPE_ID = 4
+      AND RAW_VALUE IS NOT NULL
+      AND NOT IS_NULL_VALUE(RAW_VALUE)
+)
 
-    WHEN EXPECTED_CURATED_VALUE = CURRENT_CURATED_VALUE
-        THEN 'MATCH'
+SELECT
+    STATUS,
+    COUNT(*) AS ROW_COUNT,
+    COUNT(DISTINCT FIELD_ID) AS DISTINCT_FIELDS
+FROM validated
+GROUP BY STATUS
+ORDER BY STATUS;
 
-    WHEN IS_NULL_VALUE(EXPECTED_CURATED_VALUE)
-     AND IS_NULL_VALUE(CURRENT_CURATED_VALUE)
-        THEN 'MATCH'
+What I expect from the table you just showed is a large count under:
 
-    ELSE 'REVIEW'
-END AS VALIDATION_STATUS
+OLD_TYPE4_LOGIC_FOUND
 
-Then your rows should clearly show:
+because current curated values are arrays while RAW values are objects.
 
-TYPE_4_OLD_LOGIC_CONFIRMED
-
-instead of generic REVIEW.
-
-So yes: this is strong evidence that the new Type 4 fix is correct. I would still avoid running the full Matillion update across everything until we do one controlled rebuild/test row or small table first.
+If REVIEW = 0, then we have very strong evidence that the Type 4 fix is safe across this whole table. Then the next step is the controlled update using the new generic SQL.
