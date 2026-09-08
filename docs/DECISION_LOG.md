@@ -133,3 +133,10 @@ Added
 corrected the payload-semantics validator. The repository still does not pin an
 OSCAL version; confirming the target version is required before production
 conformance decisions. `EXECUTE_WRITES` remains `False`.
+Final validator QA added fail-closed handling for a conflicting pinned OSCAL
+version, malformed/non-object payloads, noncanonical status tokens,
+missing/duplicate/orphan singleton nodes, source parse/resolution errors, and
+source/output coverage mismatches. Optional-omission projections now subtract
+only actual empty-node keys and their counted incoming edges. Raw component
+references remain an explicit mapped-scope blocker. The cells remain
+aggregate-only and read-only.
