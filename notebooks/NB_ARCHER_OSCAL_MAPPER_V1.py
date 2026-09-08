@@ -608,10 +608,14 @@ def build_element_instances(
         if transformed is SKIP_VALUE:
             continue
 
-        mapping_type = str(mapping_row.get("MAPPING_TYPE") or "").lower()
         target_field = _target_field_name(mapping_row)
 
-        if element_path.endswith("props[]") or "extension" in mapping_type:
+        # The registry path owns node cardinality.  An Extension mapping may
+        # resolve a value, but it must create a separate OSCAL property node
+        # only when its owning registry node is actually props[].  Treating
+        # every Extension mapping as a collection created multiple instances
+        # of singleton parents such as system-characteristics.
+        if element_path.endswith("props[]"):
             values = transformed if isinstance(transformed, list) else [transformed]
             for index, item in enumerate(values):
                 payload = {
