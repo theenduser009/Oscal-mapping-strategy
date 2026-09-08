@@ -140,3 +140,29 @@ source/output coverage mismatches. Optional-omission projections now subtract
 only actual empty-node keys and their counted incoming edges. Raw component
 references remain an explicit mapped-scope blocker. The cells remain
 aggregate-only and read-only.
+
+## 2026-09-08 — OSCAL SSP 1.2.3 target pin and minimum-contract gate
+
+The user confirmed NIST OSCAL SSP 1.2.3 as the repository's conformance
+target. Authoritative Mapper V1 Cell 1 and its copy-ready split file now set
+`OSCAL_VERSION = "1.2.3"` and display the version at initialization. This pin
+does not change the existing deterministic identity policy, registry ownership,
+or DIM/FACT graph representation.
+
+The existing security/status cardinality and payload-semantics validators now
+identify 1.2.3 as the pinned contract. They tolerate an absent version only in
+an already-running notebook session that predates this repository pin, and
+they fail closed if a different version is configured.
+
+Added the aggregate-only, read-only
+`RUN_AFTER_07_ssp_v123_minimum_required_scope_audit.py`. It measures the
+minimum required SSP paths, cardinalities, and payload fields derived from the
+official OSCAL 1.2.3 SSP, metadata, and implementation-common metaschemas. It
+does not expose source identifiers or payloads, does not assemble a final OSCAL
+document, and does not replace official JSON schema and constraint validation.
+
+The immediate next step is to run that audit against the existing read-only
+Snowflake graph and use the aggregate gaps as the mapping backlog. The 90
+partial security-impact assemblies and 42 missing statuses remain
+source/business disposition items, while 4,452 raw component references still
+require hydration. `EXECUTE_WRITES` remains `False`.
