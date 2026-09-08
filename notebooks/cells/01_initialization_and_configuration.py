@@ -24,6 +24,7 @@ CONFIG = {
         "%Y%m%dT%H%M%SZ"
     ),
     "OSCAL_MODEL": "SSP",
+    "OSCAL_VERSION": "1.2.3",
     "EXECUTE_WRITES": False,
     "BUILD_COVERAGE_REPORT": True,
     "SOURCE_SYSTEM_NAME": "ARCHER",
@@ -70,4 +71,6 @@ if CONFIG["EXECUTE_WRITES"]:
 
 print("Cell 1 initialized")
 print("OSCAL model:", CONFIG["OSCAL_MODEL"])
+print("OSCAL version:", CONFIG["OSCAL_VERSION"])
 print("Writes enabled:", CONFIG["EXECUTE_WRITES"])
+
