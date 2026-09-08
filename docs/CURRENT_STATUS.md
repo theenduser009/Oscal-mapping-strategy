@@ -8,55 +8,7 @@ Last reconciled: 2026-09-08
 - Generic architecture remains: configuration, inputs, canonical mapping, helpers/transforms, graph builder, guarded loader, orchestrator.
 - Keep `EXECUTE_WRITES = False` while validating.
 
-## Previously validated baseline
-
-Prior clean read-only checkpoint before the semantic revision:
-
-```text
-Graph nodes: 51772
-Graph edges: 48959
-Duplicate node keys: 0
-Duplicate edge keys: 0
-Dangling source edges: 0
-Dangling target edges: 0
-PRE-WRITE VALIDATION PASSED
-EXECUTE_WRITES = False
-```
-
-The semantic review identified four Phase 1 fixes: security-impact normalization, status normalization, document-ID string shaping, and exclusion of transient `HELPER_PTA_CALC`. Component hydration remains Phase 2.
-
-## Controlled-vocabulary review used for the revision
-
-Security-impact labels observed:
-
-- Confidentiality: `<missing>` 2454, Legacy LOE C 148, Legacy LOE C + DFARS 115, Low 36, Legacy LOE D + DFARS 30, Legacy LOE A 13, Legacy LOE D 12, Legacy LOE B 5.
-- Integrity: `<missing>` 2542, Legacy LOE C + DFARS 98, Legacy LOE C 80, Low 37, Legacy LOE D + DFARS 30, Legacy LOE D 12, Legacy LOE A 9, Legacy LOE B 5.
-- Availability: `<missing>` 2542, Legacy LOE C + DFARS 98, Legacy LOE C 80, Low 37, Legacy LOE D + DFARS 30, Legacy LOE D 12, Legacy LOE A 9, Legacy LOE B 5.
-
-Status labels observed:
-
-```text
-Decommissioned = 1104
-Operational = 1060
-Under Development = 550
-Reauthorize = 57
-<missing> = 42
-```
-
-Reviewed semantic code revision:
-
-- Security objectives route by stable owner path and target field.
-- `Low` normalizes to `low`.
-- Reviewed legacy LOE labels remain explicit reviewed legacy values and are not falsely classified as Low/Moderate/High.
-- Status crosswalk: `Operational -> operational`, `Under Development -> under-development`, `Decommissioned -> disposition`, `Reauthorize -> other` with explanatory remark.
-- Scalar document identifiers convert to strings.
-- `HELPER_PTA_CALC` is excluded as a transient helper.
-- Unknown/multi-valued security/status labels fail closed.
-- Component hydration remains Phase 2.
-
-## LATEST VERIFIED POST-REVISION SNOWFLAKE RUN
-
-Run shown in Snowflake after replacing/rerunning the semantic helper cell and rerunning the mapper:
+## Latest verified mapper run
 
 ```text
 OSCAL MAPPING RUN
@@ -78,14 +30,9 @@ Edges: 48687
 Writes: False
 ```
 
-This exactly matches the expected structural delta from excluding 272 transient `HELPER_PTA_CALC` property nodes:
+The current graph is structurally clean and remains read-only.
 
-```text
-51772 - 272 = 51500 nodes
-48959 - 272 = 48687 edges
-```
-
-## LATEST SSP READ-ONLY SCOPE VALIDATION
+## Latest SSP scope validation
 
 ```text
 Nodes: 51500
@@ -96,21 +43,23 @@ Expected tree edges: 48687
 PASS - Cell 7 graph validation passed
 PASS - Cell 7 pre-write validation passed
 PASS - Writes were not executed
-PASS - Graph contains nodes
-PASS - Graph contains source records
 PASS - Exactly one SSP root per source record
 PASS - Tree edge count reconciles
 ```
 
-Registry/mapping scope remains:
+Registry/mapping scope:
 
 ```text
 Active registry paths: 17
 Mapped registry owner paths: 10
 Structural paths without owned field mappings: 7
+Canonical mapping rows: 54
+Mappings with source data: 38
+Mappings without source data: 16
+Mappings with source data percent: 70.37
 ```
 
-Generated node counts by element type:
+Generated node counts include:
 
 ```text
 authorization-boundary  2813
@@ -127,53 +76,9 @@ system-implementation   2813
 system-security-plan    2813
 ```
 
-Generated node counts by registry path reconcile with those counts, including `system-characteristics.props[] = 12035` and `system-implementation.components[] = 4804`.
+## Payload semantics validation
 
-Payload presence:
-
-```text
-Non-empty payload nodes: 43127
-Structural/empty payload nodes: 8373
-```
-
-Notable payload-presence breakdown:
-
-```text
-authorization-boundary false=2519 true=294
-components false=4804
-document-ids false=2813
-metadata false=2813
-props false=12035
-responsible-parties false=9344
-security-impact-level false=360 true=2453
-status false=2813
-system-characteristics false=2813
-system-ids false=2813
-system-implementation true=2813
-system-security-plan true=2813
-```
-
-Field-level mapping coverage remains:
-
-```text
-Canonical mapping rows: 54
-Mappings with source data: 38
-Mappings without source data: 16
-Mappings with source data percent: 70.37
-```
-
-The current no-source-data list still includes the visible rows from the previous scope review, including metadata publication timestamps, some props, several security-impact candidates, and component references such as `SAP_INTAKE_FORM_INTERCONNECTIONS` and `SUBSYSTEMS`. This is a source-availability/reporting issue, not a graph-integrity failure.
-
-Scope validation result:
-
-```text
-SSP READ-ONLY SCOPE VALIDATION PASSED
-Review the displayed element/path and coverage tables before writes.
-```
-
-## LATEST SSP READ-ONLY PAYLOAD SEMANTICS VALIDATION
-
-The semantic revision now passes Phase 1 payload shape validation:
+After the reviewed semantic normalization:
 
 ```text
 Security-impact nodes: 2813
@@ -208,97 +113,116 @@ Component-reference nodes: 4804
   Non-raw payloads: 352
 ```
 
-Readiness result:
+Phase 1 payload shapes pass for populated mapped values. Component hydration remains Phase 2.
+
+## Latest read-only OSCAL SSP security/status cardinality review
+
+Provisional evaluation target: OSCAL SSP 1.2.3. `CONFIG` still does not pin an OSCAL version, so this remains provisional until the program target is confirmed.
+
+### Record and graph reconciliation
 
 ```text
-PHASE 1 PAYLOAD SHAPES PASSED
-REQUIRED-FIELD SOURCE GAPS REMAIN: 2585 aggregate empty/incomplete node observations
-PHASE 2 COMPONENT HYDRATION REMAINS: 4452 raw reference payloads
-NEXT ENGINEERING FOCUS: required-field source-gap review
+Source rows: 2813
+Unique source records: 2813
+Unique graph records: 2813
+Source/graph intersection: 2813
+Source-only records: 0
+Graph-only records: 0
+Blank graph record IDs: 0
+Unique security-node records: 2813
+Source records without a security node: 0
+Orphan security-node records: 0
+Duplicate security nodes: 0
+Duplicate status nodes: 0
+Source JSON parse errors: 0
+Source path resolution errors: 0
+Security payload parse errors: 0
+Status payload parse errors: 0
 ```
 
-## Post-review OSCAL version/cardinality correction
+### Security-impact source/output overlap
 
-The earlier Snowflake output above is preserved as historical runtime evidence, but
-its line `REQUIRED-FIELD SOURCE GAPS REMAIN: 2585` is **not** the current
-authoritative required-gap total.
-
-The current review uses OSCAL SSP 1.2.3 provisionally because the repository has
-not yet pinned an OSCAL version in `CONFIG`. Under that version:
-
-- `security-impact-level` is optional.
-- If `security-impact-level` is emitted, confidentiality, integrity, and
-  availability are all required.
-- `system-characteristics.status` and `status.state` are required.
-
-The verified runtime counts therefore reclassify as follows:
+Configured candidate population reconciles to generated output with no source/output discrepancy:
 
 ```text
-2453 no-objective security nodes = optional absence, not required-field gaps
-90 partial security-impact assemblies
-91 objective values present in those partial assemblies
-179 missing required objective occurrences in those partial assemblies
-42 missing required status.state occurrences
-221 missing required field occurrences in this narrow security/status check
+Confidentiality: source_present=359, generated_present=359, both=359, source_only=0, output_only=0
+Integrity:       source_present=271, generated_present=271, both=271, source_only=0, output_only=0
+Availability:    source_present=271, generated_present=271, both=271, source_only=0, output_only=0
 ```
 
-The unique affected-record count and source-versus-transform cause split must be
-measured by the new aggregate-only diagnostic. The mapper still materializes
-empty structural `{}` security nodes; omitting them applies to assembled OSCAL
-output unless a separate graph-policy change is approved. A projection that
-also omits those nodes from the graph would be 49,047 nodes and 46,234 edges,
-but no such production change has been made.
+### OSCAL 1.2.3 cardinality classification
 
-## Corrected interpretation
+```text
+Optional absent security-impact assemblies: 2453
+Complete security-impact assemblies: 270
+Partial security-impact assemblies: 90
+Missing security structural nodes: 0
+Malformed/invalid security assemblies: 0
 
-- Run `20260908T201705Z` passed graph and pre-write validation with zero
-  duplicate or dangling keys and no writes.
-- The 272-node/edge reduction is fully explained by the deliberate exclusion
-  of transient `HELPER_PTA_CALC` properties.
-- Populated value normalization passed for the currently mapped subset.
-- The 2,453 empty security-impact assemblies are not required gaps under the
-  provisional 1.2.3 contract.
-- The 90 partial security-impact assemblies are cardinality blockers if emitted;
-  together they are missing 179 required objective fields.
-- The 42 missing `status.state` values are required-field blockers.
-- The corrected narrow missing-required-field count is therefore 221, not
-  2,585.
-- Component hydration remains incomplete: 4,452 component payloads still carry
-  raw Archer references.
+Confidentiality missing child occurrences in partial assemblies: 1
+Integrity missing child occurrences in partial assemblies: 89
+Availability missing child occurrences in partial assemblies: 89
+Missing required security-objective occurrences: 179
+Invalid security value occurrences: 0
+
+Missing required status.state occurrences: 42
+Invalid populated status assemblies: 0
+Missing required field occurrences in emitted/required assemblies: 221
+```
+
+### Unique-record impact
+
+```text
+Records with partial security-impact assembly: 90
+Records with missing required status.state: 42
+Records in both groups: 1
+Records requiring review in this narrow check: 131
+Records ready within only this narrow check: 2682
+Records with source parse/resolution errors: 0
+Records with a security source/output discrepancy: 0
+Records with a status source/output discrepancy: 0
+```
+
+This is the key correction to the earlier aggregate `2585` source-gap interpretation: the 2,453 completely empty security-impact assemblies are optional absence under the provisional OSCAL 1.2.3 contract, not required-field failures. The actual narrow security/status review population is 131 unique records.
+
+### Optional-omission projection only
+
+The mapper currently materializes structural `{}` security-impact nodes. No graph-policy change has been requested or applied.
+
+If the 2,453 no-objective optional security-impact nodes were also omitted from the graph, the projection would be:
+
+```text
+Current graph nodes: 51500
+Current graph edges: 48687
+No-objective security nodes eligible for final-output omission: 2453
+Actual incoming edges to those nodes: 2453
+Projected nodes: 49047
+Projected edges: 46234
+```
+
+This is a projection only, not a production change.
+
+## Current interpretation
+
+- Graph integrity is clean: zero duplicate keys and zero dangling edges.
+- Source-to-graph record coverage is exact for all 2,813 records.
+- Security/status source values reconcile exactly with generated payload presence; no transformation-loss discrepancy was detected in this check.
+- 2,453 empty security-impact assemblies are optional under the provisional OSCAL SSP 1.2.3 interpretation.
+- 90 partial security-impact assemblies remain blockers if emitted because they are missing 179 required C/I/A child occurrences.
+- 42 records are missing required `status.state`.
+- One record belongs to both blocker groups, producing 131 unique records requiring review.
+- 2,682 records pass this narrow security/status cardinality check.
+- Component hydration remains incomplete: 4,452 raw Archer component-reference payloads remain.
 - The current 17-path registry/mapping subset is not a complete OSCAL SSP.
-  Required whole-document areas still need a version-pinned coverage review,
-  including `import-profile`, `control-implementation`,
-  `system-information`, complete required metadata/system-characteristics
-  fields, hydrated components, and assembled-document schema/constraint
-  validation.
-- Graph integrity and mapped-payload shape success do not authorize DIM/FACT
-  writes. Keep `EXECUTE_WRITES = False`.
+- This narrow cardinality check does not prove whole-document SSP conformance or write readiness.
+- `EXECUTE_WRITES = False`; no DIM/FACT writes or permanent objects were created by these diagnostics.
 
 ## Immediate engineering focus
 
-In the **same Snowflake session** that still has the successful Cell 7 data
-frames, run only:
+Review the cause and disposition of the 131 unique blocker records before changing mapper behavior:
 
-[`notebooks/validation/RUN_AFTER_07_ssp_required_field_gap_review.py`](../notebooks/validation/RUN_AFTER_07_ssp_required_field_gap_review.py)
+1. 90 records with partial security-impact assemblies.
+2. 42 records missing required `status.state`.
+3. One record overlaps both groups.
 
-No rerun of Cells 1-7 is needed for this diagnostic. It prints aggregate counts
-only and never displays source record IDs, Archer field names, source values, or
-payloads. Paste its complete output at the end of this file.
-
-The payload-semantics validator was also corrected so future runs no longer
-count optional empty security-impact assemblies as required gaps or call partial
-C/I/A assemblies complete.
-
-## Version decision required before production changes
-
-Confirm the OSCAL target version before suppressing optional assemblies,
-expanding the required registry scope, or changing production mapping behavior.
-OSCAL SSP 1.2.3 is the recommended current target unless the program requires an
-older release.
-
-## Handoff to Codex
-
-Treat run `20260908T201705Z` as the latest verified Snowflake evidence. Next,
-review the aggregate output from the new security/status cardinality diagnostic,
-then pin the OSCAL version and plan the missing full-SSP scope. Do not enable
-writes.
+Do not enable writes. After the blocker disposition is understood, pin the target OSCAL version and perform the full required-SSP coverage review, including missing whole-document areas and Phase 2 component hydration.
