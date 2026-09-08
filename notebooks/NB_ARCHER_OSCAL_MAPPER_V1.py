@@ -624,11 +624,29 @@ def _element_type(element_path):
 def _canonical_registry_rows(element_registry_dataframe, model_key):
     rows = []
     for row in element_registry_dataframe.collect():
-        model = _registry_value(row, "OSCAL_MODEL", "MODEL_NAME", "MODEL")
+        model = _registry_value(
+            row,
+            "OSCAL_MODEL_KEY",
+            "OSCAL_MODEL",
+            "MODEL_NAME",
+            "MODEL",
+        )
         if model and str(model).strip().upper() != model_key.upper():
             continue
+
+        is_active = _registry_value(row, "IS_ACTIVE", "ACTIVE")
+        if is_active is not None and str(is_active).strip().upper() in {
+            "FALSE",
+            "F",
+            "NO",
+            "N",
+            "0",
+        }:
+            continue
+
         path = _registry_value(
             row,
+            "NODE_PATH",
             "OSCAL_ELEMENT_PATH",
             "ELEMENT_PATH",
             "JSON_PATH",
@@ -638,6 +656,7 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
         path = str(path).strip()
         parent = _registry_value(
             row,
+            "PARENT_NODE_PATH",
             "PARENT_ELEMENT_PATH",
             "PARENT_PATH",
         )
@@ -647,14 +666,27 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
             "ELEMENT_LEVEL",
             "LEVEL_NUMBER",
         )
+        process_order = _registry_value(row, "PROCESS_ORDER")
+        derived_level = path.count(".") + 1
         rows.append(
             {
                 "element_path": path,
                 "parent_path": str(parent).strip() if parent else _derive_parent_path(path),
-                "level": int(level) if level is not None else path.count(".") + 1,
+                "level": int(level) if level is not None else derived_level,
+                "process_order": (
+                    int(process_order)
+                    if process_order is not None
+                    else derived_level * 1000000
+                ),
             }
         )
-    rows.sort(key=lambda item: (item["level"], item["element_path"]))
+    rows.sort(
+        key=lambda item: (
+            item["process_order"],
+            item["level"],
+            item["element_path"],
+        )
+    )
     if not rows:
         raise ValueError("No registry paths found for configured OSCAL model")
     return rows
