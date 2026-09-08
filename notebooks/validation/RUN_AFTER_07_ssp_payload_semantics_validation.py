@@ -3,12 +3,16 @@
 # Run this temporary Snowflake Python cell after Mapper V1 Cell 7.  It checks
 # aggregate payload shapes and semantic value classes without printing source
 # records or payload contents.  It creates no permanent objects and performs
-# no DIM or FACT writes.
+# no DIM or FACT writes. OSCAL SSP 1.2.3 is used provisionally until the
+# project pins a version in CONFIG. This validates only the currently mapped
+# payload scope; it is not whole-document OSCAL conformance validation.
 
 from collections import Counter
 import json
 import uuid
 
+
+PROVISIONAL_OSCAL_VERSION = "1.2.3"
 
 if CONFIG.get("EXECUTE_WRITES", False):
     raise RuntimeError(
@@ -32,11 +36,11 @@ PATHS = {
     "components": "system-security-plan.system-implementation.components[]",
 }
 
-SECURITY_OBJECTIVES = {
+SECURITY_OBJECTIVES = (
     "security-objective-confidentiality",
     "security-objective-integrity",
     "security-objective-availability",
-}
+)
 
 ALLOWED_SECURITY_VALUES = {
     "low",
@@ -132,18 +136,40 @@ for row in final_nodes_df.select(
     if path == PATHS["security_impact"]:
         stats["security_total"] += 1
         if not payload:
-            stats["security_empty"] += 1
+            # security-impact-level is optional in OSCAL SSP 1.2.3. The
+            # registry graph still materializes an empty structural node; a
+            # final serializer should omit that absent optional assembly.
+            stats["security_absent_optional"] += 1
             continue
 
-        present_objectives = SECURITY_OBJECTIVES.intersection(payload)
-        if len(present_objectives) < len(SECURITY_OBJECTIVES):
-            stats["security_incomplete_objective_nodes"] += 1
+        present_objectives = {
+            objective
+            for objective in SECURITY_OBJECTIVES
+            if (
+                isinstance(payload.get(objective), str)
+                and bool(payload.get(objective).strip())
+            )
+        }
+        missing_objectives = [
+            objective
+            for objective in SECURITY_OBJECTIVES
+            if objective not in present_objectives
+        ]
+        if missing_objectives:
+            stats["security_partial_assemblies"] += 1
+            stats[
+                "security_missing_required_objective_occurrences"
+            ] += len(missing_objectives)
+            for objective in missing_objectives:
+                stats["security_missing_" + objective] += 1
+        else:
+            stats["security_complete_assemblies"] += 1
 
         invalid_value_found = False
-        value_found = False
-        for objective in present_objectives:
+        for objective in SECURITY_OBJECTIVES:
+            if objective not in payload:
+                continue
             value = payload.get(objective)
-            value_found = True
             if not isinstance(value, str) or not value.strip():
                 invalid_value_found = True
                 stats["security_invalid_type_or_empty_occurrences"] += 1
@@ -160,10 +186,10 @@ for row in final_nodes_df.select(
                 invalid_value_found = True
                 stats["security_unreviewed_label_occurrences"] += 1
 
-        if value_found and not invalid_value_found:
-            stats["security_semantically_valid"] += 1
+        if present_objectives and not invalid_value_found:
+            stats["security_populated_value_valid"] += 1
         else:
-            stats["security_semantically_invalid"] += 1
+            stats["security_populated_value_invalid"] += 1
 
     elif path == PATHS["status"]:
         stats["status_total"] += 1
@@ -244,13 +270,20 @@ for row in final_nodes_df.select(
 
 print("=" * 72)
 print("SSP READ-ONLY PAYLOAD SEMANTICS VALIDATION")
+print("Provisional evaluation target: OSCAL SSP", PROVISIONAL_OSCAL_VERSION)
+print("CONFIG-pinned OSCAL version:", CONFIG.get("OSCAL_VERSION", "<not pinned>"))
 print("=" * 72)
 
 print("Security-impact nodes:", stats["security_total"])
-print("  Empty/no source values:", stats["security_empty"])
-print("  Semantically valid populated nodes:", stats["security_semantically_valid"])
-print("  Semantically invalid populated nodes:", stats["security_semantically_invalid"])
-print("  Incomplete objective nodes:", stats["security_incomplete_objective_nodes"])
+print("  Optional absent assemblies:", stats["security_absent_optional"])
+print("  Populated assemblies with valid values:", stats["security_populated_value_valid"])
+print("  Populated assemblies with invalid values:", stats["security_populated_value_invalid"])
+print("  Complete C/I/A assemblies:", stats["security_complete_assemblies"])
+print("  Partial C/I/A assemblies:", stats["security_partial_assemblies"])
+print("  Missing required objective occurrences in partial assemblies:", stats["security_missing_required_objective_occurrences"])
+print("    Missing confidentiality:", stats["security_missing_security-objective-confidentiality"])
+print("    Missing integrity:", stats["security_missing_security-objective-integrity"])
+print("    Missing availability:", stats["security_missing_security-objective-availability"])
 print("  Standard value occurrences:", stats["security_standard_value_occurrences"])
 print("  Reviewed legacy LOE occurrences:", stats["security_reviewed_legacy_occurrences"])
 print("  Invalid type/empty occurrences:", stats["security_invalid_type_or_empty_occurrences"])
@@ -278,37 +311,48 @@ print("  Raw Archer reference payloads:", stats["components_raw_reference_payloa
 print("  Non-raw payloads:", stats["components_nonraw_payloads"])
 
 
-phase_one_issues = {
-    "security-impact normalization": stats["security_semantically_invalid"],
+populated_value_issues = {
+    "security-impact value normalization": stats["security_populated_value_invalid"],
     "status normalization": stats["status_semantically_invalid"],
     "property shaping": stats["props_invalid"],
     "responsible-party shaping": stats["responsible_parties_invalid"],
     "document-ID shaping": stats["document_ids_invalid"],
 }
 
-remaining_phase_one = {
-    name: count for name, count in phase_one_issues.items() if count
+remaining_value_issues = {
+    name: count for name, count in populated_value_issues.items() if count
 }
 
 print("\n=== READINESS RESULT ===")
-if remaining_phase_one:
-    print("PHASE 1 REVIEW REQUIRED")
-    for name, count in remaining_phase_one.items():
+if remaining_value_issues:
+    print("POPULATED VALUE-SHAPE REVIEW REQUIRED")
+    for name, count in remaining_value_issues.items():
         print(" -", name + ":", count, "invalid populated nodes")
 else:
-    print("PHASE 1 PAYLOAD SHAPES PASSED")
+    print("POPULATED VALUE SHAPES PASSED")
 
-required_field_source_gaps = (
-    stats["security_empty"]
-    + stats["security_incomplete_objective_nodes"]
+missing_required_occurrences = (
+    stats["security_missing_required_objective_occurrences"]
     + stats["status_empty_or_missing"]
 )
-if required_field_source_gaps:
+if missing_required_occurrences:
     print(
-        "REQUIRED-FIELD SOURCE GAPS REMAIN:",
-        required_field_source_gaps,
-        "aggregate empty/incomplete node observations",
+        "OSCAL 1.2.3 CARDINALITY/REQUIRED-FIELD GAPS:",
+        missing_required_occurrences,
+        "missing required field occurrences",
     )
+    print(
+        "  Missing objectives inside partial security-impact assemblies:",
+        stats["security_missing_required_objective_occurrences"],
+    )
+    print(
+        "  Missing required status.state occurrences:",
+        stats["status_empty_or_missing"],
+    )
+print(
+    "OPTIONAL ABSENT SECURITY-IMPACT ASSEMBLIES (NOT REQUIRED GAPS):",
+    stats["security_absent_optional"],
+)
 
 if stats["components_raw_reference_payloads"]:
     print(
@@ -318,7 +362,7 @@ if stats["components_raw_reference_payloads"]:
     )
 
 priority_order = [
-    "security-impact normalization",
+    "security-impact value normalization",
     "status normalization",
     "property shaping",
     "responsible-party shaping",
@@ -326,10 +370,10 @@ priority_order = [
 ]
 
 next_focus = next(
-    (name for name in priority_order if phase_one_issues[name]),
+    (name for name in priority_order if populated_value_issues[name]),
     (
-        "required-field source-gap review"
-        if required_field_source_gaps
+        "OSCAL 1.2.3 security/status cardinality source-gap review"
+        if missing_required_occurrences
         else (
             "component reference hydration"
             if stats["components_raw_reference_payloads"]
@@ -339,4 +383,8 @@ next_focus = next(
 )
 
 print("NEXT ENGINEERING FOCUS:", next_focus)
+print(
+    "FULL-SCOPE WARNING: this mapped-subset check does not validate a complete "
+    "assembled SSP or authorize writes."
+)
 
