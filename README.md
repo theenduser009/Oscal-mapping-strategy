@@ -36,17 +36,18 @@ missing `status.state` values.
 
 ## Immediate next action
 
-The repository target is now pinned to **NIST OSCAL SSP 1.2.3**. In the same
-live Snowflake session, run the aggregate-only
-[minimum-required SSP scope audit](notebooks/validation/RUN_AFTER_07_ssp_v123_minimum_required_scope_audit.py).
-No rerun of Mapper Cells 1-7 is needed if the existing session is still active;
-the audit explicitly recognizes a pre-pin session. If the session was restarted,
-use the updated Cell 1 and run Cells 1-7 first.
+The minimum-required-scope audit now proves that all 2,813 current records are
+blocked by SSP completeness gaps. In the same live Snowflake session, run the
+aggregate-only
+[required-source readiness audit](notebooks/validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py).
+It determines whether each missing path and field already has executable
+mapping/source evidence, needs registry activation, needs nested-payload
+shaping, or requires an approved controlled configuration value.
 
-The audit checks the required SSP skeleton and minimum fields. It does not
-assemble a final OSCAL JSON document, replace official schema/constraint
-validation, or authorize writes. The current 17-path subset and 4,452 raw
-component references remain incomplete. Keep `EXECUTE_WRITES = False`.
+No rerun of Mapper Cells 1-7 is needed in the active session. This diagnostic
+does not expose source identifiers or values, change the graph, assemble final
+OSCAL JSON, replace official validation, or authorize writes. Keep
+`EXECUTE_WRITES = False`.
 
 ## Read-only inspection SQL
 
