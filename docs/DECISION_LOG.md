@@ -62,3 +62,10 @@ Confirmed mapping state:
 - Existing loaded `props` rows contained raw values and were not OSCAL-ready.
 - The consolidated Mapper V1 now contains generic extension-property and Archer select-value transformation logic, but its `props` runtime result still requires a read-only Snowflake validation.
 - `status.state` semantic lookup and some optional branches remain incomplete.
+
+## 2026-09-08 — Cells 1–3 Snowflake checkpoint
+
+Cells 1 and 2 completed successfully. The RAW source contains 2,813 rows and 2,813 distinct selected records, so the current physical source is already one row per `CONTENT_ID`; Cell 2 did not need to deduplicate it. The mapping artifact contains 608 rows, and 114,471 Archer select values were loaded.
+
+Cell 3 also completed successfully. Snowflake emitted a benign warning because Pandas filtering and sorting retained a non-standard index before `session.create_dataframe`. Cell 3 now calls `reset_index(drop=True)` before that conversion. This changes no mapping data and prevents the warning. Writes remain disabled.
+
