@@ -29,7 +29,11 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 - Direct mappings preserve approved source values.
 - Transform mappings must execute through the shared dispatcher before payload construction.
 - Archer select IDs resolve through `ARCHER_META_VALUE`.
-- FIPS 199 values normalize to `low`, `moderate`, or `high`.
+- Recognized FIPS 199 values normalize to `low`, `moderate`, or `high`.
+- Reviewed legacy LOE labels remain strings; the mapper must not invent a FIPS equivalence.
+- System status uses an explicit OSCAL crosswalk; `other` includes an explanatory remark.
+- Document identifiers and property values must satisfy their OSCAL string contracts.
+- Transient helper fields never become OSCAL properties.
 - Approved responsible-party fields become OSCAL role objects.
 - Extension properties become stable `name`/`value` objects.
 - Helper, TBD, empty, and unapproved values do not become final OSCAL properties.
