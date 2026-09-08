@@ -24,4 +24,10 @@ After Cell 7 completes with writes disabled, run the separate
 [SSP scope and coverage validation](../validation/RUN_AFTER_07_ssp_scope_validation.py).
 It is a temporary diagnostic cell, not an eighth production cell.
 
+Once scope validation passes, run the separate
+[SSP payload-semantics validation](../validation/RUN_AFTER_07_ssp_payload_semantics_validation.py).
+It checks security-impact, status, property, responsible-party, document-ID,
+and component-reference payload shapes without printing source payloads or
+writing to DIM/FACT tables.
+
 The repository baseline keeps `EXECUTE_WRITES = False`.
