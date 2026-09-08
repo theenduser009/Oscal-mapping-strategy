@@ -185,3 +185,31 @@ Do **not** enable `EXECUTE_WRITES` yet. Production mapper changes should be revi
 ## Handoff to Codex
 
 Codex/Desktop should pull this file first. Treat the semantic failure diagnostic above as the latest verified Snowflake runtime evidence. Continue from the Phase 1 semantic correction plan; do not reopen duplicate-source, graph-cardinality, or edge-linkage investigations unless a regression appears. Keep `EXECUTE_WRITES = False`.
+
+## Next checkpoint: controlled-vocabulary labels
+
+The semantic failure diagnostic has been reviewed. It is sufficient to define
+the deterministic document-ID and helper-property corrections, but it
+deliberately did not display the controlled-vocabulary labels needed to approve
+security-impact and status mappings.
+
+Run
+`notebooks/validation/RUN_AFTER_07_ssp_crosswalk_review.py`
+in the existing successful Cell 7 session. This read-only cell displays only
+Archer lookup metadata labels and aggregate occurrence counts for the three
+security objectives and `status.state`. It does not display Archer IDs, source
+record IDs, or complete payloads and performs no writes.
+
+After that output is reviewed, make one synchronized production revision to
+the authoritative notebook and affected split cells:
+
+- convert the document `identifier` to its OSCAL string representation;
+- exclude `HELPER_PTA_CALC` as a transient helper rather than emitting it as
+  an OSCAL property;
+- route security objectives through a stable target-path transform and apply
+  only an approved label crosswalk;
+- resolve and normalize `status.state` using an approved explicit crosswalk,
+  leaving unknown values fail-closed;
+- keep component hydration in Phase 2.
+
+Keep `EXECUTE_WRITES = False`.
