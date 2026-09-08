@@ -75,3 +75,9 @@ The first read-only Mapper V1 run reached Cell 7 but stopped before graph constr
 
 Cell 5 now recognizes the actual Snowflake registry columns, excludes explicitly inactive rows, and sorts by `PROCESS_ORDER`. The correction passes Python syntax validation. No DIM or FACT writes occurred, and `EXECUTE_WRITES` remains `False`.
 
+## 2026-09-08 — Canonical mapping ownership correction
+
+After the registry-schema fix, Cell 7 built and validated a read-only structural graph, reported zero duplicate or dangling keys, passed pre-write validation, and correctly made no DIM/FACT changes. It then failed in the optional coverage helper because Cell 3 had produced an empty mapping list.
+
+The mapping CSV uses inconsistent model labels, while the registry uses the stable model key `SSP`. Cell 3 no longer filters mappings by the CSV display label. It now uses the active registry paths as the authoritative model boundary, assigns every mapping to its deepest active registry owner, derives a target field from the relative OSCAL path when necessary, and fails early if no mapping is owned. A focused local test and Python syntax validation passed. Writes remain disabled.
+
