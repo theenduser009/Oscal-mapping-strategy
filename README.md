@@ -39,3 +39,4 @@ Return only the two counts. The notebook's Cell 2 now fails closed when duplicat
 ## Read-only inspection SQL
 
 - [Show full OSCAL paths, DIM payloads, and FACT relationships for one SSP](sql/show_oscal_path_and_payload.sql)
+- [Drill into `system-characteristics` and all descendant payloads](sql/drill_down_system_characteristics.sql)
