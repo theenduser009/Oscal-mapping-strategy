@@ -28,7 +28,9 @@ Once scope validation passes, run the separate
 [SSP payload-semantics validation](../validation/RUN_AFTER_07_ssp_payload_semantics_validation.py).
 It checks security-impact, status, property, responsible-party, document-ID,
 and component-reference payload shapes without printing source payloads or
-writing to DIM/FACT tables.
+writing to DIM/FACT tables. The corrected version distinguishes optional
+absent security-impact from partial C/I/A assemblies under provisional OSCAL
+SSP 1.2.3.
 
 If that validator reports semantic failures, run the privacy-safe
 [semantic failure diagnostic](../validation/RUN_AFTER_07_ssp_semantic_failure_diagnostic.py).
@@ -42,13 +44,22 @@ source record IDs, or complete payloads.
 
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
-## Current reviewed semantic revision
+## Current post-revision checkpoint
 
-The authoritative notebook and split Cell 4 are synchronized. In a Snowflake
-session that already completed Cell 7, replace Cell 4 and rerun Cells 4-7. Then
-run the scope validator followed by the updated payload-semantics validator.
-Keep `EXECUTE_WRITES = False`.
+Run `20260908T201705Z` passed graph and pre-write validation with 51,500
+nodes, 48,687 edges, zero duplicate/dangling keys, and no writes. The reviewed
+semantic revision behaved as expected.
 
-The revision preserves reviewed legacy LOE strings without inventing FIPS
-equivalences, applies the explicit status crosswalk, converts document
-identifiers to strings, and excludes `HELPER_PTA_CALC` as transient.
+In the same Snowflake session, run the separate
+[security/status cardinality and source-gap review](../validation/RUN_AFTER_07_ssp_required_field_gap_review.py).
+It is aggregate-only and read-only. You do not need to rerun Cells 1-7.
+
+The earlier 2,585 aggregate mixed optional absence with true cardinality
+gaps. Under provisional OSCAL SSP 1.2.3, the current narrow count is 221
+missing required field occurrences: 179 objectives inside 90 partial
+security-impact assemblies and 42 missing `status.state` values. The project
+must pin its target OSCAL version before production conformance changes.
+
+The current 17-path mapped subset is not a complete SSP, so even a clean
+result from this narrow diagnostic does not authorize writes. Keep
+`EXECUTE_WRITES = False`.
