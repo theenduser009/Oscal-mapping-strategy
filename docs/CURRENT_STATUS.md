@@ -217,37 +217,88 @@ PHASE 2 COMPONENT HYDRATION REMAINS: 4452 raw reference payloads
 NEXT ENGINEERING FOCUS: required-field source-gap review
 ```
 
-## Interpretation
+## Post-review OSCAL version/cardinality correction
 
-This is the authoritative latest checkpoint.
+The earlier Snowflake output above is preserved as historical runtime evidence, but
+its line `REQUIRED-FIELD SOURCE GAPS REMAIN: 2585` is **not** the current
+authoritative required-gap total.
 
-- The controlled semantic revision worked as intended.
-- Graph integrity remains clean: zero duplicate node/edge keys and zero dangling edges.
-- The 272-node/edge reduction is fully explained by the deliberate exclusion of transient `HELPER_PTA_CALC` props.
-- Security-impact populated nodes are now all semantically accepted under the reviewed policy: 110 standard occurrences and 791 reviewed legacy LOE occurrences, with zero unreviewed/invalid occurrences.
-- Status is now valid for all 2771 populated states; 42 records are empty/no-source rather than semantically invalid.
-- All 12,035 emitted properties now have valid OSCAL name/value shape.
-- All 2,813 document IDs now have valid identifier shape.
-- All 9,344 responsible-party nodes remain valid.
-- Phase 1 payload shape work is therefore complete for the currently populated mapped scope.
-- Remaining Phase 1 concern is source completeness: 2,585 aggregate empty/incomplete observations.
-- Phase 2 still requires hydration/resolution of 4,452 raw Archer component references.
+The current review uses OSCAL SSP 1.2.3 provisionally because the repository has
+not yet pinned an OSCAL version in `CONFIG`. Under that version:
+
+- `security-impact-level` is optional.
+- If `security-impact-level` is emitted, confidentiality, integrity, and
+  availability are all required.
+- `system-characteristics.status` and `status.state` are required.
+
+The verified runtime counts therefore reclassify as follows:
+
+```text
+2453 no-objective security nodes = optional absence, not required-field gaps
+90 partial security-impact assemblies
+91 objective values present in those partial assemblies
+179 missing required objective occurrences in those partial assemblies
+42 missing required status.state occurrences
+221 missing required field occurrences in this narrow security/status check
+```
+
+The unique affected-record count and source-versus-transform cause split must be
+measured by the new aggregate-only diagnostic. The mapper still materializes
+empty structural `{}` security nodes; omitting them applies to assembled OSCAL
+output unless a separate graph-policy change is approved. A projection that
+also omits those nodes from the graph would be 49,047 nodes and 46,234 edges,
+but no such production change has been made.
+
+## Corrected interpretation
+
+- Run `20260908T201705Z` passed graph and pre-write validation with zero
+  duplicate or dangling keys and no writes.
+- The 272-node/edge reduction is fully explained by the deliberate exclusion
+  of transient `HELPER_PTA_CALC` properties.
+- Populated value normalization passed for the currently mapped subset.
+- The 2,453 empty security-impact assemblies are not required gaps under the
+  provisional 1.2.3 contract.
+- The 90 partial security-impact assemblies are cardinality blockers if emitted;
+  together they are missing 179 required objective fields.
+- The 42 missing `status.state` values are required-field blockers.
+- The corrected narrow missing-required-field count is therefore 221, not
+  2,585.
+- Component hydration remains incomplete: 4,452 component payloads still carry
+  raw Archer references.
+- The current 17-path registry/mapping subset is not a complete OSCAL SSP.
+  Required whole-document areas still need a version-pinned coverage review,
+  including `import-profile`, `control-implementation`,
+  `system-information`, complete required metadata/system-characteristics
+  fields, hydrated components, and assembled-document schema/constraint
+  validation.
+- Graph integrity and mapped-payload shape success do not authorize DIM/FACT
+  writes. Keep `EXECUTE_WRITES = False`.
 
 ## Immediate engineering focus
 
-Keep `EXECUTE_WRITES = False`.
+In the **same Snowflake session** that still has the successful Cell 7 data
+frames, run only:
 
-The next action is a **read-only required-field source-gap review**. Determine which of the 2,585 empty/incomplete observations are:
+[`notebooks/validation/RUN_AFTER_07_ssp_required_field_gap_review.py`](../notebooks/validation/RUN_AFTER_07_ssp_required_field_gap_review.py)
 
-1. legitimate optional/missing source values,
-2. source fields that are expected but currently unpopulated,
-3. mapping candidates with no source data in this dataset,
-4. true required-field gaps that should block write readiness.
+No rerun of Cells 1-7 is needed for this diagnostic. It prints aggregate counts
+only and never displays source record IDs, Archer field names, source values, or
+payloads. Paste its complete output at the end of this file.
 
-Do not reopen graph structure, deterministic identity, security/status crosswalk, document-ID shaping, or helper-property handling unless a regression appears. Do not begin component hydration until this Phase 1 source-gap review is complete.
+The payload-semantics validator was also corrected so future runs no longer
+count optional empty security-impact assemblies as required gaps or call partial
+C/I/A assemblies complete.
+
+## Version decision required before production changes
+
+Confirm the OSCAL target version before suppressing optional assemblies,
+expanding the required registry scope, or changing production mapping behavior.
+OSCAL SSP 1.2.3 is the recommended current target unless the program requires an
+older release.
 
 ## Handoff to Codex
 
-Codex/Desktop should pull this file first and treat the `20260908T201705Z` run plus the post-revision scope/semantic validators as the latest verified Snowflake evidence.
-
-Continue with a read-only required-field source-gap diagnostic while keeping `EXECUTE_WRITES = False`. The mapper should not be redesigned; the semantic revision is now validated.
+Treat run `20260908T201705Z` as the latest verified Snowflake evidence. Next,
+review the aggregate output from the new security/status cardinality diagnostic,
+then pin the OSCAL version and plan the missing full-SSP scope. Do not enable
+writes.
