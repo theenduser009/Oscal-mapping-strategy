@@ -8,7 +8,9 @@ Last reconciled: 2026-09-08
 - Generic architecture remains: configuration, inputs, canonical mapping, helpers/transforms, graph builder, guarded loader, orchestrator.
 - Keep `EXECUTE_WRITES = False` while validating.
 
-## Latest successful read-only graph checkpoint
+## Previously validated baseline
+
+Prior clean read-only checkpoint before the semantic revision:
 
 ```text
 Graph nodes: 51772
@@ -21,136 +23,17 @@ PRE-WRITE VALIDATION PASSED
 EXECUTE_WRITES = False
 ```
 
-Source records / SSP roots: 2813 / 2813. Tree reconciliation is exact: 51,772 - 2,813 = 48,959 edges.
+The semantic review identified four Phase 1 fixes: security-impact normalization, status normalization, document-ID string shaping, and exclusion of transient `HELPER_PTA_CALC`. Component hydration remains Phase 2.
 
-## Latest scope validation
+## Controlled-vocabulary review used for the revision
 
-- Active registry paths: 17
-- Mapped registry owner paths: 10
-- Structural paths without owned mappings: 7
-- Canonical mapping rows: 54
-- Mappings with source data: 38
-- Mappings without source data: 16
-- Mapping-row source-data coverage: 70.37%
+Security-impact labels observed:
 
-Generated nodes include: authorization-boundary 2813, components 4804, document-ids 2813, metadata 2813, props 12307, responsible-parties 9344, security-impact-level 2813, status 2813, system-characteristics 2813, system-ids 2813, system-implementation 2813, system-security-plan 2813.
+- Confidentiality: `<missing>` 2454, Legacy LOE C 148, Legacy LOE C + DFARS 115, Low 36, Legacy LOE D + DFARS 30, Legacy LOE A 13, Legacy LOE D 12, Legacy LOE B 5.
+- Integrity: `<missing>` 2542, Legacy LOE C + DFARS 98, Legacy LOE C 80, Low 37, Legacy LOE D + DFARS 30, Legacy LOE D 12, Legacy LOE A 9, Legacy LOE B 5.
+- Availability: `<missing>` 2542, Legacy LOE C + DFARS 98, Legacy LOE C 80, Low 37, Legacy LOE D + DFARS 30, Legacy LOE D 12, Legacy LOE A 9, Legacy LOE B 5.
 
-## Payload semantics checkpoint
-
-- Security-impact: 2813 nodes; 2453 empty; 360 populated invalid; 0 populated valid; 90 incomplete objective nodes; 901 unrecognized value occurrences.
-- Status: 2813 invalid / 0 valid.
-- Properties: 12035 valid / 272 invalid.
-- Responsible parties: 9344 valid / 0 invalid.
-- Document IDs: 2813 invalid / 0 valid.
-- Components: 4452 raw Archer reference payloads; 352 non-raw.
-
-## Semantic failure diagnostic summary
-
-### Security impact
-
-```text
-classification:lookup-resolves-to-standard = 110
-classification:recognized-archer-nonstandard-label = 791
-missing-objective-fields = 7538
-nodes = 2813
-not-resolvable-by-current-fips-helper = 791
-objective-value-type:object = 901
-resolvable-by-current-fips-helper = 110
-resolved-standard-value:low = 110
-```
-
-Candidate profile showed only zero- or one-populated-candidate buckets for each objective; no multi-populated candidate collisions were displayed.
-
-### Status
-
-```text
-crosswalk-bucket:already-allowed = 1610
-crosswalk-bucket:candidate-disposition = 1104
-crosswalk-bucket:needs-approved-crosswalk = 57
-empty-after-select-lookup = 42
-lookup-result-type:string = 2771
-nodes = 2813
-state-type:null = 42
-state-type:object = 2771
-```
-
-### Document IDs
-
-```text
-identifier-type:number = 2813
-payload-keys:identifier = 2813
-single-scalar-identifier-candidate = 2813
-```
-
-### Properties
-
-```text
-invalid = 272
-nodes = 12307
-valid = 12035
-source=HELPER_PTA_CALC | reason=non-string-value | type=number | count=272
-```
-
-### Components
-
-```text
-no-known-raw-reference-key = 352
-nodes = 4804
-raw-reference-at-any-depth = 4452
-keys=ContentId,LevelId | count=4452
-keys=interconnections-connecting-information-system | count=352
-```
-
-## LATEST SSP READ-ONLY CONTROLLED-VOCABULARY CROSSWALK REVIEW
-
-The controlled-vocabulary review completed safely. It displayed only lookup metadata labels and aggregate counts, with no source/Archer IDs or complete payloads.
-
-```text
-SSP READ-ONLY CONTROLLED-VOCABULARY CROSSWALK REVIEW
-security-impact nodes = 2813
-status nodes = 2813
-```
-
-### security-objective-confidentiality
-
-```text
-<missing> = 2454
-Legacy LOE C = 148
-Legacy LOE C + DFARS = 115
-Low = 36
-Legacy LOE D + DFARS = 30
-Legacy LOE A = 13
-Legacy LOE D = 12
-Legacy LOE B = 5
-```
-
-### security-objective-integrity
-
-```text
-<missing> = 2542
-Legacy LOE C + DFARS = 98
-Legacy LOE C = 80
-Low = 37
-Legacy LOE D + DFARS = 30
-Legacy LOE D = 12
-Legacy LOE A = 9
-Legacy LOE B = 5
-```
-
-### security-objective-availability
-
-```text
-<missing> = 2542
-Legacy LOE C + DFARS = 98
-Legacy LOE C = 80
-Low = 37
-Legacy LOE D + DFARS = 30
-Legacy LOE D = 12
-Legacy LOE A = 9
-Legacy LOE B = 5
-```
-
-### status.state
+Status labels observed:
 
 ```text
 Decommissioned = 1104
@@ -160,75 +43,211 @@ Reauthorize = 57
 <missing> = 42
 ```
 
-### Safety result
+Reviewed semantic code revision:
+
+- Security objectives route by stable owner path and target field.
+- `Low` normalizes to `low`.
+- Reviewed legacy LOE labels remain explicit reviewed legacy values and are not falsely classified as Low/Moderate/High.
+- Status crosswalk: `Operational -> operational`, `Under Development -> under-development`, `Decommissioned -> disposition`, `Reauthorize -> other` with explanatory remark.
+- Scalar document identifiers convert to strings.
+- `HELPER_PTA_CALC` is excluded as a transient helper.
+- Unknown/multi-valued security/status labels fail closed.
+- Component hydration remains Phase 2.
+
+## LATEST VERIFIED POST-REVISION SNOWFLAKE RUN
+
+Run shown in Snowflake after replacing/rerunning the semantic helper cell and rerunning the mapper:
 
 ```text
-READ-ONLY CROSSWALK REVIEW COMPLETE
-EXECUTE_WRITES = False
-No source/Archer IDs or complete payloads were displayed.
-No DIM/FACT writes or permanent objects were created.
+OSCAL MAPPING RUN
+Model: SSP
+Run ID: 20260908T201705Z
+
+Graph nodes: 51500
+Graph edges: 48687
+Duplicate node keys: 0
+Duplicate edge keys: 0
+Dangling source edges: 0
+Dangling target edges: 0
+PRE-WRITE VALIDATION PASSED
+EXECUTE_WRITES = False; no DIM/FACT changes were made
+
+OSCAL MAPPING RUN COMPLETE
+Nodes: 51500
+Edges: 48687
+Writes: False
 ```
 
-## Interpretation / controlled next step
+This exactly matches the expected structural delta from excluding 272 transient `HELPER_PTA_CALC` property nodes:
 
-This latest review provides the exact label populations needed for an approved crosswalk decision.
+```text
+51772 - 272 = 51500 nodes
+48959 - 272 = 48687 edges
+```
 
-- Security impact: `Low` is already OSCAL-compatible and occurs 36/37/37 times across confidentiality/integrity/availability. The remaining populated labels are legacy Archer LOE labels (`Legacy LOE A/B/C/D`, with some `+ DFARS`) and require an architect/business-approved mapping to OSCAL `low|moderate|high`. Do not infer those mappings automatically.
-- Status: `Operational`, `Under Development`, `Decommissioned`, and `Reauthorize` are the only populated labels observed, plus 42 missing. Before changing production logic, approve an explicit OSCAL status crosswalk. The previous diagnostic bucketed 1,610 values as already allowed, 1,104 as candidate disposition, and 57 as needing approved crosswalk; the explicit labels now show exactly which populations those buckets represent.
-- Document ID shaping remains deterministic: convert the existing numeric `identifier` to the required OSCAL string representation.
-- `HELPER_PTA_CALC` remains the only invalid property profile and should be treated as a transient/helper field rather than broadly stringifying values.
-- Component hydration remains Phase 2 and should stay out of the Phase 1 semantic revision.
+## LATEST SSP READ-ONLY SCOPE VALIDATION
 
-Do **not** enable `EXECUTE_WRITES` yet.
+```text
+Nodes: 51500
+Edges: 48687
+Source records: 2813
+SSP roots: 2813
+Expected tree edges: 48687
+PASS - Cell 7 graph validation passed
+PASS - Cell 7 pre-write validation passed
+PASS - Writes were not executed
+PASS - Graph contains nodes
+PASS - Graph contains source records
+PASS - Exactly one SSP root per source record
+PASS - Tree edge count reconciles
+```
 
-The next production change should be one controlled Cell 3/Cell 4 semantic revision only after the security-impact and status crosswalks are approved. Then rerun the existing read-only graph, scope, payload-semantics, semantic-failure, and crosswalk validators before considering writes.
+Registry/mapping scope remains:
+
+```text
+Active registry paths: 17
+Mapped registry owner paths: 10
+Structural paths without owned field mappings: 7
+```
+
+Generated node counts by element type:
+
+```text
+authorization-boundary  2813
+components              4804
+document-ids            2813
+metadata                2813
+props                   12035
+responsible-parties     9344
+security-impact-level   2813
+status                  2813
+system-characteristics  2813
+system-ids              2813
+system-implementation   2813
+system-security-plan    2813
+```
+
+Generated node counts by registry path reconcile with those counts, including `system-characteristics.props[] = 12035` and `system-implementation.components[] = 4804`.
+
+Payload presence:
+
+```text
+Non-empty payload nodes: 43127
+Structural/empty payload nodes: 8373
+```
+
+Notable payload-presence breakdown:
+
+```text
+authorization-boundary false=2519 true=294
+components false=4804
+document-ids false=2813
+metadata false=2813
+props false=12035
+responsible-parties false=9344
+security-impact-level false=360 true=2453
+status false=2813
+system-characteristics false=2813
+system-ids false=2813
+system-implementation true=2813
+system-security-plan true=2813
+```
+
+Field-level mapping coverage remains:
+
+```text
+Canonical mapping rows: 54
+Mappings with source data: 38
+Mappings without source data: 16
+Mappings with source data percent: 70.37
+```
+
+The current no-source-data list still includes the visible rows from the previous scope review, including metadata publication timestamps, some props, several security-impact candidates, and component references such as `SAP_INTAKE_FORM_INTERCONNECTIONS` and `SUBSYSTEMS`. This is a source-availability/reporting issue, not a graph-integrity failure.
+
+Scope validation result:
+
+```text
+SSP READ-ONLY SCOPE VALIDATION PASSED
+Review the displayed element/path and coverage tables before writes.
+```
+
+## LATEST SSP READ-ONLY PAYLOAD SEMANTICS VALIDATION
+
+The semantic revision now passes Phase 1 payload shape validation:
+
+```text
+Security-impact nodes: 2813
+  Empty/no source values: 2453
+  Semantically valid populated nodes: 360
+  Semantically invalid populated nodes: 0
+  Incomplete objective nodes: 90
+  Standard value occurrences: 110
+  Reviewed legacy LOE occurrences: 791
+  Invalid type/empty occurrences: 0
+  Unreviewed label occurrences: 0
+
+Status nodes: 2813
+  Semantically valid: 2771
+  Semantically invalid: 0
+  Empty/no source state: 42
+
+Property nodes: 12035
+  Valid OSCAL name/value shape: 12035
+  Invalid OSCAL name/value shape: 0
+
+Responsible-party nodes: 9344
+  Valid role/UUID shape: 9344
+  Invalid role/UUID shape: 0
+
+Document-ID nodes: 2813
+  Valid identifier shape: 2813
+  Invalid identifier shape: 0
+
+Component-reference nodes: 4804
+  Raw Archer reference payloads: 4452
+  Non-raw payloads: 352
+```
+
+Readiness result:
+
+```text
+PHASE 1 PAYLOAD SHAPES PASSED
+REQUIRED-FIELD SOURCE GAPS REMAIN: 2585 aggregate empty/incomplete node observations
+PHASE 2 COMPONENT HYDRATION REMAINS: 4452 raw reference payloads
+NEXT ENGINEERING FOCUS: required-field source-gap review
+```
+
+## Interpretation
+
+This is the authoritative latest checkpoint.
+
+- The controlled semantic revision worked as intended.
+- Graph integrity remains clean: zero duplicate node/edge keys and zero dangling edges.
+- The 272-node/edge reduction is fully explained by the deliberate exclusion of transient `HELPER_PTA_CALC` props.
+- Security-impact populated nodes are now all semantically accepted under the reviewed policy: 110 standard occurrences and 791 reviewed legacy LOE occurrences, with zero unreviewed/invalid occurrences.
+- Status is now valid for all 2771 populated states; 42 records are empty/no-source rather than semantically invalid.
+- All 12,035 emitted properties now have valid OSCAL name/value shape.
+- All 2,813 document IDs now have valid identifier shape.
+- All 9,344 responsible-party nodes remain valid.
+- Phase 1 payload shape work is therefore complete for the currently populated mapped scope.
+- Remaining Phase 1 concern is source completeness: 2,585 aggregate empty/incomplete observations.
+- Phase 2 still requires hydration/resolution of 4,452 raw Archer component references.
+
+## Immediate engineering focus
+
+Keep `EXECUTE_WRITES = False`.
+
+The next action is a **read-only required-field source-gap review**. Determine which of the 2,585 empty/incomplete observations are:
+
+1. legitimate optional/missing source values,
+2. source fields that are expected but currently unpopulated,
+3. mapping candidates with no source data in this dataset,
+4. true required-field gaps that should block write readiness.
+
+Do not reopen graph structure, deterministic identity, security/status crosswalk, document-ID shaping, or helper-property handling unless a regression appears. Do not begin component hydration until this Phase 1 source-gap review is complete.
 
 ## Handoff to Codex
 
-Codex/Desktop should pull this file first and treat this controlled-vocabulary review as the latest verified Snowflake evidence. Continue from crosswalk approval and controlled semantic correction; do not reopen graph, duplicate-source, or edge-linkage investigations unless a regression appears. Keep `EXECUTE_WRITES = False`.
+Codex/Desktop should pull this file first and treat the `20260908T201705Z` run plus the post-revision scope/semantic validators as the latest verified Snowflake evidence.
 
-## Reviewed semantic code revision committed
-
-The authoritative notebook, split Cell 4, payload-semantics validator, and
-crosswalk review are now synchronized with the reviewed runtime labels.
-
-Implemented:
-
-- Security objectives are routed by stable owner path and target field.
-  `Low` normalizes to `low`; reviewed legacy LOE labels remain strings and
-  are not falsely reclassified as Low/Moderate/High.
-- Status uses the explicit crosswalk:
-  `Operational -> operational`,
-  `Under Development -> under-development`,
-  `Decommissioned -> disposition`, and
-  `Reauthorize -> other` with an explanatory remark.
-- Scalar document identifiers are converted to strings.
-- `HELPER_PTA_CALC` is excluded as a transient helper.
-- Unknown or multi-valued security/status labels fail closed.
-- Component hydration remains unchanged in Phase 2.
-- `EXECUTE_WRITES = False` remains unchanged.
-
-Local verification passed Python compilation, focused transformation tests for
-all observed labels, document conversion, helper exclusion, and a mock
-payload-validator test.
-
-### Exact next Snowflake action
-
-In the current notebook session:
-
-1. Replace Cell 4 with
-   `notebooks/cells/04_parsing_transform_payload_helpers.py`.
-2. Rerun Cells 4, 5, 6, and 7 in order. Cell 3 does not need replacement or
-   rerunning because the diagnostic proved its `identifier` target is already
-   correct.
-3. Rerun `RUN_AFTER_07_ssp_scope_validation.py`.
-4. Rerun the updated
-   `RUN_AFTER_07_ssp_payload_semantics_validation.py`.
-5. Post both complete outputs here.
-
-Expected structural delta: excluding the 272 helper props should reduce nodes
-from 51,772 to approximately 51,500 and edges from 48,959 to approximately
-48,687 while preserving the forest invariant. Treat these as expectations, not
-hard-coded pass criteria.
-
-Do not enable writes.
+Continue with a read-only required-field source-gap diagnostic while keeping `EXECUTE_WRITES = False`. The mapper should not be redesigned; the semantic revision is now validated.
