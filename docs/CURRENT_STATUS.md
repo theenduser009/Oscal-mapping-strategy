@@ -2,17 +2,15 @@
 
 Last reconciled: 2026-09-08
 
-## Verified state
+## Verified notebook
 
 - Current notebook: `NB_ARCHER_OSCAL_MAPPER_V1`.
 - The generic seven-cell architecture is preserved: configuration, inputs, canonical mapping, helpers/transforms, graph builder, guarded loader, and orchestrator.
-- A prior run read 5,626 source rows but only 2,813 distinct source record IDs.
-- Cell 5 consequently produced duplicate node and edge keys.
-- Cell 6 correctly blocked all writes.
-- The physical RAW-table count has not yet been supplied, so the duplication's physical origin is still unconfirmed.
-- Repository source passes Python syntax compilation. Snowflake runtime validation remains pending because this environment is not connected to the user's Snowflake session or mapping CSV.
+- Keep `EXECUTE_WRITES = False` while debugging.
 
-## What the consolidated notebook restores
+## Restored generic capabilities
+
+The consolidated mapper includes:
 
 - Registry-first hierarchy construction.
 - Deterministic node, UUID, and edge identity.
@@ -20,38 +18,96 @@ Last reconciled: 2026-09-08
 - Archer select-value lookup.
 - FIPS 199 Low/Moderate/High normalization.
 - Approved responsible-party role transformations.
-- A generic Direct/Transform/Extension dispatcher.
-- A fail-closed source-record selector using available technical recency columns.
+- Generic Direct/Transform/Extension dispatch.
+- Fail-closed source-record selection for duplicate source IDs.
 - Mapping coverage output for sprint reporting.
 - Graph validation, pre-write validation, idempotent DIM/FACT merge, and post-load verification.
 
-## Safety gate
+## Duplicate-source investigation
 
-Keep `EXECUTE_WRITES = False`.
+A prior run had:
 
-The source selector behaves as follows:
+- Source rows: 5,626
+- Distinct `SOURCE_RECORD_ID`: 2,813
+- Duplicate graph keys were produced and Cell 6 correctly blocked writes.
 
-1. If RAW has one row per `CONTENT_ID`, it passes rows through.
-2. If RAW contains duplicates and an approved technical load/version column exists, it selects the newest row deterministically.
-3. If RAW contains duplicates but no approved ordering column exists, it stops with an error instead of silently discarding data.
+Do not blindly add `.distinct()` or `drop_duplicates()` to hide this. If duplicate source rows reappear, resolve them using a deterministic technical version/load ordering rule.
+
+## Prior successful read-only graph run
+
+A later read-only SSP run reached graph validation successfully:
+
+- Graph nodes: **19,691**
+- Graph edges: **16,878**
+- Duplicate node keys: **0**
+- Duplicate edge keys: **0**
+- Dangling source edges: **0**
+- Dangling target edges: **0**
+- Pre-write validation: **PASSED**
+- `EXECUTE_WRITES = False`, therefore no DIM/FACT changes were made.
+
+That run then failed only in the mapping-coverage helper with:
+
+```text
+ValueError: Cannot infer schema from empty data
+```
+
+Trace location:
+
+```text
+Cell 7 -> run_oscal_mapping -> build_mapping_coverage
+Cell 4 -> build_mapping_coverage -> session.create_dataframe(output)
+```
+
+This means the coverage helper produced an empty Python `output` list. Do not mask this with an empty-schema workaround until the filtering/ownership reason for zero coverage rows is understood.
+
+## Latest Snowflake runtime error
+
+The newest screenshot shows the mapper now failing earlier during graph construction:
+
+```text
+OSCAL MAPPING RUN
+Model: SSP
+Run ID: 20260908T162917Z
+
+ValueError: Ambiguous collection parent for
+system-security-plan.system-characteristics.authorization-boundary
+instance singleton
+```
+
+Traceback:
+
+```text
+Cell 7, line 45, in <module>
+  run_oscal_mapping(...)
+
+Cell 7, line 15, in run_oscal_mapping
+  nodes_df, edges_df = build_oscal_graph(...)
+
+Cell 5, line 200, in build_oscal_graph
+  raise ValueError(...)
+```
+
+### What Codex should inspect next
+
+Do **not** redesign the notebook and do **not** change the identity contract.
+
+Inspect only the parent-resolution logic around Cell 5 line ~200 and the active registry rows for:
+
+```text
+system-security-plan.system-characteristics
+system-security-plan.system-characteristics.authorization-boundary
+```
+
+`authorization-boundary` is expected to behave as a singleton child under the singleton `system-characteristics` branch. The error text says the builder is treating its parent relationship as ambiguous/collection-like. Determine whether this is caused by:
+
+1. an incorrect `IS_COLLECTION` / `INSTANCE_KEY_RULE` registry value,
+2. multiple parent instances being created for the same source record,
+3. collection-parent detection using path syntax incorrectly, or
+4. source duplication reappearing upstream.
+
+Do not patch around the exception until the exact cause is identified.
 
 ## Immediate next action
 
-Run this read-only SQL in Snowflake:
-
-```sql
-SELECT
-    COUNT(*) AS RAW_ROWS,
-    COUNT(DISTINCT CONTENT_ID) AS DISTINCT_CONTENT_IDS
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW;
-```
-
-Send back:
-
-```text
-RAW_ROWS = ...
-DISTINCT_CONTENT_IDS = ...
-```
-
-After those counts are reviewed, run Cells 1 through 7 with writes still disabled. Runtime results will determine whether the technical source-order candidates need adjustment before SSP mapping resumes at `system-characteristics.props[]`.
-
+From Codex/Desktop, pull this file and the current `notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`, then inspect the active registry values and Cell 5 parent-resolution branch that raises the `Ambiguous collection parent` exception.
