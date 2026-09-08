@@ -207,3 +207,41 @@ Codex/Desktop should pull this file first and treat the payload-semantics output
 ## Error/checkpoint handoff convention
 
 When a new Snowflake result or error is reported from the phone, update this `docs/CURRENT_STATUS.md` file with the exact observed counts/error and enough context for Codex to continue from desktop without requiring screenshots to be re-sent.
+
+## Codex analysis of payload-semantics results
+
+The semantic-validator parser is working correctly. The successful 12,035
+property rows and all 9,344 responsible-party rows rule out a general
+`METADATA_JSON` parsing or Snowpark Row-access problem.
+
+Current evidence indicates:
+
+- Security-impact object keys are correct, but the payload contains
+  non-standard/legacy Archer labels. Those labels must be classified separately
+  from truly unresolved IDs. More than one source mapping can also converge on
+  the same security objective, so candidate collisions must be measured before
+  choosing a precedence rule.
+- Status currently reaches `state` without a dedicated approved OSCAL
+  normalization. The next diagnostic will classify the resolved status into
+  safe crosswalk buckets without printing the value.
+- The document-ID owner collection can fall back to a source-derived
+  `tracking-id` key when the canonical target field is blank; the required
+  `identifier` target must be confirmed and then made explicit in the
+  canonical mapping contract.
+- The 272 invalid properties are a narrow value-type/shape gap. Raw objects or
+  arrays must not be blindly JSON-stringified to make validation pass.
+- Responsible-party shape is currently clean.
+- Component-reference hydration remains Phase 2 and must not be mixed into the
+  Phase 1 semantic corrections.
+
+The exact next step is the read-only
+`notebooks/validation/RUN_AFTER_07_ssp_semantic_failure_diagnostic.py`
+cell. It prints mapping dispatch, aggregate type/key profiles, security
+candidate-collision counts, and safe classification buckets. It prints no
+source record IDs or payload values and performs no writes.
+
+Run it in the existing successful Cell 7 session with
+`EXECUTE_WRITES = False`, then add its complete output below this checkpoint.
+Do not modify the production mapper until this diagnostic is reviewed, so the
+status, document-ID, property, and security changes can be made together in one
+controlled Cell 3/Cell 4 revision.
