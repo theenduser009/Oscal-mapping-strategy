@@ -46,6 +46,22 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 - A write requires unique and non-null node and edge keys, no dangling edges, unique and non-null target PKs, successful idempotent merges, and post-load count verification.
 - Source duplication must be resolved using an explicit technical selection rule. Blind `DISTINCT`, arbitrary `drop_duplicates`, and global-parent shortcuts are prohibited.
 
+
+## Versioned conformance boundary
+
+- Pin the target OSCAL release explicitly before making required/optional
+  claims or changing production emission behavior.
+- A registry node materialized with `{}` is structural graph state, not proof
+  that an optional OSCAL assembly should be emitted in the final document.
+- Cardinality must be evaluated at field-occurrence level. An optional
+  assembly can still have required children when the assembly is present.
+- Graph integrity and mapped-payload shape checks are necessary but do not
+  establish complete OSCAL document conformance.
+- Write readiness requires assembling each SSP and validating it against the
+  pinned release's schema plus applicable OSCAL constraints, in addition to
+  the existing DIM/FACT graph and load checks.
+- Narrow diagnostics must label their scope and cannot authorize writes.
+
 ## Known limitation
 
 Nested collection-to-collection paths require explicit parent-instance context. The consolidated graph builder fails closed when multiple possible parent instances exist and no unique parent-instance key is available. This protects SSP data and makes the remaining POA&M and Assessment Results enhancement explicit.
