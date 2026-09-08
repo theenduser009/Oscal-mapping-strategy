@@ -255,6 +255,7 @@ canonical_mapping_pdf.sort_values(
     inplace=True,
     kind="stable",
 )
+canonical_mapping_pdf.reset_index(drop=True, inplace=True)
 
 canonical_mapping_df = session.create_dataframe(canonical_mapping_pdf)
 
