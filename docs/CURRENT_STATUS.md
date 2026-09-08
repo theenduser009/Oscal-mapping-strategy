@@ -6,7 +6,7 @@ Last reconciled: 2026-09-08
 
 - Current notebook: `NB_ARCHER_OSCAL_MAPPER_V1`.
 - The generic seven-cell architecture is preserved: configuration, inputs, canonical mapping, helpers/transforms, graph builder, guarded loader, and orchestrator.
-- Keep `EXECUTE_WRITES = False` while debugging.
+- Keep `EXECUTE_WRITES = False` while debugging/validating.
 
 ## Restored generic capabilities
 
@@ -33,9 +33,9 @@ A prior run had:
 
 Do not blindly add `.distinct()` or `drop_duplicates()` to hide this. If duplicate source rows reappear, resolve them using a deterministic technical version/load ordering rule.
 
-## Prior successful read-only graph run
+## Earlier read-only graph checkpoint
 
-A later read-only SSP run reached graph validation successfully:
+An earlier SSP run reached:
 
 - Graph nodes: **19,691**
 - Graph edges: **16,878**
@@ -44,85 +44,70 @@ A later read-only SSP run reached graph validation successfully:
 - Dangling source edges: **0**
 - Dangling target edges: **0**
 - Pre-write validation: **PASSED**
-- `EXECUTE_WRITES = False`, therefore no DIM/FACT changes were made.
+- `EXECUTE_WRITES = False`
 
-That run then failed only in the mapping-coverage helper with:
+That run then exposed an empty mapping-coverage helper condition (`Cannot infer schema from empty data`).
 
-```text
-ValueError: Cannot infer schema from empty data
-```
+## Resolved parent-cardinality issue
 
-Trace location:
+A subsequent run failed with:
 
 ```text
-Cell 7 -> run_oscal_mapping -> build_mapping_coverage
-Cell 4 -> build_mapping_coverage -> session.create_dataframe(output)
-```
-
-This means the coverage helper produced an empty Python `output` list. Do not mask this with an empty-schema workaround until the filtering/ownership reason for zero coverage rows is understood.
-
-## Latest Snowflake runtime error
-
-The newest screenshot shows the mapper now failing earlier during graph construction:
-
-```text
-OSCAL MAPPING RUN
-Model: SSP
-Run ID: 20260908T162917Z
-
 ValueError: Ambiguous collection parent for
 system-security-plan.system-characteristics.authorization-boundary
 instance singleton
 ```
 
-Traceback:
+The identified cause was cardinality leaking from mapping type into graph structure. Extension mappings must not create collection cardinality unless the owning registry path is actually a collection such as `props[]`. The registry remains authoritative for hierarchy/cardinality.
+
+## LATEST VERIFIED SNOWFLAKE RUNTIME CHECKPOINT
+
+Screenshot received 2026-09-08 shows a successful full read-only SSP mapper run after the correction.
 
 ```text
-Cell 7, line 45, in <module>
-  run_oscal_mapping(...)
+OSCAL MAPPING RUN
+Model: SSP
+Run ID: 20260908T185543Z
 
-Cell 7, line 15, in run_oscal_mapping
-  nodes_df, edges_df = build_oscal_graph(...)
+Graph nodes: 51772
+Graph edges: 48959
+Duplicate node keys: 0
+Duplicate edge keys: 0
+Dangling source edges: 0
+Dangling target edges: 0
+PRE-WRITE VALIDATION PASSED
+EXECUTE_WRITES = False; no DIM/FACT changes were made
 
-Cell 5, line 200, in build_oscal_graph
-  raise ValueError(...)
+OSCAL MAPPING RUN COMPLETE
+Nodes: 51772
+Edges: 48959
+Writes: False
 ```
 
-### What Codex should inspect next
+### Interpretation
 
-Do **not** redesign the notebook and do **not** change the identity contract.
+This is now the authoritative latest runtime checkpoint:
 
-Inspect only the parent-resolution logic around Cell 5 line ~200 and the active registry rows for:
+- Graph construction completed.
+- The earlier ambiguous collection-parent failure is no longer present in this run.
+- Duplicate-node and duplicate-edge validation both pass at zero.
+- Both referential/dangling-edge checks pass at zero.
+- Pre-write validation passes.
+- Safety gate remained OFF, so no DIM or FACT changes were made.
+- Node/edge counts are **51,772 / 48,959** for this run.
 
-```text
-system-security-plan.system-characteristics
-system-security-plan.system-characteristics.authorization-boundary
-```
+Do not replace these counts with the older 19,691 / 16,878 checkpoint when discussing current state.
 
-`authorization-boundary` is expected to behave as a singleton child under the singleton `system-characteristics` branch. The error text says the builder is treating its parent relationship as ambiguous/collection-like. Determine whether this is caused by:
+## Safety / next-step rule
 
-1. an incorrect `IS_COLLECTION` / `INSTANCE_KEY_RULE` registry value,
-2. multiple parent instances being created for the same source record,
-3. collection-parent detection using path syntax incorrectly, or
-4. source duplication reappearing upstream.
+Do **not** enable `EXECUTE_WRITES` merely because this read-only run passed. Before any write-enabled run, reconcile the 51,772 nodes / 48,959 edges with expected registry/mapping scope and confirm mapping coverage/element-type counts. Keep the duplicate-source guard and graph validation intact.
 
-Do not patch around the exception until the exact cause is identified.
+## Handoff to Codex
 
-## Immediate next action
+Codex/Desktop should pull this file first. Treat the 20260908T185543Z run above as the latest verified Snowflake runtime evidence. Continue from this checkpoint rather than reproducing the earlier duplicate-source or ambiguous-parent investigations unless a regression appears.
 
-From Codex/Desktop, pull this file and the current `notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`, then inspect the active registry values and Cell 5 parent-resolution branch that raises the `Ambiguous collection parent` exception.
+The immediate engineering focus is validation of the resulting SSP scope/content (including mapping coverage and expected element-type populations) while `EXECUTE_WRITES=False`; do not redesign the seven-cell mapper or change the frozen deterministic identity contract.
 
-## Latest correction prepared
+## Error/checkpoint handoff convention
 
-The ambiguous parent error is caused by cardinality leaking from mapping type into graph structure. In Cell 4, the prior condition treated every Extension mapping as a request to create a separate collection instance. If such a row was owned by the singleton `system-characteristics` node, it produced multiple parents, so the singleton `authorization-boundary` child could not choose one.
-
-The correction now creates property collection instances only when the owning registry path is actually `props[]`. Extension mappings can still resolve Archer lookup values, but mapping type no longer changes node cardinality. The registry remains authoritative. The complete notebook and copy-ready Cell 4 contain the correction, and both Python syntax validation and a focused singleton/props regression test pass.
-
-### Snowflake next step
-
-In the existing live session, replace and run only copy-ready Cell 4, then rerun Cell 7. Keep `EXECUTE_WRITES = False`. If the session has restarted, run Cells 1 through 7 in order.
-
-## Error handoff convention
-
-When a new Snowflake error is reported, the newest error and screenshot-derived traceback will be recorded in this `docs/CURRENT_STATUS.md` file. Codex should read this file first, reconcile it with the authoritative notebook, fix the owning cell, validate it, and keep the corresponding copy-ready cell synchronized.
-
+When a new Snowflake result or error is reported from the phone, update this `docs/CURRENT_STATUS.md` file with the exact observed counts/error and enough context for Codex to continue from desktop without requiring screenshots to be re-sent.
