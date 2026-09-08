@@ -5,8 +5,9 @@
 # using aggregate counts only. It never prints record IDs, Archer field names,
 # source values, or payloads. It creates no objects and performs no writes.
 #
-# OSCAL v1.2.3 is a provisional diagnostic target until the project pins an
-# OSCAL version in CONFIG. Under v1.2.3, security-impact-level is optional, but
+# OSCAL v1.2.3 is the repository's pinned diagnostic target. An already-running
+# session that predates the pin may omit OSCAL_VERSION; a conflicting configured
+# version fails closed. Under v1.2.3, security-impact-level is optional, but
 # when emitted all three security-objective child fields are required. Status
 # and status.state are required. This cell does not claim whole-SSP conformance.
 
@@ -15,7 +16,7 @@ import itertools
 import json
 
 
-PROVISIONAL_OSCAL_VERSION = "1.2.3"
+SUPPORTED_OSCAL_VERSION = "1.2.3"
 
 required_review_objects = {
     "CONFIG": globals().get("CONFIG"),
@@ -47,7 +48,7 @@ if not run_result.get("validation_passed", False):
 configured_oscal_version = str(CONFIG.get("OSCAL_VERSION") or "").strip()
 if (
     configured_oscal_version
-    and configured_oscal_version != PROVISIONAL_OSCAL_VERSION
+    and configured_oscal_version != SUPPORTED_OSCAL_VERSION
 ):
     raise RuntimeError(
         "This diagnostic implements OSCAL SSP 1.2.3 cardinality. "
@@ -436,8 +437,11 @@ for edge_row in final_edges_df.select(
 
 print("=" * 78)
 print("READ-ONLY OSCAL SSP SECURITY/STATUS CARDINALITY REVIEW")
-print("Provisional evaluation target: OSCAL SSP", PROVISIONAL_OSCAL_VERSION)
-print("CONFIG-pinned OSCAL version:", CONFIG.get("OSCAL_VERSION", "<not pinned>"))
+print("Validator contract: OSCAL SSP", SUPPORTED_OSCAL_VERSION)
+print(
+    "Session CONFIG OSCAL version:",
+    configured_oscal_version or "<session predates repository pin>",
+)
 print("No record IDs, Archer field names, source values, or payloads are shown.")
 print("=" * 78)
 
@@ -533,7 +537,7 @@ print("Projected edges if graph policy also omits them:", run_edges - omittable_
 print("The mapper currently materializes structural {} nodes; this is not a requested graph change.")
 
 print("\n=== INTERPRETATION GATES ===")
-print("1. Empty security-impact is optional under provisional OSCAL 1.2.3 and is not a required-field gap.")
+print("1. Empty security-impact is optional under OSCAL 1.2.3 and is not a required-field gap.")
 print("2. If security-impact is emitted, all C/I/A children are required; partial assemblies need remediation or whole-assembly omission.")
 print("3. status.state is required; missing or invalid states block the affected record.")
 print("4. Source-only means mapping/transform review; output-only may be a legitimate derived value.")
