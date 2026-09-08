@@ -34,3 +34,8 @@ FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW;
 
 Return only the two counts. The notebook's Cell 2 now fails closed when duplicates exist without an approved technical recency column; it never applies blind `DISTINCT` or arbitrary `drop_duplicates` logic.
 
+
+
+## Read-only inspection SQL
+
+- [Show full OSCAL paths, DIM payloads, and FACT relationships for one SSP](sql/show_oscal_path_and_payload.sql)
