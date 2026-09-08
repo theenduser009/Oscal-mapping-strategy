@@ -101,8 +101,14 @@ def _crosswalk_labels(value):
             "under-major-modification",
             "disposition",
             "other",
+            "legacy-loe-a",
+            "legacy-loe-b",
+            "legacy-loe-c",
+            "legacy-loe-c-+-dfars",
+            "legacy-loe-d",
+            "legacy-loe-d-+-dfars",
         }:
-            labels.append(normalized)
+            labels.append(key)
         else:
             labels.append("<unresolved-value-not-displayed>")
     return labels or ["<empty>"]
