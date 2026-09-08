@@ -35,4 +35,9 @@ If that validator reports semantic failures, run the privacy-safe
 It reports aggregate dispatch, type, key-shape, and collision evidence only;
 it does not print source record IDs or payload values.
 
+When security or status mappings still need a business crosswalk, run the
+[controlled-vocabulary crosswalk review](../validation/RUN_AFTER_07_ssp_crosswalk_review.py).
+It prints only lookup metadata labels and aggregate counts—never Archer IDs,
+source record IDs, or complete payloads.
+
 The repository baseline keeps `EXECUTE_WRITES = False`.
