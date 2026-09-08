@@ -4,6 +4,16 @@
 
 Build one generic, metadata-driven mapper that can be configured for SSP, POA&M, Assessment Results, Assessment Plan, and Component Definition. Do not create a separate growing notebook for each OSCAL model.
 
+## Pinned conformance target
+
+- The repository target is NIST OSCAL SSP 1.2.3.
+- Version-specific required/optional and controlled-value claims must be
+  traceable to the official 1.2.3 metaschemas.
+- The version pin is a conformance contract. It does not change deterministic
+  graph identity, source-record identity, registry ownership, or DIM/FACT keys.
+- A live notebook session started before the pin may be audited read-only, but
+  the next full mapper run must use the pinned Cell 1.
+
 ## Contracts
 
 - Archer `CURATED_JSON` is the transformation source of truth.
@@ -49,8 +59,8 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 
 ## Versioned conformance boundary
 
-- Pin the target OSCAL release explicitly before making required/optional
-  claims or changing production emission behavior.
+- Keep the target OSCAL release pinned explicitly before making required/optional
+  claims or changing production emission behavior. The current target is SSP 1.2.3.
 - A registry node materialized with `{}` is structural graph state, not proof
   that an optional OSCAL assembly should be emitted in the final document.
 - Cardinality must be evaluated at field-occurrence level. An optional
