@@ -7,6 +7,7 @@ Last reconciled: 2026-09-08
 - Current notebook: `NB_ARCHER_OSCAL_MAPPER_V1` / live Snowflake copy shown as `NB_ARCHER_OSCAL_MAPPER_V2` during the latest validation run.
 - Generic architecture remains: configuration, inputs, canonical mapping, helpers/transforms, graph builder, guarded loader, orchestrator.
 - Keep `EXECUTE_WRITES = False` while validating.
+- Repository conformance target: NIST OSCAL SSP `1.2.3`, pinned in authoritative Cell 1.
 
 ## Latest verified mapper run
 
@@ -117,7 +118,7 @@ Phase 1 payload shapes pass for populated mapped values. Component hydration rem
 
 ## Latest read-only OSCAL SSP security/status cardinality review
 
-Provisional evaluation target: OSCAL SSP 1.2.3. `CONFIG` still does not pin an OSCAL version, so this remains provisional until the program target is confirmed.
+Repository contract: OSCAL SSP 1.2.3 is now pinned in Cell 1. The latest verified Snowflake session predates that repository change, so its live `CONFIG` may not display the version; its existing aggregate read-only results remain valid.
 
 ### Record and graph reconciliation
 
@@ -183,7 +184,7 @@ Records with a security source/output discrepancy: 0
 Records with a status source/output discrepancy: 0
 ```
 
-This is the key correction to the earlier aggregate `2585` source-gap interpretation: the 2,453 completely empty security-impact assemblies are optional absence under the provisional OSCAL 1.2.3 contract, not required-field failures. The actual narrow security/status review population is 131 unique records.
+This is the key correction to the earlier aggregate `2585` source-gap interpretation: the 2,453 completely empty security-impact assemblies are optional absence under the pinned OSCAL 1.2.3 contract, not required-field failures. The actual narrow security/status review population is 131 unique records.
 
 ### Optional-omission projection only
 
@@ -202,12 +203,21 @@ Projected edges: 46234
 
 This is a projection only, not a production change.
 
+## OSCAL 1.2.3 version pin and next gate
+
+- The user confirmed OSCAL SSP 1.2.3 as the repository target.
+- Authoritative Mapper V1 Cell 1 and its split copy now set `OSCAL_VERSION = "1.2.3"`.
+- The existing cardinality and payload validators now label 1.2.3 as the pinned contract. They accept an absent version only in an already-running pre-pin session and fail closed on a conflicting version.
+- The new [minimum-required-scope audit](../notebooks/validation/RUN_AFTER_07_ssp_v123_minimum_required_scope_audit.py) checks required SSP branches, cardinality, and minimum payload fields using aggregate-only output.
+- The exact audit contract and NIST source links are documented in [OSCAL SSP 1.2.3 Minimum Contract](OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md).
+- The new audit has passed local syntax and representative in-memory tests but has not yet been run against Snowflake. No new runtime counts are claimed here.
+
 ## Current interpretation
 
 - Graph integrity is clean: zero duplicate keys and zero dangling edges.
 - Source-to-graph record coverage is exact for all 2,813 records.
 - Security/status source values reconcile exactly with generated payload presence; no transformation-loss discrepancy was detected in this check.
-- 2,453 empty security-impact assemblies are optional under the provisional OSCAL SSP 1.2.3 interpretation.
+- 2,453 empty security-impact assemblies are optional under the pinned OSCAL SSP 1.2.3 contract.
 - 90 partial security-impact assemblies remain blockers if emitted because they are missing 179 required C/I/A child occurrences.
 - 42 records are missing required `status.state`.
 - One record belongs to both blocker groups, producing 131 unique records requiring review.
@@ -217,12 +227,8 @@ This is a projection only, not a production change.
 - This narrow cardinality check does not prove whole-document SSP conformance or write readiness.
 - `EXECUTE_WRITES = False`; no DIM/FACT writes or permanent objects were created by these diagnostics.
 
-## Immediate engineering focus
+## Immediate next action
 
-Review the cause and disposition of the 131 unique blocker records before changing mapper behavior:
+If the Snowflake session that produced run `20260908T201705Z` is still active, run only the read-only [OSCAL 1.2.3 minimum-required-scope audit](../notebooks/validation/RUN_AFTER_07_ssp_v123_minimum_required_scope_audit.py) in a new Python cell. You do not need to rerun Mapper Cells 1-7 solely for this audit; it recognizes a pre-pin live session. If the session was restarted, replace Cell 1 with the pinned copy and run Cells 1-7 first.
 
-1. 90 records with partial security-impact assemblies.
-2. 42 records missing required `status.state`.
-3. One record overlaps both groups.
-
-Do not enable writes. After the blocker disposition is understood, pin the target OSCAL version and perform the full required-SSP coverage review, including missing whole-document areas and Phase 2 component hydration.
+Paste the complete aggregate output into this file and report `check status`. The result will become the version-specific mapping backlog for missing required paths and fields. Do not enable writes.
