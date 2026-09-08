@@ -103,3 +103,33 @@ deterministic rules:
 The payload-semantics validator was aligned with these reviewed rules and now
 distinguishes invalid shapes from required-field source gaps. Repository
 `EXECUTE_WRITES` remains `False`; Snowflake runtime revalidation is pending.
+
+## 2026-09-08 — Provisional OSCAL 1.2.3 cardinality correction
+
+The earlier aggregate of 2,585 empty/incomplete observations is no longer
+classified as 2,585 required-field gaps. Under provisional OSCAL SSP 1.2.3,
+`security-impact-level` is optional, but all three C/I/A objectives are
+required when that assembly is emitted. `status.state` remains required.
+
+The verified counts now mean:
+
+- 2,453 no-objective security nodes represent optional absence for final OSCAL
+  emission and are not required-field gaps.
+- 90 partial security-impact assemblies contain 91 values and are missing 179
+  required objective occurrences.
+- 42 records are missing required `status.state`.
+- The narrow security/status missing-required-field total is 221 occurrences.
+- The exact unique affected-record and source-versus-transform split will be
+  measured by the new aggregate-only read-only diagnostic.
+
+This is a validation/interpretation correction, not a production graph change.
+The current 17-path mapped subset also does not constitute a complete SSP:
+required areas such as `import-profile`, `control-implementation`,
+`system-information`, full required metadata/system-characteristics fields,
+component hydration, and assembled-document validation remain.
+
+Added
+`notebooks/validation/RUN_AFTER_07_ssp_required_field_gap_review.py` and
+corrected the payload-semantics validator. The repository still does not pin an
+OSCAL version; confirming the target version is required before production
+conformance decisions. `EXECUTE_WRITES` remains `False`.
