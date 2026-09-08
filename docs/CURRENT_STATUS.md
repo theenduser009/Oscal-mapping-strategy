@@ -170,6 +170,32 @@ The primary blockers are now precisely identified:
 5. The earlier 2453 empty security-impact assemblies remain optional under OSCAL SSP 1.2.3 and should not be confused with these minimum-contract blockers.
 6. `EXECUTE_WRITES=False`; writes remain blocked.
 
+## Next source-readiness checkpoint prepared
+
+The repository now contains the read-only
+[OSCAL SSP 1.2.3 required-source readiness audit](../notebooks/validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py).
+It has passed Python syntax validation, representative in-memory execution
+tests, and an independent classification review. It has not yet been run in
+Snowflake, so no source-readiness counts are claimed here.
+
+The diagnostic inspects the original mapping artifact as well as the current
+canonical mappings. For each hard-coded required OSCAL path and field it keeps
+four axes separate: registry presence, executable mapping candidates, aggregate
+populated-source coverage, and generated valid coverage. It also detects
+candidate collisions, current owner misalignment, exact duplicate artifact
+rows, nested-payload shaping needs, and collection all-member validity. It
+prints no record IDs, Archer field names, source values, payloads, hashes, or
+lookup labels.
+
 ## Immediate next action
 
-Do **not** patch individual records and do **not** enable writes. The next engineering task is to reconcile the five missing required registry branches against the Archer mapping/source model, starting with `system-security-plan.import-profile`, and determine for each branch whether Archer has a direct source, a derived source, or whether a standards-required value must come from controlled configuration/metadata. Then add registry/mapping support generically rather than hard-coding SSP record exceptions.
+In the same live Snowflake notebook session, copy and run the complete
+[required-source readiness audit](../notebooks/validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py)
+in one new Python cell. Do not rerun Mapper Cells 1-7 or the minimum-scope audit
+solely for this step.
+
+Paste the complete aggregate output into this status file and report
+`check status`. The import-profile decision gate will show whether the mapping
+artifact contains a populated candidate or whether an approved controlled
+`SSP_IMPORT_PROFILE_HREF` value must be supplied. No URI or source value is
+invented. Keep `EXECUTE_WRITES = False`.
