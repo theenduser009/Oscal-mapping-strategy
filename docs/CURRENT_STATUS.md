@@ -67,14 +67,9 @@ Edges: 48959
 Writes: False
 ```
 
-## LATEST SSP READ-ONLY SCOPE VALIDATION
-
-Latest screenshots show the separate read-only scope validation cell completed successfully.
-
-### Forest / graph reconciliation
+## Latest SSP read-only scope validation
 
 ```text
-SSP READ-ONLY SCOPE VALIDATION
 Nodes: 51772
 Edges: 48959
 Source records: 2813
@@ -96,7 +91,7 @@ The reconciliation is exact:
 Observed edges = 48,959
 ```
 
-### Registry and mapping scope
+Registry/mapping scope from that run:
 
 ```text
 Active registry paths: 17
@@ -104,21 +99,7 @@ Mapped registry owner paths: 10
 Structural paths without owned field mappings: 7
 ```
 
-Structural/unmapped registry paths shown for review:
-
-```text
-system-security-plan
-system-security-plan.system-implementation
-system-security-plan.system-implementation.components[].component
-system-security-plan.system-implementation.components[].component.links[]
-system-security-plan.system-implementation.components[].component.props[]
-system-security-plan.system-implementation.components[].component.protocols[]
-system-security-plan.system-implementation.components[].component.responsible-roles[]
-```
-
-These are structural paths and are not automatically treated as validation failures.
-
-### Generated node counts by element type
+Generated node counts by element type:
 
 ```text
 authorization-boundary  2813
@@ -135,47 +116,14 @@ system-implementation   2813
 system-security-plan    2813
 ```
 
-### Generated node counts by registry path
-
-```text
-system-security-plan                                                        2813
-system-security-plan.metadata                                               2813
-system-security-plan.metadata.document-ids[]                                2813
-system-security-plan.metadata.responsible-parties[]                         9344
-system-security-plan.system-characteristics                                 2813
-system-security-plan.system-characteristics.authorization-boundary          2813
-system-security-plan.system-characteristics.props[]                         12307
-system-security-plan.system-characteristics.security-impact-level           2813
-system-security-plan.system-characteristics.status                          2813
-system-security-plan.system-characteristics.system-ids[]                    2813
-system-security-plan.system-implementation                                  2813
-system-security-plan.system-implementation.components[]                     4804
-```
-
-### Payload presence
+Payload presence:
 
 ```text
 Non-empty payload nodes: 43399
 Structural/empty payload nodes: 8373
 ```
 
-Breakdown visible in validation output:
-
-```text
-authorization-boundary  populated 2519 / empty 294
-components              populated 4804
-metadata                populated 2813
-props                   populated 12307
-responsible-parties     populated 9344
-security-impact-level   populated 360 / empty 2453
-status                  populated 2813
-system-characteristics  populated 2813
-system-ids              populated 2813
-system-implementation   empty 2813
-system-security-plan    empty 2813
-```
-
-### Field-level mapping coverage
+Field-level mapping coverage:
 
 ```text
 Canonical mapping rows: 54
@@ -184,128 +132,78 @@ Mappings without source data: 16
 Mappings with source data percent: 70.37
 ```
 
-Coverage summary shown in the screenshot includes mapping types/statuses such as:
+## LATEST SSP READ-ONLY PAYLOAD SEMANTICS VALIDATION
+
+Latest screenshot shows the semantic validator completed and produced the following aggregate results.
 
 ```text
-Calculated          In Progress  HAS_SOURCE_DATA=True   2
-Direct              In Progress  HAS_SOURCE_DATA=True   7
-Direct/Transform    In Progress  HAS_SOURCE_DATA=False  6
-Direct/Transform    In Progress  HAS_SOURCE_DATA=True   5
-Extension Property  In Progress  HAS_SOURCE_DATA=False  4
-Extension Property  In Progress  HAS_SOURCE_DATA=True   6
-Reference           In Progress  HAS_SOURCE_DATA=False  2
-Reference           In Progress  HAS_SOURCE_DATA=True   4
-TBD                 In Progress  HAS_SOURCE_DATA=False  2
-TBD                 In Progress  HAS_SOURCE_DATA=True   5
-Transform           In Progress  HAS_SOURCE_DATA=False  2
-Transform           In Progress  HAS_SOURCE_DATA=True   9
+SSP READ-ONLY PAYLOAD SEMANTICS VALIDATION
+
+Security-impact nodes: 2813
+  Empty/no source values: 2453
+  Semantically valid populated nodes: 0
+  Semantically invalid populated nodes: 360
+  Incomplete objective nodes: 90
+  Unrecognized value occurrences: 901
+
+Status nodes: 2813
+  Semantically valid: 0
+  Semantically invalid: 2813
+
+Property nodes: 12307
+  Valid OSCAL name/value shape: 12035
+  Invalid OSCAL name/value shape: 272
+
+Responsible-party nodes: 9344
+  Valid role/UUID shape: 9344
+  Invalid role/UUID shape: 0
+
+Document-ID nodes: 2813
+  Valid identifier shape: 0
+  Invalid identifier shape: 2813
+
+Component-reference nodes: 4804
+  Raw Archer reference payloads: 4452
+  Non-raw payloads: 352
 ```
 
-### Mappings without source data
-
-The validation output explicitly listed the following no-source-data mappings for review:
+Readiness result from the validator:
 
 ```text
-ARCHER_CONTENT_AUTHORIZATION_PACKAGE_LAST_UPDATED
-  -> system-security-plan.metadata.last-modified
+PHASE 1 REVIEW REQUIRED
+- security-impact normalization: 360 invalid populated nodes
+- status normalization: 2813 invalid populated nodes
+- property shaping: 272 invalid populated nodes
+- document-ID shaping: 2813 invalid populated nodes
 
-ARCHER_CONTENT_AUTHORIZATION_PACKAGE_CONFIRMED_IN_ARCHER
-  -> system-security-plan.metadata.props[]
-
-ARCHER_CONTENT_AUTHORIZATION_PACKAGE_FIRST_PUBLISHED
-  -> system-security-plan.metadata.published
-
-DAILY_LOSS_AMOUNT_FROM_OUTAGE
-  -> system-security-plan.system-characteristics.props[]
-
-FINANCIAL_SYSTEM
-  -> system-security-plan.system-characteristics.props[]
-
-FISMA_REPORTABLE
-  -> system-security-plan.system-characteristics.props[]
-
-PIA_REQUIRED
-  -> system-security-plan.system-characteristics.props[]
-
-RECOMMENDED_SECURITY_CATEGORY
-  -> system-security-plan.system-characteristics.security-impact-level
-
-CNSS_AVAILABILITY_RATING
-  -> system-security-plan.system-characteristics.security-impact-level.security-objective-availability
-
-RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY
-  -> system-security-plan.system-characteristics.security-impact-level.security-objective-availability
-
-CNSS_CONFIDENTIALITY_RATING
-  -> system-security-plan.system-characteristics.security-impact-level.security-objective-confidentiality
-
-RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY
-  -> system-security-plan.system-characteristics.security-impact-level.security-objective-confidentiality
-
-CNSS_INTEGRITY_RATING
-  -> system-security-plan.system-characteristics.security-impact-level.security-objective-integrity
-
-RECOMMENDED_INTEGRITY_CONTROL_CATEGORY
-  -> system-security-plan.system-characteristics.security-impact-level.security-objective-integrity
-
-SAP_INTAKE_FORM_INTERCONNECTIONS
-  -> system-security-plan.system-implementation.components[]
-
-SUBSYSTEMS
-  -> system-security-plan.system-implementation.components[]
+PHASE 2 COMPONENT HYDRATION REMAINS: 4452 raw reference payloads
+NEXT ENGINEERING FOCUS: security-impact normalization
 ```
 
-### Validation conclusion
+## Interpretation
 
-```text
-SSP READ-ONLY SCOPE VALIDATION PASSED
-Review the displayed element/path and coverage tables before writes.
-```
+This is the authoritative latest checkpoint.
 
-## Interpretation / next engineering focus
+- Graph integrity remains clean and writes remain disabled.
+- Structural graph correctness is no longer the blocker.
+- The remaining work is semantic payload shaping/normalization.
+- Responsible-party shaping is currently clean: 9,344 / 9,344 valid.
+- Property shaping is mostly correct but has 272 invalid nodes that need inspection.
+- Security-impact is the first priority because all 360 populated nodes fail semantic validation, with 90 incomplete-objective nodes and 901 unrecognized value occurrences.
+- Status shaping is also fully invalid in current output and needs normalization review.
+- Document IDs are present structurally but all 2,813 fail the expected identifier shape.
+- Component references are still largely raw Archer references: 4,452 of 4,804 require later hydration/resolution.
 
-This is now the authoritative current checkpoint.
+## Immediate engineering focus
 
-- Graph integrity is clean.
-- Duplicate and dangling-edge problems are not present in this validated run.
-- Forest edge reconciliation is exact.
-- Exactly one SSP root exists per source record.
-- The current generated SSP scope is 51,772 nodes / 48,959 edges from 2,813 source records.
-- 54 canonical mappings are in scope; 38 currently have source data and 16 do not (70.37% populated at mapping-row level).
-- Structural registry paths without direct owned field mappings are expected and should not be confused with unmapped Archer fields.
-- Several security-impact-level mappings are sparse/no-data, which explains the large empty count for that node type.
-- Component-related deeper registry paths remain structural/unmapped and need review before declaring full SSP implementation coverage.
+Do not enable `EXECUTE_WRITES` yet.
 
-## Safety / next-step rule
-
-Do **not** enable `EXECUTE_WRITES` yet solely because this validation passed.
-
-Next: review the 16 no-source-data mappings and the 7 structural registry paths, distinguish true missing implementation from legitimate no-data/structural nodes, and then decide whether the current SSP scope is complete enough for write-enabled validation. Preserve the seven-cell mapper architecture and frozen deterministic identity contract.
+Next read-only work should focus on **security-impact normalization** first, using the existing Archer value lookup/FIPS-199 logic rather than changing graph structure or identity. After that, address status normalization, the 272 malformed property payloads, and document-ID shaping. Component hydration remains Phase 2.
 
 ## Handoff to Codex
 
-Codex/Desktop should pull this file first and treat this scope-validation output as the latest verified runtime evidence. Continue from these exact counts and mappings; do not reproduce the earlier duplicate-source or ambiguous-parent debugging unless a regression appears.
+Codex/Desktop should pull this file first and treat the payload-semantics output above as the latest verified Snowflake runtime evidence. Continue from semantic normalization; do not reopen duplicate-source, graph-cardinality, or edge-linkage investigations unless a regression appears.
 
 ## Error/checkpoint handoff convention
 
 When a new Snowflake result or error is reported from the phone, update this `docs/CURRENT_STATUS.md` file with the exact observed counts/error and enough context for Codex to continue from desktop without requiring screenshots to be re-sent.
-
-## 2026-09-08 Codex review and next checkpoint
-
-The posted scope-validation output has been reviewed and passes in full.
-
-- The 7 registry paths without owned mappings are structural containers or the deeper component branch; they are not current graph failures.
-- The 16 canonical mappings without source data are observed source sparsity for this run; they are not mapper runtime failures.
-- Graph integrity, deterministic-key uniqueness, parent/child linkage, root cardinality, and forest reconciliation all passed.
-- No DIM/FACT writes were made.
-
-The next read-only checkpoint is
-`notebooks/validation/RUN_AFTER_07_ssp_payload_semantics_validation.py`.
-Run it in a new Snowflake Python cell after the successful Cell 7 state, with
-`EXECUTE_WRITES = False`. It reports aggregate semantic shape checks for
-security impact, status, properties, responsible parties, document IDs, and
-component references without printing source payloads or identifiers.
-
-Do not rerun Cells 1-7 if the current Snowflake notebook session still holds
-the successful Cell 7 variables. Post the complete validator output back into
-this file for the next Codex review.
