@@ -30,4 +30,9 @@ It checks security-impact, status, property, responsible-party, document-ID,
 and component-reference payload shapes without printing source payloads or
 writing to DIM/FACT tables.
 
+If that validator reports semantic failures, run the privacy-safe
+[semantic failure diagnostic](../validation/RUN_AFTER_07_ssp_semantic_failure_diagnostic.py).
+It reports aggregate dispatch, type, key-shape, and collision evidence only;
+it does not print source record IDs or payload values.
+
 The repository baseline keeps `EXECUTE_WRITES = False`.
