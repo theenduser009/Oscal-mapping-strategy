@@ -69,3 +69,9 @@ Cells 1 and 2 completed successfully. The RAW source contains 2,813 rows and 2,8
 
 Cell 3 also completed successfully. Snowflake emitted a benign warning because Pandas filtering and sorting retained a non-standard index before `session.create_dataframe`. Cell 3 now calls `reset_index(drop=True)` before that conversion. This changes no mapping data and prevents the warning. Writes remain disabled.
 
+## 2026-09-08 — Cell 7 registry-schema correction
+
+The first read-only Mapper V1 run reached Cell 7 but stopped before graph construction with no registry paths found. The registry itself was not empty; its authoritative schema uses `OSCAL_MODEL_KEY`, `NODE_PATH`, `PARENT_NODE_PATH`, `PROCESS_ORDER`, and `IS_ACTIVE`. Cell 5 had only recognized generic alternative names.
+
+Cell 5 now recognizes the actual Snowflake registry columns, excludes explicitly inactive rows, and sorts by `PROCESS_ORDER`. The correction passes Python syntax validation. No DIM or FACT writes occurred, and `EXECUTE_WRITES` remains `False`.
+
