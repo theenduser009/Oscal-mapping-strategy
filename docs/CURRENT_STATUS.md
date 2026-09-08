@@ -111,3 +111,27 @@ The immediate engineering focus is validation of the resulting SSP scope/content
 ## Error/checkpoint handoff convention
 
 When a new Snowflake result or error is reported from the phone, update this `docs/CURRENT_STATUS.md` file with the exact observed counts/error and enough context for Codex to continue from desktop without requiring screenshots to be re-sent.
+
+## Read-only scope validation prepared
+
+A separate copy-ready validation cell is now available at
+`notebooks/validation/RUN_AFTER_07_ssp_scope_validation.py`. It is not an
+eighth production cell and makes no permanent changes.
+
+The latest counts already satisfy the primary forest reconciliation:
+
+```text
+51,772 nodes - 2,813 source records = 48,959 expected edges
+Observed edges = 48,959
+```
+
+The validation cell additionally checks one SSP root per source record, Cell 7
+validation flags, the write gate, active registry versus mapped owner paths,
+node counts by element type and full registry path, empty versus populated
+payloads, field-level source-data coverage, and mappings with no source data.
+
+Run it after Cell 7 in the same live Snowflake session with
+`EXECUTE_WRITES=False`. Record its complete summary and tables in this file
+as the next runtime checkpoint. Do not enable writes based only on the current
+graph counts.
+
