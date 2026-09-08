@@ -42,3 +42,10 @@ Query: [`sql/show_oscal_path_and_payload.sql`](../sql/show_oscal_path_and_payloa
 ## 2026-09-08 — Demo query registry-column correction
 
 The first path/payload demo query assumed the registry column `OSCAL_ELEMENT_PATH`, which is not present in the connected Snowflake registry schema. The query was corrected to reconstruct `OSCAL_PATH` entirely from DIM nodes and FACT parent-child edges. The registry dependency and invalid identifier were removed; the query remains read-only.
+
+
+## 2026-09-08 — Empty root payload interpretation
+
+A `system-security-plan` DIM row with `METADATA_JSON = {}` is currently valid. The row is a structural root node, its OSCAL UUID is stored in the separate `OSCAL_UUID` column, and mapped content is stored in descendant nodes such as `metadata`, `system-characteristics`, `system-implementation`, and `control-implementation`.
+
+The root is not required to remain empty forever. It should receive payload only when an approved mapping explicitly targets a root-level OSCAL field; data must not be copied upward merely to make the root JSON non-empty.
