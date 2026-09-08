@@ -41,3 +41,14 @@ It prints only lookup metadata labels and aggregate counts—never Archer IDs,
 source record IDs, or complete payloads.
 
 The repository baseline keeps `EXECUTE_WRITES = False`.
+
+## Current reviewed semantic revision
+
+The authoritative notebook and split Cell 4 are synchronized. In a Snowflake
+session that already completed Cell 7, replace Cell 4 and rerun Cells 4-7. Then
+run the scope validator followed by the updated payload-semantics validator.
+Keep `EXECUTE_WRITES = False`.
+
+The revision preserves reviewed legacy LOE strings without inventing FIPS
+equivalences, applies the explicit status crosswalk, converts document
+identifiers to strings, and excludes `HELPER_PTA_CALC` as transient.
