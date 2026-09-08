@@ -1,0 +1,21 @@
+# Mapper V1 — copy-ready Snowflake cells
+
+These files are synchronized copies of the seven sections in
+[the authoritative complete notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py).
+
+Copy each file into one Snowflake Python cell and run them in numerical order.
+The files depend on state initialized by the preceding cells. Do not maintain a
+separate implementation here; future mapper corrections must update the
+complete notebook and the affected split cell together.
+
+## Run order
+
+1. [Initialization and configuration](01_initialization_and_configuration.py)
+2. [Source, mapping, and registry inputs](02_source_mapping_registry_inputs.py)
+3. [Canonical mapping contract](03_canonical_mapping_contract.py)
+4. [Parsing, transformation, and payload helpers](04_parsing_transform_payload_helpers.py)
+5. [Registry graph builder](05_registry_graph_builder.py)
+6. [Validation and guarded loader](06_validation_and_guarded_loader.py)
+7. [Mapper orchestrator](07_mapper_orchestrator.py)
+
+The repository baseline keeps `EXECUTE_WRITES = False`.
