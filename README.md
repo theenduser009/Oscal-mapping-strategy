@@ -23,18 +23,15 @@ Cell 6 validates the graph and target load frames before any merge. Cell 7 is th
 
 ## Immediate next action
 
-Determine whether the confirmed two-times duplication originates in the physical Archer table:
+A reviewed semantic correction is now committed. In the existing Snowflake
+notebook session, replace Cell 4 with
+[`notebooks/cells/04_parsing_transform_payload_helpers.py`](notebooks/cells/04_parsing_transform_payload_helpers.py),
+then rerun Cells 4, 5, 6, and 7 in order. Keep
+`EXECUTE_WRITES = False`.
 
-```sql
-SELECT
-    COUNT(*) AS RAW_ROWS,
-    COUNT(DISTINCT CONTENT_ID) AS DISTINCT_CONTENT_IDS
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW;
-```
-
-Return only the two counts. The notebook's Cell 2 now fails closed when duplicates exist without an approved technical recency column; it never applies blind `DISTINCT` or arbitrary `drop_duplicates` logic.
-
-
+After Cell 7 passes, rerun the scope validator and the updated payload-semantics
+validator. The semantic-failure and crosswalk diagnostics are only needed again
+if an unexpected result remains.
 
 ## Read-only inspection SQL
 
