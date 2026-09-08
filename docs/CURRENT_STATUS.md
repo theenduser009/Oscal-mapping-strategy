@@ -289,3 +289,23 @@ Codex/Desktop should pull this file first and treat this scope-validation output
 ## Error/checkpoint handoff convention
 
 When a new Snowflake result or error is reported from the phone, update this `docs/CURRENT_STATUS.md` file with the exact observed counts/error and enough context for Codex to continue from desktop without requiring screenshots to be re-sent.
+
+## 2026-09-08 Codex review and next checkpoint
+
+The posted scope-validation output has been reviewed and passes in full.
+
+- The 7 registry paths without owned mappings are structural containers or the deeper component branch; they are not current graph failures.
+- The 16 canonical mappings without source data are observed source sparsity for this run; they are not mapper runtime failures.
+- Graph integrity, deterministic-key uniqueness, parent/child linkage, root cardinality, and forest reconciliation all passed.
+- No DIM/FACT writes were made.
+
+The next read-only checkpoint is
+`notebooks/validation/RUN_AFTER_07_ssp_payload_semantics_validation.py`.
+Run it in a new Snowflake Python cell after the successful Cell 7 state, with
+`EXECUTE_WRITES = False`. It reports aggregate semantic shape checks for
+security impact, status, properties, responsible parties, document IDs, and
+component references without printing source payloads or identifiers.
+
+Do not rerun Cells 1-7 if the current Snowflake notebook session still holds
+the successful Cell 7 variables. Post the complete validator output back into
+this file for the next Codex review.
