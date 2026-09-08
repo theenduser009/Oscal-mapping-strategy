@@ -103,6 +103,12 @@ def _review_present(value):
     return True
 
 
+def _review_security_token(value):
+    # Security objectives are strings; normalize only to recognize the
+    # explicitly reviewed standard/legacy source label family.
+    return "-".join(str(value).strip().lower().replace("_", "-").split())
+
+
 def _review_payload(value):
     try:
         if value is None:
@@ -330,7 +336,7 @@ for record_id in source_ids:
         if isinstance(value, str) and bool(value.strip()):
             output_fields_present.add(field)
             generated_present_records[(SECURITY_PATH, field)].add(record_id)
-            if value not in SECURITY_ALLOWED_VALUES:
+            if _review_security_token(value) not in SECURITY_ALLOWED_VALUES:
                 invalid_security_value_occurrences += 1
                 invalid_security_assembly_records.add(record_id)
         elif field in security_payload and value not in (None, ""):
@@ -344,22 +350,24 @@ for record_id in source_ids:
         pass
     elif not security_payload:
         empty_optional_security_records.add(record_id)
-    elif not output_fields_present:
-        # A non-empty object with no valid objective is not optional absence.
-        invalid_security_assembly_records.add(record_id)
-    elif len(output_fields_present) == len(SECURITY_FIELDS):
-        complete_security_records.add(record_id)
     else:
-        partial_security_records.add(record_id)
-        for field in SECURITY_FIELDS:
-            if field in output_fields_present:
-                continue
-            partial_missing_by_objective[field] += 1
-            source_key = (SECURITY_PATH, field)
-            if record_id in source_present_records[source_key]:
-                partial_output_gaps[field] += 1
-            else:
-                partial_source_candidate_gaps[field] += 1
+        if not output_fields_present:
+            # A non-empty object with no valid objective is an emitted,
+            # invalid partial assembly—not optional absence.
+            invalid_security_assembly_records.add(record_id)
+        if len(output_fields_present) == len(SECURITY_FIELDS):
+            complete_security_records.add(record_id)
+        else:
+            partial_security_records.add(record_id)
+            for field in SECURITY_FIELDS:
+                if field in output_fields_present:
+                    continue
+                partial_missing_by_objective[field] += 1
+                source_key = (SECURITY_PATH, field)
+                if record_id in source_present_records[source_key]:
+                    partial_output_gaps[field] += 1
+                else:
+                    partial_source_candidate_gaps[field] += 1
 
     status_payload = status_payload_by_record.get(record_id, {})
     status_state = status_payload.get("state")
