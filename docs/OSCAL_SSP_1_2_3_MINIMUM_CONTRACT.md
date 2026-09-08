@@ -91,10 +91,13 @@ It does not yet emit one assembled OSCAL JSON document. Consequently:
 
 1. Run Mapper V1 Cells 1 through 7 with writes disabled.
 2. Run `RUN_AFTER_07_ssp_v123_minimum_required_scope_audit.py`.
-3. Record the aggregate output in `docs/CURRENT_STATUS.md`.
-4. Turn every missing path or required-field count into a mapping or source-data
+3. Run `RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py` to classify
+   each gap as registry, mapping, source-data, controlled-configuration, or
+   mapper-output work without displaying source field names or values.
+4. Record the aggregate output in `docs/CURRENT_STATUS.md`.
+5. Turn every missing path or required-field count into a mapping or source-data
    backlog item.
-5. Re-run the audit until the minimum contract passes.
-6. Assemble representative SSP JSON and run official schema and constraint
+6. Re-run the audit until the minimum contract passes.
+7. Assemble representative SSP JSON and run official schema and constraint
    validation. This remains a separate gate.
 
