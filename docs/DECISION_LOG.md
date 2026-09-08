@@ -16,3 +16,17 @@ The observed 5,626 rows versus 2,813 distinct source IDs is treated as an upstre
 
 Review the RAW row count and distinct `CONTENT_ID` count. Then confirm which available technical timestamp or version column is the authoritative tie-breaker for duplicate Archer records.
 
+
+
+## 2026-09-08 — Cleanup completed
+
+The main branch now contains one 1,083-line, seven-cell Mapper V1 source plus the authoritative current-status and architecture documents. The notebook passes Python syntax compilation. Snowflake runtime validation remains pending, and `EXECUTE_WRITES` remains `False`.
+
+Removed from the current branch as superseded:
+
+- the three-cell props inspection script;
+- the four copy-page files generated from that partial script;
+- the older SSP progress file;
+- the older response log.
+
+All removed material remains recoverable through Git history. Future substantive project checkpoints are recorded in this decision log.
