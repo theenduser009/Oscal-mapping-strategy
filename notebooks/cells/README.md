@@ -18,4 +18,10 @@ complete notebook and the affected split cell together.
 6. [Validation and guarded loader](06_validation_and_guarded_loader.py)
 7. [Mapper orchestrator](07_mapper_orchestrator.py)
 
+## Read-only checkpoint after Cell 7
+
+After Cell 7 completes with writes disabled, run the separate
+[SSP scope and coverage validation](../validation/RUN_AFTER_07_ssp_scope_validation.py).
+It is a temporary diagnostic cell, not an eighth production cell.
+
 The repository baseline keeps `EXECUTE_WRITES = False`.
