@@ -48,26 +48,28 @@ It checks the required SSP skeleton and minimum required fields against the
 pinned version contract. It remains aggregate-only and read-only, and does not
 replace assembled-document schema or constraint validation.
 
+After that result is recorded, run the
+[required-source readiness audit](../validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py).
+It classifies registry, artifact-c mapping, populated-source, current-owner,
+nested-shaping, controlled-configuration, and generated-output evidence without
+printing source names or values.
+
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
 ## Current post-revision checkpoint
 
-Run `20260908T201705Z` passed graph and pre-write validation with 51,500
-nodes, 48,687 edges, zero duplicate/dangling keys, and no writes. The reviewed
-semantic revision behaved as expected. The OSCAL target is now pinned to SSP
-1.2.3 in authoritative Cell 1 and this split copy.
+Pinned run `20260908T220830Z` passed graph and pre-write validation with
+51,500 nodes, 48,687 edges, zero duplicate/dangling keys, and no writes. The
+minimum-required-scope audit then found eight of thirteen required paths in the
+registry, five absent paths, incomplete components, required payload gaps, and
+zero of 2,813 records meeting the complete minimum contract.
 
-The narrow version-specific review found 179 missing security-objective
-occurrences inside 90 partial optional assemblies and 42 missing required
-`status.state` values, affecting 131 unique records. It found no source/output
-transformation loss.
+If the same Snowflake session is active, run only the
+[required-source readiness audit](../validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py)
+in a new Python cell. It will establish which gaps already have aggregate
+mapping/source candidates and which need registry, configuration, or mapper
+shaping work. Do not rerun Cells 1-7 solely for this diagnostic.
 
-If the same Snowflake session is still active, run only the
-[minimum-required-scope audit](../validation/RUN_AFTER_07_ssp_v123_minimum_required_scope_audit.py)
-in a new Python cell. A pre-pin session is accepted; a conflicting configured
-version fails closed. If the session was restarted, use the updated Cell 1 and
-run Cells 1-7 first.
-
-The current 17-path subset is not a complete SSP. Component hydration, required
-whole-document branches, assembled-document schema validation, and constraint
-validation remain gates. Keep `EXECUTE_WRITES = False`.
+The current graph is healthy but is not a complete SSP. Component hydration,
+required whole-document branches, assembled-document schema validation, and
+constraint validation remain gates. Keep `EXECUTE_WRITES = False`.
