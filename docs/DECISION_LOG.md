@@ -166,3 +166,32 @@ Snowflake graph and use the aggregate gaps as the mapping backlog. The 90
 partial security-impact assemblies and 42 missing statuses remain
 source/business disposition items, while 4,452 raw component references still
 require hydration. `EXECUTE_WRITES` remains `False`.
+
+## 2026-09-08 — SSP required-source readiness checkpoint
+
+The minimum-required-scope audit established that all 2,813 source SSPs remain
+blocked by required structure or payload gaps. The next action is evidence
+collection, not speculative mapper or registry mutation.
+
+Added the read-only
+`RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py`. It inspects the
+original mapping artifact so target candidates beneath currently missing
+registry paths are not hidden by current ancestor ownership. For every
+hard-coded minimum-contract path and payload field, it reports separate
+aggregate evidence for registry presence, executable candidate rows, populated
+source coverage, current canonical ownership, generated validity, and
+collection all-member validity.
+
+The diagnostic fails closed on graph/pre-write/write-state failures,
+source/graph identity differences, source parsing/resolution errors, and a
+conflicting OSCAL version. It distinguishes structural singleton registry work
+from source mappings, detects mapping-candidate collisions and exact duplicate
+artifact rows, and identifies nested targets such as component `status.state`
+that require mapper shaping rather than simple mapping activation. It does not
+print record IDs, Archer field names, source values, payloads, hashes, or lookup
+labels.
+
+No registry path, mapping, source value, profile URI, graph policy, DIM row, or
+FACT row was changed. `EXECUTE_WRITES` remains `False`. The audit result will
+determine whether `import-profile.href` has a usable candidate or requires an
+approved `SSP_IMPORT_PROFILE_HREF` configuration value.
