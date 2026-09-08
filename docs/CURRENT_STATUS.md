@@ -111,3 +111,18 @@ Do not patch around the exception until the exact cause is identified.
 ## Immediate next action
 
 From Codex/Desktop, pull this file and the current `notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`, then inspect the active registry values and Cell 5 parent-resolution branch that raises the `Ambiguous collection parent` exception.
+
+## Latest correction prepared
+
+The ambiguous parent error is caused by cardinality leaking from mapping type into graph structure. In Cell 4, the prior condition treated every Extension mapping as a request to create a separate collection instance. If such a row was owned by the singleton `system-characteristics` node, it produced multiple parents, so the singleton `authorization-boundary` child could not choose one.
+
+The correction now creates property collection instances only when the owning registry path is actually `props[]`. Extension mappings can still resolve Archer lookup values, but mapping type no longer changes node cardinality. The registry remains authoritative. The complete notebook and copy-ready Cell 4 contain the correction, and both Python syntax validation and a focused singleton/props regression test pass.
+
+### Snowflake next step
+
+In the existing live session, replace and run only copy-ready Cell 4, then rerun Cell 7. Keep `EXECUTE_WRITES = False`. If the session has restarted, run Cells 1 through 7 in order.
+
+## Error handoff convention
+
+When a new Snowflake error is reported, the newest error and screenshot-derived traceback will be recorded in this `docs/CURRENT_STATUS.md` file. Codex should read this file first, reconcile it with the authoritative notebook, fix the owning cell, validate it, and keep the corresponding copy-ready cell synchronized.
+
