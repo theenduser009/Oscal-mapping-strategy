@@ -81,3 +81,25 @@ After the registry-schema fix, Cell 7 built and validated a read-only structural
 
 The mapping CSV uses inconsistent model labels, while the registry uses the stable model key `SSP`. Cell 3 no longer filters mappings by the CSV display label. It now uses the active registry paths as the authoritative model boundary, assigns every mapping to its deepest active registry owner, derives a target field from the relative OSCAL path when necessary, and fails early if no mapping is owned. A focused local test and Python syntax validation passed. Writes remain disabled.
 
+## 2026-09-08 — Reviewed SSP semantic transformation revision
+
+The controlled-vocabulary review produced the exact runtime labels. The
+authoritative notebook and split Cell 4 now implement the following
+deterministic rules:
+
+- Normalize recognized FIPS Low values to `low`.
+- Preserve reviewed `Legacy LOE A/B/C/D` labels, including `+ DFARS`
+  variants, as strings. OSCAL defines each security-objective field as a
+  required string when the security-impact object is emitted; no unsupported
+  LOE-to-FIPS equivalence is inferred.
+- Map `Operational -> operational`, `Under Development ->
+  under-development`, and `Decommissioned -> disposition`.
+- Map `Reauthorize -> other` and add the OSCAL-required explanatory remark.
+- Convert scalar document identifiers to strings.
+- Treat `HELPER_PTA_CALC` as transient and do not emit it as an OSCAL prop.
+- Fail closed on unknown or multi-valued security/status labels.
+- Leave component hydration in Phase 2.
+
+The payload-semantics validator was aligned with these reviewed rules and now
+distinguishes invalid shapes from required-field source gaps. Repository
+`EXECUTE_WRITES` remains `False`; Snowflake runtime revalidation is pending.
