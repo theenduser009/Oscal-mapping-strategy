@@ -30,3 +30,10 @@ Removed from the current branch as superseded:
 - the older response log.
 
 All removed material remains recoverable through Git history. Future substantive project checkpoints are recorded in this decision log.
+
+
+## 2026-09-08 — Path and payload demonstration query
+
+Added a read-only SQL query that starts from the SSP DIM root, follows parent-child links in the FACT table, reconstructs each structural path, resolves registered array paths, and displays the payload written to each DIM element. It defaults to test content ID `565189` and performs no writes.
+
+Query: [`sql/show_oscal_path_and_payload.sql`](../sql/show_oscal_path_and_payload.sql)
