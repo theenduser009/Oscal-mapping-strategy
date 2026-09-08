@@ -29,7 +29,7 @@ Once scope validation passes, run the separate
 It checks security-impact, status, property, responsible-party, document-ID,
 and component-reference payload shapes without printing source payloads or
 writing to DIM/FACT tables. The corrected version distinguishes optional
-absent security-impact from partial C/I/A assemblies under provisional OSCAL
+absent security-impact from partial C/I/A assemblies under pinned OSCAL
 SSP 1.2.3.
 
 If that validator reports semantic failures, run the privacy-safe
@@ -42,24 +42,32 @@ When security or status mappings still need a business crosswalk, run the
 It prints only lookup metadata labels and aggregate counts—never Archer IDs,
 source record IDs, or complete payloads.
 
+After the mapped-scope diagnostics, run the separate
+[OSCAL 1.2.3 minimum-required-scope audit](../validation/RUN_AFTER_07_ssp_v123_minimum_required_scope_audit.py).
+It checks the required SSP skeleton and minimum required fields against the
+pinned version contract. It remains aggregate-only and read-only, and does not
+replace assembled-document schema or constraint validation.
+
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
 ## Current post-revision checkpoint
 
 Run `20260908T201705Z` passed graph and pre-write validation with 51,500
 nodes, 48,687 edges, zero duplicate/dangling keys, and no writes. The reviewed
-semantic revision behaved as expected.
+semantic revision behaved as expected. The OSCAL target is now pinned to SSP
+1.2.3 in authoritative Cell 1 and this split copy.
 
-In the same Snowflake session, run the separate
-[security/status cardinality and source-gap review](../validation/RUN_AFTER_07_ssp_required_field_gap_review.py).
-It is aggregate-only and read-only. You do not need to rerun Cells 1-7.
+The narrow version-specific review found 179 missing security-objective
+occurrences inside 90 partial optional assemblies and 42 missing required
+`status.state` values, affecting 131 unique records. It found no source/output
+transformation loss.
 
-The earlier 2,585 aggregate mixed optional absence with true cardinality
-gaps. Under provisional OSCAL SSP 1.2.3, the current narrow count is 221
-missing required field occurrences: 179 objectives inside 90 partial
-security-impact assemblies and 42 missing `status.state` values. The project
-must pin its target OSCAL version before production conformance changes.
+If the same Snowflake session is still active, run only the
+[minimum-required-scope audit](../validation/RUN_AFTER_07_ssp_v123_minimum_required_scope_audit.py)
+in a new Python cell. A pre-pin session is accepted; a conflicting configured
+version fails closed. If the session was restarted, use the updated Cell 1 and
+run Cells 1-7 first.
 
-The current 17-path mapped subset is not a complete SSP, so even a clean
-result from this narrow diagnostic does not authorize writes. Keep
-`EXECUTE_WRITES = False`.
+The current 17-path subset is not a complete SSP. Component hydration, required
+whole-document branches, assembled-document schema validation, and constraint
+validation remain gates. Keep `EXECUTE_WRITES = False`.
