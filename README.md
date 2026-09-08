@@ -21,17 +21,27 @@ The committed notebook always starts with:
 
 Cell 6 validates the graph and target load frames before any merge. Cell 7 is the only execution cell. Do not enable writes until the read-only run has zero duplicate keys, zero null primary keys, and zero dangling edges.
 
+## Latest verified checkpoint
+
+Snowflake run `20260908T201705Z` passed graph and pre-write validation with
+51,500 nodes, 48,687 edges, zero duplicate or dangling keys, and no writes.
+The populated mapped values passed their reviewed normalization rules.
+
+The earlier 2,585 aggregate was corrected: under provisional OSCAL SSP 1.2.3,
+2,453 no-objective security-impact assemblies are optional absences. The
+narrow emitted/required security/status gap is 221 field occurrences: 179
+missing objectives inside 90 partial security-impact assemblies plus 42
+missing `status.state` values.
+
 ## Immediate next action
 
-A reviewed semantic correction is now committed. In the existing Snowflake
-notebook session, replace Cell 4 with
-[`notebooks/cells/04_parsing_transform_payload_helpers.py`](notebooks/cells/04_parsing_transform_payload_helpers.py),
-then rerun Cells 4, 5, 6, and 7 in order. Keep
-`EXECUTE_WRITES = False`.
+In the same Snowflake notebook session, run the aggregate-only
+[OSCAL 1.2.3 security/status cardinality review](notebooks/validation/RUN_AFTER_07_ssp_required_field_gap_review.py).
+No rerun of Mapper Cells 1-7 is needed. Keep `EXECUTE_WRITES = False`.
 
-After Cell 7 passes, rerun the scope validator and the updated payload-semantics
-validator. The semantic-failure and crosswalk diagnostics are only needed again
-if an unexpected result remains.
+The project must confirm and pin its target OSCAL version before production
+conformance changes. The current 17-path subset is not yet a complete SSP and
+does not authorize DIM/FACT writes.
 
 ## Read-only inspection SQL
 
