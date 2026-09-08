@@ -186,3 +186,49 @@ The next production change should be one controlled Cell 3/Cell 4 semantic revis
 ## Handoff to Codex
 
 Codex/Desktop should pull this file first and treat this controlled-vocabulary review as the latest verified Snowflake evidence. Continue from crosswalk approval and controlled semantic correction; do not reopen graph, duplicate-source, or edge-linkage investigations unless a regression appears. Keep `EXECUTE_WRITES = False`.
+
+## Reviewed semantic code revision committed
+
+The authoritative notebook, split Cell 4, payload-semantics validator, and
+crosswalk review are now synchronized with the reviewed runtime labels.
+
+Implemented:
+
+- Security objectives are routed by stable owner path and target field.
+  `Low` normalizes to `low`; reviewed legacy LOE labels remain strings and
+  are not falsely reclassified as Low/Moderate/High.
+- Status uses the explicit crosswalk:
+  `Operational -> operational`,
+  `Under Development -> under-development`,
+  `Decommissioned -> disposition`, and
+  `Reauthorize -> other` with an explanatory remark.
+- Scalar document identifiers are converted to strings.
+- `HELPER_PTA_CALC` is excluded as a transient helper.
+- Unknown or multi-valued security/status labels fail closed.
+- Component hydration remains unchanged in Phase 2.
+- `EXECUTE_WRITES = False` remains unchanged.
+
+Local verification passed Python compilation, focused transformation tests for
+all observed labels, document conversion, helper exclusion, and a mock
+payload-validator test.
+
+### Exact next Snowflake action
+
+In the current notebook session:
+
+1. Replace Cell 4 with
+   `notebooks/cells/04_parsing_transform_payload_helpers.py`.
+2. Rerun Cells 4, 5, 6, and 7 in order. Cell 3 does not need replacement or
+   rerunning because the diagnostic proved its `identifier` target is already
+   correct.
+3. Rerun `RUN_AFTER_07_ssp_scope_validation.py`.
+4. Rerun the updated
+   `RUN_AFTER_07_ssp_payload_semantics_validation.py`.
+5. Post both complete outputs here.
+
+Expected structural delta: excluding the 272 helper props should reduce nodes
+from 51,772 to approximately 51,500 and edges from 48,959 to approximately
+48,687 while preserving the forest invariant. Treat these as expectations, not
+hard-coded pass criteria.
+
+Do not enable writes.
