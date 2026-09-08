@@ -50,7 +50,7 @@ replace assembled-document schema or constraint validation.
 
 After that result is recorded, run the
 [required-source readiness audit](../validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py).
-It classifies registry, artifact-c mapping, populated-source, current-owner,
+It classifies registry, mapping-artifact, populated-source, current-owner,
 nested-shaping, controlled-configuration, and generated-output evidence without
 printing source names or values.
 
