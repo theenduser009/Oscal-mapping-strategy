@@ -47,6 +47,15 @@ ALLOWED_SECURITY_VALUES = {
     "fips-199-high",
 }
 
+REVIEWED_LEGACY_SECURITY_VALUES = {
+    "legacy-loe-a",
+    "legacy-loe-b",
+    "legacy-loe-c",
+    "legacy-loe-c-+-dfars",
+    "legacy-loe-d",
+    "legacy-loe-d-+-dfars",
+}
+
 ALLOWED_STATUS_VALUES = {
     "operational",
     "under-development",
@@ -99,6 +108,18 @@ def _is_uuid(value):
         return False
 
 
+def _recursive_keys(value):
+    keys = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            keys.add(str(key))
+            keys.update(_recursive_keys(item))
+    elif isinstance(value, list):
+        for item in value:
+            keys.update(_recursive_keys(item))
+    return keys
+
+
 stats = Counter()
 
 for row in final_nodes_df.select(
@@ -121,11 +142,23 @@ for row in final_nodes_df.select(
         invalid_value_found = False
         value_found = False
         for objective in present_objectives:
-            for value in _leaf_values(payload.get(objective)):
-                value_found = True
-                if _normalized_token(value) not in ALLOWED_SECURITY_VALUES:
-                    invalid_value_found = True
-                    stats["security_unrecognized_value_occurrences"] += 1
+            value = payload.get(objective)
+            value_found = True
+            if not isinstance(value, str) or not value.strip():
+                invalid_value_found = True
+                stats["security_invalid_type_or_empty_occurrences"] += 1
+                continue
+
+            token = _normalized_token(value)
+            if token in ALLOWED_SECURITY_VALUES:
+                stats["security_standard_value_occurrences"] += 1
+            elif token in REVIEWED_LEGACY_SECURITY_VALUES:
+                # OSCAL defines these objective fields as strings. Preserve
+                # reviewed legacy LOE labels without claiming a FIPS level.
+                stats["security_reviewed_legacy_occurrences"] += 1
+            else:
+                invalid_value_found = True
+                stats["security_unreviewed_label_occurrences"] += 1
 
         if value_found and not invalid_value_found:
             stats["security_semantically_valid"] += 1
@@ -134,14 +167,24 @@ for row in final_nodes_df.select(
 
     elif path == PATHS["status"]:
         stats["status_total"] += 1
-        status_values = _leaf_values(payload.get("state"))
-        if (
-            status_values
-            and all(
-                _normalized_token(value) in ALLOWED_STATUS_VALUES
-                for value in status_values
+        state = payload.get("state")
+        if state is None or state == "":
+            stats["status_empty_or_missing"] += 1
+            continue
+
+        state_token = _normalized_token(state)
+        valid_state = (
+            isinstance(state, str)
+            and state_token in ALLOWED_STATUS_VALUES
+        )
+        valid_other_remarks = (
+            state_token != "other"
+            or (
+                isinstance(payload.get("remarks"), str)
+                and bool(payload.get("remarks").strip())
             )
-        ):
+        )
+        if valid_state and valid_other_remarks:
             stats["status_semantically_valid"] += 1
         else:
             stats["status_semantically_invalid"] += 1
@@ -155,6 +198,7 @@ for row in final_nodes_df.select(
             and bool(prop_name.strip())
             and isinstance(prop_value, str)
             and bool(prop_value.strip())
+            and prop_name != "helper-pta-calc"
             and prop_name != "package-type-helper-calc"
         )
         stats[
@@ -169,6 +213,7 @@ for row in final_nodes_df.select(
             isinstance(role_id, str)
             and bool(role_id.strip())
             and isinstance(party_uuids, list)
+            and bool(party_uuids)
             and all(_is_uuid(value) for value in party_uuids)
         )
         stats[
@@ -189,7 +234,7 @@ for row in final_nodes_df.select(
         stats["components_total"] += 1
         normalized_keys = {
             str(key).replace("_", "").replace("-", "").lower()
-            for key in payload
+            for key in _recursive_keys(payload)
         }
         if "contentid" in normalized_keys or "levelid" in normalized_keys:
             stats["components_raw_reference_payloads"] += 1
@@ -206,11 +251,15 @@ print("  Empty/no source values:", stats["security_empty"])
 print("  Semantically valid populated nodes:", stats["security_semantically_valid"])
 print("  Semantically invalid populated nodes:", stats["security_semantically_invalid"])
 print("  Incomplete objective nodes:", stats["security_incomplete_objective_nodes"])
-print("  Unrecognized value occurrences:", stats["security_unrecognized_value_occurrences"])
+print("  Standard value occurrences:", stats["security_standard_value_occurrences"])
+print("  Reviewed legacy LOE occurrences:", stats["security_reviewed_legacy_occurrences"])
+print("  Invalid type/empty occurrences:", stats["security_invalid_type_or_empty_occurrences"])
+print("  Unreviewed label occurrences:", stats["security_unreviewed_label_occurrences"])
 
 print("Status nodes:", stats["status_total"])
 print("  Semantically valid:", stats["status_semantically_valid"])
 print("  Semantically invalid:", stats["status_semantically_invalid"])
+print("  Empty/no source state:", stats["status_empty_or_missing"])
 
 print("Property nodes:", stats["props_total"])
 print("  Valid OSCAL name/value shape:", stats["props_valid"])
@@ -249,6 +298,18 @@ if remaining_phase_one:
 else:
     print("PHASE 1 PAYLOAD SHAPES PASSED")
 
+required_field_source_gaps = (
+    stats["security_empty"]
+    + stats["security_incomplete_objective_nodes"]
+    + stats["status_empty_or_missing"]
+)
+if required_field_source_gaps:
+    print(
+        "REQUIRED-FIELD SOURCE GAPS REMAIN:",
+        required_field_source_gaps,
+        "aggregate empty/incomplete node observations",
+    )
+
 if stats["components_raw_reference_payloads"]:
     print(
         "PHASE 2 COMPONENT HYDRATION REMAINS:",
@@ -267,9 +328,13 @@ priority_order = [
 next_focus = next(
     (name for name in priority_order if phase_one_issues[name]),
     (
-        "component reference hydration"
-        if stats["components_raw_reference_payloads"]
-        else "write-readiness review"
+        "required-field source-gap review"
+        if required_field_source_gaps
+        else (
+            "component reference hydration"
+            if stats["components_raw_reference_payloads"]
+            else "write-readiness review"
+        )
     ),
 )
 
