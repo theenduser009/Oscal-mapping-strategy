@@ -382,7 +382,29 @@ RESPONSIBLE_PARTY_ROLE_IDS = {
 }
 
 TRANSIENT_SOURCE_FIELDS = {
+    "HELPER_PTA_CALC",
     "PACKAGE_TYPE_HELPER_CALC",
+}
+
+SECURITY_IMPACT_ELEMENT_PATH = (
+    "system-security-plan.system-characteristics.security-impact-level"
+)
+STATUS_ELEMENT_PATH = "system-security-plan.system-characteristics.status"
+DOCUMENT_IDS_ELEMENT_PATH = "system-security-plan.metadata.document-ids[]"
+
+SECURITY_OBJECTIVE_FIELDS = {
+    "security-objective-confidentiality",
+    "security-objective-integrity",
+    "security-objective-availability",
+}
+
+STATUS_STATE_CROSSWALK = {
+    "operational": "operational",
+    "under-development": "under-development",
+    "decommissioned": "disposition",
+    # OSCAL has no reauthorization state. `other` is the lossless catch-all,
+    # and build_element_instances adds the required explanatory remark.
+    "reauthorize": "other",
 }
 
 
@@ -509,6 +531,91 @@ def transform_fips_199(value):
     return normalized[0] if len(normalized) == 1 else normalized
 
 
+def _single_archer_label(value):
+    extracted = _extract_reference_ids(value)
+    values = extracted if isinstance(extracted, list) else [extracted]
+    values = [item for item in values if item is not None]
+    if len(values) != 1:
+        return None
+
+    item = values[0]
+    if isinstance(item, (dict, list)):
+        return None
+
+    key = str(item).strip()
+    if not key:
+        return None
+
+    resolved = ARCHER_VALUE_LOOKUP.get(key)
+    if resolved is not None:
+        label = str(resolved).strip()
+        return label or None
+
+    # An already resolved textual label is safe to preserve. An unknown
+    # numeric ID is not: it must be added to ARCHER_META_VALUE first.
+    if isinstance(item, str) and not key.isdigit():
+        return key
+    return None
+
+
+def transform_security_objective(value):
+    normalized = transform_fips_199(value)
+    if isinstance(normalized, list):
+        if len(normalized) != 1:
+            raise ValueError(
+                "Security objective resolved to multiple FIPS values"
+            )
+        normalized = normalized[0]
+    if _has_value(normalized):
+        return str(normalized)
+
+    label = _single_archer_label(value)
+    if label is None:
+        raise ValueError(
+            "Security objective contains an unresolved or multi-value label"
+        )
+
+    # OSCAL models these objectives as strings. Preserve reviewed legacy LOE
+    # labels instead of inventing an unapproved Low/Moderate/High equivalence.
+    return label
+
+
+def transform_status_state(value):
+    label = _single_archer_label(value)
+    if label is None:
+        raise ValueError("Status contains an unresolved or multi-value label")
+
+    source_token = _stable_property_name(label)
+    target_state = STATUS_STATE_CROSSWALK.get(source_token)
+    if target_state is None:
+        raise ValueError(
+            "Status label is not present in the approved OSCAL crosswalk"
+        )
+
+    payload = {"state": target_state}
+    if target_state == "other":
+        payload["remarks"] = (
+            "Mapped from Archer operational status: " + label + "."
+        )
+    return payload
+
+
+def transform_document_identifier(value):
+    value = _to_python(value)
+    if isinstance(value, (bool, dict, list)) or value is None:
+        raise ValueError("Document identifier must be a single scalar value")
+
+    identifier = str(value).strip()
+    if not identifier or identifier.lower() in {
+        "nan",
+        "inf",
+        "+inf",
+        "-inf",
+    }:
+        raise ValueError("Document identifier is empty or non-finite")
+    return identifier
+
+
 def _party_uuid_values(source_record_id, source_field, value):
     extracted = _extract_reference_ids(value)
     values = extracted if isinstance(extracted, list) else [extracted]
@@ -568,10 +675,25 @@ def apply_mapping_transform(mapping_row, value, source_record_id):
     if not _has_value(value):
         return SKIP_VALUE
 
+    owner_path = str(mapping_row.get("OWNER_ELEMENT_PATH") or "").strip()
+    target_field = _target_field_name(mapping_row)
+
     if source_field in RESPONSIBLE_PARTY_ROLE_IDS:
         return transform_responsible_party(
             source_record_id, source_field, value
         )
+
+    if (
+        owner_path == SECURITY_IMPACT_ELEMENT_PATH
+        and target_field in SECURITY_OBJECTIVE_FIELDS
+    ):
+        return transform_security_objective(value)
+
+    if owner_path == STATUS_ELEMENT_PATH and target_field == "state":
+        return transform_status_state(value)
+
+    if owner_path == DOCUMENT_IDS_ELEMENT_PATH and target_field == "identifier":
+        return transform_document_identifier(value)
 
     if "fips" in transform_logic or "security objective" in transform_logic:
         transformed = transform_fips_199(value)
@@ -651,6 +773,22 @@ def build_element_instances(
                         "parent_instance_key": None,
                     }
                 )
+            continue
+
+        if (
+            element_path == STATUS_ELEMENT_PATH
+            and target_field == "state"
+            and isinstance(transformed, dict)
+            and "state" in transformed
+        ):
+            aggregate_payload["state"] = transformed["state"]
+            if "remarks" in transformed:
+                existing_remarks = aggregate_payload.get("remarks")
+                if not (
+                    isinstance(existing_remarks, str)
+                    and existing_remarks.strip()
+                ):
+                    aggregate_payload["remarks"] = transformed["remarks"]
             continue
 
         aggregate_payload[target_field] = transformed
