@@ -108,6 +108,12 @@ def _payload_dict(value):
         return {}, True
 
 
+def _security_label_token(value):
+    # Security objectives are strings, not a status-style controlled enum.
+    # Normalize only to recognize the explicitly reviewed source label family.
+    return "-".join(str(value).strip().lower().replace("_", "-").split())
+
+
 def _leaf_values(value):
     if value is None:
         return []
@@ -225,9 +231,10 @@ for row in final_nodes_df.select(
                 stats["security_invalid_type_or_empty_occurrences"] += 1
                 continue
 
-            if value in ALLOWED_SECURITY_VALUES:
+            security_token = _security_label_token(value)
+            if security_token in ALLOWED_SECURITY_VALUES:
                 stats["security_standard_value_occurrences"] += 1
-            elif value in REVIEWED_LEGACY_SECURITY_VALUES:
+            elif security_token in REVIEWED_LEGACY_SECURITY_VALUES:
                 # OSCAL defines these objective fields as strings. Preserve
                 # reviewed legacy LOE labels without claiming a FIPS level.
                 stats["security_reviewed_legacy_occurrences"] += 1
@@ -395,7 +402,7 @@ print("  Invalid identifier shape:", stats["document_ids_invalid"])
 
 print("Component-reference nodes:", stats["components_total"])
 print("  Raw Archer reference payloads:", stats["components_raw_reference_payloads"])
-print("  Non-raw payloads:", stats["components_nonraw_payloads"])
+print("  Non-raw payloads (not schema-validated here):", stats["components_nonraw_payloads"])
 print("  Invalid payload shape:", stats["components_invalid_payload_shape"])
 
 print("Source rows:", source_rows_seen)
@@ -461,6 +468,7 @@ mapped_scope_issues = {
     "orphan security node records": len(orphan_security_nodes),
     "duplicate status singleton nodes": duplicate_status_nodes,
     "orphan status node records": len(orphan_status_nodes),
+    "raw Archer component-reference payloads": stats["components_raw_reference_payloads"],
 }
 remaining_mapped_scope_issues = {
     name: count for name, count in mapped_scope_issues.items() if count
@@ -496,11 +504,11 @@ next_focus = next(
         "OSCAL 1.2.3 security/status cardinality source-gap review"
         if missing_required_occurrences
         else (
-            "mapped-scope structural review"
-            if remaining_mapped_scope_issues
+            "component reference hydration"
+            if stats["components_raw_reference_payloads"]
             else (
-                "component reference hydration"
-                if stats["components_raw_reference_payloads"]
+                "mapped-scope structural review"
+                if remaining_mapped_scope_issues
                 else "full SSP scope and assembled-document validation"
             )
         )
