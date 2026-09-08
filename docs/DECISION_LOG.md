@@ -49,3 +49,16 @@ The first path/payload demo query assumed the registry column `OSCAL_ELEMENT_PAT
 A `system-security-plan` DIM row with `METADATA_JSON = {}` is currently valid. The row is a structural root node, its OSCAL UUID is stored in the separate `OSCAL_UUID` column, and mapped content is stored in descendant nodes such as `metadata`, `system-characteristics`, `system-implementation`, and `control-implementation`.
 
 The root is not required to remain empty forever. It should receive payload only when an approved mapping explicitly targets a root-level OSCAL field; data must not be copied upward merely to make the root JSON non-empty.
+
+
+## 2026-09-08 — System-characteristics descendant status
+
+The standalone system-characteristics drill-down returns the parent node plus available descendants: `props`, `security-impact-level`, `status`, `system-ids`, and `authorization-boundary`.
+
+Confirmed mapping state:
+
+- FIPS 199 security-impact transformations were implemented and previously validated for confidentiality, integrity, and availability.
+- For test SSP `565189`, the security-impact structure existed but its three objective values were null.
+- Existing loaded `props` rows contained raw values and were not OSCAL-ready.
+- The consolidated Mapper V1 now contains generic extension-property and Archer select-value transformation logic, but its `props` runtime result still requires a read-only Snowflake validation.
+- `status.state` semantic lookup and some optional branches remain incomplete.
