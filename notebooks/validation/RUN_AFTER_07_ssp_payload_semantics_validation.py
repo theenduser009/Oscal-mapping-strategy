@@ -3,8 +3,9 @@
 # Run this temporary Snowflake Python cell after Mapper V1 Cell 7.  It checks
 # aggregate payload shapes and semantic value classes without printing source
 # records or payload contents.  It creates no permanent objects and performs
-# no DIM or FACT writes. OSCAL SSP 1.2.3 is used provisionally until the
-# project pins a version in CONFIG. This validates only the currently mapped
+# no DIM or FACT writes. OSCAL SSP 1.2.3 is the repository's pinned contract;
+# an already-running session that predates the pin may omit OSCAL_VERSION, while
+# a conflicting version fails closed. This validates only the currently mapped
 # payload scope; it is not whole-document OSCAL conformance validation.
 
 from collections import Counter
@@ -12,7 +13,7 @@ import json
 import uuid
 
 
-PROVISIONAL_OSCAL_VERSION = "1.2.3"
+SUPPORTED_OSCAL_VERSION = "1.2.3"
 
 required_semantic_objects = {
     "CONFIG": globals().get("CONFIG"),
@@ -38,7 +39,7 @@ if not run_result.get("validation_passed", False):
 configured_oscal_version = str(CONFIG.get("OSCAL_VERSION") or "").strip()
 if (
     configured_oscal_version
-    and configured_oscal_version != PROVISIONAL_OSCAL_VERSION
+    and configured_oscal_version != SUPPORTED_OSCAL_VERSION
 ):
     raise RuntimeError(
         "This validator implements OSCAL SSP 1.2.3 cardinality. "
@@ -356,8 +357,11 @@ orphan_status_nodes = status_node_records - source_ids
 
 print("=" * 72)
 print("SSP READ-ONLY PAYLOAD SEMANTICS VALIDATION")
-print("Provisional evaluation target: OSCAL SSP", PROVISIONAL_OSCAL_VERSION)
-print("CONFIG-pinned OSCAL version:", CONFIG.get("OSCAL_VERSION", "<not pinned>"))
+print("Validator contract: OSCAL SSP", SUPPORTED_OSCAL_VERSION)
+print(
+    "Session CONFIG OSCAL version:",
+    configured_oscal_version or "<session predates repository pin>",
+)
 print("=" * 72)
 
 print("Security-impact nodes:", stats["security_total"])
