@@ -20,6 +20,7 @@ PROVISIONAL_OSCAL_VERSION = "1.2.3"
 required_review_objects = {
     "CONFIG": globals().get("CONFIG"),
     "final_nodes_df": globals().get("final_nodes_df"),
+    "final_edges_df": globals().get("final_edges_df"),
     "source_df": globals().get("source_df"),
     "run_result": globals().get("run_result"),
     "CANONICAL_MAPPING_ROWS": globals().get("CANONICAL_MAPPING_ROWS"),
@@ -27,6 +28,7 @@ required_review_objects = {
     "_parse_source_json": globals().get("_parse_source_json"),
     "resolve_json_path": globals().get("resolve_json_path"),
     "_target_field_name": globals().get("_target_field_name"),
+    "col": globals().get("col"),
 }
 missing_review_objects = [
     name for name, value in required_review_objects.items() if value is None
@@ -42,6 +44,15 @@ if CONFIG.get("EXECUTE_WRITES", False):
     )
 if not run_result.get("validation_passed", False):
     raise RuntimeError("Cell 7 graph validation must pass first.")
+configured_oscal_version = str(CONFIG.get("OSCAL_VERSION") or "").strip()
+if (
+    configured_oscal_version
+    and configured_oscal_version != PROVISIONAL_OSCAL_VERSION
+):
+    raise RuntimeError(
+        "This diagnostic implements OSCAL SSP 1.2.3 cardinality. "
+        "CONFIG pins a different OSCAL_VERSION; use a version-specific review."
+    )
 
 
 SECURITY_PATH = (
@@ -60,6 +71,20 @@ STATUS_ALLOWED = {
     "under-major-modification",
     "disposition",
     "other",
+}
+SECURITY_ALLOWED_VALUES = {
+    "low",
+    "moderate",
+    "high",
+    "fips-199-low",
+    "fips-199-moderate",
+    "fips-199-high",
+    "legacy-loe-a",
+    "legacy-loe-b",
+    "legacy-loe-c",
+    "legacy-loe-c-+-dfars",
+    "legacy-loe-d",
+    "legacy-loe-d-+-dfars",
 }
 ALL_MASKS = [
     f"C{c}/I{i}/A{a}"
@@ -92,10 +117,6 @@ def _review_payload(value):
         return {}, True
     except (TypeError, ValueError, json.JSONDecodeError):
         return {}, True
-
-
-def _review_token(value):
-    return "-".join(str(value).strip().lower().replace("_", "-").split())
 
 
 def _review_mapping_is_eligible(mapping):
@@ -155,6 +176,7 @@ blank_source_ids = 0
 duplicate_source_rows = 0
 source_parse_errors = 0
 source_resolution_errors = 0
+source_error_records = set()
 
 for source_row in source_df.to_local_iterator():
     source_rows_seen += 1
@@ -172,6 +194,7 @@ for source_row in source_df.to_local_iterator():
         source_object = _parse_source_json(source_row)
     except (TypeError, ValueError, json.JSONDecodeError):
         source_parse_errors += 1
+        source_error_records.add(record_id)
         source_object = {}
 
     unique_paths = {
@@ -187,6 +210,7 @@ for source_row in source_df.to_local_iterator():
             )
         except (TypeError, ValueError, KeyError, IndexError):
             source_resolution_errors += 1
+            source_error_records.add(record_id)
             path_presence[source_path] = False
 
     for target_key, source_paths in target_source_paths.items():
@@ -236,12 +260,16 @@ for graph_row in final_nodes_df.select("SOURCE_RECORD_ID").distinct().to_local_i
 
 security_payload_by_record = {}
 status_payload_by_record = {}
+security_node_key_by_record = {}
 security_node_counts = Counter()
 status_node_counts = Counter()
 payload_parse_errors = Counter()
+security_payload_error_records = set()
+status_payload_error_records = set()
 
 for output_row in final_nodes_df.select(
     "SOURCE_RECORD_ID",
+    "NODE_KEY",
     "ELEMENT_PATH",
     "METADATA_JSON",
 ).filter(
@@ -256,9 +284,14 @@ for output_row in final_nodes_df.select(
     if path == SECURITY_PATH:
         security_node_counts[record_id] += 1
         security_payload_by_record.setdefault(record_id, payload)
+        security_node_key_by_record.setdefault(record_id, output_row["NODE_KEY"])
+        if parse_error:
+            security_payload_error_records.add(record_id)
     elif path == STATUS_PATH:
         status_node_counts[record_id] += 1
         status_payload_by_record.setdefault(record_id, payload)
+        if parse_error:
+            status_payload_error_records.add(record_id)
 
 
 duplicate_security_nodes = sum(
@@ -280,6 +313,8 @@ generated_pattern_counts = Counter()
 empty_optional_security_records = set()
 complete_security_records = set()
 partial_security_records = set()
+missing_security_node_records = source_ids - set(security_node_counts)
+invalid_security_assembly_records = set(security_payload_error_records)
 partial_missing_by_objective = Counter()
 partial_source_candidate_gaps = Counter()
 partial_output_gaps = Counter()
@@ -295,12 +330,23 @@ for record_id in source_ids:
         if isinstance(value, str) and bool(value.strip()):
             output_fields_present.add(field)
             generated_present_records[(SECURITY_PATH, field)].add(record_id)
+            if value not in SECURITY_ALLOWED_VALUES:
+                invalid_security_value_occurrences += 1
+                invalid_security_assembly_records.add(record_id)
         elif field in security_payload and value not in (None, ""):
             invalid_security_value_occurrences += 1
+            invalid_security_assembly_records.add(record_id)
 
     generated_pattern_counts[_review_mask(output_fields_present)] += 1
-    if not output_fields_present:
+    if record_id in missing_security_node_records:
+        pass
+    elif record_id in security_payload_error_records:
+        pass
+    elif not security_payload:
         empty_optional_security_records.add(record_id)
+    elif not output_fields_present:
+        # A non-empty object with no valid objective is not optional absence.
+        invalid_security_assembly_records.add(record_id)
     elif len(output_fields_present) == len(SECURITY_FIELDS):
         complete_security_records.add(record_id)
     else:
@@ -317,18 +363,21 @@ for record_id in source_ids:
 
     status_payload = status_payload_by_record.get(record_id, {})
     status_state = status_payload.get("state")
-    if not isinstance(status_state, str) or not status_state.strip():
+    if record_id not in status_node_counts:
+        missing_status_records.add(record_id)
+    elif record_id in status_payload_error_records:
+        invalid_status_records.add(record_id)
+    elif not isinstance(status_state, str) or not status_state.strip():
         missing_status_records.add(record_id)
     else:
-        status_token = _review_token(status_state)
         valid_other_remarks = (
-            status_token != "other"
+            status_state != "other"
             or (
                 isinstance(status_payload.get("remarks"), str)
                 and bool(status_payload.get("remarks").strip())
             )
         )
-        if status_token not in STATUS_ALLOWED or not valid_other_remarks:
+        if status_state not in STATUS_ALLOWED or not valid_other_remarks:
             invalid_status_records.add(record_id)
 
 
@@ -354,10 +403,27 @@ conformance_blocking_records = (
     partial_security_records
     | missing_status_records
     | invalid_status_records
+    | invalid_security_assembly_records
+    | missing_security_node_records
     | security_output_gap_records
     | status_output_gap_records
+    | source_error_records
+    | (source_ids - graph_ids)
+    | (graph_ids - source_ids)
 )
 narrow_scope_ready_records = source_ids - conformance_blocking_records
+
+omittable_node_keys = {
+    security_node_key_by_record[record_id]
+    for record_id in empty_optional_security_records
+    if security_node_key_by_record.get(record_id) is not None
+}
+omittable_incoming_edges = 0
+for edge_row in final_edges_df.select(
+    "FK_TARGET_ELEMENT_HASH"
+).to_local_iterator():
+    if edge_row["FK_TARGET_ELEMENT_HASH"] in omittable_node_keys:
+        omittable_incoming_edges += 1
 
 
 print("=" * 78)
@@ -425,6 +491,8 @@ print("\n=== OSCAL 1.2.3 CARDINALITY CLASSIFICATION ===")
 print("Optional absent security-impact assemblies:", len(empty_optional_security_records))
 print("Complete security-impact assemblies:", len(complete_security_records))
 print("Partial security-impact assemblies:", len(partial_security_records))
+print("Missing security structural nodes:", len(missing_security_node_records))
+print("Malformed/invalid security assemblies:", len(invalid_security_assembly_records))
 for field, label in SECURITY_TARGETS:
     print(label, "missing child occurrences in partial assemblies:", partial_missing_by_objective[field])
     print(label, "with no populated source candidate:", partial_source_candidate_gaps[field])
@@ -443,6 +511,7 @@ print("Records with a security source/output discrepancy:", len(security_output_
 print("Records with a status source/output discrepancy:", len(status_output_gap_records))
 print("Unique records requiring review in this narrow check:", len(conformance_blocking_records))
 print("Records ready within only this narrow check:", len(narrow_scope_ready_records))
+print("Records with source parse/resolution errors:", len(source_error_records))
 
 run_nodes = int(run_result.get("nodes", 0) or 0)
 run_edges = int(run_result.get("edges", 0) or 0)
@@ -450,8 +519,9 @@ print("\n=== OPTIONAL-OMISSION PROJECTION ONLY ===")
 print("Current graph nodes:", run_nodes)
 print("Current graph edges:", run_edges)
 print("No-objective security nodes eligible for final-output omission:", len(empty_optional_security_records))
-print("Projected nodes if graph policy also omits them:", run_nodes - len(empty_optional_security_records))
-print("Projected edges if graph policy also omits them:", run_edges - len(empty_optional_security_records))
+print("Actual incoming edges to those nodes:", omittable_incoming_edges)
+print("Projected nodes if graph policy also omits them:", run_nodes - len(omittable_node_keys))
+print("Projected edges if graph policy also omits them:", run_edges - omittable_incoming_edges)
 print("The mapper currently materializes structural {} nodes; this is not a requested graph change.")
 
 print("\n=== INTERPRETATION GATES ===")
@@ -465,7 +535,7 @@ print("6. The repository must pin its OSCAL version before production conformanc
 print("\n=== SAFETY RESULT ===")
 print("EXECUTE_WRITES =", CONFIG.get("EXECUTE_WRITES", False))
 print("No DIM/FACT writes or permanent objects were created.")
-if conformance_blocking_records or missing_required_occurrences:
+if blank_graph_ids or conformance_blocking_records or missing_required_occurrences:
     print("RESULT: REVIEW REQUIRED; WRITES REMAIN BLOCKED")
 else:
     print("RESULT: NARROW SECURITY/STATUS CHECK PASSED; FULL SSP REVIEW STILL REQUIRED")
