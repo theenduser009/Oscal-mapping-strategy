@@ -281,3 +281,24 @@ guards completed without error. The checkpoint does not include the exact
 count of metadata payloads whose `oscal-version` equals the configured value,
 so one aggregate-only validation cell is required before marking this field
 runtime-verified. Do not rerun the mapper for that check.
+
+The aggregate OSCAL-version validation is durably recorded `PASSED`: 2,813
+metadata nodes exactly match the configured version, every failure count is
+zero, and no writes occurred. Work may therefore advance to the next
+executable metadata mapping.
+
+## 2026-09-09 — Metadata document-ID exact-value gate
+
+The next executable Excel row is the direct mapping from `TRACKING_ID` to
+`system-security-plan.metadata.document-ids[].identifier`. Cell 4 already
+implements the required deterministic scalar-to-trimmed-string conversion,
+and the existing payload-shape audit reports 2,813 valid nodes. No production
+mapper change is justified before checking equality.
+
+Added `RUN_AFTER_07_ssp_metadata_document_id_validation.py`. It is
+aggregate-only and read-only. It verifies the exact one-row mapping contract,
+source/graph identity, populated-versus-absent source behavior, one attributable
+collection node per populated source, singleton instance identity used by the
+current builder, exact payload shape, and exact transformed identifier
+equality. It prints no identifiers, payloads, or source record IDs and fails
+closed on drift or mismatch.

@@ -53,15 +53,16 @@ than the next code change. Cell 5 now safely injects the already-pinned OSCAL
 version into every singleton metadata payload; a live Snowflake rerun is
 now complete. The rerun retained the healthy 51,500-node / 48,687-edge graph,
 passed all structural and pre-write gates, and made no writes. A direct
-aggregate payload count is the only remaining proof for this field.
+aggregate payload check was then run and recorded `PASSED` for all 2,813
+metadata nodes, with every failure count at zero and no writes.
 
 ## Immediate next action
 
 In the still-open live Snowflake session, run the one-cell, read-only
-[metadata OSCAL-version validation](notebooks/validation/RUN_AFTER_07_ssp_metadata_oscal_version_validation.py).
-Do not rerun the seven mapper cells. Record the aggregate result, then proceed
-to exact-value verification of the metadata document identifier. Keep
-`EXECUTE_WRITES = False` and leave the source timestamps unchanged.
+[metadata document-ID validation](notebooks/validation/RUN_AFTER_07_ssp_metadata_document_id_validation.py).
+Do not rerun the seven mapper cells. Record its aggregate output, then proceed
+within the same metadata branch. Keep `EXECUTE_WRITES = False` and leave the
+source timestamps unchanged.
 
 ## Read-only inspection SQL
 

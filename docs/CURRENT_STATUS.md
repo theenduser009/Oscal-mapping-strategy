@@ -133,8 +133,9 @@ Metadata/config findings:
 - `metadata.title`: no executable mapping source; action `MAPPING_SOURCE_REQUIRED`.
 - `metadata.version`: no executable mapping source; action `MAPPING_SOURCE_REQUIRED`.
 - `metadata.oscal-version`: controlled config `OSCAL_VERSION` is injected by
-  Cell 5; the updated graph ran successfully and exact aggregate payload
-  verification is the next read-only check.
+  Cell 5; the updated graph ran successfully and the exact aggregate payload
+  validation passed for all 2,813 metadata nodes. The durable checkpoint
+  records every failure count at zero and no writes.
 - `import-profile.href`: registry absent, no mapping source, and no configured profile href; action `ADD_REGISTRY_CONFIG_VALUE_REQUIRED`.
 
 Missing branch/field design findings include:
@@ -294,9 +295,11 @@ The unchanged graph cardinality is expected because this patch changes the
 metadata payload, not graph topology. Successful Cell 5 execution proves that
 the configured-version, conflict, and singleton guards did not fail. The
 checkpoint does not print a field-level version count, so exact 2,813-record
-payload verification remains the next small check. Its repeated Cell 8
-timestamp conclusion is historical audit output; it does not supersede the
-later user decision to preserve those timestamps unchanged.
+payload verification required a separate small check. That check is now
+recorded `PASSED`: all 2,813 metadata nodes contain the configured value, every
+failure count is zero, and no writes occurred. The repeated Cell 8 timestamp
+conclusion is historical audit output; it does not supersede the later user
+decision to preserve those timestamps unchanged.
 
 ## Locked metadata branch boundary
 
@@ -337,13 +340,13 @@ Do not patch individual records. Do not invent required controlled values. Do no
 ## Immediate next action
 
 In the same still-open Snowflake session, run the aggregate-only
-[metadata OSCAL-version validation](../notebooks/validation/RUN_AFTER_07_ssp_metadata_oscal_version_validation.py)
-as one new Python cell. Do not rerun Cells 1–7. It verifies source/graph
-identity, one singleton metadata node per record, parseable object payloads,
-and exact equality between every emitted `oscal-version` and
-`CONFIG["OSCAL_VERSION"]` without printing payloads or record IDs.
+[metadata document-ID validation](../notebooks/validation/RUN_AFTER_07_ssp_metadata_document_id_validation.py)
+as one new Python cell. Do not rerun Cells 1–7. It enforces the one-row
+`TRACKING_ID` mapping contract, reproduces the mapper's scalar-to-string
+conversion, and proves exact source/output equality, cardinality, payload
+shape, and source/graph identity without printing identifiers, payloads, or
+record IDs.
 
-Record that result, then continue within the same locked metadata branch to
-exact-value verification of `TRACKING_ID` →
-`metadata.document-ids[].identifier`. Keep `EXECUTE_WRITES = False` and do not
-change either timestamp source or attach a timezone.
+Record this document-ID result in the next GitHub checkpoint. Keep
+`EXECUTE_WRITES = False` and do not change either timestamp source or attach a
+timezone.
