@@ -1,6 +1,6 @@
 # Current Status
 
-Last reconciled: 2026-09-08
+Last reconciled: 2026-09-09
 
 ## Verified notebook
 
@@ -8,12 +8,9 @@ Last reconciled: 2026-09-08
 - Keep `EXECUTE_WRITES = False` while validating.
 - Repository conformance target: NIST OSCAL SSP `1.2.3`, pinned in authoritative Cell 1.
 
-## Latest verified mapper rerun
+## Verified mapper checkpoint
 
 ```text
-OSCAL MAPPING RUN
-Model: SSP
-Run ID: 20260908T220830Z
 Graph nodes: 51500
 Graph edges: 48687
 Duplicate node keys: 0
@@ -21,120 +18,14 @@ Duplicate edge keys: 0
 Dangling source edges: 0
 Dangling target edges: 0
 PRE-WRITE VALIDATION PASSED
-EXECUTE_WRITES = False; no DIM/FACT changes were made
+EXECUTE_WRITES = False
 ```
 
-## Narrow security/status review checkpoint
+Source/graph identity remains exact for 2813 source records.
 
-- Source rows / unique source records / unique graph records: 2813 / 2813 / 2813.
-- Source/graph intersection: 2813; source-only=0; graph-only=0.
-- Duplicate security nodes=0; duplicate status nodes=0; parse/resolution errors=0.
-- Optional absent security-impact assemblies: 2453.
-- Complete security-impact assemblies: 270.
-- Partial security-impact assemblies: 90.
-- Missing required security-objective occurrences: 179.
-- Missing required `status.state` occurrences: 42.
-- Unique records requiring review in this narrow check: 131.
-- Records ready within only this narrow check: 2682.
-- Security/status source-to-output discrepancies: 0.
-- Component hydration remains incomplete: 4452 raw Archer component-reference payloads.
+## Minimum-required-scope checkpoint
 
-## Latest OSCAL SSP 1.2.3 minimum-required-scope audit
-
-Screenshot-confirmed run after the pinned 1.2.3 mapper checkpoint.
-
-### Run and identity gates
-
-```text
-Validator contract: OSCAL SSP 1.2.3
-Session CONFIG OSCAL version: 1.2.3
-Cell 7 graph validation passed: True
-Cell 7 pre-write validation passed: True
-Writes executed: False
-Source rows: 2813
-Unique source records: 2813
-Unique graph records: 2813
-Source/graph intersection: 2813
-Source-only records: 0
-Graph-only records: 0
-Blank graph record IDs: 0
-Source/graph identity gate passed: True
-```
-
-### Required path coverage findings
-
-Minimum contract requires 13 paths. Eight are currently present in the registry and five are missing.
-
-Confirmed present examples include:
-
-```text
-system-security-plan
-system-security-plan.metadata
-system-security-plan.system-characteristics
-system-security-plan.system-characteristics.status
-system-security-plan.system-characteristics.authorization-boundary
-system-security-plan.system-implementation
-system-security-plan.system-characteristics.system-ids[]
-system-security-plan.system-implementation.components[]
-```
-
-Required paths shown missing from the registry:
-
-```text
-system-security-plan.import-profile
-system-security-plan.system-characteristics.system-information
-system-security-plan.system-characteristics.system-information.information-types[]
-system-security-plan.control-implementation
-system-security-plan.control-implementation.implemented-requirements[]
-```
-
-The audit reports the missing required paths as cardinality blockers across all 2813 evaluated source records.
-
-`components[]` is present but does not yet satisfy required one-or-more coverage across all source records:
-
-```text
-nodes=4804
-source_coverage=944
-missing_source_records=1869
-cardinality_blocked_records=1869
-duplicate_excess_nodes=3860
-malformed_payloads=0
-```
-
-The `duplicate_excess_nodes=3860` value is a cardinality diagnostic for an expected one-or-more collection, not a duplicate node-key defect. Mapper graph duplicate node keys remain zero.
-
-### Required field coverage findings
-
-Confirmed audit observations include:
-
-```text
-system-security-plan.OSCAL_UUID: valid=2813, missing=0, invalid=0
-metadata.title: valid=0, missing=2813, invalid=0
-metadata.last-modified: valid=2813, missing=0, invalid=0
-metadata.version: valid=0, missing=2813, invalid=0
-metadata.oscal-version: valid=0, missing=2813, invalid=0
-system-characteristics.system-name: valid=2813, missing=0, invalid=0
-system-characteristics.description: valid=2780, missing=33, invalid=0
-status.state: valid=2771, missing=42, invalid=0
-status.remarks (required when state=other): valid=57, missing=0, invalid=0
-authorization-boundary.description: valid=2519, missing=294, invalid=0
-system-ids[].id: valid=2813, missing=0, invalid=0
-```
-
-Component required payload fields remain absent in the current reference-only representation:
-
-```text
-components[].OSCAL_UUID: valid=4804, missing=0, invalid=0
-components[].type: valid=0, missing=4804, invalid=0
-components[].title: valid=0, missing=4804, invalid=0
-components[].description: valid=0, missing=4804, invalid=0
-components[].status.state: valid=0, missing=4804, invalid=0
-components[] records_blocked_by_fields_or_payload: 944
-```
-
-This confirms that component hydration is a real Phase-2 requirement rather than merely a cosmetic payload-shape issue.
-
-### Static scope summary
+The previous minimum-contract audit established:
 
 ```text
 Required paths in minimum contract: 13
@@ -142,60 +33,178 @@ Required paths present in registry: 8
 Required paths missing from registry: 5
 Required paths with mapping owner: 6
 Required paths without mapping owner: 7
-```
-
-Mapping-owner absence is evidence only; path/field results determine blocking.
-
-### Current minimum contract result
-
-```text
-Unique source records evaluated: 2813
-Records blocked by minimum required structure/fields: 2813
-Records meeting the current minimum contract: 0
+Records meeting current minimum contract: 0
 Result: NOT READY
 ```
 
-The audit explicitly states that it never authorizes writes. Even a future PASS still requires assembled OSCAL JSON schema and constraint validation before any write decision.
+Missing registry branches identified were `import-profile`, `system-information`, `information-types[]`, `control-implementation`, and `implemented-requirements[]`.
 
-## Current interpretation
+## Latest required-source readiness audit — EXECUTED 2026-09-09
 
-The graph engine itself remains structurally healthy: 51,500 nodes, 48,687 edges, zero duplicate node/edge keys and zero dangling edges. The new minimum-contract audit changes the focus from graph mechanics to **SSP completeness**.
+The read-only OSCAL SSP 1.2.3 required-source readiness audit was executed successfully in the live Snowflake notebook.
 
-The primary blockers are now precisely identified:
+### Safety / identity gates
 
-1. Five minimum-contract registry branches are absent: `import-profile`, `system-information`, `information-types[]`, `control-implementation`, and `implemented-requirements[]`.
-2. Required root metadata fields are absent, notably `metadata.title`, `metadata.version`, and `metadata.oscal-version`.
-3. Existing required payload gaps remain: 33 missing system descriptions, 42 missing status states, and 294 missing authorization-boundary descriptions.
-4. `components[]` only covers 944 of 2813 source records and is still reference-only; required component payload fields (`type`, `title`, `description`, `status.state`) are not hydrated.
-5. The earlier 2453 empty security-impact assemblies remain optional under OSCAL SSP 1.2.3 and should not be confused with these minimum-contract blockers.
-6. `EXECUTE_WRITES=False`; writes remain blocked.
+```text
+Session CONFIG OSCAL version: 1.2.3
+Cell 7 graph validation passed: True
+Cell 7 pre-write validation passed: True
+Writes executed: False
+Source rows: 2813
+Unique source records: 2813
+Unique graph records: 2813
+Source/graph identity reconciled: True
+Source parse errors: 0
+Source path resolution errors: 0
+```
 
-## Next source-readiness checkpoint prepared
+### Required path action classification
 
-The repository now contains the read-only
-[OSCAL SSP 1.2.3 required-source readiness audit](../notebooks/validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py).
-It has passed Python syntax validation, representative in-memory execution
-tests, and an independent classification review. It has not yet been run in
-Snowflake, so no source-readiness counts are claimed here.
+The audit reviewed 13 required paths and classified them as:
 
-The diagnostic inspects the original mapping artifact as well as the current
-canonical mappings. For each hard-coded required OSCAL path and field it keeps
-four axes separate: registry presence, executable mapping candidates, aggregate
-populated-source coverage, and generated valid coverage. It also detects
-candidate collisions, current owner misalignment, exact duplicate artifact
-rows, nested-payload shaping needs, and collection all-member validity. It
-prints no record IDs, Archer field names, source values, payloads, hashes, or
-lookup labels.
+```text
+ADD_STRUCTURAL_REGISTRY_PATH: 3
+DESIGN_COLLECTION_REGISTRY_AND_INSTANCE_MAPPING: 2
+SOURCE_CANDIDATE_COLLISION_REVIEW: 1
+STRUCTURE_CARDINALITY_COVERED: 7
+```
+
+Key findings:
+
+- `system-security-plan`: registry present, 2813 generated nodes, cardinality valid for all 2813; no artifact rows required for the structural root.
+- `metadata`: registry present, artifact rows=5, executable rows=4, skipped rows=1; generated coverage=2813.
+- `import-profile`: registry missing, artifact rows=0, executable rows=0, generated nodes=0. Action: `ADD_STRUCTURAL_REGISTRY_PATH`.
+- `system-characteristics`: registry present, artifact rows=6, executable rows=6, generated coverage=2813.
+- `system-information`: registry missing, no mapping candidates. Action: `ADD_STRUCTURAL_REGISTRY_PATH`.
+- `status`: registry present, artifact rows=3, executable rows=2, skipped=1; generated coverage=2813.
+- `authorization-boundary`: registry present and generated coverage=2813.
+- `system-implementation`: structural cardinality covered for 2813.
+- `control-implementation`: registry missing. Action: `ADD_STRUCTURAL_REGISTRY_PATH`.
+- `system-ids[]`: registry present; one executable candidate; generated coverage/cardinality valid for all 2813.
+- `information-types[]`: registry missing. Action: `DESIGN_COLLECTION_REGISTRY_AND_INSTANCE_MAPPING`.
+- `components[]`: registry present, artifact/executable rows=6, six unique source candidates; generated nodes=4804 but generated record coverage only 944. Candidate records zero=1869. Action: `SOURCE_CANDIDATE_COLLISION_REVIEW`.
+- `implemented-requirements[]`: registry missing. Action: `DESIGN_COLLECTION_REGISTRY_AND_INSTANCE_MAPPING`.
+
+Important: collection multiplicity/extra nodes are not being treated as duplicate graph-key defects. Graph duplicate keys remain zero.
+
+### Required payload field action classification
+
+The audit reviewed 18 required payload fields:
+
+```text
+ADD_REGISTRY_AND_MAPPING_SOURCE: 4
+ADD_REGISTRY_CONFIG_VALUE_REQUIRED: 1
+CONFIG_INJECTION_OR_SHAPING_REQUIRED: 1
+GENERATED_VALID_FULL_COVERAGE: 3
+MAPPING_SOURCE_AND_SHAPING_REQUIRED: 1
+MAPPING_SOURCE_REQUIRED: 5
+SOURCE_COMPLETENESS_REQUIRED: 3
+```
+
+Confirmed full generated coverage:
+
+```text
+system-characteristics.system-name: 2813
+system-ids[].id: 2813
+metadata.last-modified: 2813
+```
+
+Confirmed source-completeness gaps:
+
+```text
+system-characteristics.description: candidate zero=33; generated valid=2780
+status.state: candidate zero=42; generated valid=2771
+authorization-boundary.description: candidate zero=294; generated valid=2519
+```
+
+These are source completeness issues, not observed mapper-loss discrepancies.
+
+Metadata/config findings:
+
+- `metadata.title`: no executable mapping source; action `MAPPING_SOURCE_REQUIRED`.
+- `metadata.version`: no executable mapping source; action `MAPPING_SOURCE_REQUIRED`.
+- `metadata.oscal-version`: controlled config `OSCAL_VERSION` is ready; action `CONFIG_INJECTION_OR_SHAPING_REQUIRED`.
+- `import-profile.href`: registry absent, no mapping source, and no configured profile href; action `ADD_REGISTRY_CONFIG_VALUE_REQUIRED`.
+
+Missing branch/field design findings include:
+
+- `control-implementation.description`: `ADD_REGISTRY_AND_MAPPING_SOURCE`.
+- `information-types[].title`: `ADD_REGISTRY_AND_MAPPING_SOURCE`.
+- `information-types[].description`: `ADD_REGISTRY_AND_MAPPING_SOURCE`.
+- `implemented-requirements[].control-id`: `ADD_REGISTRY_AND_MAPPING_SOURCE`.
+
+Component hydration findings:
+
+```text
+components[].type: MAPPING_SOURCE_REQUIRED
+components[].title: MAPPING_SOURCE_REQUIRED
+components[].description: MAPPING_SOURCE_REQUIRED
+components[].status.state: MAPPING_SOURCE_AND_SHAPING_REQUIRED
+```
+
+The current component collection remains reference-oriented and needs source/instance design before production OSCAL assembly.
+
+### Composite record-level readiness
+
+The audit reports:
+
+```text
+system-security-plan: generated nodes satisfy cardinality/all required fields = 2813
+metadata: candidate sources cover all required fields = 0; generated nodes satisfy all required fields = 0
+import-profile: 0 / 0
+system-characteristics: candidate source completeness=2780; generated valid=2780
+system-information: 0 / 0
+status: candidate/generated valid=2771
+ authorization-boundary: candidate/generated valid=2519
+system-implementation: generated structural coverage=2813
+control-implementation: 0 / 0
+system-ids[]: candidate/generated valid=2813
+information-types[]: 0 / 0
+components[]: candidate/generated all-required-field coverage=0
+implemented-requirements[]: 0 / 0
+```
+
+Candidate-source coverage for collections is explicitly record-level evidence only and does not prove that values correlate to the same collection member instance.
+
+### Import-profile decision gate
+
+```text
+Registry path present: False
+Artifact rows for href: 0
+Executable rows for href: 0
+Currently owner-aligned rows for href: 0
+Candidate records with one populated value: 0
+Candidate records with multiple populated values: 0
+SSP_IMPORT_PROFILE_HREF configured: False
+```
+
+Decision from the audit:
+
+> Provide the approved profile URI for `CONFIG['SSP_IMPORT_PROFILE_HREF']`; no default was invented.
+
+This is a controlled configuration/business-governance input, not something the mapper should fabricate.
+
+### Audit result
+
+```text
+RESULT: MAPPING-BACKLOG EVIDENCE ONLY
+```
+
+The audit never authorizes writes. Assembled OSCAL JSON schema and constraint validation remain mandatory after the minimum-contract gaps are resolved.
+
+## Current engineering interpretation
+
+The graph engine is no longer the primary problem. Its structural integrity remains clean. The backlog is now separated into four concrete categories:
+
+1. **Structural registry additions** — `import-profile`, `system-information`, `control-implementation`.
+2. **Collection design + instance mapping** — `information-types[]` and `implemented-requirements[]`.
+3. **Component collection/source collision + hydration design** — current `components[]` coverage is 944/2813 records and six candidate source mappings need deliberate reconciliation.
+4. **Required field sourcing/configuration** — metadata title/version, import-profile href, component fields, plus known source-completeness gaps of 33/42/294 records.
+
+Do not patch individual records. Do not invent required controlled values. Do not enable writes.
 
 ## Immediate next action
 
-In the same live Snowflake notebook session, copy and run the complete
-[required-source readiness audit](../notebooks/validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py)
-in one new Python cell. Do not rerun Mapper Cells 1-7 or the minimum-scope audit
-solely for this step.
+The next engineering action should be **import-profile contract resolution**, because the diagnostic has now proven there is no Archer mapping candidate and no configured href. Obtain/confirm the approved OSCAL SSP profile URI with the architect/governance owner, then add the `import-profile` registry node and controlled `SSP_IMPORT_PROFILE_HREF` configuration path generically.
 
-Paste the complete aggregate output into this status file and report
-`check status`. The import-profile decision gate will show whether the mapping
-artifact contains a populated candidate or whether an approved controlled
-`SSP_IMPORT_PROFILE_HREF` value must be supplied. No URI or source value is
-invented. Keep `EXECUTE_WRITES = False`.
+Keep `EXECUTE_WRITES = False`. After that, proceed branch-by-branch through `system-information`, `information-types[]`, `control-implementation`, and `implemented-requirements[]`, using the audit classifications rather than ad-hoc mapper changes.
