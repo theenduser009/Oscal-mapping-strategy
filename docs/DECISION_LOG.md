@@ -345,3 +345,9 @@ two-objective inputs, reviewed legacy labels, optional-node omission, and
 unchanged behavior for other structural paths. The next step is one normal
 read-only mapper run from Cell 4 through Cell 7; no standalone validator is
 required and `EXECUTE_WRITES` remains `False`.
+
+The live rerun subsequently passed with 48,957 nodes and 46,144 edges, zero
+duplicate or dangling keys, passed pre-write validation, and no writes. The
+2,543-node and 2,543-edge reduction exactly matches the 2,453 empty plus 90
+partial assemblies intentionally omitted. The production decision is accepted;
+no additional security-impact validator is required.

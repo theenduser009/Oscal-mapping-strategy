@@ -11,8 +11,8 @@ Last reconciled: 2026-09-09
 ## Verified mapper checkpoint
 
 ```text
-Graph nodes: 51500
-Graph edges: 48687
+Graph nodes: 48957
+Graph edges: 46144
 Duplicate node keys: 0
 Duplicate edge keys: 0
 Dangling source edges: 0
@@ -22,6 +22,9 @@ EXECUTE_WRITES = False
 ```
 
 Source/graph identity remains exact for 2813 source records.
+The reduction from the prior graph is exactly 2,543 nodes and 2,543 edges,
+matching the 2,453 empty plus 90 partial security-impact assemblies that the
+new complete-or-omit rule intentionally removes.
 
 ## Minimum-required-scope checkpoint
 
@@ -310,8 +313,8 @@ not restart discovery for each field:
 
 | Target | Rows | Current disposition |
 | --- | ---: | --- |
-| `metadata.last-modified` | 2 | Source-preserving collision-safe resolver added; live rerun pending; timezone gap retained |
-| `metadata.published` | 2 | Same collision-safe resolver added; live source collision outcome pending |
+| `metadata.last-modified` | 2 | Source-preserving collision-safe resolver ran successfully; timezone gap retained |
+| `metadata.published` | 2 | Same collision-safe resolver ran successfully; no populated-source conflict raised |
 | literal `metadata.props` | 1 | `TBD`, source-empty, and not an active collection registry path |
 | `metadata.document-ids[].identifier` | 1 | Exact source/output equality passed for 2,813/2,813 records |
 | `metadata.responsible-parties[]` | 9 | Five shape/presence-reconciled, four `TBD`; party/role targets are absent |
@@ -323,7 +326,7 @@ can be safely closed now. Responsible-party nodes are not semantically
 complete merely because their payload shape is valid: neither
 `metadata.parties[]` nor `metadata.roles[]` exists to resolve their references.
 
-## Security-impact production assembly — IMPLEMENTED; LIVE RERUN PENDING
+## Security-impact production assembly — LIVE RERUN PASSED
 
 The recorded source/runtime evidence separates the optional assembly states:
 
@@ -343,8 +346,13 @@ Cell 5 now recognizes that same path as an optional singleton and does not
 recreate an omitted assembly as an empty structural node. Other structural
 singleton and collection behavior is unchanged. The split cells and
 authoritative notebook are synchronized, and focused tests cover complete,
-empty, and partial inputs plus the structural fallback. Snowflake confirmation
-is still pending one normal read-only mapper rerun.
+empty, and partial inputs plus the structural fallback.
+
+The read-only Snowflake rerun passed. Graph nodes and edges each fell by exactly
+2,543, which equals the 2,453 empty plus 90 partial assemblies identified by
+the earlier aggregate evidence. Duplicate and dangling key counts remained
+zero, pre-write validation passed, and no DIM/FACT write occurred. The 270
+complete security-impact assemblies remain the expected emitted population.
 
 ## Current engineering interpretation
 
@@ -364,12 +372,8 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-Replace the live notebook's copy-ready
-[Cell 4](../notebooks/cells/04_parsing_transform_payload_helpers.py) and
-[Cell 5](../notebooks/cells/05_registry_graph_builder.py), then run Cells 4,
-5, 6, and 7 in order. Do not run another standalone validator for this step.
-This single read-only rerun exercises both production changes: timestamp
-collision handling and complete-or-omit security-impact assembly. If populated
-timestamp sources disagree, the mapper stops with a sanitized conflict instead
-of silently choosing one. Keep `EXECUTE_WRITES = False`; source timestamps stay
-unchanged and no security-objective value is fabricated.
+The timestamp and security-impact production changes are accepted; do not
+rerun them or run another standalone validator. Continue root-to-leaf with the
+next unresolved Excel-defined metadata slice: `metadata.responsible-parties[]`
+and its required role/party references. Keep `EXECUTE_WRITES = False`; do not
+invent a person, role, or source relationship while implementing that slice.
