@@ -12,6 +12,7 @@ Unique governed IDs shared across fields: **12**
 ## Field observations
 
 ### SUBSYSTEMS
+
 - Mapping rows: 1
 - Mapping type: REFERENCE
 - Declared component-type signal: `system`
@@ -24,6 +25,7 @@ Unique governed IDs shared across fields: **12**
 - Root value type: NONE
 
 ### SOFTWARE
+
 - Mapping rows: 1
 - Mapping type: REFERENCE
 - Declared component-type signal: `software`
@@ -39,6 +41,7 @@ Unique governed IDs shared across fields: **12**
 - Top object key signature: `ContentId,LevelId`
 
 ### HARDWARE
+
 - Mapping rows: 1
 - Mapping type: REFERENCE
 - Declared component-type signal: `hardware`
@@ -54,6 +57,7 @@ Unique governed IDs shared across fields: **12**
 - Top object key signature: `ContentId,LevelId`
 
 ### INTERCONNECTIONS
+
 - Mapping rows: 1
 - Mapping type: REFERENCE
 - Declared component-type signal: `interconnection`
@@ -69,6 +73,7 @@ Unique governed IDs shared across fields: **12**
 - Top object key signature: `ContentId,LevelId`
 
 ### INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM
+
 - Mapping rows: 1
 - Mapping type: REFERENCE
 - Declared component-type signal: `interconnection`
@@ -84,6 +89,7 @@ Unique governed IDs shared across fields: **12**
 - Top object key signature: NONE
 
 ### SAP_INTAKE_FORM_INTERCONNECTIONS
+
 - Mapping rows: 1
 - Mapping type: REFERENCE
 - Declared component-type signal: `interconnection`

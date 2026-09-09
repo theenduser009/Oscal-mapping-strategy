@@ -1,8 +1,10 @@
 import contextlib
 import datetime
+import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import runpy
 import unittest
 import uuid
@@ -20,6 +22,12 @@ CELL_5_PATH = (
     / "notebooks"
     / "cells"
     / "05_registry_graph_builder.py"
+)
+CELL_4_PATH = (
+    REPO_ROOT
+    / "notebooks"
+    / "cells"
+    / "04_parsing_transform_payload_helpers.py"
 )
 COMPONENT_PATH = (
     "system-security-plan.system-implementation.components[]"
@@ -125,6 +133,23 @@ def _load_cell_5():
         )
 
 
+def _load_cell_4():
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        return runpy.run_path(
+            str(CELL_4_PATH),
+            init_globals={
+                "ARCHER_VALUE_LOOKUP": {},
+                "CONFIG": {"SOURCE_SYSTEM_NAME": "unit-test"},
+                "FIPS_199_VALUE_LOOKUP": {},
+                "hashlib": hashlib,
+                "json": json,
+                "re": re,
+                "uuid": uuid,
+            },
+        )
+
+
 def _component_registry_row(**overrides):
     row = {
         "OSCAL_MODEL_KEY": "SSP",
@@ -138,6 +163,18 @@ def _component_registry_row(**overrides):
     }
     row.update(overrides)
     return row
+
+
+def _component_mapping_row(source_field, component_type):
+    return {
+        "SOURCE_FIELD_NAME": source_field,
+        "OWNER_ELEMENT_PATH": COMPONENT_PATH,
+        "OSCAL_ELEMENT_PATH": COMPONENT_PATH,
+        "OSCAL_FIELD_NAME": "",
+        "MAPPING_TYPE": "Reference",
+        "TRANSFORMATION_LOGIC": f"Create {component_type} component",
+        "STATUS": "Mapped",
+    }
 
 
 class ComponentSourceContractTests(unittest.TestCase):
@@ -236,6 +273,161 @@ class ComponentRegistryContractTests(unittest.TestCase):
                     [_component_registry_row(PARENT_NODE_PATH="wrong-parent")]
                 ),
                 "SSP",
+            )
+
+    def test_component_payload_receives_node_uuid(self):
+        component_uuid = str(uuid.uuid4())
+        payload = self.cell_5["_payload_with_instance_uuid"](
+            COMPONENT_PATH,
+            {"type": "software"},
+            component_uuid,
+        )
+        self.assertEqual(
+            payload,
+            {"type": "software", "uuid": component_uuid},
+        )
+
+    def test_component_payload_rejects_conflicting_uuid(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Component payload uuid conflicts with node uuid",
+        ):
+            self.cell_5["_payload_with_instance_uuid"](
+                COMPONENT_PATH,
+                {"type": "software", "uuid": str(uuid.uuid4())},
+                str(uuid.uuid4()),
+            )
+
+
+class ComponentReferenceEmissionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.cell_4 = _load_cell_4()
+
+    def test_object_references_use_canonical_content_id_and_type(self):
+        rows = [_component_mapping_row("SOFTWARE", "software")]
+        instances = self.cell_4["build_element_instances"](
+            {
+                "SOFTWARE": [
+                    {"ContentId": 202, "LevelId": 7},
+                    {"ContentId": "101", "LevelId": 7},
+                ]
+            },
+            "private-source-record",
+            COMPONENT_PATH,
+            rows,
+        )
+        self.assertEqual(
+            instances,
+            [
+                {
+                    "instance_key": "101",
+                    "payload": {"type": "software"},
+                    "parent_instance_key": None,
+                },
+                {
+                    "instance_key": "202",
+                    "payload": {"type": "software"},
+                    "parent_instance_key": None,
+                },
+            ],
+        )
+
+    def test_scalar_reference_members_are_supported(self):
+        rows = [
+            _component_mapping_row(
+                "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM",
+                "interconnection",
+            )
+        ]
+        instances = self.cell_4["build_element_instances"](
+            {
+                "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM": [
+                    303,
+                    "404",
+                ]
+            },
+            "private-source-record",
+            COMPONENT_PATH,
+            rows,
+        )
+        self.assertEqual(
+            [item["instance_key"] for item in instances],
+            ["303", "404"],
+        )
+        self.assertTrue(
+            all(
+                item["payload"] == {"type": "interconnection"}
+                for item in instances
+            )
+        )
+
+    def test_same_content_id_and_type_deduplicates_across_fields(self):
+        rows = [
+            _component_mapping_row("INTERCONNECTIONS", "interconnection"),
+            _component_mapping_row(
+                "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM",
+                "interconnection",
+            ),
+        ]
+        instances = self.cell_4["build_element_instances"](
+            {
+                "INTERCONNECTIONS": [
+                    {"ContentId": "same-private-id", "LevelId": 9}
+                ],
+                "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM": [
+                    "same-private-id"
+                ],
+            },
+            "private-source-record",
+            COMPONENT_PATH,
+            rows,
+        )
+        self.assertEqual(len(instances), 1)
+        self.assertEqual(instances[0]["instance_key"], "same-private-id")
+
+    def test_same_content_id_with_conflicting_types_fails_without_value(self):
+        rows = [
+            _component_mapping_row("SOFTWARE", "software"),
+            _component_mapping_row("HARDWARE", "hardware"),
+        ]
+        with self.assertRaisesRegex(
+            ValueError,
+            "Collection identity resolves to conflicting payloads",
+        ) as raised:
+            self.cell_4["build_element_instances"](
+                {
+                    "SOFTWARE": [{"ContentId": "private-conflict-id"}],
+                    "HARDWARE": [{"ContentId": "private-conflict-id"}],
+                },
+                "private-source-record",
+                COMPONENT_PATH,
+                rows,
+            )
+        self.assertNotIn("private-conflict-id", str(raised.exception))
+
+    def test_populated_object_without_content_id_fails_closed(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Component reference is missing ContentId",
+        ):
+            self.cell_4["build_element_instances"](
+                {"SOFTWARE": [{"LevelId": 7}]},
+                "private-source-record",
+                COMPONENT_PATH,
+                [_component_mapping_row("SOFTWARE", "software")],
+            )
+
+    def test_mapping_type_signal_drift_fails_closed(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "Component mapping type signal does not match approved contract",
+        ):
+            self.cell_4["build_element_instances"](
+                {"SOFTWARE": [{"ContentId": "private-id"}]},
+                "private-source-record",
+                COMPONENT_PATH,
+                [_component_mapping_row("SOFTWARE", "hardware")],
             )
 
 

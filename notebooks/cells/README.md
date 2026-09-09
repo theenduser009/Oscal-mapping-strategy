@@ -95,13 +95,16 @@ retained 67,683 nodes and 64,870 edges, passed every structural gate, and made
 no writes. Do not rerun the metadata setup or the accepted mapper cells for
 that release.
 
-The next action is the one-time aggregate
-[component source-contract extraction](../validation/RUN_AFTER_07_ssp_component_source_contract.py).
-Run it as one new Python cell in the still-open session and post its complete
-output. It prints no identifiers or source values and performs no DML. Cell 5
-already verifies the recorded component collection parent, `CONTENT_ID` rule,
-and `$` item path; component emission will change only after the extraction
-proves the live reference shape.
+The one-time aggregate
+[component source-contract extraction](../validation/RUN_AFTER_07_ssp_component_source_contract.py)
+is complete. It proved arrays of `ContentId,LevelId` objects plus one scalar-ID
+array, all six declared component types, and 12 IDs shared across fields.
+
+The component identity/type release is now in [Cell 4](04_parsing_transform_payload_helpers.py)
+and [Cell 5](05_registry_graph_builder.py). In the still-open session, replace
+and run Cells 4 and 5, then run Cell 7 once with writes disabled. Full title,
+description, and status hydration still requires a referenced component lookup
+source and is not claimed by this release.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

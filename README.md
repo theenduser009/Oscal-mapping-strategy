@@ -36,6 +36,13 @@ collection-contract release. That release is runtime-accepted; no further
 metadata or system-characteristics rerun is pending. Work now moves to the
 next evidence-backed downstream SSP branch, with writes still disabled.
 
+The component source contract is now captured: all 4,804 populated references
+use either `ContentId,LevelId` objects or scalar content IDs. The mapper now
+uses the registry-governed content ID as component identity, emits the declared
+component type and deterministic UUID, and rejects cross-type identity
+conflicts. Title, description, and status remain blocked on a referenced-record
+lookup source and are not defaulted.
+
 The earlier 2,585 aggregate was corrected: under pinned OSCAL SSP 1.2.3,
 2,453 no-objective security-impact assemblies are optional absences. Cell 4
 now also omits the 90 partial assemblies, while retaining complete C-I-A
@@ -79,13 +86,12 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The accepted graph now moves to the component branch. In the current notebook
-session, run the one-time aggregate
-[component source-contract extraction](notebooks/validation/RUN_AFTER_07_ssp_component_source_contract.py)
-as a new Python cell. Do not rerun accepted mapper cells or the metadata
-registry setup. Post the complete output so the six Archer references can be
-implemented with the recorded `CONTENT_ID` identity and their actual live
-container shape. All 106 repository tests pass and writes remain disabled.
+The component identity/type release is ready. In the current notebook session,
+replace [Cell 4](notebooks/cells/04_parsing_transform_payload_helpers.py) and
+[Cell 5](notebooks/cells/05_registry_graph_builder.py), then run Cells 4, 5,
+and 7 with `EXECUTE_WRITES = False`. Do not run registry setup or another
+standalone validator. Post the complete Cell 7 output. All 114 repository tests
+pass.
 
 ## Read-only inspection SQL
 

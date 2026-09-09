@@ -28,7 +28,7 @@ structural key check passed, and no DIM/FACT write occurred. The durable
 complete Cell 7 result.
 
 The existing-registry `system-characteristics` collection-contract release is
-now runtime-accepted. All 106 repository tests pass, and the live rerun kept
+now runtime-accepted. All 114 repository tests pass, and the live rerun kept
 the same healthy 67,683-node / 64,870-edge graph with no writes. The durable
 [system-characteristics checkpoint](checkpoints/2026-09-09-ssp-system-characteristics-contract-run.md)
 records the result.
@@ -513,7 +513,7 @@ pre-write validation, and `EXECUTE_WRITES = False`. The unchanged counts are
 accepted evidence that the governed collection identities caused no data loss
 for this source population. No further system-characteristics rerun is needed.
 
-## Component source contract — READY FOR ONE-TIME EXTRACTION
+## Component source contract — EXECUTED; IDENTITY/TYPE RELEASE IMPLEMENTED
 
 The next root-to-leaf branch is
 `system-security-plan.system-implementation.components[]`. The parent
@@ -530,20 +530,34 @@ be promoted as the component implementation. The checked-in artifacts also do
 not prove the live reference-container shape or show whether title,
 description, and status are carried inside each reference.
 
-`RUN_AFTER_07_ssp_component_source_contract.py` is a one-time, aggregate-only
-contract extraction. It reports mapping type and component-type signals,
-wrapper/object key shapes, governed ID coverage, required-field key coverage,
-and within/cross-field ID collisions. It hashes identifiers in memory and does
-not print identifiers, source values, record IDs, or payloads. It performs no
-DML. The result will directly determine the explicit `components[]` hydrator;
-it is not another general conformance validator.
+The one-time aggregate
+[component source-contract checkpoint](checkpoints/2026-09-09-ssp-component-source-contract.md)
+is complete. It reconciled all 4,804 populated references: 4,452 explicit
+`ContentId` object members and 352 scalar content-ID members. The object shape
+is exactly `ContentId,LevelId`; no object carries title, description, or
+status. Seven SSP records contain cross-field overlap, covering 12 governed
+IDs. No source identifier or value was printed, and no data was changed.
+
+Cell 4 now implements the six proved `Reference` mappings. It requires each
+mapping's declared component-type signal, accepts only the two observed source
+shapes, canonicalizes `ContentId` to a string, uses it as member identity, and
+emits the proved component type. Identical content ID and type pairs collapse
+to one node; a content ID with conflicting types fails closed without printing
+the ID. Cell 5 adds the node's deterministic OSCAL UUID to its component
+payload and verifies the recorded parent, collection flag, `CONTENT_ID` rule,
+and `$` item path. No registry DML is required.
+
+This is a component identity/type release, not full component hydration. The
+source references do not contain the required title, description, or status,
+and Cell 2 currently loads no referenced component table. Those remaining
+fields need an approved lookup source keyed by `ContentId`; they are not
+invented here.
 
 ## Immediate next action
 
-Do not rerun the accepted mapper cells. In the still-open notebook session,
-run only
-[`RUN_AFTER_07_ssp_component_source_contract.py`](../notebooks/validation/RUN_AFTER_07_ssp_component_source_contract.py)
-as one new Python cell and post its complete aggregate output. Keep
-`EXECUTE_WRITES = False`; no registry setup or standalone validator is needed.
-If the notebook session has closed, run Cells 1 through 7 first and then run
-the contract extraction once.
+In the still-open notebook session, replace Cells 4 and 5 from the repository,
+then run Cell 4, Cell 5, and Cell 7. Keep `EXECUTE_WRITES = False`; do not run
+registry setup or another standalone validator. If the session has closed,
+run Cells 1 through 7 in order. Post the complete Cell 7 output. Component node
+counts may decrease only where the same governed content ID is repeated across
+fields; any conflicting cross-type ID will stop safely for review.

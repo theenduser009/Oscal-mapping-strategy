@@ -65,6 +65,11 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 - A component reference is not a complete OSCAL component. Required title,
   description, and status values must come from the referenced source object
   or an approved lookup contract; the mapper does not invent them.
+- The observed SSP component reference contract has two shapes only: an object
+  with `ContentId,LevelId`, or a scalar content ID. Component type is declared
+  by the six approved mapping rows. A repeated content ID with the same type
+  deduplicates; a cross-type collision fails closed.
+- A component payload UUID equals its deterministic graph node OSCAL UUID.
 - Converging singleton mappings may share one transformed value, but distinct
   populated values require explicit precedence and must fail closed until it
   is approved.

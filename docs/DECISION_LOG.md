@@ -524,3 +524,25 @@ within/cross-field collisions without printing identifiers or values. Its
 result is the direct input to one explicit fail-closed component hydrator. No
 component emission behavior changes, registry DML, or mapper rerun is included
 in this evidence increment.
+
+## 2026-09-09 — Implement governed component identity and type
+
+The live source-contract extraction reconciled the six component reference
+mappings and all 4,804 populated members. Software, hardware, and the primary
+interconnection field use arrays of `ContentId,LevelId` objects. The connecting
+information-system field uses an array of scalar content IDs. The other two
+approved fields are currently empty. Twelve governed IDs overlap across fields
+in seven SSP records.
+
+Cell 4 now accepts exactly those proved object and scalar shapes, requires the
+approved `Reference` mapping type and declared component-type signal, and uses
+canonical `ContentId` as the registry-governed instance key. Matching identity
+and type pairs deduplicate; conflicting types for one content ID fail closed.
+Cell 5 adds the deterministic node UUID to the component payload and enforces
+the existing component registry contract. No registry write is required.
+
+The reference objects contain no title, description, or status keys. The
+release therefore emits only evidence-backed UUID and type fields and does not
+claim complete OSCAL components. Completing that branch requires an approved
+referenced-record lookup keyed by `ContentId`. The full test suite has 114
+passing tests, and runtime validation remains read-only.

@@ -44,6 +44,17 @@ SYSTEM_CHARACTERISTICS_PROPS_ELEMENT_PATH = (
 SYSTEM_IDS_ELEMENT_PATH = (
     "system-security-plan.system-characteristics.system-ids[]"
 )
+COMPONENTS_ELEMENT_PATH = (
+    "system-security-plan.system-implementation.components[]"
+)
+COMPONENT_SOURCE_TYPES = {
+    "SUBSYSTEMS": "system",
+    "SOFTWARE": "software",
+    "HARDWARE": "hardware",
+    "INTERCONNECTIONS": "interconnection",
+    "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM": "interconnection",
+    "SAP_INTAKE_FORM_INTERCONNECTIONS": "interconnection",
+}
 DOCUMENT_IDS_ELEMENT_PATH = "system-security-plan.metadata.document-ids[]"
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
 METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
@@ -242,6 +253,73 @@ def _source_value_instance_key(source_field, value):
 
 def _value_instance_key(value):
     return _deterministic_hash("value-v1", value)
+
+
+def _component_mapping_type(mapping_row):
+    source_field = str(mapping_row.get("SOURCE_FIELD_NAME") or "").strip()
+    component_type = COMPONENT_SOURCE_TYPES.get(source_field)
+    if component_type is None:
+        raise ValueError("Component mapping source is not approved")
+
+    mapping_type = str(
+        mapping_row.get("MAPPING_TYPE") or ""
+    ).strip().lower()
+    if mapping_type != "reference":
+        raise ValueError("Component mapping must use Reference type")
+
+    evidence_text = " ".join(
+        str(mapping_row.get(column) or "")
+        for column in (
+            "TRANSFORMATION_LOGIC",
+            "NOTES",
+            "NOTE",
+            "COMMENTS",
+            "COMMENT",
+        )
+    ).lower()
+    declared_types = {
+        candidate
+        for candidate in set(COMPONENT_SOURCE_TYPES.values())
+        if re.search(r"\b" + re.escape(candidate) + r"\b", evidence_text)
+    }
+    if declared_types != {component_type}:
+        raise ValueError(
+            "Component mapping type signal does not match approved contract"
+        )
+    return component_type
+
+
+def _canonical_component_content_id(value):
+    value = _to_python(value)
+    if isinstance(value, (bool, dict, list)) or value is None:
+        raise ValueError("Component reference has invalid ContentId")
+    content_id = str(value).strip()
+    if not content_id or content_id.lower() in {
+        "nan",
+        "inf",
+        "+inf",
+        "-inf",
+    }:
+        raise ValueError("Component reference has invalid ContentId")
+    return content_id
+
+
+def _component_reference_content_ids(value):
+    value = _to_python(value)
+    members = value if isinstance(value, list) else [value]
+    content_ids = []
+    for member in members:
+        member = _to_python(member)
+        if isinstance(member, dict):
+            if "ContentId" not in member:
+                raise ValueError("Component reference is missing ContentId")
+            content_id = _canonical_component_content_id(
+                member["ContentId"]
+            )
+        else:
+            content_id = _canonical_component_content_id(member)
+        content_ids.append(content_id)
+    return content_ids
 
 
 def transform_fips_199(value):
@@ -786,6 +864,19 @@ def build_element_instances(
                 )
             continue
 
+        if element_path == COMPONENTS_ELEMENT_PATH:
+            component_type = _component_mapping_type(mapping_row)
+            for content_id in _component_reference_content_ids(transformed):
+                _append_unique_collection_instance(
+                    instances,
+                    {
+                        "instance_key": content_id,
+                        "payload": {"type": component_type},
+                        "parent_instance_key": None,
+                    },
+                )
+            continue
+
         if element_path.endswith("responsible-parties[]"):
             instances.append(
                 {
@@ -853,6 +944,8 @@ def build_element_instances(
             },
         )
 
+    if element_path == COMPONENTS_ELEMENT_PATH:
+        instances.sort(key=lambda item: item["instance_key"])
     return instances
 
 

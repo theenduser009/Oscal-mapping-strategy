@@ -8,6 +8,9 @@ METADATA_PARTIES_ELEMENT_PATH = "system-security-plan.metadata.parties[]"
 RESPONSIBLE_PARTIES_ELEMENT_PATH = (
     "system-security-plan.metadata.responsible-parties[]"
 )
+COMPONENTS_ELEMENT_PATH = (
+    "system-security-plan.system-implementation.components[]"
+)
 APPROVED_RESPONSIBLE_PARTY_TYPE = "person"
 OPTIONAL_SINGLETON_ELEMENT_PATHS = {
     "system-security-plan.system-characteristics.security-impact-level",
@@ -157,6 +160,19 @@ def _instance_oscal_uuid(
         element_path,
         instance_key,
     )
+
+
+def _payload_with_instance_uuid(element_path, payload, oscal_uuid):
+    if element_path != COMPONENTS_ELEMENT_PATH:
+        return payload
+    if not isinstance(payload, dict):
+        raise ValueError("Component payload must be an object")
+    existing_uuid = payload.get("uuid")
+    if existing_uuid not in (None, "") and existing_uuid != oscal_uuid:
+        raise ValueError("Component payload uuid conflicts with node uuid")
+    updated_payload = dict(payload)
+    updated_payload["uuid"] = oscal_uuid
+    return updated_payload
 
 
 def _canonical_registry_rows(element_registry_dataframe, model_key):
@@ -520,6 +536,11 @@ def build_oscal_graph(
                     source_record_id,
                     model_key,
                 )
+                payload = _payload_with_instance_uuid(
+                    path,
+                    instance["payload"],
+                    oscal_uuid,
+                )
                 created = {
                     "NODE_KEY": node_key,
                     "ELEMENT_PATH": path,
@@ -528,7 +549,7 @@ def build_oscal_graph(
                     "OSCAL_UUID": oscal_uuid,
                     "ELEMENT_TYPE": _element_type(path),
                     "METADATA_JSON": json.dumps(
-                        instance["payload"], sort_keys=True, default=str
+                        payload, sort_keys=True, default=str
                     ),
                     "SOURCE_SYSTEM_NAME": source_system,
                     "SOURCE_TABLE_NAME": source_table,
