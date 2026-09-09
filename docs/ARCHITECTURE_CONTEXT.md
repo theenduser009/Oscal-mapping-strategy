@@ -44,7 +44,16 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 - System status uses an explicit OSCAL crosswalk; `other` includes an explanatory remark.
 - Document identifiers and property values must satisfy their OSCAL string contracts.
 - Transient helper fields never become OSCAL properties.
-- Approved responsible-party fields become OSCAL role objects.
+- `AUTHORIZATION_PACKAGE_NAME` remains the system-name source and is also the
+  approved source for required `metadata.title`; no fallback title is invented.
+- The SSP document version is controlled as `1.0`, independently of the OSCAL
+  model version `1.2.3`.
+- The five approved responsible-party fields become referenced OSCAL roles and
+  `person` party objects. The four workbook rows marked `TBD` remain excluded.
+- A party UUID is stable across roles within one SSP and must equal the party
+  node OSCAL UUID. Every emitted role and party must be referenced exactly.
+- `metadata.roles[]` and `metadata.parties[]` must be governed registry rows
+  under metadata; the mapper never invents them in notebook memory.
 - Extension properties become stable `name`/`value` objects.
 - Helper, TBD, empty, and unapproved values do not become final OSCAL properties.
 

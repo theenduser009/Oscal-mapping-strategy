@@ -1,0 +1,303 @@
+# %% Standalone Snowflake Python cell - governed SSP metadata registry setup
+
+# With the flag below left False, this performs read-only preflight only. For
+# the approved metadata release, set it to True before one controlled run: the
+# same run preflights first, derives deterministic orders, inserts only missing
+# target paths, and verifies the final state. It never updates a governed row.
+
+import re
+
+from snowflake.snowpark.context import get_active_session
+from snowflake.snowpark.functions import col, lit, trim, upper
+
+
+EXECUTE_REGISTRY_WRITES = False
+
+REGISTRY_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY"
+MODEL_KEY = "SSP"
+SSP_ROOT_PATH = "system-security-plan"
+METADATA_PATH = "system-security-plan.metadata"
+ROLES_PATH = "system-security-plan.metadata.roles[]"
+PARTIES_PATH = "system-security-plan.metadata.parties[]"
+RESPONSIBLE_PARTIES_PATH = (
+    "system-security-plan.metadata.responsible-parties[]"
+)
+TARGET_PATHS = (ROLES_PATH, PARTIES_PATH)
+
+REQUIRED_REGISTRY_COLUMNS = {
+    "OSCAL_MODEL_KEY",
+    "NODE_PATH",
+    "PARENT_NODE_PATH",
+    "PROCESS_ORDER",
+    "IS_ACTIVE",
+}
+
+
+session = get_active_session()
+
+
+def _assert_safe_identifier(identifier):
+    if not re.fullmatch(r"[A-Za-z0-9_.$]+", identifier):
+        raise ValueError("Unsafe registry table identifier")
+
+
+def _clean(value):
+    return "" if value is None else str(value).strip()
+
+
+def _is_active(value):
+    return _clean(value).upper() not in {"FALSE", "F", "NO", "N", "0"}
+
+
+def _stored_process_order(value, node_path, required=False):
+    text = _clean(value)
+    if not text:
+        if required:
+            raise ValueError(
+                f"Registry PROCESS_ORDER is missing for {node_path}"
+            )
+        return None
+    if not re.fullmatch(r"-?[0-9]+", text):
+        raise ValueError(
+            f"Registry PROCESS_ORDER is not an integer for {node_path}"
+        )
+    return int(text)
+
+
+def _read_model_rows():
+    registry_df = session.table(REGISTRY_TABLE)
+    columns = {str(name).strip().upper() for name in registry_df.columns}
+    missing_columns = sorted(REQUIRED_REGISTRY_COLUMNS - columns)
+    if missing_columns:
+        raise ValueError(
+            "Registry is missing required governed columns: "
+            + ", ".join(missing_columns)
+        )
+
+    selected_df = (
+        registry_df.select(
+            col("OSCAL_MODEL_KEY"),
+            col("NODE_PATH"),
+            col("PARENT_NODE_PATH"),
+            col("PROCESS_ORDER"),
+            col("IS_ACTIVE"),
+        )
+        .filter(
+            upper(trim(col("OSCAL_MODEL_KEY").cast("string")))
+            == lit(MODEL_KEY)
+        )
+    )
+    return [row.as_dict(recursive=True) for row in selected_df.collect()]
+
+
+def _rows_by_path(model_rows):
+    indexed = {}
+    for row in model_rows:
+        path = _clean(row.get("NODE_PATH"))
+        if path:
+            indexed.setdefault(path, []).append(row)
+    return indexed
+
+
+def _one_row(indexed_rows, path, required):
+    rows = indexed_rows.get(path, [])
+    if len(rows) > 1:
+        raise ValueError(f"Registry has duplicate SSP rows for {path}")
+    if not rows:
+        if required:
+            raise ValueError(f"Registry is missing required SSP path {path}")
+        return None
+    return rows[0]
+
+
+def _assert_existing_row(row, path, expected_parent):
+    if row is None:
+        return
+    if _clean(row.get("PARENT_NODE_PATH")) != expected_parent:
+        raise ValueError(f"Existing SSP registry parent is invalid for {path}")
+    if not _is_active(row.get("IS_ACTIVE")):
+        raise ValueError(f"Existing SSP registry row is inactive for {path}")
+    _stored_process_order(row.get("PROCESS_ORDER"), path, required=True)
+
+
+def _print_metadata_siblings(model_rows):
+    siblings = [
+        row
+        for row in model_rows
+        if _clean(row.get("NODE_PATH")) == METADATA_PATH
+        or _clean(row.get("PARENT_NODE_PATH")) == METADATA_PATH
+    ]
+
+    def _sort_key(row):
+        path = _clean(row.get("NODE_PATH"))
+        process_order = _stored_process_order(
+            row.get("PROCESS_ORDER"),
+            path,
+        )
+        return (
+            process_order if process_order is not None else 2**63 - 1,
+            path,
+        )
+
+    siblings.sort(key=_sort_key)
+    print("=== READ-ONLY SSP METADATA REGISTRY PREFLIGHT ===")
+    for row in siblings:
+        print(
+            "path=",
+            _clean(row.get("NODE_PATH")),
+            " | parent=",
+            _clean(row.get("PARENT_NODE_PATH")) or "<root>",
+            " | process_order=",
+            _clean(row.get("PROCESS_ORDER")) or "<null>",
+            " | active=",
+            _is_active(row.get("IS_ACTIVE")),
+            sep="",
+        )
+
+
+def _build_preflight(model_rows):
+    if not model_rows:
+        raise ValueError("No SSP registry rows were found")
+
+    indexed_rows = _rows_by_path(model_rows)
+    root_row = _one_row(indexed_rows, SSP_ROOT_PATH, True)
+    metadata_row = _one_row(indexed_rows, METADATA_PATH, True)
+    responsible_row = _one_row(
+        indexed_rows,
+        RESPONSIBLE_PARTIES_PATH,
+        True,
+    )
+    roles_row = _one_row(indexed_rows, ROLES_PATH, False)
+    parties_row = _one_row(indexed_rows, PARTIES_PATH, False)
+
+    _assert_existing_row(root_row, SSP_ROOT_PATH, "")
+    _assert_existing_row(metadata_row, METADATA_PATH, SSP_ROOT_PATH)
+    _assert_existing_row(
+        responsible_row,
+        RESPONSIBLE_PARTIES_PATH,
+        METADATA_PATH,
+    )
+    _assert_existing_row(roles_row, ROLES_PATH, METADATA_PATH)
+    _assert_existing_row(parties_row, PARTIES_PATH, METADATA_PATH)
+
+    occupied_orders = []
+    for row in model_rows:
+        path = _clean(row.get("NODE_PATH"))
+        process_order = _stored_process_order(
+            row.get("PROCESS_ORDER"),
+            path,
+        )
+        if process_order is not None:
+            occupied_orders.append(process_order)
+    if not occupied_orders:
+        raise ValueError(
+            "Cannot derive target PROCESS_ORDER because SSP has no existing "
+            "integer PROCESS_ORDER values"
+        )
+
+    next_order = max(occupied_orders) + 1
+    planned_rows = []
+    resolved_orders = {}
+    for path, existing_row in (
+        (ROLES_PATH, roles_row),
+        (PARTIES_PATH, parties_row),
+    ):
+        if existing_row is not None:
+            resolved_orders[path] = _stored_process_order(
+                existing_row.get("PROCESS_ORDER"),
+                path,
+                required=True,
+            )
+            continue
+        resolved_orders[path] = next_order
+        planned_rows.append(
+            {
+                "OSCAL_MODEL_KEY": MODEL_KEY,
+                "NODE_PATH": path,
+                "PARENT_NODE_PATH": METADATA_PATH,
+                "PROCESS_ORDER": next_order,
+                "IS_ACTIVE": True,
+            }
+        )
+        next_order += 1
+
+    return {
+        "planned_rows": planned_rows,
+        "resolved_orders": resolved_orders,
+    }
+
+
+def _insert_missing_rows(planned_rows):
+    if not planned_rows:
+        return []
+
+    source_view = "TMP_SSP_METADATA_REGISTRY_SETUP"
+    session.create_dataframe(planned_rows).create_or_replace_temp_view(
+        source_view
+    )
+    merge_sql = f"""
+MERGE INTO {REGISTRY_TABLE} AS target
+USING {source_view} AS source
+    ON UPPER(TRIM(target.OSCAL_MODEL_KEY::STRING)) = source.OSCAL_MODEL_KEY
+   AND TRIM(target.NODE_PATH::STRING) = source.NODE_PATH
+WHEN NOT MATCHED THEN INSERT (
+    OSCAL_MODEL_KEY,
+    NODE_PATH,
+    PARENT_NODE_PATH,
+    PROCESS_ORDER,
+    IS_ACTIVE
+) VALUES (
+    source.OSCAL_MODEL_KEY,
+    source.NODE_PATH,
+    source.PARENT_NODE_PATH,
+    source.PROCESS_ORDER,
+    source.IS_ACTIVE
+)
+"""
+    return session.sql(merge_sql).collect()
+
+
+def _verify_targets(expected_orders):
+    model_rows = _read_model_rows()
+    indexed_rows = _rows_by_path(model_rows)
+    for path in TARGET_PATHS:
+        row = _one_row(indexed_rows, path, True)
+        _assert_existing_row(row, path, METADATA_PATH)
+        actual_order = _stored_process_order(
+            row.get("PROCESS_ORDER"),
+            path,
+            required=True,
+        )
+        if actual_order != expected_orders[path]:
+            raise ValueError(f"Registry verification failed for {path} order")
+    print("REGISTRY VERIFICATION PASSED")
+
+
+_assert_safe_identifier(REGISTRY_TABLE)
+current_model_rows = _read_model_rows()
+_print_metadata_siblings(current_model_rows)
+preflight = _build_preflight(current_model_rows)
+
+if preflight["planned_rows"]:
+    print("=== DETERMINISTIC INSERT PLAN ===")
+    for planned_row in preflight["planned_rows"]:
+        print(
+            "insert_path=",
+            planned_row["NODE_PATH"],
+            " | parent=",
+            planned_row["PARENT_NODE_PATH"],
+            " | process_order=",
+            planned_row["PROCESS_ORDER"],
+            " | active=True",
+            sep="",
+        )
+else:
+    print("Both governed target paths already exist; no insert is needed")
+
+if not EXECUTE_REGISTRY_WRITES:
+    print("EXECUTE_REGISTRY_WRITES = False; no registry changes were made")
+    print("READ-ONLY REGISTRY PREFLIGHT PASSED")
+else:
+    merge_result = _insert_missing_rows(preflight["planned_rows"])
+    print("Registry insert-only MERGE completed:", merge_result)
+    _verify_targets(preflight["resolved_orders"])

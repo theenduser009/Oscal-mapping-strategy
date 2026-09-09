@@ -250,11 +250,16 @@ class ResponsiblePartyIdentityTests(unittest.TestCase):
                     "PROCESS_ORDER": 9,
                 },
                 {
+                    "NODE_PATH": "system-security-plan.metadata.parties[]",
+                    "PARENT_NODE_PATH": "system-security-plan.metadata",
+                    "PROCESS_ORDER": 10,
+                },
+                {
                     "NODE_PATH": (
                         "system-security-plan.metadata.responsible-parties[]"
                     ),
                     "PARENT_NODE_PATH": "system-security-plan.metadata",
-                    "PROCESS_ORDER": 10,
+                    "PROCESS_ORDER": 11,
                 },
             ]
         )

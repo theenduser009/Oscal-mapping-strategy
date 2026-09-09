@@ -22,6 +22,7 @@ FULL_NOTEBOOK_PATH = (
 )
 METADATA_PATH = "system-security-plan.metadata"
 OTHER_PATH = "system-security-plan.system-characteristics"
+TEST_METADATA_TITLE = "Example SSP"
 
 
 def _load_helpers():
@@ -71,6 +72,12 @@ class MetadataTimestampResolutionTests(unittest.TestCase):
         cls.helpers = _load_helpers()
 
     def _build(self, source_obj, mapping_rows, element_path=METADATA_PATH):
+        source_obj = dict(source_obj)
+        if element_path == METADATA_PATH:
+            source_obj.setdefault(
+                "AUTHORIZATION_PACKAGE_NAME",
+                TEST_METADATA_TITLE,
+            )
         return self.helpers["build_element_instances"](
             source_obj,
             "private-source-record",
@@ -114,7 +121,10 @@ class MetadataTimestampResolutionTests(unittest.TestCase):
                 self.assertEqual(instances[0]["instance_key"], "singleton")
                 self.assertEqual(
                     instances[0]["payload"],
-                    {target_field: source_value},
+                    {
+                        "title": TEST_METADATA_TITLE,
+                        target_field: source_value,
+                    },
                 )
 
     def test_identical_populated_candidates_resolve_once(self):
@@ -131,7 +141,10 @@ class MetadataTimestampResolutionTests(unittest.TestCase):
 
                 self.assertEqual(
                     instances[0]["payload"],
-                    {target_field: source_value},
+                    {
+                        "title": TEST_METADATA_TITLE,
+                        target_field: source_value,
+                    },
                 )
 
     def test_conflicting_candidates_fail_in_any_row_order_without_values(self):
@@ -179,7 +192,10 @@ class MetadataTimestampResolutionTests(unittest.TestCase):
             rows,
         )
 
-        self.assertEqual(instances[0]["payload"], {"title": "Example SSP"})
+        self.assertEqual(
+            instances[0]["payload"],
+            {"title": TEST_METADATA_TITLE},
+        )
         self.assertNotIn("published", instances[0]["payload"])
 
     def test_invalid_or_non_string_candidate_fails_closed(self):

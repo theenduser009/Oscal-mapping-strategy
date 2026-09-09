@@ -36,6 +36,7 @@ CONFIG = {
     ),
     "OSCAL_MODEL": "SSP",
     "OSCAL_VERSION": "1.2.3",
+    "SSP_DOCUMENT_VERSION": "1.0",
     "EXECUTE_WRITES": False,
     "BUILD_COVERAGE_REPORT": True,
     "SOURCE_SYSTEM_NAME": "ARCHER",
@@ -412,9 +413,12 @@ STATUS_ELEMENT_PATH = "system-security-plan.system-characteristics.status"
 DOCUMENT_IDS_ELEMENT_PATH = "system-security-plan.metadata.document-ids[]"
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
 METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
+METADATA_PARTIES_ELEMENT_PATH = "system-security-plan.metadata.parties[]"
 RESPONSIBLE_PARTIES_ELEMENT_PATH = (
     "system-security-plan.metadata.responsible-parties[]"
 )
+METADATA_TITLE_SOURCE_FIELD = "AUTHORIZATION_PACKAGE_NAME"
+APPROVED_RESPONSIBLE_PARTY_TYPE = "person"
 METADATA_TIMESTAMP_FIELDS = ("published", "last-modified")
 
 SECURITY_OBJECTIVE_FIELDS = {
@@ -666,6 +670,25 @@ def transform_last_modified(value):
     return _preserve_metadata_timestamp(value, "last-modified")
 
 
+def transform_metadata_title(value):
+    value = _to_python(value)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Metadata title source must be a nonblank string")
+    return value
+
+
+def _is_executable_responsible_party_mapping(mapping_row):
+    source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+    if source_field not in RESPONSIBLE_PARTY_ROLE_DEFINITIONS:
+        return False
+
+    mapping_type = str(
+        mapping_row.get("MAPPING_TYPE") or "Direct"
+    ).strip().lower()
+    status = str(mapping_row.get("STATUS") or "").strip().lower()
+    return "tbd" not in mapping_type and "more information" not in status
+
+
 def _active_responsible_party_role_instances(source_obj, source_record_id):
     instances = []
     emitted_role_ids = set()
@@ -675,16 +698,9 @@ def _active_responsible_party_role_instances(source_obj, source_record_id):
     )
     for mapping_row in mapping_rows:
         source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+        if not _is_executable_responsible_party_mapping(mapping_row):
+            continue
         definition = RESPONSIBLE_PARTY_ROLE_DEFINITIONS.get(source_field)
-        if definition is None:
-            continue
-
-        mapping_type = str(
-            mapping_row.get("MAPPING_TYPE") or "Direct"
-        ).strip().lower()
-        status = str(mapping_row.get("STATUS") or "").strip().lower()
-        if "tbd" in mapping_type or "more information" in status:
-            continue
 
         source_value = resolve_json_path(source_obj, source_field)
         if not _has_value(source_value):
@@ -753,6 +769,82 @@ def _party_uuid_values(source_record_id, value):
         if party_uuid not in party_uuids:
             party_uuids.append(party_uuid)
     return party_uuids
+
+
+def _active_responsible_party_instances(source_obj, source_record_id):
+    instances = []
+    emitted_party_uuids = set()
+    mapping_rows = MAPPINGS_BY_ELEMENT_PATH.get(
+        RESPONSIBLE_PARTIES_ELEMENT_PATH,
+        [],
+    )
+    for mapping_row in mapping_rows:
+        if not _is_executable_responsible_party_mapping(mapping_row):
+            continue
+
+        source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+        source_value = resolve_json_path(source_obj, source_field)
+        if not _has_value(source_value):
+            continue
+
+        for party_uuid in _party_uuid_values(source_record_id, source_value):
+            if party_uuid in emitted_party_uuids:
+                continue
+            emitted_party_uuids.add(party_uuid)
+            instances.append(
+                {
+                    "instance_key": party_uuid,
+                    "payload": {
+                        "uuid": party_uuid,
+                        "type": APPROVED_RESPONSIBLE_PARTY_TYPE,
+                    },
+                    "parent_instance_key": None,
+                }
+            )
+    return instances
+
+
+def _active_responsible_party_assignment_instances(
+    source_obj,
+    source_record_id,
+):
+    assignments_by_role = {}
+    mapping_rows = MAPPINGS_BY_ELEMENT_PATH.get(
+        RESPONSIBLE_PARTIES_ELEMENT_PATH,
+        [],
+    )
+    for mapping_row in mapping_rows:
+        if not _is_executable_responsible_party_mapping(mapping_row):
+            continue
+
+        source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+        source_value = resolve_json_path(source_obj, source_field)
+        if not _has_value(source_value):
+            continue
+
+        party_uuids = _party_uuid_values(source_record_id, source_value)
+        if not party_uuids:
+            continue
+
+        role_id = RESPONSIBLE_PARTY_ROLE_IDS[source_field]
+        assignment = assignments_by_role.get(role_id)
+        if assignment is None:
+            assignment = {
+                "instance_key": source_field,
+                "payload": {
+                    "role-id": role_id,
+                    "party-uuids": [],
+                },
+                "parent_instance_key": None,
+            }
+            assignments_by_role[role_id] = assignment
+
+        emitted_uuids = assignment["payload"]["party-uuids"]
+        for party_uuid in party_uuids:
+            if party_uuid not in emitted_uuids:
+                emitted_uuids.append(party_uuid)
+
+    return list(assignments_by_role.values())
 
 
 def transform_responsible_party(source_record_id, source_field, value):
@@ -886,13 +978,29 @@ def build_element_instances(
     aggregate_payload = {}
     resolved_cluster_fields = set()
 
+    if element_path == METADATA_PARTIES_ELEMENT_PATH:
+        return _active_responsible_party_instances(
+            source_obj,
+            source_record_id,
+        )
+
     if element_path == METADATA_ROLES_ELEMENT_PATH:
         return _active_responsible_party_role_instances(
             source_obj,
             source_record_id,
         )
 
+    if element_path == RESPONSIBLE_PARTIES_ELEMENT_PATH:
+        return _active_responsible_party_assignment_instances(
+            source_obj,
+            source_record_id,
+        )
+
     if element_path == METADATA_ELEMENT_PATH:
+        aggregate_payload["title"] = transform_metadata_title(
+            resolve_json_path(source_obj, METADATA_TITLE_SOURCE_FIELD)
+        )
+        resolved_cluster_fields.add("title")
         for target_field in METADATA_TIMESTAMP_FIELDS:
             cluster_rows = [
                 row
@@ -1043,11 +1151,15 @@ print("Cell 4 helpers initialized")
 
 # %% Cell 5 - Registry-driven canonical node and edge graph
 
+import uuid
+
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
 METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
+METADATA_PARTIES_ELEMENT_PATH = "system-security-plan.metadata.parties[]"
 RESPONSIBLE_PARTIES_ELEMENT_PATH = (
     "system-security-plan.metadata.responsible-parties[]"
 )
+APPROVED_RESPONSIBLE_PARTY_TYPE = "person"
 OPTIONAL_SINGLETON_ELEMENT_PATHS = {
     "system-security-plan.system-characteristics.security-impact-level",
 }
@@ -1088,6 +1200,16 @@ def _inject_controlled_metadata_fields(element_path, instances):
     if not configured_version:
         raise ValueError("OSCAL_VERSION must be configured for metadata")
 
+    document_version = CONFIG.get("SSP_DOCUMENT_VERSION")
+    if (
+        not isinstance(document_version, str)
+        or not document_version.strip()
+        or document_version != document_version.strip()
+    ):
+        raise ValueError(
+            "SSP_DOCUMENT_VERSION must be a nonblank canonical string"
+        )
+
     payload = instances[0].get("payload")
     if payload is None:
         payload = {}
@@ -1102,11 +1224,69 @@ def _inject_controlled_metadata_fields(element_path, instances):
     ):
         raise ValueError("Metadata oscal-version conflicts with configuration")
 
+    existing_document_version = payload.get("version")
+    if (
+        existing_document_version not in (None, "")
+        and existing_document_version != document_version
+    ):
+        raise ValueError(
+            "Metadata document version conflicts with configuration"
+        )
+
     updated_payload = dict(payload)
     updated_payload["oscal-version"] = configured_version
+    updated_payload["version"] = document_version
     updated_instance = dict(instances[0])
     updated_instance["payload"] = updated_payload
     return [updated_instance]
+
+
+def _canonical_uuid(value, label):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a canonical UUID")
+    try:
+        canonical = str(uuid.UUID(value))
+    except (ValueError, AttributeError, TypeError):
+        raise ValueError(f"{label} must be a canonical UUID") from None
+    if value != canonical:
+        raise ValueError(f"{label} must be a canonical UUID")
+    return canonical
+
+
+def _instance_oscal_uuid(
+    element_path,
+    instance,
+    source_system,
+    source_table,
+    source_record_id,
+    model_key,
+):
+    instance_key = instance["instance_key"]
+    if element_path == METADATA_PARTIES_ELEMENT_PATH:
+        payload = instance.get("payload")
+        if not isinstance(payload, dict):
+            raise ValueError("Metadata party payload must be an object")
+        instance_uuid = _canonical_uuid(
+            instance_key,
+            "Metadata party instance key",
+        )
+        payload_uuid = _canonical_uuid(
+            payload.get("uuid"),
+            "Metadata party payload uuid",
+        )
+        if instance_uuid != payload_uuid:
+            raise ValueError("Metadata party UUID fields do not match")
+        return payload_uuid
+
+    return _deterministic_uuid(
+        CONFIG["IDENTITY_VERSION"],
+        source_system,
+        source_table,
+        source_record_id,
+        model_key,
+        element_path,
+        instance_key,
+    )
 
 
 def _canonical_registry_rows(element_registry_dataframe, model_key):
@@ -1178,23 +1358,26 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
         ),
         None,
     )
-    approved_party_mapping_exists = any(
-        str(row.get("SOURCE_FIELD_NAME") or "").strip()
-        in RESPONSIBLE_PARTY_ROLE_IDS
-        for row in MAPPINGS_BY_ELEMENT_PATH.get(
-            RESPONSIBLE_PARTIES_ELEMENT_PATH,
-            [],
-        )
-    )
-    if (
-        responsible_party_row is not None
-        and approved_party_mapping_exists
-        and METADATA_ROLES_ELEMENT_PATH not in existing_paths
+    approved_party_mapping_exists = False
+    for mapping_row in MAPPINGS_BY_ELEMENT_PATH.get(
+        RESPONSIBLE_PARTIES_ELEMENT_PATH,
+        [],
     ):
-        raise ValueError(
-            "Registry is missing metadata.roles[] required by approved "
-            "responsible-party mappings"
-        )
+        source_field = str(
+            mapping_row.get("SOURCE_FIELD_NAME") or ""
+        ).strip()
+        mapping_type = str(
+            mapping_row.get("MAPPING_TYPE") or "Direct"
+        ).strip().lower()
+        status = str(mapping_row.get("STATUS") or "").strip().lower()
+        if (
+            source_field in RESPONSIBLE_PARTY_ROLE_IDS
+            and "tbd" not in mapping_type
+            and "more information" not in status
+        ):
+            approved_party_mapping_exists = True
+            break
+
     role_row = next(
         (
             row
@@ -1203,8 +1386,43 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
         ),
         None,
     )
+    party_row = next(
+        (
+            row
+            for row in rows
+            if row["element_path"] == METADATA_PARTIES_ELEMENT_PATH
+        ),
+        None,
+    )
+
+    if approved_party_mapping_exists:
+        if responsible_party_row is None:
+            raise ValueError(
+                "Registry is missing metadata.responsible-parties[] required "
+                "by approved responsible-party mappings"
+            )
+        if METADATA_ROLES_ELEMENT_PATH not in existing_paths:
+            raise ValueError(
+                "Registry is missing metadata.roles[] required by approved "
+                "responsible-party mappings"
+            )
+        if METADATA_PARTIES_ELEMENT_PATH not in existing_paths:
+            raise ValueError(
+                "Registry is missing metadata.parties[] required by approved "
+                "responsible-party mappings"
+            )
+
     if role_row is not None and role_row["parent_path"] != METADATA_ELEMENT_PATH:
         raise ValueError("Registry metadata.roles[] parent path is invalid")
+    if party_row is not None and party_row["parent_path"] != METADATA_ELEMENT_PATH:
+        raise ValueError("Registry metadata.parties[] parent path is invalid")
+    if (
+        responsible_party_row is not None
+        and responsible_party_row["parent_path"] != METADATA_ELEMENT_PATH
+    ):
+        raise ValueError(
+            "Registry metadata.responsible-parties[] parent path is invalid"
+        )
     rows.sort(
         key=lambda item: (
             item["process_order"],
@@ -1215,6 +1433,114 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
     if not rows:
         raise ValueError("No registry paths found for configured OSCAL model")
     return rows
+
+
+def _metadata_reference_payload(node, label):
+    raw_payload = node.get("METADATA_JSON")
+    if isinstance(raw_payload, str):
+        try:
+            payload = json.loads(raw_payload)
+        except (TypeError, ValueError):
+            raise ValueError(f"{label} payload is not valid JSON") from None
+    else:
+        payload = raw_payload
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} payload must be an object")
+    return payload
+
+
+def _validate_metadata_reference_closure(nodes_by_path):
+    role_nodes = nodes_by_path.get(METADATA_ROLES_ELEMENT_PATH, [])
+    party_nodes = nodes_by_path.get(METADATA_PARTIES_ELEMENT_PATH, [])
+    assignment_nodes = nodes_by_path.get(
+        RESPONSIBLE_PARTIES_ELEMENT_PATH,
+        [],
+    )
+
+    role_counts = {}
+    for node in role_nodes:
+        payload = _metadata_reference_payload(node, "Metadata role")
+        role_id = payload.get("id")
+        if not isinstance(role_id, str) or not role_id.strip():
+            raise ValueError("Metadata role id must be a nonblank string")
+        if node.get("INSTANCE_KEY") != role_id:
+            raise ValueError("Metadata role id and instance key do not match")
+        role_counts[role_id] = role_counts.get(role_id, 0) + 1
+        if role_counts[role_id] != 1:
+            raise ValueError("Metadata role id is not unique")
+
+    party_counts = {}
+    for node in party_nodes:
+        payload = _metadata_reference_payload(node, "Metadata party")
+        node_uuid = _canonical_uuid(
+            node.get("OSCAL_UUID"),
+            "Metadata party node uuid",
+        )
+        payload_uuid = _canonical_uuid(
+            payload.get("uuid"),
+            "Metadata party payload uuid",
+        )
+        if node_uuid != payload_uuid or node.get("INSTANCE_KEY") != node_uuid:
+            raise ValueError("Metadata party UUID fields do not match")
+        if payload.get("type") != APPROVED_RESPONSIBLE_PARTY_TYPE:
+            raise ValueError("Metadata party type violates approved contract")
+        party_counts[node_uuid] = party_counts.get(node_uuid, 0) + 1
+        if party_counts[node_uuid] != 1:
+            raise ValueError("Metadata party uuid is not unique")
+
+    referenced_roles = set()
+    referenced_parties = set()
+    assignment_role_counts = {}
+    for node in assignment_nodes:
+        payload = _metadata_reference_payload(
+            node,
+            "Metadata responsible-party",
+        )
+        role_id = payload.get("role-id")
+        if not isinstance(role_id, str) or not role_id.strip():
+            raise ValueError(
+                "Metadata responsible-party role-id must be nonblank"
+            )
+        assignment_role_counts[role_id] = (
+            assignment_role_counts.get(role_id, 0) + 1
+        )
+        if assignment_role_counts[role_id] != 1:
+            raise ValueError(
+                "Metadata responsible-party role-id is not unique"
+            )
+        if role_counts.get(role_id) != 1:
+            raise ValueError(
+                "Metadata responsible-party role reference is unresolved"
+            )
+        referenced_roles.add(role_id)
+
+        party_uuids = payload.get("party-uuids")
+        if not isinstance(party_uuids, list) or not party_uuids:
+            raise ValueError(
+                "Metadata responsible-party must reference a party"
+            )
+        local_party_uuids = set()
+        for party_uuid in party_uuids:
+            canonical_uuid = _canonical_uuid(
+                party_uuid,
+                "Metadata responsible-party reference uuid",
+            )
+            if canonical_uuid in local_party_uuids:
+                raise ValueError(
+                    "Metadata responsible-party contains duplicate party "
+                    "references"
+                )
+            local_party_uuids.add(canonical_uuid)
+            if party_counts.get(canonical_uuid) != 1:
+                raise ValueError(
+                    "Metadata responsible-party reference is unresolved"
+                )
+            referenced_parties.add(canonical_uuid)
+
+    if set(role_counts) != referenced_roles:
+        raise ValueError("Metadata contains an unreferenced role")
+    if set(party_counts) != referenced_parties:
+        raise ValueError("Metadata contains an unreferenced party")
 
 
 def build_oscal_graph(
@@ -1281,14 +1607,13 @@ def build_oscal_graph(
                     path,
                     instance_key,
                 )
-                oscal_uuid = _deterministic_uuid(
-                    CONFIG["IDENTITY_VERSION"],
+                oscal_uuid = _instance_oscal_uuid(
+                    path,
+                    instance,
                     source_system,
                     source_table,
                     source_record_id,
                     model_key,
-                    path,
-                    instance_key,
                 )
                 created = {
                     "NODE_KEY": node_key,
@@ -1352,6 +1677,8 @@ def build_oscal_graph(
                         "TARGET_OSCAL_UUID": child_node["OSCAL_UUID"],
                     }
                 )
+
+        _validate_metadata_reference_closure(nodes_by_path)
 
     if not node_rows:
         raise ValueError("Graph builder produced no nodes")

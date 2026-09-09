@@ -21,6 +21,15 @@ METADATA_PATH = "system-security-plan.metadata"
 OTHER_PATH = "system-security-plan.system-characteristics"
 
 
+def _metadata_config(**overrides):
+    config = {
+        "OSCAL_VERSION": "1.2.3",
+        "SSP_DOCUMENT_VERSION": "1.0",
+    }
+    config.update(overrides)
+    return config
+
+
 def _load_helper(config):
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
@@ -69,7 +78,7 @@ class MetadataOscalVersionInjectionTests(unittest.TestCase):
         self.assertEqual(instances, before)
 
     def test_injects_configured_version_into_one_metadata_singleton(self):
-        helper = _load_helper({"OSCAL_VERSION": "1.2.3"})
+        helper = _load_helper(_metadata_config())
         payload = {"title": "Example SSP", "nested": {"keep": True}}
         instance = _metadata_instance(payload)
         instances = [instance]
@@ -84,6 +93,7 @@ class MetadataOscalVersionInjectionTests(unittest.TestCase):
         self.assertEqual(result[0]["payload"]["title"], "Example SSP")
         self.assertEqual(result[0]["payload"]["nested"], {"keep": True})
         self.assertEqual(result[0]["payload"]["oscal-version"], "1.2.3")
+        self.assertEqual(result[0]["payload"]["version"], "1.0")
 
         self.assertEqual(instances, before)
         self.assertIsNot(result, instances)
@@ -91,8 +101,12 @@ class MetadataOscalVersionInjectionTests(unittest.TestCase):
         self.assertIsNot(result[0]["payload"], payload)
 
     def test_matching_existing_version_is_allowed_without_mutation(self):
-        helper = _load_helper({"OSCAL_VERSION": "1.2.3"})
-        payload = {"oscal-version": "1.2.3", "title": "Example SSP"}
+        helper = _load_helper(_metadata_config())
+        payload = {
+            "oscal-version": "1.2.3",
+            "title": "Example SSP",
+            "version": "1.0",
+        }
         instances = [_metadata_instance(payload)]
         before = copy.deepcopy(instances)
 
@@ -103,7 +117,7 @@ class MetadataOscalVersionInjectionTests(unittest.TestCase):
         self.assertIsNot(result[0]["payload"], payload)
 
     def test_conflicting_existing_version_fails_closed(self):
-        helper = _load_helper({"OSCAL_VERSION": "1.2.3"})
+        helper = _load_helper(_metadata_config())
         instances = [
             _metadata_instance(
                 {"oscal-version": "1.1.3", "title": "Example SSP"}
@@ -118,10 +132,10 @@ class MetadataOscalVersionInjectionTests(unittest.TestCase):
 
     def test_missing_or_blank_configured_version_fails_closed(self):
         invalid_configs = (
-            {},
-            {"OSCAL_VERSION": None},
-            {"OSCAL_VERSION": ""},
-            {"OSCAL_VERSION": "   "},
+            {"SSP_DOCUMENT_VERSION": "1.0"},
+            _metadata_config(OSCAL_VERSION=None),
+            _metadata_config(OSCAL_VERSION=""),
+            _metadata_config(OSCAL_VERSION="   "),
         )
         for config in invalid_configs:
             with self.subTest(config=config):
@@ -135,13 +149,13 @@ class MetadataOscalVersionInjectionTests(unittest.TestCase):
                 self.assertEqual(instances, before)
 
     def test_zero_metadata_instances_fail_closed(self):
-        helper = _load_helper({"OSCAL_VERSION": "1.2.3"})
+        helper = _load_helper(_metadata_config())
 
         with self.assertRaisesRegex(ValueError, "exactly one"):
             helper(METADATA_PATH, [])
 
     def test_multiple_metadata_instances_fail_closed_without_mutation(self):
-        helper = _load_helper({"OSCAL_VERSION": "1.2.3"})
+        helper = _load_helper(_metadata_config())
         instances = [
             _metadata_instance({"title": "First"}),
             _metadata_instance({"title": "Second"}, "second"),
@@ -154,7 +168,7 @@ class MetadataOscalVersionInjectionTests(unittest.TestCase):
         self.assertEqual(instances, before)
 
     def test_non_singleton_metadata_instance_fails_closed_without_mutation(self):
-        helper = _load_helper({"OSCAL_VERSION": "1.2.3"})
+        helper = _load_helper(_metadata_config())
         instances = [
             _metadata_instance({"title": "Example SSP"}, "unexpected")
         ]
@@ -166,7 +180,7 @@ class MetadataOscalVersionInjectionTests(unittest.TestCase):
         self.assertEqual(instances, before)
 
     def test_non_object_metadata_payload_fails_closed(self):
-        helper = _load_helper({"OSCAL_VERSION": "1.2.3"})
+        helper = _load_helper(_metadata_config())
         instances = [_metadata_instance(["not", "an", "object"])]
         before = copy.deepcopy(instances)
 

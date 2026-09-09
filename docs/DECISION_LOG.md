@@ -388,3 +388,31 @@ does not infer whether a source reference is a person or organization. The
 next production increment requires explicit party-type evidence or an approved
 rule. No notebook rerun is required for this intermediate identity change, and
 `EXECUTE_WRITES` remains `False`.
+
+## 2026-09-09 — Complete the approved SSP metadata mapper branch
+
+The user approved one metadata completion contract: reuse
+`AUTHORIZATION_PACKAGE_NAME` as `metadata.title`, set the SSP document version
+to controlled value `1.0`, treat the five executable responsible-party fields
+as person references, and keep the four workbook rows marked `TBD` excluded.
+This does not change the existing system-name mapping or the decision to
+preserve source timestamps unchanged.
+
+Cell 4 now builds the required title, deduplicated role definitions, reusable
+`person` party objects, and one responsible-party assignment per role. Cell 5
+injects both controlled version fields and fails closed unless role IDs and
+party UUIDs resolve exactly once within the same source SSP. A party node's
+graph OSCAL UUID is exactly the UUID carried in its party payload and referenced
+by responsible-party assignments.
+
+The registry remains authoritative. The mapper requires `metadata.roles[]`,
+`metadata.parties[]`, and the existing `metadata.responsible-parties[]` under
+metadata. A separate setup cell performs read-only preflight by default and,
+only when its own registry-write flag is enabled, inserts missing role/party
+paths using unused process orders derived from the live SSP registry. It never
+updates an existing governed row and verifies the result after the merge.
+
+The split Cells 1, 4, and 5 and the authoritative notebook are synchronized.
+All 81 repository tests pass. The release is not yet runtime-accepted: first
+run the guarded registry setup, then run Cells 1 through 7 once with mapper
+`EXECUTE_WRITES = False`. No separate post-run validator is required.

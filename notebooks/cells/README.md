@@ -18,6 +18,11 @@ complete notebook and the affected split cell together.
 6. [Validation and guarded loader](06_validation_and_guarded_loader.py)
 7. [Mapper orchestrator](07_mapper_orchestrator.py)
 
+Before the metadata-completion release is run for the first time, use the
+[guarded metadata registry setup cell](../setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py)
+to add only the missing `metadata.roles[]` and `metadata.parties[]` rows. Its
+registry-write flag is separate from the mapper and is `False` by default.
+
 ## Read-only checkpoint after Cell 7
 
 After Cell 7 completes with writes disabled, run the separate
@@ -64,9 +69,9 @@ missing target from a model label, field name, or note.
 
 The metadata last-modified audit has now been executed. `LAST_UPDATED` supplies
 all 2,813 current values, and every value is timezone-naive. The user chose to
-preserve those values unchanged for now. Cell 5 therefore leaves timestamps
-alone and injects only the controlled `OSCAL_VERSION` into each singleton
-metadata payload.
+preserve those values unchanged for now. Cell 4 also sources the required
+metadata title from `AUTHORIZATION_PACKAGE_NAME`; Cell 5 injects the controlled
+OSCAL version and SSP document version `1.0` without changing timestamps.
 
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
@@ -78,24 +83,23 @@ minimum-required-scope audit then found eight of thirteen required paths in the
 registry, five absent paths, incomplete components, required payload gaps, and
 zero of 2,813 records meeting the complete minimum contract.
 
-The required-source readiness, mapping-artifact progress, and metadata
-last-modified audits have now been executed. The updated Cell 5 and complete
-mapper have also been rerun successfully. In the same active Snowflake
-session, the metadata OSCAL-version and document-ID validations then passed for
-all 2,813 records. The next production release updates both
-[Cell 4](04_parsing_transform_payload_helpers.py) and
-[Cell 5](05_registry_graph_builder.py): replace both, then run Cells 4, 5, 6,
-and 7. It resolves metadata timestamp collisions without changing source
-strings and makes optional security-impact emission complete-or-omit. Do not
-run another standalone validator for this step.
+The required-source readiness, mapping-artifact progress, metadata timestamp,
+OSCAL-version, and document-ID checks have been executed. The latest accepted
+read-only mapper run has 48,957 nodes and 46,144 edges with every structural
+gate passing. The next release completes the approved metadata contract across
+[Cell 1](01_initialization_and_configuration.py),
+[Cell 4](04_parsing_transform_payload_helpers.py), and
+[Cell 5](05_registry_graph_builder.py). After the guarded registry setup,
+replace those three cells and run Cells 1 through 7 once. Do not run another
+standalone validator for this step.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and
 constraint validation remain gates. Keep `EXECUTE_WRITES = False`.
 
-Cell 4 now also stabilizes responsible-party identity across roles and
-deduplicates repeated references. This is an intermediate production
-foundation for future `metadata.parties[]` nodes; do not rerun the notebook for
-this change alone. Cell 4 now has controlled definitions for the five approved
-roles, while Cell 5 requires a real `metadata.roles[]` registry row and never
-synthesizes it. Party type is not inferred from the role name.
+Cell 4 now stabilizes responsible-party identity across roles, deduplicates
+repeated references and mapping rows, and emits the five approved roles plus
+their reusable `person` party objects. Cell 5 requires real `metadata.roles[]`
+and `metadata.parties[]` registry rows, uses each party payload UUID as the
+party node OSCAL UUID, and fails closed unless every role and party reference
+resolves exactly once. The four `TBD` responsible-party rows remain excluded.

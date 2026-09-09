@@ -5,6 +5,7 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 ## Authoritative files
 
 - [`notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`](notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py) — the complete seven-cell Snowflake/Snowpark notebook source.
+- [`notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py`](notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py) — the guarded, insert-only setup cell for the governed metadata role and party registry paths.
 - [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) — verified state, safety gate, and the single next action.
 - [`docs/ARCHITECTURE_CONTEXT.md`](docs/ARCHITECTURE_CONTEXT.md) — design guardrails that must survive future edits.
 - [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) — dated project decisions and GitHub checkpoints.
@@ -25,10 +26,11 @@ Cell 6 validates the graph and target load frames before any merge. Cell 7 is th
 
 ## Latest verified checkpoint
 
-Snowflake run `20260908T201705Z` passed graph and pre-write validation with
-51,500 nodes, 48,687 edges, zero duplicate or dangling keys, and no writes.
-The reviewed security-impact and status transformations passed their scoped
-normalization checks; that statement does not cover every Transform row.
+The latest accepted read-only Snowflake run passed graph and pre-write
+validation with 48,957 nodes, 46,144 edges, zero duplicate or dangling keys,
+and no writes. The reviewed security-impact and status transformations passed
+their scoped normalization checks; that statement does not cover every
+Transform row.
 
 The earlier 2,585 aggregate was corrected: under pinned OSCAL SSP 1.2.3,
 2,453 no-objective security-impact assemblies are optional absences. Cell 4
@@ -73,15 +75,17 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The timestamp and security-impact production changes are accepted. Cell 4 now
-also gives the same Archer party one stable UUID across multiple approved
-roles, deduplicates repeated references, and fails closed when a stable source
-identifier is absent. The mapper also contains explicit definitions for the
-five approved roles and will emit only referenced roles once the governed
-`metadata.roles[]` registry path exists. Continue the slice by adding that
-registry row and then resolving party type for `metadata.parties[]`. Keep
-`EXECUTE_WRITES = False`; do not invent missing source relationships or party
-types.
+The complete approved metadata release is ready for one combined Snowflake
+run. It sources `metadata.title` from `AUTHORIZATION_PACKAGE_NAME`, pins the
+SSP document version to `1.0`, emits the five approved role definitions and
+deduplicated `person` party objects, and proves every responsible-party role
+and UUID reference closes inside the same SSP record. The four workbook rows
+still marked `TBD` remain excluded. All 81 repository tests pass.
+
+Run the guarded registry setup cell first to add only the missing
+`metadata.roles[]` and `metadata.parties[]` paths, then replace Cells 1, 4, and
+5 and run all seven cells in order. Keep the mapper's `EXECUTE_WRITES = False`.
+This is one metadata-branch acceptance run; no standalone validator is required.
 
 ## Read-only inspection SQL
 

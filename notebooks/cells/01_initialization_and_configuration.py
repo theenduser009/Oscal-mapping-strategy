@@ -25,6 +25,7 @@ CONFIG = {
     ),
     "OSCAL_MODEL": "SSP",
     "OSCAL_VERSION": "1.2.3",
+    "SSP_DOCUMENT_VERSION": "1.0",
     "EXECUTE_WRITES": False,
     "BUILD_COVERAGE_REPORT": True,
     "SOURCE_SYSTEM_NAME": "ARCHER",

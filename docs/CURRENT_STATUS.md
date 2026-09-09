@@ -26,6 +26,11 @@ The reduction from the prior graph is exactly 2,543 nodes and 2,543 edges,
 matching the 2,453 empty plus 90 partial security-impact assemblies that the
 new complete-or-omit rule intentionally removes.
 
+The next metadata-completion release is implemented and locally verified but
+has not yet been run in Snowflake. All 81 repository tests pass. The accepted
+48,957-node / 46,144-edge result above remains the live baseline until the one
+combined metadata run is posted.
+
 ## Minimum-required-scope checkpoint
 
 The previous minimum-contract audit established:
@@ -317,15 +322,14 @@ not restart discovery for each field:
 | `metadata.published` | 2 | Same collision-safe resolver ran successfully; no populated-source conflict raised |
 | literal `metadata.props` | 1 | `TBD`, source-empty, and not an active collection registry path |
 | `metadata.document-ids[].identifier` | 1 | Exact source/output equality passed for 2,813/2,813 records |
-| `metadata.responsible-parties[]` | 9 | Five executable role assignments now use cross-role stable, deduplicated party UUIDs; four remain `TBD`; party/role targets are absent |
+| `metadata.responsible-parties[]` | 9 | Five executable assignments now close to generated role and `person` party objects; four `TBD` rows remain excluded |
 
 The pinned contract additionally requires `metadata.title`,
-`metadata.version`, and `metadata.oscal-version`. The first two have no
-approved Excel source or controlled value. OSCAL version is the only one that
-can be safely closed now. Responsible-party nodes are not semantically
-complete merely because their payload shape is valid: neither
-`metadata.parties[]` is absent, and the production role builder now requires a
-governed `metadata.roles[]` registry row before it can resolve role references.
+`metadata.version`, and `metadata.oscal-version`. The approved completion rule
+now reuses `AUTHORIZATION_PACKAGE_NAME` for the metadata title, sets the SSP
+document version to controlled value `1.0`, and retains OSCAL version `1.2.3`.
+The source field already generated `system-name` for all 2,813 records in the
+accepted baseline, so no fallback title is invented.
 
 ## Security-impact production assembly — LIVE RERUN PASSED
 
@@ -355,7 +359,7 @@ the earlier aggregate evidence. Duplicate and dangling key counts remained
 zero, pre-write validation passed, and no DIM/FACT write occurred. The 270
 complete security-impact assemblies remain the expected emitted population.
 
-## Responsible-party identity foundation — IMPLEMENTED; RERUN DEFERRED
+## Metadata completion release — IMPLEMENTED; SNOWFLAKE RUN PENDING
 
 The five approved responsible-party source fields already emit role
 assignments, but the prior party UUID included the source role field. That
@@ -370,16 +374,21 @@ removed in source order. Reference objects must expose `Id`, `UserId`, or
 serialization. Missing stable identifiers fail closed with no source values in
 the error.
 
-This is the identity foundation for `metadata.parties[]`. Cell 4 now also has
-five explicit, controlled role ID/title definitions and emits only roles that
-are actually referenced by an SSP. Cell 5 refuses to synthesize hierarchy: it
-requires `system-security-plan.metadata.roles[]` to be an active registry row
-under metadata. The live registry does not yet contain that row, so do not run
-the updated cells until the governed registry addition is approved and made.
+The user approved the five executable source fields as person references.
+Cell 4 now emits only referenced role definitions, one reusable `person` party
+object per stable party UUID, and one deduplicated assignment per role. Cell 5
+uses the party payload UUID as that node's OSCAL UUID and validates, per source
+record, that every role ID and every party UUID resolves exactly once. It also
+rejects unreferenced role or party objects. The four `TBD` mappings remain
+excluded.
 
-OSCAL party `type` remains unresolved from the available repository evidence,
-so the mapper does not guess `person` or `organization`. Party definition nodes
-remain the next responsibility sub-step.
+The registry remains authoritative. Cell 5 requires active
+`system-security-plan.metadata.roles[]`,
+`system-security-plan.metadata.parties[]`, and the existing
+`system-security-plan.metadata.responsible-parties[]` rows, all parented to
+metadata. The guarded setup cell derives unused process orders from the live
+SSP registry, inserts only missing role/party paths, and verifies them. It is
+read-only by default and never updates an existing governed row.
 
 ## Current engineering interpretation
 
@@ -388,7 +397,7 @@ The graph engine is no longer the primary problem. Its structural integrity rema
 1. **Structural registry additions** — `import-profile`, `system-information`, `control-implementation`.
 2. **Collection design + instance mapping** — `information-types[]` and `implemented-requirements[]`.
 3. **Component collection/source collision + hydration design** — current `components[]` coverage is 944/2813 records and six candidate source mappings need deliberate reconciliation.
-4. **Required field sourcing/configuration** — metadata title/version, import-profile href, component fields, plus known source-completeness gaps of 33/42/294 records.
+4. **Required field sourcing/configuration** — import-profile href, component fields, plus known source-completeness gaps of 33/42/294 records.
 
 The Excel mapping artifact is now the primary sequencing source for that
 backlog. The minimum-contract findings remain valid final-completeness gates,
@@ -399,8 +408,11 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-Add the governed `system-security-plan.metadata.roles[]` registry row under
-metadata, then resolve party type from explicit Archer reference metadata or an
-approved mapping rule and add `metadata.parties[]`. Do not run the updated
-Cells 4 and 5 before the registry row exists. Keep `EXECUTE_WRITES = False`;
-do not infer `person` or `organization` from a role name alone.
+Run `notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py` once with its
+separate registry-write flag enabled; its preflight must pass and its final
+message must be `REGISTRY VERIFICATION PASSED`. Then replace notebook Cells 1,
+4, and 5 from the repository, confirm mapper `EXECUTE_WRITES = False`, and run
+Cells 1 through 7 in order. Post the complete Cell 7 output in this status file.
+No standalone validator is required. If the combined run passes, the approved
+metadata branch is accepted and work moves directly to the next unresolved
+`system-characteristics` branch.
