@@ -76,10 +76,12 @@ availability objectives are emitted. Missing values are never invented.
 The timestamp and security-impact production changes are accepted. Cell 4 now
 also gives the same Archer party one stable UUID across multiple approved
 roles, deduplicates repeated references, and fails closed when a stable source
-identifier is absent. Continue the `metadata.responsible-parties[]` slice by
-adding its role/party reference targets after party type is explicitly
-resolved. Keep `EXECUTE_WRITES = False`; do not invent missing source
-relationships or party types.
+identifier is absent. The mapper also contains explicit definitions for the
+five approved roles and will emit only referenced roles once the governed
+`metadata.roles[]` registry path exists. Continue the slice by adding that
+registry row and then resolving party type for `metadata.parties[]`. Keep
+`EXECUTE_WRITES = False`; do not invent missing source relationships or party
+types.
 
 ## Read-only inspection SQL
 

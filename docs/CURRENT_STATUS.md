@@ -324,7 +324,8 @@ The pinned contract additionally requires `metadata.title`,
 approved Excel source or controlled value. OSCAL version is the only one that
 can be safely closed now. Responsible-party nodes are not semantically
 complete merely because their payload shape is valid: neither
-`metadata.parties[]` nor `metadata.roles[]` exists to resolve their references.
+`metadata.parties[]` is absent, and the production role builder now requires a
+governed `metadata.roles[]` registry row before it can resolve role references.
 
 ## Security-impact production assembly — LIVE RERUN PASSED
 
@@ -369,10 +370,16 @@ removed in source order. Reference objects must expose `Id`, `UserId`, or
 serialization. Missing stable identifiers fail closed with no source values in
 the error.
 
-This is the identity foundation for `metadata.parties[]`; it does not yet emit
-party or role definition nodes. OSCAL party `type` remains unresolved from the
-available repository evidence, so the mapper does not guess `person` or
-`organization`. No Snowflake rerun is requested for this intermediate step.
+This is the identity foundation for `metadata.parties[]`. Cell 4 now also has
+five explicit, controlled role ID/title definitions and emits only roles that
+are actually referenced by an SSP. Cell 5 refuses to synthesize hierarchy: it
+requires `system-security-plan.metadata.roles[]` to be an active registry row
+under metadata. The live registry does not yet contain that row, so do not run
+the updated cells until the governed registry addition is approved and made.
+
+OSCAL party `type` remains unresolved from the available repository evidence,
+so the mapper does not guess `person` or `organization`. Party definition nodes
+remain the next responsibility sub-step.
 
 ## Current engineering interpretation
 
@@ -392,9 +399,8 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-Continue the responsible-party branch by resolving party type from explicit
-Archer reference metadata or an approved mapping rule, then add the matching
-`metadata.roles[]` and `metadata.parties[]` reference targets. Do not rerun the
-notebook for the identity-only intermediate change. Keep
-`EXECUTE_WRITES = False`; do not infer `person` or `organization` from a role
-name alone.
+Add the governed `system-security-plan.metadata.roles[]` registry row under
+metadata, then resolve party type from explicit Archer reference metadata or an
+approved mapping rule and add `metadata.parties[]`. Do not run the updated
+Cells 4 and 5 before the registry row exists. Keep `EXECUTE_WRITES = False`;
+do not infer `person` or `organization` from a role name alone.

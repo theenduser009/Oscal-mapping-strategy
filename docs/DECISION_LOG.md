@@ -221,6 +221,23 @@ of transformed-value equality or a completed mapping. It prints aggregate
 progress by default and never authorizes writes or whole-document conformance.
 `EXECUTE_WRITES` remains `False`.
 
+## 2026-09-09 — Build referenced metadata roles; preserve registry authority
+
+The five approved responsible-party mappings already establish controlled role
+semantics. Cell 4 now defines an explicit nonblank OSCAL role ID and title for
+each one and emits only the distinct roles actually referenced by a source SSP.
+TBD mappings and empty source references remain excluded.
+
+The element registry remains authoritative for hierarchy. Cell 5 does not
+silently add `metadata.roles[]`; when approved responsible-party mappings are
+active and that registry path is missing, it fails with a sanitized registry
+error. A present roles path must be parented to metadata. This prevents a
+notebook-only hierarchy from drifting away from the governed registry.
+
+The live registry addition and explicit party-type rule remain prerequisites
+for full role/party closure. No notebook rerun is requested yet, and
+`EXECUTE_WRITES` remains `False`.
+
 ## 2026-09-09 — Metadata last-modified evidence gate
 
 The executed Excel-first progress audit selected

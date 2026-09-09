@@ -2,14 +2,31 @@
 
 SKIP_VALUE = object()
 
+RESPONSIBLE_PARTY_ROLE_DEFINITIONS = {
+    "INFORMATION_OWNER_IO": {
+        "id": "information-owner",
+        "title": "Information Owner",
+    },
+    "INFORMATION_SYSTEM_OWNER_ISO": {
+        "id": "system-owner",
+        "title": "Information System Owner",
+    },
+    "AUTHORIZING_OFFICIAL_AO": {
+        "id": "authorizing-official",
+        "title": "Authorizing Official",
+    },
+    "INFORMATION_SYSTEM_SECURITY_OFFICER_ISSO": {
+        "id": "system-security-officer",
+        "title": "Information System Security Officer",
+    },
+    "PRIVACY_OFFICER_PO": {
+        "id": "privacy-officer",
+        "title": "Privacy Officer",
+    },
+}
 RESPONSIBLE_PARTY_ROLE_IDS = {
-    "INFORMATION_OWNER_IO": "information-owner",
-    "INFORMATION_SYSTEM_OWNER_ISO": "system-owner",
-    "AUTHORIZING_OFFICIAL_AO": "authorizing-official",
-    "INFORMATION_SYSTEM_SECURITY_OFFICER_ISSO": (
-        "system-security-officer"
-    ),
-    "PRIVACY_OFFICER_PO": "privacy-officer",
+    source_field: definition["id"]
+    for source_field, definition in RESPONSIBLE_PARTY_ROLE_DEFINITIONS.items()
 }
 
 TRANSIENT_SOURCE_FIELDS = {
@@ -23,6 +40,10 @@ SECURITY_IMPACT_ELEMENT_PATH = (
 STATUS_ELEMENT_PATH = "system-security-plan.system-characteristics.status"
 DOCUMENT_IDS_ELEMENT_PATH = "system-security-plan.metadata.document-ids[]"
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
+METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
+RESPONSIBLE_PARTIES_ELEMENT_PATH = (
+    "system-security-plan.metadata.responsible-parties[]"
+)
 METADATA_TIMESTAMP_FIELDS = ("published", "last-modified")
 
 SECURITY_OBJECTIVE_FIELDS = {
@@ -274,6 +295,49 @@ def transform_last_modified(value):
     return _preserve_metadata_timestamp(value, "last-modified")
 
 
+def _active_responsible_party_role_instances(source_obj, source_record_id):
+    instances = []
+    emitted_role_ids = set()
+    mapping_rows = MAPPINGS_BY_ELEMENT_PATH.get(
+        RESPONSIBLE_PARTIES_ELEMENT_PATH,
+        [],
+    )
+    for mapping_row in mapping_rows:
+        source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+        definition = RESPONSIBLE_PARTY_ROLE_DEFINITIONS.get(source_field)
+        if definition is None:
+            continue
+
+        mapping_type = str(
+            mapping_row.get("MAPPING_TYPE") or "Direct"
+        ).strip().lower()
+        status = str(mapping_row.get("STATUS") or "").strip().lower()
+        if "tbd" in mapping_type or "more information" in status:
+            continue
+
+        source_value = resolve_json_path(source_obj, source_field)
+        if not _has_value(source_value):
+            continue
+        if not _party_uuid_values(source_record_id, source_value):
+            continue
+
+        role_id = definition["id"]
+        if role_id in emitted_role_ids:
+            continue
+        emitted_role_ids.add(role_id)
+        instances.append(
+            {
+                "instance_key": role_id,
+                "payload": {
+                    "id": role_id,
+                    "title": definition["title"],
+                },
+                "parent_instance_key": None,
+            }
+        )
+    return instances
+
+
 def _party_reference_identifier(item):
     item = _to_python(item)
     if isinstance(item, dict):
@@ -450,6 +514,12 @@ def build_element_instances(
     instances = []
     aggregate_payload = {}
     resolved_cluster_fields = set()
+
+    if element_path == METADATA_ROLES_ELEMENT_PATH:
+        return _active_responsible_party_role_instances(
+            source_obj,
+            source_record_id,
+        )
 
     if element_path == METADATA_ELEMENT_PATH:
         for target_field in METADATA_TIMESTAMP_FIELDS:

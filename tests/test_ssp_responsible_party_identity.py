@@ -16,9 +16,12 @@ CELL_4_PATH = (
     / "cells"
     / "04_parsing_transform_payload_helpers.py"
 )
+CELL_5_PATH = (
+    REPO_ROOT / "notebooks" / "cells" / "05_registry_graph_builder.py"
+)
 
 
-def _load_cell_4():
+def _load_cell_4(mapping_rows=None):
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
         return runpy.run_path(
@@ -27,12 +30,57 @@ def _load_cell_4():
                 "ARCHER_VALUE_LOOKUP": {},
                 "CONFIG": {"SOURCE_SYSTEM_NAME": "unit-test-source"},
                 "FIPS_199_VALUE_LOOKUP": {},
+                "MAPPINGS_BY_ELEMENT_PATH": {
+                    "system-security-plan.metadata.responsible-parties[]": (
+                        mapping_rows or []
+                    )
+                },
                 "hashlib": hashlib,
                 "json": json,
                 "re": re,
                 "uuid": uuid,
             },
         )
+
+
+def _load_cell_5():
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
+        return runpy.run_path(
+            str(CELL_5_PATH),
+            init_globals={
+                "MAPPINGS_BY_ELEMENT_PATH": {
+                    (
+                        "system-security-plan.metadata."
+                        "responsible-parties[]"
+                    ): [
+                        {
+                            "SOURCE_FIELD_NAME": "INFORMATION_OWNER_IO",
+                        }
+                    ]
+                },
+                "RESPONSIBLE_PARTY_ROLE_IDS": {
+                    "INFORMATION_OWNER_IO": "information-owner",
+                },
+            },
+        )
+
+
+class _RegistryRow:
+    def __init__(self, values):
+        self._values = values
+
+    def as_dict(self, recursive=True):
+        del recursive
+        return dict(self._values)
+
+
+class _RegistryDataFrame:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def collect(self):
+        return [_RegistryRow(row) for row in self._rows]
 
 
 class ResponsiblePartyIdentityTests(unittest.TestCase):
@@ -101,6 +149,127 @@ class ResponsiblePartyIdentityTests(unittest.TestCase):
                 "INFORMATION_OWNER_IO",
                 True,
             )
+
+    def test_roles_are_emitted_only_for_populated_approved_mappings(self):
+        mapping_rows = [
+            {
+                "SOURCE_FIELD_NAME": "INFORMATION_OWNER_IO",
+                "MAPPING_TYPE": "Transform",
+                "STATUS": "Mapped",
+            },
+            {
+                "SOURCE_FIELD_NAME": "AUTHORIZING_OFFICIAL_AO",
+                "MAPPING_TYPE": "Transform",
+                "STATUS": "Mapped",
+            },
+            {
+                "SOURCE_FIELD_NAME": "PRIVACY_OFFICER_PO",
+                "MAPPING_TYPE": "TBD",
+                "STATUS": "More Information Required",
+            },
+        ]
+        cell = _load_cell_4(mapping_rows)
+
+        instances = cell["build_element_instances"](
+            {
+                "INFORMATION_OWNER_IO": {"Id": "person-1"},
+                "AUTHORIZING_OFFICIAL_AO": {"UserId": "person-2"},
+                "PRIVACY_OFFICER_PO": {"Id": "person-3"},
+            },
+            "ssp-record",
+            cell["METADATA_ROLES_ELEMENT_PATH"],
+            [],
+        )
+
+        self.assertEqual(
+            instances,
+            [
+                {
+                    "instance_key": "information-owner",
+                    "payload": {
+                        "id": "information-owner",
+                        "title": "Information Owner",
+                    },
+                    "parent_instance_key": None,
+                },
+                {
+                    "instance_key": "authorizing-official",
+                    "payload": {
+                        "id": "authorizing-official",
+                        "title": "Authorizing Official",
+                    },
+                    "parent_instance_key": None,
+                },
+            ],
+        )
+
+    def test_missing_roles_registry_path_fails_closed(self):
+        cell = _load_cell_5()
+        registry = _RegistryDataFrame(
+            [
+                {
+                    "NODE_PATH": "system-security-plan",
+                    "PARENT_NODE_PATH": None,
+                    "PROCESS_ORDER": 1,
+                },
+                {
+                    "NODE_PATH": "system-security-plan.metadata",
+                    "PARENT_NODE_PATH": "system-security-plan",
+                    "PROCESS_ORDER": 2,
+                },
+                {
+                    "NODE_PATH": (
+                        "system-security-plan.metadata.responsible-parties[]"
+                    ),
+                    "PARENT_NODE_PATH": "system-security-plan.metadata",
+                    "PROCESS_ORDER": 10,
+                },
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "missing metadata.roles"):
+            cell["_canonical_registry_rows"](registry, "SSP")
+
+    def test_governed_roles_registry_path_is_accepted(self):
+        cell = _load_cell_5()
+        registry = _RegistryDataFrame(
+            [
+                {
+                    "NODE_PATH": "system-security-plan",
+                    "PARENT_NODE_PATH": None,
+                    "PROCESS_ORDER": 1,
+                },
+                {
+                    "NODE_PATH": "system-security-plan.metadata",
+                    "PARENT_NODE_PATH": "system-security-plan",
+                    "PROCESS_ORDER": 2,
+                },
+                {
+                    "NODE_PATH": "system-security-plan.metadata.roles[]",
+                    "PARENT_NODE_PATH": "system-security-plan.metadata",
+                    "PROCESS_ORDER": 9,
+                },
+                {
+                    "NODE_PATH": (
+                        "system-security-plan.metadata.responsible-parties[]"
+                    ),
+                    "PARENT_NODE_PATH": "system-security-plan.metadata",
+                    "PROCESS_ORDER": 10,
+                },
+            ]
+        )
+
+        rows = cell["_canonical_registry_rows"](registry, "SSP")
+        role_rows = [
+            row
+            for row in rows
+            if row["element_path"]
+            == "system-security-plan.metadata.roles[]"
+        ]
+        self.assertEqual(len(role_rows), 1)
+        self.assertEqual(
+            role_rows[0]["parent_path"], "system-security-plan.metadata"
+        )
 
 
 if __name__ == "__main__":

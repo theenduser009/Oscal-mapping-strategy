@@ -96,4 +96,6 @@ constraint validation remain gates. Keep `EXECUTE_WRITES = False`.
 Cell 4 now also stabilizes responsible-party identity across roles and
 deduplicates repeated references. This is an intermediate production
 foundation for future `metadata.parties[]` nodes; do not rerun the notebook for
-this change alone. Party type is not inferred from the role name.
+this change alone. Cell 4 now has controlled definitions for the five approved
+roles, while Cell 5 requires a real `metadata.roles[]` registry row and never
+synthesizes it. Party type is not inferred from the role name.

@@ -1,6 +1,10 @@
 # %% Cell 5 - Registry-driven canonical node and edge graph
 
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
+METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
+RESPONSIBLE_PARTIES_ELEMENT_PATH = (
+    "system-security-plan.metadata.responsible-parties[]"
+)
 OPTIONAL_SINGLETON_ELEMENT_PATHS = {
     "system-security-plan.system-characteristics.security-impact-level",
 }
@@ -121,6 +125,43 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
                 ),
             }
         )
+
+    existing_paths = {row["element_path"] for row in rows}
+    responsible_party_row = next(
+        (
+            row
+            for row in rows
+            if row["element_path"] == RESPONSIBLE_PARTIES_ELEMENT_PATH
+        ),
+        None,
+    )
+    approved_party_mapping_exists = any(
+        str(row.get("SOURCE_FIELD_NAME") or "").strip()
+        in RESPONSIBLE_PARTY_ROLE_IDS
+        for row in MAPPINGS_BY_ELEMENT_PATH.get(
+            RESPONSIBLE_PARTIES_ELEMENT_PATH,
+            [],
+        )
+    )
+    if (
+        responsible_party_row is not None
+        and approved_party_mapping_exists
+        and METADATA_ROLES_ELEMENT_PATH not in existing_paths
+    ):
+        raise ValueError(
+            "Registry is missing metadata.roles[] required by approved "
+            "responsible-party mappings"
+        )
+    role_row = next(
+        (
+            row
+            for row in rows
+            if row["element_path"] == METADATA_ROLES_ELEMENT_PATH
+        ),
+        None,
+    )
+    if role_row is not None and role_row["parent_path"] != METADATA_ELEMENT_PATH:
+        raise ValueError("Registry metadata.roles[] parent path is invalid")
     rows.sort(
         key=lambda item: (
             item["process_order"],
