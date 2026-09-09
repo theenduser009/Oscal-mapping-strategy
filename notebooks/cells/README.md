@@ -62,6 +62,13 @@ runtime evidence, and prints the next implementation-ready SSP path in
 root-to-leaf order, with an unresolved-review fallback. It does not infer a
 missing target from a model label, field name, or note.
 
+When that audit selects `system-security-plan.metadata.last-modified`, run the
+[metadata last-modified readiness audit](../validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
+as the current conditional follow-up. It measures the two converging timestamp
+candidates, timezone/format quality, overlap, conflicts, and current output
+attribution using aggregate counts only. It does not choose precedence or a
+timezone and is not a permanent eighth production cell.
+
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
 ## Current post-revision checkpoint
@@ -72,12 +79,13 @@ minimum-required-scope audit then found eight of thirteen required paths in the
 registry, five absent paths, incomplete components, required payload gaps, and
 zero of 2,813 records meeting the complete minimum contract.
 
-The required-source readiness audit has now been executed. If the same
-Snowflake session is active, run only the
-[SSP mapping-artifact progress audit](../validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py)
-in a new Python cell. It will reconcile the full mapping-artifact denominator,
-technical progress categories, and first root-to-leaf implementation target.
-Do not rerun Cells 1-7 solely for this diagnostic.
+The required-source readiness and mapping-artifact progress audits have now
+been executed. The latter retained 104 SSP rows and selected
+`system-security-plan.metadata.last-modified` with reason
+`TRANSFORM_HANDLER_MISSING`. If the same Snowflake session is active, run only
+the
+[metadata last-modified readiness audit](../validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
+in a new Python cell. Do not rerun Cells 1-7 solely for this diagnostic.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

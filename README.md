@@ -27,7 +27,8 @@ Cell 6 validates the graph and target load frames before any merge. Cell 7 is th
 
 Snowflake run `20260908T201705Z` passed graph and pre-write validation with
 51,500 nodes, 48,687 edges, zero duplicate or dangling keys, and no writes.
-The populated mapped values passed their reviewed normalization rules.
+The reviewed security-impact and status transformations passed their scoped
+normalization checks; that statement does not cover every Transform row.
 
 The earlier 2,585 aggregate was corrected: under pinned OSCAL SSP 1.2.3,
 2,453 no-objective security-impact assemblies are optional absences. The
@@ -35,26 +36,29 @@ narrow emitted/required security/status gap is 221 field occurrences: 179
 missing objectives inside 90 partial security-impact assemblies plus 42
 missing `status.state` values.
 
+The complete Excel-first
+[mapping-artifact progress audit](docs/checkpoints/2026-09-09_SSP_MAPPING_ARTIFACT_PROGRESS_AUDIT.md)
+was executed next. It retained 104 SSP rows: 17 are presence-reconciled, 80
+need more information, 5 have no source data, and 2 are not applicable. No row
+is explicitly marked complete, the loaded 608 rows still differ from the
+spreadsheet screenshot's 609, and no global completion claim is allowed. It
+selected `system-security-plan.metadata.last-modified` as the next
+implementation-ready path because its Transform handler is missing.
+
 ## Immediate next action
 
-The minimum-required-scope and required-source readiness audits have already
-been executed. The new mapping screenshots do not contain the complete Excel
-workbook or a reliable per-row completion status, and their 609-row UI count
-does not yet reconcile with the 608 rows loaded by the notebook.
-
 In the same live Snowflake session, run the aggregate-only
-[SSP mapping-artifact progress audit](notebooks/validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py).
-It evaluates the complete Cell 2 mapping artifact, preserves SSP rows with
-blank target paths as unresolved rather than dropping or guessing them, and
-selects the first implementation-ready SSP path in root-to-leaf order, with a
-first-unresolved review fallback. A non-empty output is reported only as
-presence reconciliation, never as proof of transformed-value equality.
+[metadata last-modified readiness audit](notebooks/validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
+in one new Python cell. The two spreadsheet rows for this singleton target
+currently pass raw values through Cell 4, and mapping order can silently decide
+which value remains. The diagnostic reports candidate population, overlap,
+timestamp/timezone quality, normalized equality/conflicts, and the current
+generated winner without printing timestamps, payloads, or record IDs.
 
-No rerun of Mapper Cells 1-7 is needed in the active session. This diagnostic
-does not expose source identifiers or values, change the graph, assemble final
-OSCAL JSON, replace official validation, or authorize writes. It treats the
-Excel crosswalk as the implementation work queue and the pinned OSCAL contract
-as the final conformance gate. Keep `EXECUTE_WRITES = False`.
+Do not rerun Mapper Cells 1-7 solely for this diagnostic. Do not infer source
+precedence, select the latest timestamp, or assign a timezone before its
+aggregate evidence is reviewed. It performs no writes and does not establish
+whole-SSP conformance. Keep `EXECUTE_WRITES = False`.
 
 ## Read-only inspection SQL
 

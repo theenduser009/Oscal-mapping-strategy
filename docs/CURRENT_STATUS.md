@@ -109,6 +109,15 @@ system-ids[].id: 2813
 metadata.last-modified: 2813
 ```
 
+For `metadata.last-modified`, **2813 means nonblank string/output presence
+only**. It does not prove RFC 3339-with-timezone normalization, transformed
+value equality, source precedence, or semantic completion. Two artifact rows
+converge on that singleton field:
+`ARCHER_CONTENT_AUTHORIZATION_PACKAGE_LAST_UPDATED` and `LAST_UPDATED`.
+Cell 4 currently has no timestamp-specific transform, so both Transform rows
+fall through to the raw-value return and the later mapping can overwrite the
+earlier value.
+
 Confirmed source-completeness gaps:
 
 ```text
@@ -192,7 +201,7 @@ RESULT: MAPPING-BACKLOG EVIDENCE ONLY
 
 The audit never authorizes writes. Assembled OSCAL JSON schema and constraint validation remain mandatory after the minimum-contract gaps are resolved.
 
-## Latest Excel mapping-artifact checkpoint
+## Latest mapping-artifact progress audit — EXECUTED 2026-09-09
 
 The repository now records the filtered screenshot evidence from
 `archer_to_oscal_mapping.xlsx`. The visible filter reports 103 of 609 records
@@ -200,12 +209,30 @@ and confirms SSP mappings across metadata, system characteristics, extension
 properties, security-impact candidates, responsible parties, components, and
 control implementation.
 
-This is useful mapping evidence, but it is not the full workbook. The current
-notebook runtime previously loaded 608 mapping rows, while the screenshot UI
-reports 609 records. That one-row baseline difference is not yet reconciled,
-and the screenshots do not expose a reliable complete/incomplete status for
-every SSP row. Therefore the estimate that roughly 20 items are complete is
-plausible but not yet a verified project count.
+The complete loaded-artifact
+[progress audit](checkpoints/2026-09-09_SSP_MAPPING_ARTIFACT_PROGRESS_AUDIT.md)
+has now been executed. Its aggregate result is:
+
+```text
+Loaded artifact rows: 608
+Screenshot-reported rows: 609
+Artifact identity/version/provenance reconciled: False
+Explicit STATUS column: False
+SSP rows retained: 104
+Unique SSP row fingerprints: 104
+Exact duplicate SSP rows: 0
+MORE_INFORMATION_REQUIRED: 80
+PRESENCE_RECONCILED: 17
+NO_SOURCE_DATA: 5
+NOT_APPLICABLE: 2
+Artifact rows explicitly marked complete: 0
+Global completion claim allowed: False
+```
+
+The 608-versus-609 baseline difference remains unresolved. The estimate that
+roughly 20 items are complete cannot be treated as a governed project count:
+17 rows have output-presence reconciliation, but the artifact declares none
+complete and presence is not transformed-value equality.
 
 The user's implementation priority is now explicit:
 
@@ -218,20 +245,21 @@ The user's implementation priority is now explicit:
 4. Use the pinned OSCAL contract for final conformance and for resolving
    ambiguity, not as a substitute for the mapping artifact.
 
-Added the read-only
-[SSP mapping-artifact progress audit](../notebooks/validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py).
-It evaluates the entire mapping artifact already loaded by Cell 2, including
-SSP-label-only rows with blank target paths that Cell 3 correctly excludes. It
-keeps artifact-declared status separate from technical runtime evidence,
-groups results by normalized SSP path in root-to-leaf order, and does not
-invent targets from model labels or notes.
+The audit selected the first implementation-ready root-to-leaf target as:
 
-The audit prints no source values, record IDs, payloads, instance keys, or
-lookup labels. Individual Archer field detail is disabled by default. Its
-result is mapping-progress evidence only. A non-empty attributable output is
-reported as presence reconciliation—not as transformed-value equality or a
-completed/conformant mapping. The audit cannot authorize writes or claim
-whole-document conformance.
+```text
+NEXT ROOT-TO-LEAF TARGET: system-security-plan.metadata.last-modified
+NEXT TARGET SELECTION BASIS: IMPLEMENTATION_READY
+NEXT TARGET CLASS: MORE_INFORMATION_REQUIRED
+NEXT TARGET REASON: TRANSFORM_HANDLER_MISSING
+```
+
+The read-only
+[metadata last-modified audit](../notebooks/validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
+has been added but has **not yet been executed**. It measures the two source
+candidates independently, their population overlap, parseability, timezone
+presence, normalized equality/conflicts, and the existing generated winner.
+It prints aggregate counts only and does not choose precedence or a timezone.
 
 ## Current engineering interpretation
 
@@ -251,16 +279,14 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-In the same live Snowflake notebook session, run the complete
-[SSP mapping-artifact progress audit](../notebooks/validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py)
-in one new Python cell. Do not rerun Mapper Cells 1-7 solely for this step.
+In the same live Snowflake notebook session, run
+[RUN_AFTER_07_ssp_metadata_last_modified_audit.py](../notebooks/validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
+in one new Python cell. Do not rerun Mapper Cells 1-7 solely for this
+diagnostic.
 
-Record its aggregate output and printed `NEXT` lines in this status file. That
-result will establish the loaded spreadsheet denominator, whether an explicit
-status column exists, presence/progress classes, and the first
-implementation-ready mapping path without exposing source values or blindly
-redoing mappings whose output presence already reconciles.
-
-The approved `import-profile.href` remains an external final-completeness gate,
-but it no longer blocks progress on earlier executable rows selected by the
-Excel-first audit. Keep `EXECUTE_WRITES = False`.
+Record its aggregate candidate coverage/overlap, aware-versus-naive timestamp
+counts, normalized equality/conflict counts, current RFC 3339 conformance, and
+the printed decision flags. Do not implement source precedence, attach a
+timezone, choose the maximum timestamp, or update the mapper until this
+evidence is recorded and any required policy is approved. Keep
+`EXECUTE_WRITES = False`.

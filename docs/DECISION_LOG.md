@@ -220,3 +220,29 @@ attributable output is classified only as presence reconciliation, not proof
 of transformed-value equality or a completed mapping. It prints aggregate
 progress by default and never authorizes writes or whole-document conformance.
 `EXECUTE_WRITES` remains `False`.
+
+## 2026-09-09 — Metadata last-modified evidence gate
+
+The executed Excel-first progress audit selected
+`system-security-plan.metadata.last-modified` as the next implementation-ready
+path with reason `TRANSFORM_HANDLER_MISSING`. The earlier 2,813 generated count
+is output-presence evidence only; it is not timestamp normalization or
+transformed-value equality.
+
+Two artifact mappings converge on the singleton field:
+`ARCHER_CONTENT_AUTHORIZATION_PACKAGE_LAST_UPDATED` and `LAST_UPDATED`. Cell 4
+has no timestamp-specific handler, so both Transform mappings currently reach
+the raw-value fallback and mapping order can silently overwrite one candidate.
+
+Added the aggregate-only, read-only
+`RUN_AFTER_07_ssp_metadata_last_modified_audit.py`. It fails closed on mapping
+baseline or candidate-contract drift, graph/write-state failures, source or
+metadata identity problems, malformed payloads, non-singleton metadata nodes,
+invalid timestamp shapes, unsafe precision, and invalid policy settings. It
+reports candidate coverage, overlap, timezone/format readiness, normalized
+equality/conflicts, and current output attribution without printing record IDs,
+timestamps, payloads, or other source values.
+
+Do not choose precedence from mapping order, assume a timezone, or select the
+maximum timestamp. Run and record the diagnostic before changing Cell 4. The
+production mapper remains unchanged and `EXECUTE_WRITES` remains `False`.
