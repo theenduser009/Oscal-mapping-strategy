@@ -62,12 +62,11 @@ runtime evidence, and prints the next implementation-ready SSP path in
 root-to-leaf order, with an unresolved-review fallback. It does not infer a
 missing target from a model label, field name, or note.
 
-When that audit selects `system-security-plan.metadata.last-modified`, run the
-[metadata last-modified readiness audit](../validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
-as the current conditional follow-up. It measures the two converging timestamp
-candidates, timezone/format quality, overlap, conflicts, and current output
-attribution using aggregate counts only. It does not choose precedence or a
-timezone and is not a permanent eighth production cell.
+The metadata last-modified audit has now been executed. `LAST_UPDATED` supplies
+all 2,813 current values, and every value is timezone-naive. The user chose to
+preserve those values unchanged for now. Cell 5 therefore leaves timestamps
+alone and injects only the controlled `OSCAL_VERSION` into each singleton
+metadata payload.
 
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
@@ -79,13 +78,10 @@ minimum-required-scope audit then found eight of thirteen required paths in the
 registry, five absent paths, incomplete components, required payload gaps, and
 zero of 2,813 records meeting the complete minimum contract.
 
-The required-source readiness and mapping-artifact progress audits have now
-been executed. The latter retained 104 SSP rows and selected
-`system-security-plan.metadata.last-modified` with reason
-`TRANSFORM_HANDLER_MISSING`. If the same Snowflake session is active, run only
-the
-[metadata last-modified readiness audit](../validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
-in a new Python cell. Do not rerun Cells 1-7 solely for this diagnostic.
+The required-source readiness, mapping-artifact progress, and metadata
+last-modified audits have now been executed. In the same active Snowflake
+session, replace Cell 5 with the updated file and run Cells 5, 6, and 7. If the
+session state has been lost, run all seven cells in order.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

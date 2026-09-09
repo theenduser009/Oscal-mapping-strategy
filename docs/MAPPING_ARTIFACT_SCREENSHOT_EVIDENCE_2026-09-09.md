@@ -143,6 +143,7 @@ PRIVACY_OFFICER_PO
 INFORMATION_SYSTEM_SECURITY_ENGINEER_ISSE
 INFORMATION_SYSTEM_ADMINISTRATOR_ISA
 AUTHORIZING_OFFICIAL_DESIGNATED_REPRESENTATIVE_AODR
+SENIOR_INFORMATION_SYSTEMS_SECURITY_OFFICER_SISSO
 ```
 
 Mapping types are a mix of `Transform` and `TBD`, and notes indicate creation of party/role relationships. Therefore these rows are not safe to emit generically until the approved role mapping and party identity construction are explicit.

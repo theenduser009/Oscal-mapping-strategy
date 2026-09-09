@@ -132,7 +132,8 @@ Metadata/config findings:
 
 - `metadata.title`: no executable mapping source; action `MAPPING_SOURCE_REQUIRED`.
 - `metadata.version`: no executable mapping source; action `MAPPING_SOURCE_REQUIRED`.
-- `metadata.oscal-version`: controlled config `OSCAL_VERSION` is ready; action `CONFIG_INJECTION_OR_SHAPING_REQUIRED`.
+- `metadata.oscal-version`: controlled config `OSCAL_VERSION` is now injected by
+  Cell 5 into the singleton metadata payload; live Snowflake rerun is pending.
 - `import-profile.href`: registry absent, no mapping source, and no configured profile href; action `ADD_REGISTRY_CONFIG_VALUE_REQUIRED`.
 
 Missing branch/field design findings include:
@@ -255,11 +256,41 @@ NEXT TARGET REASON: TRANSFORM_HANDLER_MISSING
 ```
 
 The read-only
-[metadata last-modified audit](../notebooks/validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
-has been added but has **not yet been executed**. It measures the two source
-candidates independently, their population overlap, parseability, timezone
-presence, normalized equality/conflicts, and the existing generated winner.
-It prints aggregate counts only and does not choose precedence or a timezone.
+[metadata last-modified audit](checkpoints/2026-09-09_SSP_METADATA_LAST_MODIFIED_READINESS_AUDIT.md)
+was executed. The package-prefixed candidate is empty for all 2,813 records;
+`LAST_UPDATED` is populated and is the current generated value for all 2,813.
+Every populated value is parseable but timezone-naive. The user chose to keep
+that source value unchanged for now, so no timestamp transform or inferred
+timezone is being added. This remains a final OSCAL-conformance gap, but it no
+longer blocks work on the rest of the metadata branch.
+
+The next safe branch change is implemented in the repository: Cell 5 injects
+the controlled `CONFIG["OSCAL_VERSION"]` value into the one
+`system-security-plan.metadata` payload for each source record. It copies the
+payload rather than mutating mapping output, rejects missing configuration,
+and fails closed if an existing mapped value conflicts with the configured
+version. The authoritative notebook and split Cell 5 are synchronized. This
+change has not yet been run in Snowflake.
+
+## Locked metadata branch boundary
+
+The Excel artifact defines 15 metadata rows. This is the fixed work slice; do
+not restart discovery for each field:
+
+| Target | Rows | Current disposition |
+| --- | ---: | --- |
+| `metadata.last-modified` | 2 | Source-preserving decision recorded; final timezone gap retained |
+| `metadata.published` | 2 | Timestamp policy/source evidence still unresolved |
+| literal `metadata.props` | 1 | `TBD`, source-empty, and not an active collection registry path |
+| `metadata.document-ids[].identifier` | 1 | 2,813/2,813 valid-shape nodes; exact-value verification remains |
+| `metadata.responsible-parties[]` | 9 | Five shape/presence-reconciled, four `TBD`; party/role targets are absent |
+
+The pinned contract additionally requires `metadata.title`,
+`metadata.version`, and `metadata.oscal-version`. The first two have no
+approved Excel source or controlled value. OSCAL version is the only one that
+can be safely closed now. Responsible-party nodes are not semantically
+complete merely because their payload shape is valid: neither
+`metadata.parties[]` nor `metadata.roles[]` exists to resolve their references.
 
 ## Current engineering interpretation
 
@@ -279,14 +310,13 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-In the same live Snowflake notebook session, run
-[RUN_AFTER_07_ssp_metadata_last_modified_audit.py](../notebooks/validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
-in one new Python cell. Do not rerun Mapper Cells 1-7 solely for this
-diagnostic.
+Copy the updated
+[Cell 5 registry graph builder](../notebooks/cells/05_registry_graph_builder.py)
+into the existing live Snowflake notebook, then run Cells 5, 6, and 7 in that
+order. If the notebook session was restarted and earlier variables are gone,
+run Cells 1 through 7 instead. Keep `EXECUTE_WRITES = False`.
 
-Record its aggregate candidate coverage/overlap, aware-versus-naive timestamp
-counts, normalized equality/conflict counts, current RFC 3339 conformance, and
-the printed decision flags. Do not implement source precedence, attach a
-timezone, choose the maximum timestamp, or update the mapper until this
-evidence is recorded and any required policy is approved. Keep
-`EXECUTE_WRITES = False`.
+Record the Cell 7 aggregate output in the status checkpoint. The expected
+result is the existing healthy graph/pre-write validation plus an exact
+`oscal-version` value from configuration in every singleton metadata payload.
+Do not change either timestamp source or attach a timezone during this run.

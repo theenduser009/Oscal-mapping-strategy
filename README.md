@@ -45,20 +45,22 @@ spreadsheet screenshot's 609, and no global completion claim is allowed. It
 selected `system-security-plan.metadata.last-modified` as the next
 implementation-ready path because its Transform handler is missing.
 
+The subsequent metadata audit found that the package-prefixed candidate is
+empty and `LAST_UPDATED` supplies all 2,813 current values. Those timestamps
+are parseable but timezone-naive. The user chose to preserve them unchanged
+for now, so timestamp normalization remains a final conformance gap rather
+than the next code change. Cell 5 now safely injects the already-pinned OSCAL
+version into every singleton metadata payload; a live Snowflake rerun is
+pending.
+
 ## Immediate next action
 
-In the same live Snowflake session, run the aggregate-only
-[metadata last-modified readiness audit](notebooks/validation/RUN_AFTER_07_ssp_metadata_last_modified_audit.py)
-in one new Python cell. The two spreadsheet rows for this singleton target
-currently pass raw values through Cell 4, and mapping order can silently decide
-which value remains. The diagnostic reports candidate population, overlap,
-timestamp/timezone quality, normalized equality/conflicts, and the current
-generated winner without printing timestamps, payloads, or record IDs.
-
-Do not rerun Mapper Cells 1-7 solely for this diagnostic. Do not infer source
-precedence, select the latest timestamp, or assign a timezone before its
-aggregate evidence is reviewed. It performs no writes and does not establish
-whole-SSP conformance. Keep `EXECUTE_WRITES = False`.
+In the existing live Snowflake session, replace Cell 5 with the updated
+[copy-ready graph builder](notebooks/cells/05_registry_graph_builder.py), then
+run Cells 5, 6, and 7. If the session state was lost, run all seven cells in
+order. Keep `EXECUTE_WRITES = False`, leave the source timestamps unchanged,
+and record the aggregate Cell 7 result before moving to the next metadata
+item.
 
 ## Read-only inspection SQL
 

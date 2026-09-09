@@ -246,3 +246,24 @@ timestamps, payloads, or other source values.
 Do not choose precedence from mapping order, assume a timezone, or select the
 maximum timestamp. Run and record the diagnostic before changing Cell 4. The
 production mapper remains unchanged and `EXECUTE_WRITES` remains `False`.
+
+## 2026-09-09 — Preserve source timestamps; inject controlled OSCAL version
+
+The metadata last-modified audit was executed and recorded in
+`docs/checkpoints/2026-09-09_SSP_METADATA_LAST_MODIFIED_READINESS_AUDIT.md`.
+The package-prefixed candidate is empty for all 2,813 records;
+`LAST_UPDATED` alone supplies every current generated value. All populated
+values are parseable but timezone-naive.
+
+The user chose to retain those timestamp values as they are. Therefore Cell 4
+is unchanged: no source precedence, timezone, or normalization rule is
+invented. The missing timezone remains a final OSCAL-conformance gap and does
+not block the remaining metadata implementation work.
+
+The next safe metadata requirement uses an existing controlled value. Cell 5
+now injects `CONFIG["OSCAL_VERSION"]` into every singleton
+`system-security-plan.metadata` payload. It requires exactly one singleton,
+requires a nonblank configured version, copies the payload, and rejects an
+existing conflicting value. Both the authoritative notebook and copy-ready
+Cell 5 carry the same change. `EXECUTE_WRITES` remains `False`; Snowflake
+runtime validation is still required.
