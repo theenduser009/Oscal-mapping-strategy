@@ -73,10 +73,13 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The timestamp and security-impact production changes are accepted. Continue
-root-to-leaf with the Excel-defined `metadata.responsible-parties[]` slice and
-the role/party references it requires. Keep `EXECUTE_WRITES = False` and do not
-invent missing source relationships.
+The timestamp and security-impact production changes are accepted. Cell 4 now
+also gives the same Archer party one stable UUID across multiple approved
+roles, deduplicates repeated references, and fails closed when a stable source
+identifier is absent. Continue the `metadata.responsible-parties[]` slice by
+adding its role/party reference targets after party type is explicitly
+resolved. Keep `EXECUTE_WRITES = False`; do not invent missing source
+relationships or party types.
 
 ## Read-only inspection SQL
 

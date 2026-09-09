@@ -351,3 +351,23 @@ duplicate or dangling keys, passed pre-write validation, and no writes. The
 2,543-node and 2,543-edge reduction exactly matches the 2,453 empty plus 90
 partial assemblies intentionally omitted. The production decision is accepted;
 no additional security-impact validator is required.
+
+## 2026-09-09 — Stabilize responsible-party identity across roles
+
+The five approved responsible-party mappings previously included the source
+role field in party UUID identity. That could assign different UUIDs to the
+same Archer party when the party held multiple roles, making future
+`metadata.parties[]` referential closure impossible.
+
+Cell 4 now bases the UUID on source system, SSP record, and stable party
+identifier, independent of role. Repeated references are deduplicated in
+source order. Only scalar identifiers or explicit `Id`, `UserId`, and
+`ContentId` object identifiers are accepted; arbitrary dictionaries fail
+closed instead of being serialized into an identity. No source identifier is
+printed in an error.
+
+This release intentionally does not create role or party definition nodes and
+does not infer whether a source reference is a person or organization. The
+next production increment requires explicit party-type evidence or an approved
+rule. No notebook rerun is required for this intermediate identity change, and
+`EXECUTE_WRITES` remains `False`.

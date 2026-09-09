@@ -92,3 +92,8 @@ run another standalone validator for this step.
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and
 constraint validation remain gates. Keep `EXECUTE_WRITES = False`.
+
+Cell 4 now also stabilizes responsible-party identity across roles and
+deduplicates repeated references. This is an intermediate production
+foundation for future `metadata.parties[]` nodes; do not rerun the notebook for
+this change alone. Party type is not inferred from the role name.

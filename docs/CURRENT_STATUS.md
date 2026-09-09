@@ -317,7 +317,7 @@ not restart discovery for each field:
 | `metadata.published` | 2 | Same collision-safe resolver ran successfully; no populated-source conflict raised |
 | literal `metadata.props` | 1 | `TBD`, source-empty, and not an active collection registry path |
 | `metadata.document-ids[].identifier` | 1 | Exact source/output equality passed for 2,813/2,813 records |
-| `metadata.responsible-parties[]` | 9 | Five shape/presence-reconciled, four `TBD`; party/role targets are absent |
+| `metadata.responsible-parties[]` | 9 | Five executable role assignments now use cross-role stable, deduplicated party UUIDs; four remain `TBD`; party/role targets are absent |
 
 The pinned contract additionally requires `metadata.title`,
 `metadata.version`, and `metadata.oscal-version`. The first two have no
@@ -354,6 +354,26 @@ the earlier aggregate evidence. Duplicate and dangling key counts remained
 zero, pre-write validation passed, and no DIM/FACT write occurred. The 270
 complete security-impact assemblies remain the expected emitted population.
 
+## Responsible-party identity foundation — IMPLEMENTED; RERUN DEFERRED
+
+The five approved responsible-party source fields already emit role
+assignments, but the prior party UUID included the source role field. That
+could give one Archer party a different UUID for every role and would prevent
+later creation of one reusable OSCAL party object.
+
+Cell 4 now derives party UUIDs from the source system, SSP record, and stable
+Archer party identifier without including the role field. The same party in
+multiple roles therefore reuses one UUID. Duplicate source references are
+removed in source order. Reference objects must expose `Id`, `UserId`, or
+`ContentId`; arbitrary dictionaries no longer become identities through JSON
+serialization. Missing stable identifiers fail closed with no source values in
+the error.
+
+This is the identity foundation for `metadata.parties[]`; it does not yet emit
+party or role definition nodes. OSCAL party `type` remains unresolved from the
+available repository evidence, so the mapper does not guess `person` or
+`organization`. No Snowflake rerun is requested for this intermediate step.
+
 ## Current engineering interpretation
 
 The graph engine is no longer the primary problem. Its structural integrity remains clean. The backlog is now separated into four concrete categories:
@@ -372,8 +392,9 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-The timestamp and security-impact production changes are accepted; do not
-rerun them or run another standalone validator. Continue root-to-leaf with the
-next unresolved Excel-defined metadata slice: `metadata.responsible-parties[]`
-and its required role/party references. Keep `EXECUTE_WRITES = False`; do not
-invent a person, role, or source relationship while implementing that slice.
+Continue the responsible-party branch by resolving party type from explicit
+Archer reference metadata or an approved mapping rule, then add the matching
+`metadata.roles[]` and `metadata.parties[]` reference targets. Do not rerun the
+notebook for the identity-only intermediate change. Keep
+`EXECUTE_WRITES = False`; do not infer `person` or `organization` from a role
+name alone.

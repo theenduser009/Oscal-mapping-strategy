@@ -274,30 +274,49 @@ def transform_last_modified(value):
     return _preserve_metadata_timestamp(value, "last-modified")
 
 
-def _party_uuid_values(source_record_id, source_field, value):
+def _party_reference_identifier(item):
+    item = _to_python(item)
+    if isinstance(item, dict):
+        identifier = (
+            item.get("Id")
+            or item.get("UserId")
+            or item.get("ContentId")
+        )
+        if not _has_value(identifier):
+            raise ValueError(
+                "Responsible-party reference has no stable identifier"
+            )
+        return str(identifier).strip()
+    if isinstance(item, (list, bool)) or item is None:
+        raise ValueError("Responsible-party reference identifier is invalid")
+    identifier = str(item).strip()
+    if not identifier:
+        raise ValueError("Responsible-party reference identifier is empty")
+    return identifier
+
+
+def _party_uuid(source_record_id, identifier):
+    return _deterministic_uuid(
+        CONFIG["SOURCE_SYSTEM_NAME"],
+        source_record_id,
+        "party",
+        identifier,
+    )
+
+
+def _party_uuid_values(source_record_id, value):
     extracted = _extract_reference_ids(value)
     values = extracted if isinstance(extracted, list) else [extracted]
     party_uuids = []
     for item in values:
         if item is None:
             continue
-        if isinstance(item, dict):
-            identifier = (
-                item.get("Id")
-                or item.get("UserId")
-                or item.get("ContentId")
-                or json.dumps(item, sort_keys=True, default=str)
-            )
-        else:
-            identifier = item
-        party_uuids.append(
-            _deterministic_uuid(
-                CONFIG["SOURCE_SYSTEM_NAME"],
-                source_record_id,
-                source_field,
-                identifier,
-            )
+        party_uuid = _party_uuid(
+            source_record_id,
+            _party_reference_identifier(item),
         )
+        if party_uuid not in party_uuids:
+            party_uuids.append(party_uuid)
     return party_uuids
 
 
@@ -305,7 +324,7 @@ def transform_responsible_party(source_record_id, source_field, value):
     role_id = RESPONSIBLE_PARTY_ROLE_IDS.get(source_field)
     if role_id is None:
         return SKIP_VALUE
-    party_uuids = _party_uuid_values(source_record_id, source_field, value)
+    party_uuids = _party_uuid_values(source_record_id, value)
     if not party_uuids:
         return SKIP_VALUE
     return {"role-id": role_id, "party-uuids": party_uuids}
