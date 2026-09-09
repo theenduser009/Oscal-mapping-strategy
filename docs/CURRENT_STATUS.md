@@ -359,7 +359,7 @@ the earlier aggregate evidence. Duplicate and dangling key counts remained
 zero, pre-write validation passed, and no DIM/FACT write occurred. The 270
 complete security-impact assemblies remain the expected emitted population.
 
-## Metadata completion release — IMPLEMENTED; SNOWFLAKE RUN PENDING
+## Metadata completion release — IMPLEMENTED; REGISTRY RETRY PENDING
 
 The five approved responsible-party source fields already emit role
 assignments, but the prior party UUID included the source role field. That
@@ -389,6 +389,15 @@ The registry remains authoritative. Cell 5 requires active
 metadata. The guarded setup cell derives unused process orders from the live
 SSP registry, inserts only missing role/party paths, and verifies them. It is
 read-only by default and never updates an existing governed row.
+
+The first controlled registry setup attempt was blocked by Snowflake before
+the new rows were inserted because the live table also requires non-null
+`ELEMENT_TYPE`. The setup cell has been corrected to write and verify
+`roles` for `metadata.roles[]` and `parties` for `metadata.parties[]`, plus
+the true collection flag. A schema preflight now blocks before DML if the live
+table exposes another unsupported non-null/no-default insert column.
+Do not rerun Cell 7 against the failed setup attempt; rerun the corrected
+setup cell first and require its final verification message.
 
 ## Current engineering interpretation
 

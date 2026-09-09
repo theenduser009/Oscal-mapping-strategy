@@ -416,3 +416,17 @@ The split Cells 1, 4, and 5 and the authoritative notebook are synchronized.
 All 81 repository tests pass. The release is not yet runtime-accepted: first
 run the guarded registry setup, then run Cells 1 through 7 once with mapper
 `EXECUTE_WRITES = False`. No separate post-run validator is required.
+
+## 2026-09-09 — Complete the governed registry insert contract
+
+The first controlled metadata registry setup attempt was rejected atomically
+because the live table requires non-null `ELEMENT_TYPE`, which the original
+five-column insert omitted. The existing registry was not damaged and the
+mapper remained write-disabled.
+
+The setup cell now derives the governed leaf element types `roles` and
+`parties`, marks both new paths as collections, and verifies those values after
+the insert-only merge. Before DML, it also reads Snowflake column metadata and
+fails closed if another non-null, no-default, non-identity column is not in the
+explicit insert contract. Nullable semantic columns are not fabricated, and
+existing registry rows are never updated.

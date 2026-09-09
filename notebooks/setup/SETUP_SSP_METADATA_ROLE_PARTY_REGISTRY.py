@@ -28,9 +28,13 @@ REQUIRED_REGISTRY_COLUMNS = {
     "OSCAL_MODEL_KEY",
     "NODE_PATH",
     "PARENT_NODE_PATH",
+    "ELEMENT_TYPE",
+    "IS_COLLECTION",
     "PROCESS_ORDER",
     "IS_ACTIVE",
 }
+
+SUPPORTED_INSERT_COLUMNS = REQUIRED_REGISTRY_COLUMNS
 
 
 session = get_active_session()
@@ -49,6 +53,14 @@ def _is_active(value):
     return _clean(value).upper() not in {"FALSE", "F", "NO", "N", "0"}
 
 
+def _is_true(value):
+    return _clean(value).upper() in {"TRUE", "T", "YES", "Y", "1"}
+
+
+def _element_type(node_path):
+    return node_path.rsplit(".", 1)[-1].removesuffix("[]")
+
+
 def _stored_process_order(value, node_path, required=False):
     text = _clean(value)
     if not text:
@@ -62,6 +74,45 @@ def _stored_process_order(value, node_path, required=False):
             f"Registry PROCESS_ORDER is not an integer for {node_path}"
         )
     return int(text)
+
+
+def _assert_supported_not_null_columns():
+    database_name, schema_name, table_name = REGISTRY_TABLE.split(".")
+    column_rows = session.sql(
+        f"""
+SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_DEFAULT, IS_IDENTITY
+FROM {database_name}.INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = '{schema_name}'
+  AND TABLE_NAME = '{table_name}'
+ORDER BY ORDINAL_POSITION
+"""
+    ).collect()
+    if not column_rows:
+        raise ValueError("Registry schema metadata could not be read")
+
+    unsupported = []
+    for row in column_rows:
+        values = {
+            str(key).upper(): value
+            for key, value in row.as_dict(recursive=True).items()
+        }
+        column_name = _clean(values.get("COLUMN_NAME")).upper()
+        is_required = _clean(values.get("IS_NULLABLE")).upper() == "NO"
+        has_default = values.get("COLUMN_DEFAULT") is not None
+        is_identity = _clean(values.get("IS_IDENTITY")).upper() == "YES"
+        if (
+            is_required
+            and not has_default
+            and not is_identity
+            and column_name not in SUPPORTED_INSERT_COLUMNS
+        ):
+            unsupported.append(column_name)
+
+    if unsupported:
+        raise ValueError(
+            "Registry has unsupported required insert columns: "
+            + ", ".join(unsupported)
+        )
 
 
 def _read_model_rows():
@@ -79,6 +130,8 @@ def _read_model_rows():
             col("OSCAL_MODEL_KEY"),
             col("NODE_PATH"),
             col("PARENT_NODE_PATH"),
+            col("ELEMENT_TYPE"),
+            col("IS_COLLECTION"),
             col("PROCESS_ORDER"),
             col("IS_ACTIVE"),
         )
@@ -115,6 +168,15 @@ def _assert_existing_row(row, path, expected_parent):
         return
     if _clean(row.get("PARENT_NODE_PATH")) != expected_parent:
         raise ValueError(f"Existing SSP registry parent is invalid for {path}")
+    expected_element_type = _element_type(path)
+    if _clean(row.get("ELEMENT_TYPE")) != expected_element_type:
+        raise ValueError(
+            f"Existing SSP registry ELEMENT_TYPE is invalid for {path}"
+        )
+    if path.endswith("[]") and not _is_true(row.get("IS_COLLECTION")):
+        raise ValueError(
+            f"Existing SSP registry collection flag is invalid for {path}"
+        )
     if not _is_active(row.get("IS_ACTIVE")):
         raise ValueError(f"Existing SSP registry row is inactive for {path}")
     _stored_process_order(row.get("PROCESS_ORDER"), path, required=True)
@@ -147,6 +209,10 @@ def _print_metadata_siblings(model_rows):
             _clean(row.get("NODE_PATH")),
             " | parent=",
             _clean(row.get("PARENT_NODE_PATH")) or "<root>",
+            " | element_type=",
+            _clean(row.get("ELEMENT_TYPE")) or "<null>",
+            " | collection=",
+            _is_true(row.get("IS_COLLECTION")),
             " | process_order=",
             _clean(row.get("PROCESS_ORDER")) or "<null>",
             " | active=",
@@ -215,6 +281,8 @@ def _build_preflight(model_rows):
                 "OSCAL_MODEL_KEY": MODEL_KEY,
                 "NODE_PATH": path,
                 "PARENT_NODE_PATH": METADATA_PATH,
+                "ELEMENT_TYPE": _element_type(path),
+                "IS_COLLECTION": True,
                 "PROCESS_ORDER": next_order,
                 "IS_ACTIVE": True,
             }
@@ -244,12 +312,16 @@ WHEN NOT MATCHED THEN INSERT (
     OSCAL_MODEL_KEY,
     NODE_PATH,
     PARENT_NODE_PATH,
+    ELEMENT_TYPE,
+    IS_COLLECTION,
     PROCESS_ORDER,
     IS_ACTIVE
 ) VALUES (
     source.OSCAL_MODEL_KEY,
     source.NODE_PATH,
     source.PARENT_NODE_PATH,
+    source.ELEMENT_TYPE,
+    source.IS_COLLECTION,
     source.PROCESS_ORDER,
     source.IS_ACTIVE
 )
@@ -274,6 +346,7 @@ def _verify_targets(expected_orders):
 
 
 _assert_safe_identifier(REGISTRY_TABLE)
+_assert_supported_not_null_columns()
 current_model_rows = _read_model_rows()
 _print_metadata_siblings(current_model_rows)
 preflight = _build_preflight(current_model_rows)
@@ -286,6 +359,9 @@ if preflight["planned_rows"]:
             planned_row["NODE_PATH"],
             " | parent=",
             planned_row["PARENT_NODE_PATH"],
+            " | element_type=",
+            planned_row["ELEMENT_TYPE"],
+            " | collection=True",
             " | process_order=",
             planned_row["PROCESS_ORDER"],
             " | active=True",
