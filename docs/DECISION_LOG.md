@@ -459,3 +459,33 @@ container before applying the existing `Id`, `UserId`, or `ContentId` member
 checks. Arbitrary dictionaries still fail closed. Regression coverage confirms
 deduplication inside the wrapper and full role/party closure, and mapper writes
 remain disabled.
+
+## 2026-09-09 — Enforce governed system-characteristics collection identity
+
+The accepted metadata run completed with 67,683 nodes and 64,870 edges, zero
+duplicate or dangling keys, passed pre-write validation, and no writes. The
+responsible-party stable-identifier failure is closed.
+
+The next root-to-leaf review found that Cell 4 did not implement the already
+recorded registry identities for two existing system-characteristics
+collections. Properties used source-field plus list position even though the
+registry requires `SOURCE_FIELD_NAME+VALUE`; scalar system IDs used
+`singleton` even though the registry requires `VALUE`.
+
+Cell 4 now normalizes property and system-ID values to nonblank strings,
+derives their collection identities from the governed values, deduplicates an
+identical identity, and fails closed if one identity has conflicting payloads.
+Cell 5 verifies the recorded collection flag, instance rule, and item path
+before building the graph. No registry row is inserted or updated.
+
+The same release removes canonical-row-order precedence for populated
+singleton fields. Identical transformed candidates are accepted; distinct
+candidates fail closed without printing their values. Security objectives now
+reject arbitrary text and preserve only normalized FIPS values or the eight
+reviewed legacy LOE labels. No recommended-versus-override precedence was
+invented.
+
+The authoritative notebook and split Cells 4 and 5 are synchronized. The
+complete suite contains 101 passing tests. The next runtime action is one
+read-only Cell 4, Cell 5, Cell 7 run in the existing session, with no metadata
+registry setup and no standalone validator.

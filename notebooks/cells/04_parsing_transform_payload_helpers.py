@@ -38,6 +38,12 @@ SECURITY_IMPACT_ELEMENT_PATH = (
     "system-security-plan.system-characteristics.security-impact-level"
 )
 STATUS_ELEMENT_PATH = "system-security-plan.system-characteristics.status"
+SYSTEM_CHARACTERISTICS_PROPS_ELEMENT_PATH = (
+    "system-security-plan.system-characteristics.props[]"
+)
+SYSTEM_IDS_ELEMENT_PATH = (
+    "system-security-plan.system-characteristics.system-ids[]"
+)
 DOCUMENT_IDS_ELEMENT_PATH = "system-security-plan.metadata.document-ids[]"
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
 METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
@@ -53,6 +59,16 @@ SECURITY_OBJECTIVE_FIELDS = {
     "security-objective-confidentiality",
     "security-objective-integrity",
     "security-objective-availability",
+}
+REVIEWED_LEGACY_SECURITY_VALUES = {
+    "Legacy LOE A",
+    "Legacy LOE B",
+    "Legacy LOE C",
+    "Legacy LOE D",
+    "Legacy LOE A + DFARS",
+    "Legacy LOE B + DFARS",
+    "Legacy LOE C + DFARS",
+    "Legacy LOE D + DFARS",
 }
 
 STATUS_STATE_CROSSWALK = {
@@ -169,6 +185,65 @@ def resolve_archer_select_value(value):
     return resolve_one(extracted)
 
 
+def _oscal_property_values(value):
+    values = value if isinstance(value, list) else [value]
+    normalized = []
+
+    for item in values:
+        item = _to_python(item)
+        if isinstance(item, (dict, list)) or item is None:
+            raise ValueError(
+                "OSCAL property value must resolve to a scalar"
+            )
+
+        if isinstance(item, bool):
+            text = "true" if item else "false"
+        else:
+            text = str(item).strip()
+
+        if not text or text.lower() in {
+            "nan",
+            "inf",
+            "+inf",
+            "-inf",
+        }:
+            raise ValueError(
+                "OSCAL property value must be a nonblank finite scalar"
+            )
+        normalized.append(text)
+
+    return normalized
+
+
+def _append_unique_collection_instance(instances, instance):
+    instance_key = instance["instance_key"]
+    for existing in instances:
+        if existing["instance_key"] != instance_key:
+            continue
+        if existing["payload"] != instance["payload"]:
+            raise ValueError(
+                "Collection identity resolves to conflicting payloads"
+            )
+        return
+    instances.append(instance)
+
+
+def _source_value_instance_key(source_field, value):
+    return (
+        source_field
+        + ":"
+        + _deterministic_hash(
+            "source-field-value-v1",
+            source_field,
+            value,
+        )
+    )
+
+
+def _value_instance_key(value):
+    return _deterministic_hash("value-v1", value)
+
+
 def transform_fips_199(value):
     extracted = _extract_reference_ids(value)
     values = extracted if isinstance(extracted, list) else [extracted]
@@ -233,8 +308,11 @@ def transform_security_objective(value):
             "Security objective contains an unresolved or multi-value label"
         )
 
-    # OSCAL models these objectives as strings. Preserve reviewed legacy LOE
-    # labels instead of inventing an unapproved Low/Moderate/High equivalence.
+    # OSCAL models these objectives as strings. Preserve only the reviewed
+    # legacy LOE labels instead of accepting arbitrary text or inventing an
+    # unapproved Low/Moderate/High equivalence.
+    if label not in REVIEWED_LEGACY_SECURITY_VALUES:
+        raise ValueError("Security objective contains an unreviewed label")
     return label
 
 
@@ -664,19 +742,47 @@ def build_element_instances(
         # only when its owning registry node is actually props[].  Treating
         # every Extension mapping as a collection created multiple instances
         # of singleton parents such as system-characteristics.
-        if element_path.endswith("props[]"):
-            values = transformed if isinstance(transformed, list) else [transformed]
-            for index, item in enumerate(values):
+        if element_path == SYSTEM_CHARACTERISTICS_PROPS_ELEMENT_PATH:
+            values = _oscal_property_values(transformed)
+            for item in values:
                 payload = {
                     "name": _stable_property_name(source_field),
                     "value": item,
                 }
-                instances.append(
+                _append_unique_collection_instance(
+                    instances,
                     {
-                        "instance_key": f"{source_field}:{index}",
+                        "instance_key": _source_value_instance_key(
+                            source_field,
+                            item,
+                        ),
                         "payload": payload,
                         "parent_instance_key": None,
-                    }
+                    },
+                )
+            continue
+
+        if element_path == SYSTEM_IDS_ELEMENT_PATH:
+            values = transformed if isinstance(transformed, list) else [transformed]
+            for item in values:
+                payload = item if isinstance(item, dict) else {target_field: item}
+                identity_values = _oscal_property_values(
+                    payload.get(target_field)
+                )
+                if len(identity_values) != 1:
+                    raise ValueError(
+                        "System ID must resolve to exactly one scalar value"
+                    )
+                canonical_value = identity_values[0]
+                payload = dict(payload)
+                payload[target_field] = canonical_value
+                _append_unique_collection_instance(
+                    instances,
+                    {
+                        "instance_key": _value_instance_key(canonical_value),
+                        "payload": payload,
+                        "parent_instance_key": None,
+                    },
                 )
             continue
 
@@ -718,6 +824,13 @@ def build_element_instances(
                     aggregate_payload["remarks"] = transformed["remarks"]
             continue
 
+        if (
+            target_field in aggregate_payload
+            and aggregate_payload[target_field] != transformed
+        ):
+            raise ValueError(
+                "Singleton target has conflicting populated mappings"
+            )
         aggregate_payload[target_field] = transformed
 
     # security-impact-level is optional as an assembly, but once emitted all

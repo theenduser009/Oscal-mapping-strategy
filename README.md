@@ -27,10 +27,9 @@ Cell 6 validates the graph and target load frames before any merge. Cell 7 is th
 ## Latest verified checkpoint
 
 The latest accepted read-only Snowflake run passed graph and pre-write
-validation with 48,957 nodes, 46,144 edges, zero duplicate or dangling keys,
-and no writes. The reviewed security-impact and status transformations passed
-their scoped normalization checks; that statement does not cover every
-Transform row.
+validation with 67,683 nodes, 64,870 edges, zero duplicate or dangling keys,
+and no writes. The governed metadata roles and parties are now present, and
+the responsible-party stable-identifier failure is closed.
 
 The earlier 2,585 aggregate was corrected: under pinned OSCAL SSP 1.2.3,
 2,453 no-objective security-impact assemblies are optional absences. Cell 4
@@ -75,17 +74,15 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The complete approved metadata release is ready for one combined Snowflake
-run. It sources `metadata.title` from `AUTHORIZATION_PACKAGE_NAME`, pins the
-SSP document version to `1.0`, emits the five approved role definitions and
-deduplicated `person` party objects, and proves every responsible-party role
-and UUID reference closes inside the same SSP record. The four workbook rows
-still marked `TBD` remain excluded. All 81 repository tests pass.
+The system-characteristics collection-integrity release is ready for one
+combined Snowflake run. It enforces string-valued properties, the recorded
+property and system-ID instance rules, duplicate-identity handling, and
+collision-safe singleton assembly. All 101 repository tests pass.
 
-Run the guarded registry setup cell first to add only the missing
-`metadata.roles[]` and `metadata.parties[]` paths, then replace Cells 1, 4, and
-5 and run all seven cells in order. Keep the mapper's `EXECUTE_WRITES = False`.
-This is one metadata-branch acceptance run; no standalone validator is required.
+In the current notebook session, replace Cells 4 and 5, then run Cell 4, Cell
+5, and Cell 7 with `EXECUTE_WRITES = False`. Do not rerun the metadata registry
+setup. If the session was closed, run all seven cells in order. No standalone
+validator is required.
 
 ## Read-only inspection SQL
 

@@ -11,8 +11,8 @@ Last reconciled: 2026-09-09
 ## Verified mapper checkpoint
 
 ```text
-Graph nodes: 48957
-Graph edges: 46144
+Graph nodes: 67683
+Graph edges: 64870
 Duplicate node keys: 0
 Duplicate edge keys: 0
 Dangling source edges: 0
@@ -21,15 +21,14 @@ PRE-WRITE VALIDATION PASSED
 EXECUTE_WRITES = False
 ```
 
-Source/graph identity remains exact for 2813 source records.
-The reduction from the prior graph is exactly 2,543 nodes and 2,543 edges,
-matching the 2,453 empty plus 90 partial security-impact assemblies that the
-new complete-or-omit rule intentionally removes.
+The metadata completion run is accepted. The governed roles and parties were
+materialized, the prior responsible-party identifier error was cleared, every
+structural key check passed, and no DIM/FACT write occurred. The durable
+[checkpoint](checkpoints/2026-09-09-ssp-graph-67683-64870.md) records the
+complete Cell 7 result.
 
-The next metadata-completion release is implemented and locally verified but
-has not yet been run in Snowflake. All 88 repository tests pass. The accepted
-48,957-node / 46,144-edge result above remains the live baseline until the one
-combined metadata run is posted.
+The active production increment is now the existing-registry
+`system-characteristics` collection contract. All 101 repository tests pass.
 
 ## Minimum-required-scope checkpoint
 
@@ -461,12 +460,59 @@ next when an earlier root-to-leaf row is still unresolved.
 
 Do not patch individual records. Do not invent required controlled values. Do not enable writes.
 
+## System-characteristics collection integrity release — IMPLEMENTED
+
+The accepted live registry snapshot already defines the two collection
+contracts needed for this increment:
+
+```text
+system-characteristics.props[]:
+  INSTANCE_KEY_RULE=SOURCE_FIELD_NAME+VALUE
+  ITEM_PATH=$
+
+system-characteristics.system-ids[]:
+  INSTANCE_KEY_RULE=VALUE
+  ITEM_PATH=$
+```
+
+Cell 4 now converts every emitted property value to a canonical nonblank
+string. Boolean values become lowercase JSON-style strings, finite scalar
+values become trimmed strings, and unresolved objects, nested lists, blanks,
+or non-finite values fail closed without exposing source values.
+
+Property instance identity now derives from source field plus normalized
+value, rather than list position. System-ID identity now derives from its
+normalized value, rather than the generic `singleton` key. Identical governed
+identities are deduplicated; a conflicting payload for one identity fails
+closed. Reordering a multi-value property no longer changes its node identity.
+
+Cell 5 now retains and verifies the live registry collection flag,
+`INSTANCE_KEY_RULE`, and `ITEM_PATH` for these two paths before graph
+construction. No registry DML is required.
+
+The singleton aggregator no longer lets canonical mapping row order choose a
+winner when two populated mappings target the same field. Identical
+transformed values are accepted; distinct values fail closed with a sanitized
+error. This applies the policy-free collision rule to the multiple
+security-impact candidates without inventing recommended-versus-override
+precedence. Security objective text is limited to normalized FIPS values and
+the eight reviewed legacy LOE labels.
+
+The known source-owned gaps remain unchanged: 33 records lack a system
+description, 42 lack a status state, and 294 lack an authorization-boundary
+description. `system-information` and `information-types[]` are not part of
+this release because the checked-in evidence has neither governed registry
+paths nor source mappings for them.
+
 ## Immediate next action
 
-If the current notebook session is still open, replace Cell 4 from the
-repository, run Cell 4, and then rerun Cell 7 only. Keep mapper
-`EXECUTE_WRITES = False`. If the session was closed, run Cells 1 through 7 in
-order. Post the complete Cell 7 output in this status file. No standalone
-validator is required. If the run passes, the approved metadata branch is
-accepted and work moves directly to the next unresolved
-`system-characteristics` branch.
+If the current notebook session is still open, replace Cells 4 and 5 from the
+repository, run Cell 4, then Cell 5, then Cell 7. Keep mapper
+`EXECUTE_WRITES = False`; do not rerun the metadata registry setup. If the
+session was closed, run Cells 1 through 7 in order.
+
+Post the complete Cell 7 output. Accept the run only with zero duplicate and
+dangling keys, passed pre-write validation, and no writes. Do not assume graph
+counts will remain unchanged: repeated identical property values may now
+collapse to one governed identity, and any count delta must be explained from
+that rule. No standalone validator is required.

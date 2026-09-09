@@ -410,6 +410,12 @@ SECURITY_IMPACT_ELEMENT_PATH = (
     "system-security-plan.system-characteristics.security-impact-level"
 )
 STATUS_ELEMENT_PATH = "system-security-plan.system-characteristics.status"
+SYSTEM_CHARACTERISTICS_PROPS_ELEMENT_PATH = (
+    "system-security-plan.system-characteristics.props[]"
+)
+SYSTEM_IDS_ELEMENT_PATH = (
+    "system-security-plan.system-characteristics.system-ids[]"
+)
 DOCUMENT_IDS_ELEMENT_PATH = "system-security-plan.metadata.document-ids[]"
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
 METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
@@ -425,6 +431,16 @@ SECURITY_OBJECTIVE_FIELDS = {
     "security-objective-confidentiality",
     "security-objective-integrity",
     "security-objective-availability",
+}
+REVIEWED_LEGACY_SECURITY_VALUES = {
+    "Legacy LOE A",
+    "Legacy LOE B",
+    "Legacy LOE C",
+    "Legacy LOE D",
+    "Legacy LOE A + DFARS",
+    "Legacy LOE B + DFARS",
+    "Legacy LOE C + DFARS",
+    "Legacy LOE D + DFARS",
 }
 
 STATUS_STATE_CROSSWALK = {
@@ -541,6 +557,65 @@ def resolve_archer_select_value(value):
     return resolve_one(extracted)
 
 
+def _oscal_property_values(value):
+    values = value if isinstance(value, list) else [value]
+    normalized = []
+
+    for item in values:
+        item = _to_python(item)
+        if isinstance(item, (dict, list)) or item is None:
+            raise ValueError(
+                "OSCAL property value must resolve to a scalar"
+            )
+
+        if isinstance(item, bool):
+            text = "true" if item else "false"
+        else:
+            text = str(item).strip()
+
+        if not text or text.lower() in {
+            "nan",
+            "inf",
+            "+inf",
+            "-inf",
+        }:
+            raise ValueError(
+                "OSCAL property value must be a nonblank finite scalar"
+            )
+        normalized.append(text)
+
+    return normalized
+
+
+def _append_unique_collection_instance(instances, instance):
+    instance_key = instance["instance_key"]
+    for existing in instances:
+        if existing["instance_key"] != instance_key:
+            continue
+        if existing["payload"] != instance["payload"]:
+            raise ValueError(
+                "Collection identity resolves to conflicting payloads"
+            )
+        return
+    instances.append(instance)
+
+
+def _source_value_instance_key(source_field, value):
+    return (
+        source_field
+        + ":"
+        + _deterministic_hash(
+            "source-field-value-v1",
+            source_field,
+            value,
+        )
+    )
+
+
+def _value_instance_key(value):
+    return _deterministic_hash("value-v1", value)
+
+
 def transform_fips_199(value):
     extracted = _extract_reference_ids(value)
     values = extracted if isinstance(extracted, list) else [extracted]
@@ -605,8 +680,11 @@ def transform_security_objective(value):
             "Security objective contains an unresolved or multi-value label"
         )
 
-    # OSCAL models these objectives as strings. Preserve reviewed legacy LOE
-    # labels instead of inventing an unapproved Low/Moderate/High equivalence.
+    # OSCAL models these objectives as strings. Preserve only the reviewed
+    # legacy LOE labels instead of accepting arbitrary text or inventing an
+    # unapproved Low/Moderate/High equivalence.
+    if label not in REVIEWED_LEGACY_SECURITY_VALUES:
+        raise ValueError("Security objective contains an unreviewed label")
     return label
 
 
@@ -1036,19 +1114,47 @@ def build_element_instances(
         # only when its owning registry node is actually props[].  Treating
         # every Extension mapping as a collection created multiple instances
         # of singleton parents such as system-characteristics.
-        if element_path.endswith("props[]"):
-            values = transformed if isinstance(transformed, list) else [transformed]
-            for index, item in enumerate(values):
+        if element_path == SYSTEM_CHARACTERISTICS_PROPS_ELEMENT_PATH:
+            values = _oscal_property_values(transformed)
+            for item in values:
                 payload = {
                     "name": _stable_property_name(source_field),
                     "value": item,
                 }
-                instances.append(
+                _append_unique_collection_instance(
+                    instances,
                     {
-                        "instance_key": f"{source_field}:{index}",
+                        "instance_key": _source_value_instance_key(
+                            source_field,
+                            item,
+                        ),
                         "payload": payload,
                         "parent_instance_key": None,
-                    }
+                    },
+                )
+            continue
+
+        if element_path == SYSTEM_IDS_ELEMENT_PATH:
+            values = transformed if isinstance(transformed, list) else [transformed]
+            for item in values:
+                payload = item if isinstance(item, dict) else {target_field: item}
+                identity_values = _oscal_property_values(
+                    payload.get(target_field)
+                )
+                if len(identity_values) != 1:
+                    raise ValueError(
+                        "System ID must resolve to exactly one scalar value"
+                    )
+                canonical_value = identity_values[0]
+                payload = dict(payload)
+                payload[target_field] = canonical_value
+                _append_unique_collection_instance(
+                    instances,
+                    {
+                        "instance_key": _value_instance_key(canonical_value),
+                        "payload": payload,
+                        "parent_instance_key": None,
+                    },
                 )
             continue
 
@@ -1090,6 +1196,13 @@ def build_element_instances(
                     aggregate_payload["remarks"] = transformed["remarks"]
             continue
 
+        if (
+            target_field in aggregate_payload
+            and aggregate_payload[target_field] != transformed
+        ):
+            raise ValueError(
+                "Singleton target has conflicting populated mappings"
+            )
         aggregate_payload[target_field] = transformed
 
     # security-impact-level is optional as an assembly, but once emitted all
@@ -1164,6 +1277,16 @@ APPROVED_RESPONSIBLE_PARTY_TYPE = "person"
 OPTIONAL_SINGLETON_ELEMENT_PATHS = {
     "system-security-plan.system-characteristics.security-impact-level",
 }
+SYSTEM_CHARACTERISTICS_COLLECTION_CONTRACTS = {
+    "system-security-plan.system-characteristics.props[]": {
+        "instance_key_rule": "SOURCE_FIELD_NAME+VALUE",
+        "item_path": "$",
+    },
+    "system-security-plan.system-characteristics.system-ids[]": {
+        "instance_key_rule": "VALUE",
+        "item_path": "$",
+    },
+}
 
 def _registry_value(row, *names):
     row_dict = row.as_dict(recursive=True)
@@ -1181,6 +1304,10 @@ def _derive_parent_path(element_path):
 
 def _element_type(element_path):
     return element_path.split(".")[-1].replace("[]", "")
+
+
+def _registry_true(value):
+    return str(value).strip().upper() in {"TRUE", "T", "YES", "Y", "1"}
 
 
 def _should_materialize_structural_singleton(element_path, root_path):
@@ -1336,6 +1463,9 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
             "LEVEL_NUMBER",
         )
         process_order = _registry_value(row, "PROCESS_ORDER")
+        is_collection = _registry_value(row, "IS_COLLECTION")
+        instance_key_rule = _registry_value(row, "INSTANCE_KEY_RULE")
+        item_path = _registry_value(row, "ITEM_PATH")
         derived_level = path.count(".") + 1
         rows.append(
             {
@@ -1346,6 +1476,17 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
                     int(process_order)
                     if process_order is not None
                     else derived_level * 1000000
+                ),
+                "is_collection": _registry_true(is_collection),
+                "instance_key_rule": (
+                    str(instance_key_rule).strip().upper()
+                    if instance_key_rule is not None
+                    else None
+                ),
+                "item_path": (
+                    str(item_path).strip()
+                    if item_path is not None
+                    else None
                 ),
             }
         )
@@ -1424,6 +1565,29 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
         raise ValueError(
             "Registry metadata.responsible-parties[] parent path is invalid"
         )
+
+    for path, contract in SYSTEM_CHARACTERISTICS_COLLECTION_CONTRACTS.items():
+        registry_row = next(
+            (row for row in rows if row["element_path"] == path),
+            None,
+        )
+        if registry_row is None:
+            continue
+        if not registry_row["is_collection"]:
+            raise ValueError(
+                "System-characteristics registry collection flag is invalid"
+            )
+        if (
+            registry_row["instance_key_rule"]
+            != contract["instance_key_rule"]
+        ):
+            raise ValueError(
+                "System-characteristics registry instance rule is invalid"
+            )
+        if registry_row["item_path"] != contract["item_path"]:
+            raise ValueError(
+                "System-characteristics registry item path is invalid"
+            )
     rows.sort(
         key=lambda item: (
             item["process_order"],

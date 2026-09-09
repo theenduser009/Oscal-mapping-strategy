@@ -55,6 +55,13 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 - `metadata.roles[]` and `metadata.parties[]` must be governed registry rows
   under metadata; the mapper never invents them in notebook memory.
 - Extension properties become stable `name`/`value` objects.
+- System-characteristics property identity follows the governed source-field
+  plus normalized-value rule; list position is not identity.
+- System-ID collection identity follows its governed normalized value; the
+  generic singleton key is not valid for that collection.
+- Converging singleton mappings may share one transformed value, but distinct
+  populated values require explicit precedence and must fail closed until it
+  is approved.
 - Helper, TBD, empty, and unapproved values do not become final OSCAL properties.
 
 ## Loading and validation

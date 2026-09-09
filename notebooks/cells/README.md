@@ -85,13 +85,15 @@ zero of 2,813 records meeting the complete minimum contract.
 
 The required-source readiness, mapping-artifact progress, metadata timestamp,
 OSCAL-version, and document-ID checks have been executed. The latest accepted
-read-only mapper run has 48,957 nodes and 46,144 edges with every structural
-gate passing. The next release completes the approved metadata contract across
-[Cell 1](01_initialization_and_configuration.py),
-[Cell 4](04_parsing_transform_payload_helpers.py), and
-[Cell 5](05_registry_graph_builder.py). After the guarded registry setup,
-replace those three cells and run Cells 1 through 7 once. Do not run another
-standalone validator for this step.
+read-only mapper run has 67,683 nodes and 64,870 edges with every structural
+gate passing and no writes. The metadata branch is accepted.
+
+The next release enforces the recorded system-characteristics property and
+system-ID collection contracts across
+[Cell 4](04_parsing_transform_payload_helpers.py) and
+[Cell 5](05_registry_graph_builder.py). In an open notebook session, replace
+and run Cells 4 and 5, then run Cell 7 once. Do not rerun the metadata registry
+setup or a standalone validator for this step.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and
