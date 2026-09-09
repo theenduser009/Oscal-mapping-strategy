@@ -195,3 +195,28 @@ No registry path, mapping, source value, profile URI, graph policy, DIM row, or
 FACT row was changed. `EXECUTE_WRITES` remains `False`. The audit result will
 determine whether `import-profile.href` has a usable candidate or requires an
 approved `SSP_IMPORT_PROFILE_HREF` configuration value.
+
+## 2026-09-09 — Excel-first SSP progress sequencing
+
+The user confirmed that the complete Archer-to-OSCAL Excel crosswalk is the
+implementation work queue for finishing SSP root-to-leaf. The pinned NIST OSCAL
+1.2.3 contract remains the final conformance and ambiguity-resolution gate; it
+does not replace the mappings approved in the workbook or force work to pause
+at an external governance dependency when other earlier mappings are ready.
+
+The repository currently contains filtered screenshot evidence, not the Excel
+workbook itself. The screenshot UI reports 103 of 609 records, while the live
+notebook previously loaded 608 mapping rows. Because this baseline and the
+per-row completion statuses are not visible in full, the estimate that roughly
+20 mappings are complete is not yet recorded as a verified count.
+
+Added the read-only
+`RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py`. It evaluates the entire
+Cell 2 mapping artifact, preserves blank-path SSP rows as unresolved conceptual
+backlog, separates declared artifact status from derived technical progress,
+groups by normalized SSP path, and recommends the first implementation-ready
+path in root-to-leaf order, with an unresolved-review fallback. Non-empty
+attributable output is classified only as presence reconciliation, not proof
+of transformed-value equality or a completed mapping. It prints aggregate
+progress by default and never authorizes writes or whole-document conformance.
+`EXECUTE_WRITES` remains `False`.

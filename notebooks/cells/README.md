@@ -54,6 +54,14 @@ It classifies registry, mapping-artifact, populated-source, current-owner,
 nested-shaping, controlled-configuration, and generated-output evidence without
 printing source names or values.
 
+After the readiness result is recorded, run the
+[SSP mapping-artifact progress audit](../validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py).
+It evaluates the complete Cell 2 crosswalk, including SSP-labeled rows with a
+blank target path, keeps artifact-declared status separate from technical
+runtime evidence, and prints the next implementation-ready SSP path in
+root-to-leaf order, with an unresolved-review fallback. It does not infer a
+missing target from a model label, field name, or note.
+
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
 ## Current post-revision checkpoint
@@ -64,11 +72,12 @@ minimum-required-scope audit then found eight of thirteen required paths in the
 registry, five absent paths, incomplete components, required payload gaps, and
 zero of 2,813 records meeting the complete minimum contract.
 
-If the same Snowflake session is active, run only the
-[required-source readiness audit](../validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py)
-in a new Python cell. It will establish which gaps already have aggregate
-mapping/source candidates and which need registry, configuration, or mapper
-shaping work. Do not rerun Cells 1-7 solely for this diagnostic.
+The required-source readiness audit has now been executed. If the same
+Snowflake session is active, run only the
+[SSP mapping-artifact progress audit](../validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py)
+in a new Python cell. It will reconcile the full mapping-artifact denominator,
+technical progress categories, and first root-to-leaf implementation target.
+Do not rerun Cells 1-7 solely for this diagnostic.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

@@ -9,6 +9,7 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 - [`docs/ARCHITECTURE_CONTEXT.md`](docs/ARCHITECTURE_CONTEXT.md) — design guardrails that must survive future edits.
 - [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) — dated project decisions and GitHub checkpoints.
 - [`docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md`](docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md) — pinned version sources and the first-tier required SSP contract.
+- [`docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md`](docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md) — filtered visual evidence from the SSP mapping workbook; it is not a replacement for the complete workbook.
 
 The earlier three-cell `ssp_props_read_only_cells.py` and its copy pages were temporary diagnostics. They have been removed to prevent them from being mistaken for the production mapper.
 
@@ -36,18 +37,24 @@ missing `status.state` values.
 
 ## Immediate next action
 
-The minimum-required-scope audit now proves that all 2,813 current records are
-blocked by SSP completeness gaps. In the same live Snowflake session, run the
-aggregate-only
-[required-source readiness audit](notebooks/validation/RUN_AFTER_07_ssp_v123_required_source_readiness_audit.py).
-It determines whether each missing path and field already has executable
-mapping/source evidence, needs registry activation, needs nested-payload
-shaping, or requires an approved controlled configuration value.
+The minimum-required-scope and required-source readiness audits have already
+been executed. The new mapping screenshots do not contain the complete Excel
+workbook or a reliable per-row completion status, and their 609-row UI count
+does not yet reconcile with the 608 rows loaded by the notebook.
+
+In the same live Snowflake session, run the aggregate-only
+[SSP mapping-artifact progress audit](notebooks/validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py).
+It evaluates the complete Cell 2 mapping artifact, preserves SSP rows with
+blank target paths as unresolved rather than dropping or guessing them, and
+selects the first implementation-ready SSP path in root-to-leaf order, with a
+first-unresolved review fallback. A non-empty output is reported only as
+presence reconciliation, never as proof of transformed-value equality.
 
 No rerun of Mapper Cells 1-7 is needed in the active session. This diagnostic
 does not expose source identifiers or values, change the graph, assemble final
-OSCAL JSON, replace official validation, or authorize writes. Keep
-`EXECUTE_WRITES = False`.
+OSCAL JSON, replace official validation, or authorize writes. It treats the
+Excel crosswalk as the implementation work queue and the pinned OSCAL contract
+as the final conformance gate. Keep `EXECUTE_WRITES = False`.
 
 ## Read-only inspection SQL
 

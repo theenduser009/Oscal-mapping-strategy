@@ -192,6 +192,47 @@ RESULT: MAPPING-BACKLOG EVIDENCE ONLY
 
 The audit never authorizes writes. Assembled OSCAL JSON schema and constraint validation remain mandatory after the minimum-contract gaps are resolved.
 
+## Latest Excel mapping-artifact checkpoint
+
+The repository now records the filtered screenshot evidence from
+`archer_to_oscal_mapping.xlsx`. The visible filter reports 103 of 609 records
+and confirms SSP mappings across metadata, system characteristics, extension
+properties, security-impact candidates, responsible parties, components, and
+control implementation.
+
+This is useful mapping evidence, but it is not the full workbook. The current
+notebook runtime previously loaded 608 mapping rows, while the screenshot UI
+reports 609 records. That one-row baseline difference is not yet reconciled,
+and the screenshots do not expose a reliable complete/incomplete status for
+every SSP row. Therefore the estimate that roughly 20 items are complete is
+plausible but not yet a verified project count.
+
+The user's implementation priority is now explicit:
+
+1. Use the complete Excel Archer-to-OSCAL crosswalk as the daily SSP work
+   queue.
+2. Preserve each concrete `OSCAL_Element_Path`, mapping type, transformation
+   rule, and declared status.
+3. Process unresolved mappings root-to-leaf without reworking rows already
+   proven complete.
+4. Use the pinned OSCAL contract for final conformance and for resolving
+   ambiguity, not as a substitute for the mapping artifact.
+
+Added the read-only
+[SSP mapping-artifact progress audit](../notebooks/validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py).
+It evaluates the entire mapping artifact already loaded by Cell 2, including
+SSP-label-only rows with blank target paths that Cell 3 correctly excludes. It
+keeps artifact-declared status separate from technical runtime evidence,
+groups results by normalized SSP path in root-to-leaf order, and does not
+invent targets from model labels or notes.
+
+The audit prints no source values, record IDs, payloads, instance keys, or
+lookup labels. Individual Archer field detail is disabled by default. Its
+result is mapping-progress evidence only. A non-empty attributable output is
+reported as presence reconciliation—not as transformed-value equality or a
+completed/conformant mapping. The audit cannot authorize writes or claim
+whole-document conformance.
+
 ## Current engineering interpretation
 
 The graph engine is no longer the primary problem. Its structural integrity remains clean. The backlog is now separated into four concrete categories:
@@ -201,10 +242,25 @@ The graph engine is no longer the primary problem. Its structural integrity rema
 3. **Component collection/source collision + hydration design** — current `components[]` coverage is 944/2813 records and six candidate source mappings need deliberate reconciliation.
 4. **Required field sourcing/configuration** — metadata title/version, import-profile href, component fields, plus known source-completeness gaps of 33/42/294 records.
 
+The Excel mapping artifact is now the primary sequencing source for that
+backlog. The minimum-contract findings remain valid final-completeness gates,
+but they do not determine which spreadsheet-defined mapping should be worked
+next when an earlier root-to-leaf row is still unresolved.
+
 Do not patch individual records. Do not invent required controlled values. Do not enable writes.
 
 ## Immediate next action
 
-The next engineering action should be **import-profile contract resolution**, because the diagnostic has now proven there is no Archer mapping candidate and no configured href. Obtain/confirm the approved OSCAL SSP profile URI with the architect/governance owner, then add the `import-profile` registry node and controlled `SSP_IMPORT_PROFILE_HREF` configuration path generically.
+In the same live Snowflake notebook session, run the complete
+[SSP mapping-artifact progress audit](../notebooks/validation/RUN_AFTER_07_ssp_mapping_artifact_progress_audit.py)
+in one new Python cell. Do not rerun Mapper Cells 1-7 solely for this step.
 
-Keep `EXECUTE_WRITES = False`. After that, proceed branch-by-branch through `system-information`, `information-types[]`, `control-implementation`, and `implemented-requirements[]`, using the audit classifications rather than ad-hoc mapper changes.
+Record its aggregate output and printed `NEXT` lines in this status file. That
+result will establish the loaded spreadsheet denominator, whether an explicit
+status column exists, presence/progress classes, and the first
+implementation-ready mapping path without exposing source values or blindly
+redoing mappings whose output presence already reconciles.
+
+The approved `import-profile.href` remains an external final-completeness gate,
+but it no longer blocks progress on earlier executable rows selected by the
+Excel-first audit. Keep `EXECUTE_WRITES = False`.
