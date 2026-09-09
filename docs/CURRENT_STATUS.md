@@ -27,8 +27,11 @@ structural key check passed, and no DIM/FACT write occurred. The durable
 [checkpoint](checkpoints/2026-09-09-ssp-graph-67683-64870.md) records the
 complete Cell 7 result.
 
-The active production increment is now the existing-registry
-`system-characteristics` collection contract. All 101 repository tests pass.
+The existing-registry `system-characteristics` collection-contract release is
+now runtime-accepted. All 101 repository tests pass, and the live rerun kept
+the same healthy 67,683-node / 64,870-edge graph with no writes. The durable
+[system-characteristics checkpoint](checkpoints/2026-09-09-ssp-system-characteristics-contract-run.md)
+records the result.
 
 ## Minimum-required-scope checkpoint
 
@@ -460,7 +463,7 @@ next when an earlier root-to-leaf row is still unresolved.
 
 Do not patch individual records. Do not invent required controlled values. Do not enable writes.
 
-## System-characteristics collection integrity release — IMPLEMENTED
+## System-characteristics collection integrity release — RUNTIME ACCEPTED
 
 The accepted live registry snapshot already defines the two collection
 contracts needed for this increment:
@@ -504,15 +507,17 @@ description. `system-information` and `information-types[]` are not part of
 this release because the checked-in evidence has neither governed registry
 paths nor source mappings for them.
 
+The post-release Cell 7 run completed with 67,683 nodes and 64,870 edges, zero
+duplicate node or edge keys, zero dangling source or target edges, passed
+pre-write validation, and `EXECUTE_WRITES = False`. The unchanged counts are
+accepted evidence that the governed collection identities caused no data loss
+for this source population. No further system-characteristics rerun is needed.
+
 ## Immediate next action
 
-If the current notebook session is still open, replace Cells 4 and 5 from the
-repository, run Cell 4, then Cell 5, then Cell 7. Keep mapper
-`EXECUTE_WRITES = False`; do not rerun the metadata registry setup. If the
-session was closed, run Cells 1 through 7 in order.
-
-Post the complete Cell 7 output. Accept the run only with zero duplicate and
-dangling keys, passed pre-write validation, and no writes. Do not assume graph
-counts will remain unchanged: repeated identical property values may now
-collapse to one governed identity, and any count delta must be explained from
-that rule. No standalone validator is required.
+Do not rerun the accepted metadata or system-characteristics releases. Select
+the next root-to-leaf SSP increment from the checked-in mapping and registry
+evidence. Component references are the leading candidate, but implementation
+must preserve the recorded `CONTENT_ID` member identity and must not invent
+the required component title, description, or status fields. Keep
+`EXECUTE_WRITES = False`.

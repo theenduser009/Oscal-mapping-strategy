@@ -31,6 +31,11 @@ validation with 67,683 nodes, 64,870 edges, zero duplicate or dangling keys,
 and no writes. The governed metadata roles and parties are now present, and
 the responsible-party stable-identifier failure is closed.
 
+The same clean cardinality was confirmed after the system-characteristics
+collection-contract release. That release is runtime-accepted; no further
+metadata or system-characteristics rerun is pending. Work now moves to the
+next evidence-backed downstream SSP branch, with writes still disabled.
+
 The earlier 2,585 aggregate was corrected: under pinned OSCAL SSP 1.2.3,
 2,453 no-objective security-impact assemblies are optional absences. Cell 4
 now also omits the 90 partial assemblies, while retaining complete C-I-A

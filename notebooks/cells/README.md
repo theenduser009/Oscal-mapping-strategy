@@ -88,12 +88,12 @@ OSCAL-version, and document-ID checks have been executed. The latest accepted
 read-only mapper run has 67,683 nodes and 64,870 edges with every structural
 gate passing and no writes. The metadata branch is accepted.
 
-The next release enforces the recorded system-characteristics property and
-system-ID collection contracts across
+The system-characteristics property and system-ID collection contracts across
 [Cell 4](04_parsing_transform_payload_helpers.py) and
-[Cell 5](05_registry_graph_builder.py). In an open notebook session, replace
-and run Cells 4 and 5, then run Cell 7 once. Do not rerun the metadata registry
-setup or a standalone validator for this step.
+[Cell 5](05_registry_graph_builder.py) are now runtime-accepted. The live run
+retained 67,683 nodes and 64,870 edges, passed every structural gate, and made
+no writes. Do not rerun the metadata setup or the accepted mapper cells for
+that release.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

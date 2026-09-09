@@ -489,3 +489,17 @@ The authoritative notebook and split Cells 4 and 5 are synchronized. The
 complete suite contains 101 passing tests. The next runtime action is one
 read-only Cell 4, Cell 5, Cell 7 run in the existing session, with no metadata
 registry setup and no standalone validator.
+
+## 2026-09-09 — Accept the system-characteristics contract run
+
+The live Cell 7 rerun completed with 67,683 nodes and 64,870 edges, zero
+duplicate node or edge keys, zero dangling source or target edges, passed
+pre-write validation, and no writes. Graph cardinality remained unchanged, so
+the governed property and system-ID identity rules did not remove data in this
+source population. The singleton conflict and reviewed security-impact guards
+also completed without an exception.
+
+The system-characteristics integrity release is accepted and will not be
+rerun. The next production increment moves downstream in the SSP hierarchy;
+known source-owned description, status, and authorization-boundary gaps remain
+explicit and are not patched with invented defaults.
