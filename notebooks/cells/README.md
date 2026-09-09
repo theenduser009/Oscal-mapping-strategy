@@ -79,9 +79,11 @@ registry, five absent paths, incomplete components, required payload gaps, and
 zero of 2,813 records meeting the complete minimum contract.
 
 The required-source readiness, mapping-artifact progress, and metadata
-last-modified audits have now been executed. In the same active Snowflake
-session, replace Cell 5 with the updated file and run Cells 5, 6, and 7. If the
-session state has been lost, run all seven cells in order.
+last-modified audits have now been executed. The updated Cell 5 and complete
+mapper have also been rerun successfully. In the same active Snowflake
+session, run only the
+[metadata OSCAL-version validation](../validation/RUN_AFTER_07_ssp_metadata_oscal_version_validation.py)
+as a new read-only cell; do not rerun Cells 1–7.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

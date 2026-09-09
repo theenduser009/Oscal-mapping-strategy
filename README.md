@@ -51,16 +51,17 @@ are parseable but timezone-naive. The user chose to preserve them unchanged
 for now, so timestamp normalization remains a final conformance gap rather
 than the next code change. Cell 5 now safely injects the already-pinned OSCAL
 version into every singleton metadata payload; a live Snowflake rerun is
-pending.
+now complete. The rerun retained the healthy 51,500-node / 48,687-edge graph,
+passed all structural and pre-write gates, and made no writes. A direct
+aggregate payload count is the only remaining proof for this field.
 
 ## Immediate next action
 
-In the existing live Snowflake session, replace Cell 5 with the updated
-[copy-ready graph builder](notebooks/cells/05_registry_graph_builder.py), then
-run Cells 5, 6, and 7. If the session state was lost, run all seven cells in
-order. Keep `EXECUTE_WRITES = False`, leave the source timestamps unchanged,
-and record the aggregate Cell 7 result before moving to the next metadata
-item.
+In the still-open live Snowflake session, run the one-cell, read-only
+[metadata OSCAL-version validation](notebooks/validation/RUN_AFTER_07_ssp_metadata_oscal_version_validation.py).
+Do not rerun the seven mapper cells. Record the aggregate result, then proceed
+to exact-value verification of the metadata document identifier. Keep
+`EXECUTE_WRITES = False` and leave the source timestamps unchanged.
 
 ## Read-only inspection SQL
 

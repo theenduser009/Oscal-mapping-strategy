@@ -132,8 +132,9 @@ Metadata/config findings:
 
 - `metadata.title`: no executable mapping source; action `MAPPING_SOURCE_REQUIRED`.
 - `metadata.version`: no executable mapping source; action `MAPPING_SOURCE_REQUIRED`.
-- `metadata.oscal-version`: controlled config `OSCAL_VERSION` is now injected by
-  Cell 5 into the singleton metadata payload; live Snowflake rerun is pending.
+- `metadata.oscal-version`: controlled config `OSCAL_VERSION` is injected by
+  Cell 5; the updated graph ran successfully and exact aggregate payload
+  verification is the next read-only check.
 - `import-profile.href`: registry absent, no mapping source, and no configured profile href; action `ADD_REGISTRY_CONFIG_VALUE_REQUIRED`.
 
 Missing branch/field design findings include:
@@ -270,7 +271,32 @@ the controlled `CONFIG["OSCAL_VERSION"]` value into the one
 payload rather than mutating mapping output, rejects missing configuration,
 and fails closed if an existing mapped value conflicts with the configured
 version. The authoritative notebook and split Cell 5 are synchronized. This
-change has not yet been run in Snowflake.
+change has now run successfully in Snowflake.
+
+## Latest mapper rerun — EXECUTED 2026-09-09
+
+The user-provided
+[Cell 7 + Cell 8 checkpoint](checkpoints/2026-09-09_CELL7_CELL8_OUTPUT_CHECKPOINT.md)
+records the full rerun after replacing Cell 5:
+
+```text
+Graph nodes: 51500
+Graph edges: 48687
+Duplicate node keys: 0
+Duplicate edge keys: 0
+Dangling source edges: 0
+Dangling target edges: 0
+PRE-WRITE VALIDATION PASSED
+EXECUTE_WRITES = False
+```
+
+The unchanged graph cardinality is expected because this patch changes the
+metadata payload, not graph topology. Successful Cell 5 execution proves that
+the configured-version, conflict, and singleton guards did not fail. The
+checkpoint does not print a field-level version count, so exact 2,813-record
+payload verification remains the next small check. Its repeated Cell 8
+timestamp conclusion is historical audit output; it does not supersede the
+later user decision to preserve those timestamps unchanged.
 
 ## Locked metadata branch boundary
 
@@ -310,13 +336,14 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-Copy the updated
-[Cell 5 registry graph builder](../notebooks/cells/05_registry_graph_builder.py)
-into the existing live Snowflake notebook, then run Cells 5, 6, and 7 in that
-order. If the notebook session was restarted and earlier variables are gone,
-run Cells 1 through 7 instead. Keep `EXECUTE_WRITES = False`.
+In the same still-open Snowflake session, run the aggregate-only
+[metadata OSCAL-version validation](../notebooks/validation/RUN_AFTER_07_ssp_metadata_oscal_version_validation.py)
+as one new Python cell. Do not rerun Cells 1–7. It verifies source/graph
+identity, one singleton metadata node per record, parseable object payloads,
+and exact equality between every emitted `oscal-version` and
+`CONFIG["OSCAL_VERSION"]` without printing payloads or record IDs.
 
-Record the Cell 7 aggregate output in the status checkpoint. The expected
-result is the existing healthy graph/pre-write validation plus an exact
-`oscal-version` value from configuration in every singleton metadata payload.
-Do not change either timestamp source or attach a timezone during this run.
+Record that result, then continue within the same locked metadata branch to
+exact-value verification of `TRACKING_ID` →
+`metadata.document-ids[].identifier`. Keep `EXECUTE_WRITES = False` and do not
+change either timestamp source or attach a timezone.

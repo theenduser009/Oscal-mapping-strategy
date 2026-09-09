@@ -267,3 +267,17 @@ requires a nonblank configured version, copies the payload, and rejects an
 existing conflicting value. Both the authoritative notebook and copy-ready
 Cell 5 carry the same change. `EXECUTE_WRITES` remains `False`; Snowflake
 runtime validation is still required.
+
+## 2026-09-09 — Controlled OSCAL-version mapper rerun passed
+
+The user replaced Cell 5, reopened the Snowflake session, and ran all seven
+mapper cells. The recorded checkpoint reports 51,500 nodes, 48,687 edges,
+zero duplicate keys, zero dangling edges, passed pre-write validation, and no
+writes. Graph cardinality correctly stayed unchanged because the version is a
+payload field.
+
+The run establishes that Cell 5's configured-version, singleton, and conflict
+guards completed without error. The checkpoint does not include the exact
+count of metadata payloads whose `oscal-version` equals the configured value,
+so one aggregate-only validation cell is required before marking this field
+runtime-verified. Do not rerun the mapper for that check.
