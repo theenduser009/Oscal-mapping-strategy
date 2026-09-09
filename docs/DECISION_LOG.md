@@ -324,3 +324,24 @@ precedence rule is invented.
 The split Cell 4 and authoritative notebook remain synchronized. The next
 runtime step is a normal read-only mapper execution from Cell 4 through Cell 7,
 not another standalone diagnostic.
+
+## 2026-09-09 — Make security-impact emission atomic
+
+Existing aggregate evidence found 2,453 SSP records with no populated security
+objective, 90 with only part of the confidentiality/integrity/availability
+set, and 270 with the complete set. `security-impact-level` is optional as an
+assembly, but the three objective fields are required whenever that assembly
+is emitted.
+
+Cell 4 now emits the singleton only when all three objectives are populated
+nonblank strings. It omits empty and partial assemblies without inventing a
+source value or default. Cell 5 excludes this optional path from the generic
+empty structural-singleton fallback, so an omission is not recreated as an
+empty node. Other structural singleton and collection behavior is unchanged.
+
+The split Cells 4 and 5 and the authoritative notebook are synchronized.
+Focused regression coverage verifies complete, empty, one-objective, and
+two-objective inputs, reviewed legacy labels, optional-node omission, and
+unchanged behavior for other structural paths. The next step is one normal
+read-only mapper run from Cell 4 through Cell 7; no standalone validator is
+required and `EXECUTE_WRITES` remains `False`.

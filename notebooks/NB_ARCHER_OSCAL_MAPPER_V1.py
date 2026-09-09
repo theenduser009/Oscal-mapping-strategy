@@ -584,6 +584,14 @@ def transform_security_objective(value):
     return label
 
 
+def _is_complete_security_impact_payload(payload):
+    return all(
+        isinstance(payload.get(field_name), str)
+        and bool(payload[field_name].strip())
+        for field_name in SECURITY_OBJECTIVE_FIELDS
+    )
+
+
 def transform_status_state(value):
     label = _single_archer_label(value)
     if label is None:
@@ -886,6 +894,16 @@ def build_element_instances(
 
         aggregate_payload[target_field] = transformed
 
+    # security-impact-level is optional as an assembly, but once emitted all
+    # three security objectives are required. Omit empty and partial
+    # assemblies instead of inventing missing confidentiality, integrity, or
+    # availability values.
+    if (
+        element_path == SECURITY_IMPACT_ELEMENT_PATH
+        and not _is_complete_security_impact_payload(aggregate_payload)
+    ):
+        return []
+
     if aggregate_payload:
         instances.insert(
             0,
@@ -937,6 +955,9 @@ print("Cell 4 helpers initialized")
 # %% Cell 5 - Registry-driven canonical node and edge graph
 
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
+OPTIONAL_SINGLETON_ELEMENT_PATHS = {
+    "system-security-plan.system-characteristics.security-impact-level",
+}
 
 def _registry_value(row, *names):
     row_dict = row.as_dict(recursive=True)
@@ -954,6 +975,13 @@ def _derive_parent_path(element_path):
 
 def _element_type(element_path):
     return element_path.split(".")[-1].replace("[]", "")
+
+
+def _should_materialize_structural_singleton(element_path, root_path):
+    return (
+        (element_path == root_path or "[]" not in element_path)
+        and element_path not in OPTIONAL_SINGLETON_ELEMENT_PATHS
+    )
 
 
 def _inject_controlled_metadata_fields(element_path, instances):
@@ -1097,7 +1125,10 @@ def build_oscal_graph(
 
             # Structural singleton containers are materialized even without a
             # direct mapping. Empty collections are not invented.
-            if not instances and (path == root_path or "[]" not in path):
+            if not instances and _should_materialize_structural_singleton(
+                path,
+                root_path,
+            ):
                 instances = [
                     {
                         "instance_key": "singleton",

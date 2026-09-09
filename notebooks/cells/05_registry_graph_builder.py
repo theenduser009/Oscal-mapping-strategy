@@ -1,6 +1,9 @@
 # %% Cell 5 - Registry-driven canonical node and edge graph
 
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
+OPTIONAL_SINGLETON_ELEMENT_PATHS = {
+    "system-security-plan.system-characteristics.security-impact-level",
+}
 
 def _registry_value(row, *names):
     row_dict = row.as_dict(recursive=True)
@@ -18,6 +21,13 @@ def _derive_parent_path(element_path):
 
 def _element_type(element_path):
     return element_path.split(".")[-1].replace("[]", "")
+
+
+def _should_materialize_structural_singleton(element_path, root_path):
+    return (
+        (element_path == root_path or "[]" not in element_path)
+        and element_path not in OPTIONAL_SINGLETON_ELEMENT_PATHS
+    )
 
 
 def _inject_controlled_metadata_fields(element_path, instances):
@@ -161,7 +171,10 @@ def build_oscal_graph(
 
             # Structural singleton containers are materialized even without a
             # direct mapping. Empty collections are not invented.
-            if not instances and (path == root_path or "[]" not in path):
+            if not instances and _should_materialize_structural_singleton(
+                path,
+                root_path,
+            ):
                 instances = [
                     {
                         "instance_key": "singleton",

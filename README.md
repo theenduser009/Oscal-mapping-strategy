@@ -31,10 +31,11 @@ The reviewed security-impact and status transformations passed their scoped
 normalization checks; that statement does not cover every Transform row.
 
 The earlier 2,585 aggregate was corrected: under pinned OSCAL SSP 1.2.3,
-2,453 no-objective security-impact assemblies are optional absences. The
-narrow emitted/required security/status gap is 221 field occurrences: 179
-missing objectives inside 90 partial security-impact assemblies plus 42
-missing `status.state` values.
+2,453 no-objective security-impact assemblies are optional absences. Cell 4
+now also omits the 90 partial assemblies, while retaining complete C-I-A
+assemblies; Cell 5 no longer recreates omitted security-impact data as empty
+structural nodes. This production change awaits one live rerun. The 42 missing
+required `status.state` values remain a source-data gap.
 
 The complete Excel-first
 [mapping-artifact progress audit](docs/checkpoints/2026-09-09_SSP_MAPPING_ARTIFACT_PROGRESS_AUDIT.md)
@@ -65,13 +66,18 @@ the selected source string exactly, accepts a single populated value or
 identical populated values, and fails closed when populated sources disagree.
 It does not infer or attach a timezone.
 
+The same release makes the optional `security-impact-level` branch atomic:
+only payloads containing all three confidentiality, integrity, and
+availability objectives are emitted. Missing values are never invented.
+
 ## Immediate next action
 
-Replace Cell 4 with the updated
-[copy-ready transformation cell](notebooks/cells/04_parsing_transform_payload_helpers.py),
-then run Cells 4, 5, 6, and 7 in the still-open Snowflake session. This is a
-production mapper change, not a standalone audit. Keep
-`EXECUTE_WRITES = False`; the timestamp strings remain unchanged.
+Replace the updated copy-ready [Cell 4](notebooks/cells/04_parsing_transform_payload_helpers.py)
+and [Cell 5](notebooks/cells/05_registry_graph_builder.py), then run Cells 4,
+5, 6, and 7 in the still-open Snowflake session. These are production mapper
+changes, not standalone audits. Keep `EXECUTE_WRITES = False`; timestamp
+strings remain unchanged and incomplete security-impact assemblies are
+omitted.
 
 ## Read-only inspection SQL
 

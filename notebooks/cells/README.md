@@ -82,10 +82,12 @@ The required-source readiness, mapping-artifact progress, and metadata
 last-modified audits have now been executed. The updated Cell 5 and complete
 mapper have also been rerun successfully. In the same active Snowflake
 session, the metadata OSCAL-version and document-ID validations then passed for
-all 2,813 records. The next production change is in
-[Cell 4](04_parsing_transform_payload_helpers.py): replace and run Cell 4,
-then run Cells 5, 6, and 7. Do not run another standalone validator for this
-step.
+all 2,813 records. The next production release updates both
+[Cell 4](04_parsing_transform_payload_helpers.py) and
+[Cell 5](05_registry_graph_builder.py): replace both, then run Cells 4, 5, 6,
+and 7. It resolves metadata timestamp collisions without changing source
+strings and makes optional security-impact emission complete-or-omit. Do not
+run another standalone validator for this step.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

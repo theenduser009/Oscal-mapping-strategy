@@ -323,6 +323,29 @@ can be safely closed now. Responsible-party nodes are not semantically
 complete merely because their payload shape is valid: neither
 `metadata.parties[]` nor `metadata.roles[]` exists to resolve their references.
 
+## Security-impact production assembly — IMPLEMENTED; LIVE RERUN PENDING
+
+The recorded source/runtime evidence separates the optional assembly states:
+
+```text
+No populated objective values: 2453
+Partial confidentiality/integrity/availability assemblies: 90
+Complete confidentiality/integrity/availability assemblies: 270
+```
+
+Cell 4 now treats
+`system-security-plan.system-characteristics.security-impact-level` as one
+atomic optional assembly. It emits the singleton only when all three required
+security-objective strings are populated. Empty and partial assemblies are
+omitted; the mapper does not invent or default a missing objective.
+
+Cell 5 now recognizes that same path as an optional singleton and does not
+recreate an omitted assembly as an empty structural node. Other structural
+singleton and collection behavior is unchanged. The split cells and
+authoritative notebook are synchronized, and focused tests cover complete,
+empty, and partial inputs plus the structural fallback. Snowflake confirmation
+is still pending one normal read-only mapper rerun.
+
 ## Current engineering interpretation
 
 The graph engine is no longer the primary problem. Its structural integrity remains clean. The backlog is now separated into four concrete categories:
@@ -341,10 +364,12 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-Replace the live notebook's Cell 4 with
-[the updated copy-ready cell](../notebooks/cells/04_parsing_transform_payload_helpers.py),
-then run Cells 4, 5, 6, and 7 in order. Do not run another standalone
-validator for this step. The expected `last-modified` behavior is unchanged;
-if populated `published` sources disagree, the production mapper will stop
-with a sanitized conflict instead of silently choosing one. Keep
-`EXECUTE_WRITES = False` and do not attach a timezone.
+Replace the live notebook's copy-ready
+[Cell 4](../notebooks/cells/04_parsing_transform_payload_helpers.py) and
+[Cell 5](../notebooks/cells/05_registry_graph_builder.py), then run Cells 4,
+5, 6, and 7 in order. Do not run another standalone validator for this step.
+This single read-only rerun exercises both production changes: timestamp
+collision handling and complete-or-omit security-impact assembly. If populated
+timestamp sources disagree, the mapper stops with a sanitized conflict instead
+of silently choosing one. Keep `EXECUTE_WRITES = False`; source timestamps stay
+unchanged and no security-objective value is fabricated.
