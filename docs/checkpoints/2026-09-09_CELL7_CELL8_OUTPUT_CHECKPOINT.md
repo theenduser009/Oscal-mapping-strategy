@@ -4,10 +4,12 @@ Captured from Snowflake notebook `NB_ARCHER_OSCAL_MAPPER_V2` on 2026-09-09.
 
 ## Cell 7 — OSCAL mapping run
 
+### Latest run
+
 - Model: SSP
-- Run ID: `20260909T162019Z`
-- Graph nodes: **51,500**
-- Graph edges: **48,687**
+- Run ID: `20260909T175146Z`
+- Graph nodes: **48,957**
+- Graph edges: **46,144**
 - Duplicate node keys: **0**
 - Duplicate edge keys: **0**
 - Dangling source edges: **0**
@@ -16,6 +18,20 @@ Captured from Snowflake notebook `NB_ARCHER_OSCAL_MAPPER_V2` on 2026-09-09.
 - `EXECUTE_WRITES = False`
 - No DIM/FACT changes were made
 - Writes: **False**
+
+### Prior recorded run
+
+- Run ID: `20260909T162019Z`
+- Graph nodes: **51,500**
+- Graph edges: **48,687**
+- Duplicate node keys: **0**
+- Duplicate edge keys: **0**
+- Dangling source edges: **0**
+- Dangling target edges: **0**
+- Pre-write validation: **PASSED**
+- Writes: **False**
+
+The node/edge count changed between read-only runs, so this delta must remain visible and should be explained before writes are enabled.
 
 ## Cell 8 — `metadata.last-modified` readiness audit
 
@@ -66,8 +82,6 @@ Do not invent a timezone, choose a latest timestamp implicitly, or enable writes
 - **RESULT: PASSED**
 
 ## Metadata `document-id` read-only validation
-
-Latest screenshot result:
 
 - Document-id mapping rows: **1**
 - Mapping contract valid: **True**
