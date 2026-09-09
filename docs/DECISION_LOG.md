@@ -503,3 +503,24 @@ The system-characteristics integrity release is accepted and will not be
 rerun. The next production increment moves downstream in the SSP hierarchy;
 known source-owned description, status, and authorization-boundary gaps remain
 explicit and are not patched with invented defaults.
+
+## 2026-09-09 — Open the component branch with its governed source contract
+
+The next evidence-backed branch is `system-implementation.components[]`.
+`system-implementation` already has full structural coverage, and the live
+registry records the component collection parent, `CONTENT_ID` identity rule,
+and `$` item path. Cell 5 now verifies those exact values. It does not insert
+or update registry data.
+
+The six approved component mappings are Archer references, but neither the
+checked-in source fixture nor Cell 2 contains a referenced-record lookup
+source. The current generic source-field/list-position identity contradicts
+the registry and cannot be retained. Component payload completion also needs
+evidence for title, description, and status rather than defaults.
+
+A one-time aggregate source-contract extraction now reports the live reference
+shapes, content-ID coverage, safe key names, required-field-key coverage, and
+within/cross-field collisions without printing identifiers or values. Its
+result is the direct input to one explicit fail-closed component hydrator. No
+component emission behavior changes, registry DML, or mapper rerun is included
+in this evidence increment.

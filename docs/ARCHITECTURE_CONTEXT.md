@@ -59,6 +59,12 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
   plus normalized-value rule; list position is not identity.
 - System-ID collection identity follows its governed normalized value; the
   generic singleton key is not valid for that collection.
+- The SSP component collection is governed by Archer `CONTENT_ID` under the
+  `system-implementation` singleton. Source field and list position are never
+  component identity.
+- A component reference is not a complete OSCAL component. Required title,
+  description, and status values must come from the referenced source object
+  or an approved lookup contract; the mapper does not invent them.
 - Converging singleton mappings may share one transformed value, but distinct
   populated values require explicit precedence and must fail closed until it
   is approved.
@@ -87,6 +93,9 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
   pinned release's schema plus applicable OSCAL constraints, in addition to
   the existing DIM/FACT graph and load checks.
 - Narrow diagnostics must label their scope and cannot authorize writes.
+- One-time source-contract extraction may report aggregate key/type coverage
+  when the external Snowflake source shape is not checked into the repository;
+  it must not print source identifiers or values.
 
 ## Known limitation
 

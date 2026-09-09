@@ -28,7 +28,7 @@ structural key check passed, and no DIM/FACT write occurred. The durable
 complete Cell 7 result.
 
 The existing-registry `system-characteristics` collection-contract release is
-now runtime-accepted. All 101 repository tests pass, and the live rerun kept
+now runtime-accepted. All 106 repository tests pass, and the live rerun kept
 the same healthy 67,683-node / 64,870-edge graph with no writes. The durable
 [system-characteristics checkpoint](checkpoints/2026-09-09-ssp-system-characteristics-contract-run.md)
 records the result.
@@ -513,11 +513,37 @@ pre-write validation, and `EXECUTE_WRITES = False`. The unchanged counts are
 accepted evidence that the governed collection identities caused no data loss
 for this source population. No further system-characteristics rerun is needed.
 
+## Component source contract — READY FOR ONE-TIME EXTRACTION
+
+The next root-to-leaf branch is
+`system-security-plan.system-implementation.components[]`. The parent
+`system-implementation` singleton already has full 2,813-record structural
+coverage. The live registry snapshot gives an exact contract for
+`components[]`: parent `system-implementation`, collection true, instance rule
+`CONTENT_ID`, and item path `$`. Cell 5 now verifies that contract without
+changing any registry row.
+
+Six executable Archer `Reference` mappings target the collection: subsystems,
+software, hardware, and three interconnection sources. Current generic
+collection handling uses source field plus list position and therefore cannot
+be promoted as the component implementation. The checked-in artifacts also do
+not prove the live reference-container shape or show whether title,
+description, and status are carried inside each reference.
+
+`RUN_AFTER_07_ssp_component_source_contract.py` is a one-time, aggregate-only
+contract extraction. It reports mapping type and component-type signals,
+wrapper/object key shapes, governed ID coverage, required-field key coverage,
+and within/cross-field ID collisions. It hashes identifiers in memory and does
+not print identifiers, source values, record IDs, or payloads. It performs no
+DML. The result will directly determine the explicit `components[]` hydrator;
+it is not another general conformance validator.
+
 ## Immediate next action
 
-Do not rerun the accepted metadata or system-characteristics releases. Select
-the next root-to-leaf SSP increment from the checked-in mapping and registry
-evidence. Component references are the leading candidate, but implementation
-must preserve the recorded `CONTENT_ID` member identity and must not invent
-the required component title, description, or status fields. Keep
-`EXECUTE_WRITES = False`.
+Do not rerun the accepted mapper cells. In the still-open notebook session,
+run only
+[`RUN_AFTER_07_ssp_component_source_contract.py`](../notebooks/validation/RUN_AFTER_07_ssp_component_source_contract.py)
+as one new Python cell and post its complete aggregate output. Keep
+`EXECUTE_WRITES = False`; no registry setup or standalone validator is needed.
+If the notebook session has closed, run Cells 1 through 7 first and then run
+the contract extraction once.

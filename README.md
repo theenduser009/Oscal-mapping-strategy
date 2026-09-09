@@ -79,15 +79,13 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The system-characteristics collection-integrity release is ready for one
-combined Snowflake run. It enforces string-valued properties, the recorded
-property and system-ID instance rules, duplicate-identity handling, and
-collision-safe singleton assembly. All 101 repository tests pass.
-
-In the current notebook session, replace Cells 4 and 5, then run Cell 4, Cell
-5, and Cell 7 with `EXECUTE_WRITES = False`. Do not rerun the metadata registry
-setup. If the session was closed, run all seven cells in order. No standalone
-validator is required.
+The accepted graph now moves to the component branch. In the current notebook
+session, run the one-time aggregate
+[component source-contract extraction](notebooks/validation/RUN_AFTER_07_ssp_component_source_contract.py)
+as a new Python cell. Do not rerun accepted mapper cells or the metadata
+registry setup. Post the complete output so the six Archer references can be
+implemented with the recorded `CONTENT_ID` identity and their actual live
+container shape. All 106 repository tests pass and writes remain disabled.
 
 ## Read-only inspection SQL
 

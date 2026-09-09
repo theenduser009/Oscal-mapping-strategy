@@ -95,6 +95,14 @@ retained 67,683 nodes and 64,870 edges, passed every structural gate, and made
 no writes. Do not rerun the metadata setup or the accepted mapper cells for
 that release.
 
+The next action is the one-time aggregate
+[component source-contract extraction](../validation/RUN_AFTER_07_ssp_component_source_contract.py).
+Run it as one new Python cell in the still-open session and post its complete
+output. It prints no identifiers or source values and performs no DML. Cell 5
+already verifies the recorded component collection parent, `CONTENT_ID` rule,
+and `$` item path; component emission will change only after the extraction
+proves the live reference shape.
+
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and
 constraint validation remain gates. Keep `EXECUTE_WRITES = False`.

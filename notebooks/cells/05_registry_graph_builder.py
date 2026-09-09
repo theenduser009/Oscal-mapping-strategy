@@ -12,13 +12,20 @@ APPROVED_RESPONSIBLE_PARTY_TYPE = "person"
 OPTIONAL_SINGLETON_ELEMENT_PATHS = {
     "system-security-plan.system-characteristics.security-impact-level",
 }
-SYSTEM_CHARACTERISTICS_COLLECTION_CONTRACTS = {
+GOVERNED_COLLECTION_CONTRACTS = {
     "system-security-plan.system-characteristics.props[]": {
+        "parent_path": "system-security-plan.system-characteristics",
         "instance_key_rule": "SOURCE_FIELD_NAME+VALUE",
         "item_path": "$",
     },
     "system-security-plan.system-characteristics.system-ids[]": {
+        "parent_path": "system-security-plan.system-characteristics",
         "instance_key_rule": "VALUE",
+        "item_path": "$",
+    },
+    "system-security-plan.system-implementation.components[]": {
+        "parent_path": "system-security-plan.system-implementation",
+        "instance_key_rule": "CONTENT_ID",
         "item_path": "$",
     },
 }
@@ -301,7 +308,7 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
             "Registry metadata.responsible-parties[] parent path is invalid"
         )
 
-    for path, contract in SYSTEM_CHARACTERISTICS_COLLECTION_CONTRACTS.items():
+    for path, contract in GOVERNED_COLLECTION_CONTRACTS.items():
         registry_row = next(
             (row for row in rows if row["element_path"] == path),
             None,
@@ -310,19 +317,17 @@ def _canonical_registry_rows(element_registry_dataframe, model_key):
             continue
         if not registry_row["is_collection"]:
             raise ValueError(
-                "System-characteristics registry collection flag is invalid"
+                "Governed registry collection flag is invalid"
             )
+        if registry_row["parent_path"] != contract["parent_path"]:
+            raise ValueError("Governed registry parent path is invalid")
         if (
             registry_row["instance_key_rule"]
             != contract["instance_key_rule"]
         ):
-            raise ValueError(
-                "System-characteristics registry instance rule is invalid"
-            )
+            raise ValueError("Governed registry instance rule is invalid")
         if registry_row["item_path"] != contract["item_path"]:
-            raise ValueError(
-                "System-characteristics registry item path is invalid"
-            )
+            raise ValueError("Governed registry item path is invalid")
     rows.sort(
         key=lambda item: (
             item["process_order"],
