@@ -31,6 +31,8 @@ class MetadataRegistrySetupTests(unittest.TestCase):
         required_columns = ast.literal_eval(assignment.value)
         self.assertIn("ELEMENT_TYPE", required_columns)
         self.assertIn("IS_COLLECTION", required_columns)
+        self.assertIn("INSTANCE_KEY_RULE", required_columns)
+        self.assertIn("ITEM_PATH", required_columns)
 
     def test_collection_element_types_are_derived_from_node_paths(self):
         function = next(
@@ -53,21 +55,41 @@ class MetadataRegistrySetupTests(unittest.TestCase):
             "parties",
         )
 
-    def test_insert_only_merge_writes_element_type(self):
+    def test_target_instance_contract_uses_observed_registry_vocabulary(self):
+        self.assertIn('"INSTANCE_KEY_RULE": "SOURCE_FIELD_NAME"', self.source)
+        self.assertIn('"INSTANCE_KEY_RULE": "ID"', self.source)
+        self.assertIn('"ITEM_PATH": "$"', self.source)
+        self.assertIn('"ITEM_PATH": "UserList[]"', self.source)
+
+    def test_insert_only_merge_writes_complete_live_contract(self):
         self.assertIn(
             '"ELEMENT_TYPE": _element_type(path)',
             self.source,
         )
         self.assertIn('"IS_COLLECTION": True', self.source)
         self.assertIn(
-            "    ELEMENT_TYPE,\n    IS_COLLECTION,\n    PROCESS_ORDER,",
+            "    ELEMENT_TYPE,\n    IS_COLLECTION,\n"
+            "    INSTANCE_KEY_RULE,\n    PROCESS_ORDER,\n"
+            "    IS_ACTIVE,\n    ITEM_PATH",
             self.source,
         )
         self.assertIn(
             "    source.ELEMENT_TYPE,\n    source.IS_COLLECTION,\n"
-            "    source.PROCESS_ORDER,",
+            "    source.INSTANCE_KEY_RULE,\n    source.PROCESS_ORDER,\n"
+            "    source.IS_ACTIVE,\n    source.ITEM_PATH",
             self.source,
         )
+
+    def test_process_order_reuses_existing_metadata_collection_depth(self):
+        self.assertIn(
+            'responsible_row.get("PROCESS_ORDER")',
+            self.source,
+        )
+        self.assertIn(
+            '"PROCESS_ORDER": metadata_collection_order',
+            self.source,
+        )
+        self.assertNotIn("max(occupied_orders)", self.source)
 
     def test_unknown_required_columns_fail_before_model_read(self):
         entrypoint = self.source.index(

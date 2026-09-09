@@ -27,7 +27,7 @@ matching the 2,453 empty plus 90 partial security-impact assemblies that the
 new complete-or-omit rule intentionally removes.
 
 The next metadata-completion release is implemented and locally verified but
-has not yet been run in Snowflake. All 81 repository tests pass. The accepted
+has not yet been run in Snowflake. All 87 repository tests pass. The accepted
 48,957-node / 46,144-edge result above remains the live baseline until the one
 combined metadata run is posted.
 
@@ -391,13 +391,47 @@ SSP registry, inserts only missing role/party paths, and verifies them. It is
 read-only by default and never updates an existing governed row.
 
 The first controlled registry setup attempt was blocked by Snowflake before
-the new rows were inserted because the live table also requires non-null
-`ELEMENT_TYPE`. The setup cell has been corrected to write and verify
-`roles` for `metadata.roles[]` and `parties` for `metadata.parties[]`, plus
-the true collection flag. A schema preflight now blocks before DML if the live
-table exposes another unsupported non-null/no-default insert column.
-Do not rerun Cell 7 against the failed setup attempt; rerun the corrected
-setup cell first and require its final verification message.
+the new rows were inserted because the original merge omitted non-null
+`ELEMENT_TYPE`. The next guarded revision also stopped before DML when its
+schema preflight proved that `INSTANCE_KEY_RULE` is mandatory. Neither failed
+attempt changed the registry.
+
+The live schema and collection snapshot are now recorded. The registry has
+nine columns, and the observed collection vocabulary includes
+`SOURCE_FIELD_NAME`, `VALUE`, `SOURCE_FIELD_NAME+ID`, `SOURCE_FIELD_NAME+VALUE`,
+and `CONTENT_ID`. Metadata collection rows use process order 3; process order
+is hierarchy depth, not a globally unique sequence.
+
+The setup now supplies and verifies the complete nine-column contract. Its
+new rows reflect the mapper's actual instance identities:
+
+```text
+metadata.roles[]:
+  ELEMENT_TYPE=roles
+  IS_COLLECTION=TRUE
+  INSTANCE_KEY_RULE=SOURCE_FIELD_NAME
+  PROCESS_ORDER=3 (derived from existing metadata.responsible-parties[])
+  ITEM_PATH=$
+
+metadata.parties[]:
+  ELEMENT_TYPE=parties
+  IS_COLLECTION=TRUE
+  INSTANCE_KEY_RULE=ID
+  PROCESS_ORDER=3 (derived from existing metadata.responsible-parties[])
+  ITEM_PATH=UserList[]
+```
+
+Roles are emitted once per approved source field. Party identity is derived
+from each user-list member's stable identifier and is deliberately independent
+of source field so the same person can be reused across roles. The schema
+preflight remains fail-closed for any unrecognized mandatory column.
+
+The live snapshot contained no ID-only party rule. The user explicitly
+approved adding `ID` for this collection rather than reusing
+`SOURCE_FIELD_NAME+ID`, which would contradict cross-role party reuse.
+
+Do not rerun Cell 7 against either failed setup attempt. Run the latest setup
+cell first and require its final verification message.
 
 ## Current engineering interpretation
 

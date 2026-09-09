@@ -417,16 +417,31 @@ All 81 repository tests pass. The release is not yet runtime-accepted: first
 run the guarded registry setup, then run Cells 1 through 7 once with mapper
 `EXECUTE_WRITES = False`. No separate post-run validator is required.
 
-## 2026-09-09 — Complete the governed registry insert contract
+## 2026-09-09 — Complete the governed registry insert contract from live evidence
 
 The first controlled metadata registry setup attempt was rejected atomically
 because the live table requires non-null `ELEMENT_TYPE`, which the original
-five-column insert omitted. The existing registry was not damaged and the
-mapper remained write-disabled.
+five-column insert omitted. The next revision's schema guard then stopped
+before DML because `INSTANCE_KEY_RULE` is also mandatory. Neither attempt
+inserted a row, and mapper writes remained disabled.
 
-The setup cell now derives the governed leaf element types `roles` and
-`parties`, marks both new paths as collections, and verifies those values after
-the insert-only merge. Before DML, it also reads Snowflake column metadata and
-fails closed if another non-null, no-default, non-identity column is not in the
-explicit insert contract. Nullable semantic columns are not fabricated, and
-existing registry rows are never updated.
+The user supplied the complete nine-column schema and all 13 existing
+collection rows. That evidence corrected two earlier assumptions: semantic
+collection columns must be explicit, and `PROCESS_ORDER` represents hierarchy
+depth rather than a globally unique order. Existing metadata collection rows
+use order 3.
+
+The final setup contract uses observed registry structure and actual mapper
+identities. `metadata.roles[]` uses the existing `SOURCE_FIELD_NAME` rule with
+item path `$` because one controlled role is emitted per approved source
+field. No existing collection rule represented a party identifier independent
+of source field, so the user explicitly approved the new `ID` rule for
+`metadata.parties[]` with item path `UserList[]`. That exactly matches reusable
+party identity and avoids the existing `SOURCE_FIELD_NAME+ID` behavior, which
+would split the same person across roles. Both rows use their leaf element
+type, collection true, metadata as parent, the existing metadata collection
+order, and active true.
+
+The insert remains merge-only-when-missing, verifies every semantic field, and
+never updates existing rows. A Snowflake schema preflight rejects any unknown
+non-null/no-default/non-identity column before DML.

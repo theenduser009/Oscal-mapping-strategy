@@ -23,6 +23,19 @@ RESPONSIBLE_PARTIES_PATH = (
     "system-security-plan.metadata.responsible-parties[]"
 )
 TARGET_PATHS = (ROLES_PATH, PARTIES_PATH)
+# These values use only conventions present in the live collection snapshot.
+# Roles are one generated instance per approved source field. Parties are one
+# reusable instance per UserList member value, independent of source field.
+TARGET_INSTANCE_CONTRACTS = {
+    ROLES_PATH: {
+        "INSTANCE_KEY_RULE": "SOURCE_FIELD_NAME",
+        "ITEM_PATH": "$",
+    },
+    PARTIES_PATH: {
+        "INSTANCE_KEY_RULE": "ID",
+        "ITEM_PATH": "UserList[]",
+    },
+}
 
 REQUIRED_REGISTRY_COLUMNS = {
     "OSCAL_MODEL_KEY",
@@ -30,8 +43,10 @@ REQUIRED_REGISTRY_COLUMNS = {
     "PARENT_NODE_PATH",
     "ELEMENT_TYPE",
     "IS_COLLECTION",
+    "INSTANCE_KEY_RULE",
     "PROCESS_ORDER",
     "IS_ACTIVE",
+    "ITEM_PATH",
 }
 
 SUPPORTED_INSERT_COLUMNS = REQUIRED_REGISTRY_COLUMNS
@@ -132,8 +147,10 @@ def _read_model_rows():
             col("PARENT_NODE_PATH"),
             col("ELEMENT_TYPE"),
             col("IS_COLLECTION"),
+            col("INSTANCE_KEY_RULE"),
             col("PROCESS_ORDER"),
             col("IS_ACTIVE"),
+            col("ITEM_PATH"),
         )
         .filter(
             upper(trim(col("OSCAL_MODEL_KEY").cast("string")))
@@ -213,10 +230,14 @@ def _print_metadata_siblings(model_rows):
             _clean(row.get("ELEMENT_TYPE")) or "<null>",
             " | collection=",
             _is_true(row.get("IS_COLLECTION")),
+            " | instance_key_rule=",
+            _clean(row.get("INSTANCE_KEY_RULE")) or "<null>",
             " | process_order=",
             _clean(row.get("PROCESS_ORDER")) or "<null>",
             " | active=",
             _is_active(row.get("IS_ACTIVE")),
+            " | item_path=",
+            _clean(row.get("ITEM_PATH")) or "<null>",
             sep="",
         )
 
@@ -246,52 +267,38 @@ def _build_preflight(model_rows):
     _assert_existing_row(roles_row, ROLES_PATH, METADATA_PATH)
     _assert_existing_row(parties_row, PARTIES_PATH, METADATA_PATH)
 
-    occupied_orders = []
-    for row in model_rows:
-        path = _clean(row.get("NODE_PATH"))
-        process_order = _stored_process_order(
-            row.get("PROCESS_ORDER"),
-            path,
-        )
-        if process_order is not None:
-            occupied_orders.append(process_order)
-    if not occupied_orders:
-        raise ValueError(
-            "Cannot derive target PROCESS_ORDER because SSP has no existing "
-            "integer PROCESS_ORDER values"
-        )
-
-    next_order = max(occupied_orders) + 1
+    metadata_collection_order = _stored_process_order(
+        responsible_row.get("PROCESS_ORDER"),
+        RESPONSIBLE_PARTIES_PATH,
+        required=True,
+    )
     planned_rows = []
-    resolved_orders = {}
+    expected_rows = {}
     for path, existing_row in (
         (ROLES_PATH, roles_row),
         (PARTIES_PATH, parties_row),
     ):
+        instance_contract = TARGET_INSTANCE_CONTRACTS[path]
+        expected_row = {
+            "OSCAL_MODEL_KEY": MODEL_KEY,
+            "NODE_PATH": path,
+            "PARENT_NODE_PATH": METADATA_PATH,
+            "ELEMENT_TYPE": _element_type(path),
+            "IS_COLLECTION": True,
+            "INSTANCE_KEY_RULE": instance_contract["INSTANCE_KEY_RULE"],
+            "PROCESS_ORDER": metadata_collection_order,
+            "IS_ACTIVE": True,
+            "ITEM_PATH": instance_contract["ITEM_PATH"],
+        }
+        expected_rows[path] = expected_row
         if existing_row is not None:
-            resolved_orders[path] = _stored_process_order(
-                existing_row.get("PROCESS_ORDER"),
-                path,
-                required=True,
-            )
+            _assert_target_row(existing_row, expected_row)
             continue
-        resolved_orders[path] = next_order
-        planned_rows.append(
-            {
-                "OSCAL_MODEL_KEY": MODEL_KEY,
-                "NODE_PATH": path,
-                "PARENT_NODE_PATH": METADATA_PATH,
-                "ELEMENT_TYPE": _element_type(path),
-                "IS_COLLECTION": True,
-                "PROCESS_ORDER": next_order,
-                "IS_ACTIVE": True,
-            }
-        )
-        next_order += 1
+        planned_rows.append(expected_row)
 
     return {
         "planned_rows": planned_rows,
-        "resolved_orders": resolved_orders,
+        "expected_rows": expected_rows,
     }
 
 
@@ -314,34 +321,48 @@ WHEN NOT MATCHED THEN INSERT (
     PARENT_NODE_PATH,
     ELEMENT_TYPE,
     IS_COLLECTION,
+    INSTANCE_KEY_RULE,
     PROCESS_ORDER,
-    IS_ACTIVE
+    IS_ACTIVE,
+    ITEM_PATH
 ) VALUES (
     source.OSCAL_MODEL_KEY,
     source.NODE_PATH,
     source.PARENT_NODE_PATH,
     source.ELEMENT_TYPE,
     source.IS_COLLECTION,
+    source.INSTANCE_KEY_RULE,
     source.PROCESS_ORDER,
-    source.IS_ACTIVE
+    source.IS_ACTIVE,
+    source.ITEM_PATH
 )
 """
     return session.sql(merge_sql).collect()
 
 
-def _verify_targets(expected_orders):
+def _assert_target_row(row, expected_row):
+    path = expected_row["NODE_PATH"]
+    _assert_existing_row(row, path, expected_row["PARENT_NODE_PATH"])
+    for column_name in ("INSTANCE_KEY_RULE", "ITEM_PATH"):
+        if _clean(row.get(column_name)) != expected_row[column_name]:
+            raise ValueError(
+                f"Registry verification failed for {path} {column_name}"
+            )
+    actual_order = _stored_process_order(
+        row.get("PROCESS_ORDER"),
+        path,
+        required=True,
+    )
+    if actual_order != expected_row["PROCESS_ORDER"]:
+        raise ValueError(f"Registry verification failed for {path} order")
+
+
+def _verify_targets(expected_rows):
     model_rows = _read_model_rows()
     indexed_rows = _rows_by_path(model_rows)
     for path in TARGET_PATHS:
         row = _one_row(indexed_rows, path, True)
-        _assert_existing_row(row, path, METADATA_PATH)
-        actual_order = _stored_process_order(
-            row.get("PROCESS_ORDER"),
-            path,
-            required=True,
-        )
-        if actual_order != expected_orders[path]:
-            raise ValueError(f"Registry verification failed for {path} order")
+        _assert_target_row(row, expected_rows[path])
     print("REGISTRY VERIFICATION PASSED")
 
 
@@ -362,9 +383,13 @@ if preflight["planned_rows"]:
             " | element_type=",
             planned_row["ELEMENT_TYPE"],
             " | collection=True",
+            " | instance_key_rule=",
+            planned_row["INSTANCE_KEY_RULE"],
             " | process_order=",
             planned_row["PROCESS_ORDER"],
             " | active=True",
+            " | item_path=",
+            planned_row["ITEM_PATH"],
             sep="",
         )
 else:
@@ -376,4 +401,4 @@ if not EXECUTE_REGISTRY_WRITES:
 else:
     merge_result = _insert_missing_rows(preflight["planned_rows"])
     print("Registry insert-only MERGE completed:", merge_result)
-    _verify_targets(preflight["resolved_orders"])
+    _verify_targets(preflight["expected_rows"])
