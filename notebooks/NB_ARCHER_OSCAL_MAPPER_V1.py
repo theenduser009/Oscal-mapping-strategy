@@ -393,6 +393,8 @@ SECURITY_IMPACT_ELEMENT_PATH = (
 )
 STATUS_ELEMENT_PATH = "system-security-plan.system-characteristics.status"
 DOCUMENT_IDS_ELEMENT_PATH = "system-security-plan.metadata.document-ids[]"
+METADATA_ELEMENT_PATH = "system-security-plan.metadata"
+METADATA_TIMESTAMP_FIELDS = ("published", "last-modified")
 
 SECURITY_OBJECTIVE_FIELDS = {
     "security-objective-confidentiality",
@@ -618,6 +620,23 @@ def transform_document_identifier(value):
     return identifier
 
 
+def _preserve_metadata_timestamp(value, target_field):
+    value = _to_python(value)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(
+            f"Metadata {target_field} must be a nonblank source string"
+        )
+    return value
+
+
+def transform_published(value):
+    return _preserve_metadata_timestamp(value, "published")
+
+
+def transform_last_modified(value):
+    return _preserve_metadata_timestamp(value, "last-modified")
+
+
 def _party_uuid_values(source_record_id, source_field, value):
     extracted = _extract_reference_ids(value)
     values = extracted if isinstance(extracted, list) else [extracted]
@@ -662,6 +681,49 @@ def _target_field_name(mapping_row):
     return _stable_property_name(str(mapping_row["SOURCE_FIELD_NAME"]))
 
 
+def _resolve_metadata_timestamp_cluster(
+    source_obj,
+    mapping_rows,
+    target_field,
+):
+    cluster_rows = [
+        row
+        for row in mapping_rows
+        if _target_field_name(row) == target_field
+    ]
+    resolved_values = []
+
+    for mapping_row in cluster_rows:
+        mapping_type = str(
+            mapping_row.get("MAPPING_TYPE") or ""
+        ).strip().lower()
+        if mapping_type != "transform":
+            raise ValueError(
+                f"Metadata {target_field} mapping type must be Transform"
+            )
+
+        source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+        source_value = resolve_json_path(source_obj, source_field)
+        if not _has_value(source_value):
+            continue
+
+        if target_field == "published":
+            transformed = transform_published(source_value)
+        else:
+            transformed = transform_last_modified(source_value)
+
+        if transformed not in resolved_values:
+            resolved_values.append(transformed)
+
+    if len(resolved_values) > 1:
+        raise ValueError(
+            f"Conflicting populated metadata {target_field} sources"
+        )
+    if not resolved_values:
+        return SKIP_VALUE
+    return resolved_values[0]
+
+
 def apply_mapping_transform(mapping_row, value, source_record_id):
     source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
     mapping_type = str(mapping_row.get("MAPPING_TYPE") or "Direct").lower()
@@ -694,6 +756,15 @@ def apply_mapping_transform(mapping_row, value, source_record_id):
     if owner_path == STATUS_ELEMENT_PATH and target_field == "state":
         return transform_status_state(value)
 
+    if owner_path == METADATA_ELEMENT_PATH and target_field == "published":
+        return transform_published(value)
+
+    if (
+        owner_path == METADATA_ELEMENT_PATH
+        and target_field == "last-modified"
+    ):
+        return transform_last_modified(value)
+
     if owner_path == DOCUMENT_IDS_ELEMENT_PATH and target_field == "identifier":
         return transform_document_identifier(value)
 
@@ -722,17 +793,37 @@ def build_element_instances(
     is_collection = "[]" in element_path
     instances = []
     aggregate_payload = {}
+    resolved_cluster_fields = set()
+
+    if element_path == METADATA_ELEMENT_PATH:
+        for target_field in METADATA_TIMESTAMP_FIELDS:
+            cluster_rows = [
+                row
+                for row in mapping_rows
+                if _target_field_name(row) == target_field
+            ]
+            if not cluster_rows:
+                continue
+            resolved_cluster_fields.add(target_field)
+            resolved_value = _resolve_metadata_timestamp_cluster(
+                source_obj,
+                cluster_rows,
+                target_field,
+            )
+            if resolved_value is not SKIP_VALUE:
+                aggregate_payload[target_field] = resolved_value
 
     for mapping_row in mapping_rows:
         source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+        target_field = _target_field_name(mapping_row)
+        if target_field in resolved_cluster_fields:
+            continue
         source_value = resolve_json_path(source_obj, source_field)
         transformed = apply_mapping_transform(
             mapping_row, source_value, source_record_id
         )
         if transformed is SKIP_VALUE:
             continue
-
-        target_field = _target_field_name(mapping_row)
 
         # The registry path owns node cardinality.  An Extension mapping may
         # resolve a value, but it must create a separate OSCAL property node

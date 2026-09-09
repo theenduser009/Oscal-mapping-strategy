@@ -302,3 +302,25 @@ collection node per populated source, singleton instance identity used by the
 current builder, exact payload shape, and exact transformed identifier
 equality. It prints no identifiers, payloads, or source record IDs and fails
 closed on drift or mismatch.
+
+The user then ran the validator. The durable checkpoint records 2,813
+populated source identifiers, 2,813 generated document-ID nodes, 2,813 exact
+matches, every failure count at zero, and no writes. The document-ID mapping is
+closed and does not require another audit.
+
+## 2026-09-09 — Build timestamp collision handling in production Cell 4
+
+Repeated validation is no longer the work queue. The next production change
+implements the four Excel-defined metadata timestamp mappings directly.
+
+Cell 4 now routes `published` and `last-modified` through named,
+source-preserving transforms and resolves each converging source cluster once.
+One populated source is retained exactly. Multiple identical populated values
+are accepted. Distinct populated values fail closed with a sanitized conflict
+instead of being overwritten by canonical mapping row order. Non-string or
+blank populated candidates fail closed. No timezone, normalization, or
+precedence rule is invented.
+
+The split Cell 4 and authoritative notebook remain synchronized. The next
+runtime step is a normal read-only mapper execution from Cell 4 through Cell 7,
+not another standalone diagnostic.

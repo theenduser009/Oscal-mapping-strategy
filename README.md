@@ -48,21 +48,30 @@ implementation-ready path because its Transform handler is missing.
 The subsequent metadata audit found that the package-prefixed candidate is
 empty and `LAST_UPDATED` supplies all 2,813 current values. Those timestamps
 are parseable but timezone-naive. The user chose to preserve them unchanged
-for now, so timestamp normalization remains a final conformance gap rather
-than the next code change. Cell 5 now safely injects the already-pinned OSCAL
-version into every singleton metadata payload; a live Snowflake rerun is
-now complete. The rerun retained the healthy 51,500-node / 48,687-edge graph,
+for now, so timestamp normalization remains a final conformance gap. Cell 5
+now safely injects the already-pinned OSCAL version into every singleton
+metadata payload; a live Snowflake rerun is now complete. The rerun retained
+the healthy 51,500-node / 48,687-edge graph,
 passed all structural and pre-write gates, and made no writes. A direct
 aggregate payload check was then run and recorded `PASSED` for all 2,813
 metadata nodes, with every failure count at zero and no writes.
+The direct `TRACKING_ID` document-ID mapping is also now closed: all 2,813
+generated identifiers exactly match their transformed source values with zero
+failures and no writes.
+
+Cell 4 now contains production timestamp resolution for the Excel-defined
+`metadata.published` and `metadata.last-modified` source clusters. It preserves
+the selected source string exactly, accepts a single populated value or
+identical populated values, and fails closed when populated sources disagree.
+It does not infer or attach a timezone.
 
 ## Immediate next action
 
-In the still-open live Snowflake session, run the one-cell, read-only
-[metadata document-ID validation](notebooks/validation/RUN_AFTER_07_ssp_metadata_document_id_validation.py).
-Do not rerun the seven mapper cells. Record its aggregate output, then proceed
-within the same metadata branch. Keep `EXECUTE_WRITES = False` and leave the
-source timestamps unchanged.
+Replace Cell 4 with the updated
+[copy-ready transformation cell](notebooks/cells/04_parsing_transform_payload_helpers.py),
+then run Cells 4, 5, 6, and 7 in the still-open Snowflake session. This is a
+production mapper change, not a standalone audit. Keep
+`EXECUTE_WRITES = False`; the timestamp strings remain unchanged.
 
 ## Read-only inspection SQL
 

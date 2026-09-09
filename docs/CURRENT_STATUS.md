@@ -114,9 +114,10 @@ only**. It does not prove RFC 3339-with-timezone normalization, transformed
 value equality, source precedence, or semantic completion. Two artifact rows
 converge on that singleton field:
 `ARCHER_CONTENT_AUTHORIZATION_PACKAGE_LAST_UPDATED` and `LAST_UPDATED`.
-Cell 4 currently has no timestamp-specific transform, so both Transform rows
-fall through to the raw-value return and the later mapping can overwrite the
-earlier value.
+Cell 4 now has a source-preserving timestamp resolver. It keeps one populated
+source string unchanged, accepts identical populated candidates, and fails
+closed when populated candidates differ instead of allowing mapping order to
+overwrite a value. It does not infer a timezone. A live rerun is pending.
 
 Confirmed source-completeness gaps:
 
@@ -262,9 +263,10 @@ The read-only
 was executed. The package-prefixed candidate is empty for all 2,813 records;
 `LAST_UPDATED` is populated and is the current generated value for all 2,813.
 Every populated value is parseable but timezone-naive. The user chose to keep
-that source value unchanged for now, so no timestamp transform or inferred
-timezone is being added. This remains a final OSCAL-conformance gap, but it no
-longer blocks work on the rest of the metadata branch.
+that source value unchanged. Cell 4 therefore resolves the source cluster
+without normalizing the timestamp or inferring a timezone. This remains a
+final OSCAL-conformance gap, but it no longer permits silent mapping-order
+overwrite.
 
 The next safe branch change is implemented in the repository: Cell 5 injects
 the controlled `CONFIG["OSCAL_VERSION"]` value into the one
@@ -308,10 +310,10 @@ not restart discovery for each field:
 
 | Target | Rows | Current disposition |
 | --- | ---: | --- |
-| `metadata.last-modified` | 2 | Source-preserving decision recorded; final timezone gap retained |
-| `metadata.published` | 2 | Timestamp policy/source evidence still unresolved |
+| `metadata.last-modified` | 2 | Source-preserving collision-safe resolver added; live rerun pending; timezone gap retained |
+| `metadata.published` | 2 | Same collision-safe resolver added; live source collision outcome pending |
 | literal `metadata.props` | 1 | `TBD`, source-empty, and not an active collection registry path |
-| `metadata.document-ids[].identifier` | 1 | 2,813/2,813 valid-shape nodes; exact-value verification remains |
+| `metadata.document-ids[].identifier` | 1 | Exact source/output equality passed for 2,813/2,813 records |
 | `metadata.responsible-parties[]` | 9 | Five shape/presence-reconciled, four `TBD`; party/role targets are absent |
 
 The pinned contract additionally requires `metadata.title`,
@@ -339,14 +341,10 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-In the same still-open Snowflake session, run the aggregate-only
-[metadata document-ID validation](../notebooks/validation/RUN_AFTER_07_ssp_metadata_document_id_validation.py)
-as one new Python cell. Do not rerun Cells 1–7. It enforces the one-row
-`TRACKING_ID` mapping contract, reproduces the mapper's scalar-to-string
-conversion, and proves exact source/output equality, cardinality, payload
-shape, and source/graph identity without printing identifiers, payloads, or
-record IDs.
-
-Record this document-ID result in the next GitHub checkpoint. Keep
-`EXECUTE_WRITES = False` and do not change either timestamp source or attach a
-timezone.
+Replace the live notebook's Cell 4 with
+[the updated copy-ready cell](../notebooks/cells/04_parsing_transform_payload_helpers.py),
+then run Cells 4, 5, 6, and 7 in order. Do not run another standalone
+validator for this step. The expected `last-modified` behavior is unchanged;
+if populated `published` sources disagree, the production mapper will stop
+with a sanitized conflict instead of silently choosing one. Keep
+`EXECUTE_WRITES = False` and do not attach a timezone.
