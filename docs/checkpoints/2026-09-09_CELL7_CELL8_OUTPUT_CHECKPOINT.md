@@ -114,3 +114,23 @@ Do not invent a timezone, choose a latest timestamp implicitly, or enable writes
 - **RESULT: PASSED**
 
 This confirms the `TRACKING_ID` → OSCAL metadata document-id mapping is complete and exact for all 2,813 SSP source records, with zero duplicate/orphan/malformed/mismatch findings and no writes performed.
+
+## Registry inspection — `metadata.responsible-parties[]`
+
+Snowflake inspection confirms the current registry table schema contains nine columns:
+
+`OSCAL_MODEL_KEY`, `NODE_PATH`, `ELEMENT_TYPE`, `PARENT_NODE_PATH`, `IS_COLLECTION`, `INSTANCE_KEY_RULE`, `PROCESS_ORDER`, `IS_ACTIVE`, `ITEM_PATH`.
+
+Current SSP registry row observed for `system-security-plan.metadata.responsible-parties[]`:
+
+- `OSCAL_MODEL_KEY`: **SSP**
+- `NODE_PATH`: `system-security-plan.metadata.responsible-parties[]`
+- `ELEMENT_TYPE`: `responsible-parties`
+- `PARENT_NODE_PATH`: `system-security-plan.metadata`
+- `IS_COLLECTION`: **TRUE**
+- `INSTANCE_KEY_RULE`: `SOURCE_FIELD_NAME+ID`
+- `PROCESS_ORDER`: **3**
+- `IS_ACTIVE`: **TRUE**
+- `ITEM_PATH`: `UserList[]`
+
+This is a metadata checkpoint only; no registry mutation was performed from this capture.
