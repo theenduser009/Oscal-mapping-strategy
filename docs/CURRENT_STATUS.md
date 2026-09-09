@@ -27,7 +27,7 @@ matching the 2,453 empty plus 90 partial security-impact assemblies that the
 new complete-or-omit rule intentionally removes.
 
 The next metadata-completion release is implemented and locally verified but
-has not yet been run in Snowflake. All 87 repository tests pass. The accepted
+has not yet been run in Snowflake. All 88 repository tests pass. The accepted
 48,957-node / 46,144-edge result above remains the live baseline until the one
 combined metadata run is posted.
 
@@ -433,6 +433,18 @@ approved adding `ID` for this collection rather than reusing
 Do not rerun Cell 7 against either failed setup attempt. Run the latest setup
 cell first and require its final verification message.
 
+The subsequent Cell 7 attempt no longer stopped on missing role/party registry
+paths; it reached responsible-party parsing and failed with the sanitized
+"reference has no stable identifier" guard. The live registry evidence explains
+the source shape: responsible-party values use `ITEM_PATH=UserList[]`, while
+Cell 4 previously unwrapped other Archer containers but not `UserList`.
+
+Cell 4 and the authoritative notebook now unwrap that exact governed container
+before applying the existing stable `Id`, `UserId`, or `ContentId` checks. It
+does not accept arbitrary dictionaries, invent an identity, print a source
+value, or alter registry/DIM/FACT data. Focused wrapper and full metadata tests
+pass, and the complete suite is green.
+
 ## Current engineering interpretation
 
 The graph engine is no longer the primary problem. Its structural integrity remains clean. The backlog is now separated into four concrete categories:
@@ -451,11 +463,10 @@ Do not patch individual records. Do not invent required controlled values. Do no
 
 ## Immediate next action
 
-Run `notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py` once with its
-separate registry-write flag enabled; its preflight must pass and its final
-message must be `REGISTRY VERIFICATION PASSED`. Then replace notebook Cells 1,
-4, and 5 from the repository, confirm mapper `EXECUTE_WRITES = False`, and run
-Cells 1 through 7 in order. Post the complete Cell 7 output in this status file.
-No standalone validator is required. If the combined run passes, the approved
-metadata branch is accepted and work moves directly to the next unresolved
+If the current notebook session is still open, replace Cell 4 from the
+repository, run Cell 4, and then rerun Cell 7 only. Keep mapper
+`EXECUTE_WRITES = False`. If the session was closed, run Cells 1 through 7 in
+order. Post the complete Cell 7 output in this status file. No standalone
+validator is required. If the run passes, the approved metadata branch is
+accepted and work moves directly to the next unresolved
 `system-characteristics` branch.

@@ -134,6 +134,22 @@ class ResponsiblePartyIdentityTests(unittest.TestCase):
 
         self.assertEqual(len(transformed["party-uuids"]), 2)
 
+    def test_user_list_wrapper_uses_stable_member_ids(self):
+        transformed = self.cell["transform_responsible_party"](
+            "ssp-record",
+            "INFORMATION_OWNER_IO",
+            {
+                "UserList": [
+                    {"Id": "person-1"},
+                    {"UserId": "person-2"},
+                    {"ContentId": "person-2"},
+                ]
+            },
+        )
+
+        self.assertEqual(transformed["role-id"], "information-owner")
+        self.assertEqual(len(transformed["party-uuids"]), 2)
+
     def test_reference_without_stable_identifier_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "stable identifier"):
             self.cell["transform_responsible_party"](

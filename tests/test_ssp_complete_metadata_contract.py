@@ -82,10 +82,12 @@ def _responsible_party_rows(include_duplicate=False):
 def _source_object():
     return {
         "AUTHORIZATION_PACKAGE_NAME": "Example Authorization Package",
-        "INFORMATION_OWNER_IO": [
-            {"Id": "person-1"},
-            {"UserId": "person-1"},
-        ],
+        "INFORMATION_OWNER_IO": {
+            "UserList": [
+                {"Id": "person-1"},
+                {"UserId": "person-1"},
+            ]
+        },
         "INFORMATION_SYSTEM_OWNER_ISO": {
             "ContentIds": ["person-1", "person-2", "person-2"]
         },

@@ -133,6 +133,7 @@ def _extract_reference_ids(value):
     value = _to_python(value)
     if isinstance(value, dict):
         for key in (
+            "UserList",
             "ValuesListIds",
             "ValueListIds",
             "ContentIds",

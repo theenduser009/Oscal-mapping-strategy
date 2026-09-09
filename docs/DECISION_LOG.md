@@ -445,3 +445,17 @@ order, and active true.
 The insert remains merge-only-when-missing, verifies every semantic field, and
 never updates existing rows. A Snowflake schema preflight rejects any unknown
 non-null/no-default/non-identity column before DML.
+
+## 2026-09-09 — Unwrap the governed responsible-party UserList container
+
+After the registry path issue was cleared, Cell 7 reached Cell 4's party
+identity helper and stopped because the responsible-party reference appeared
+as a wrapper dictionary rather than a directly identifiable member. The live
+registry snapshot already defines the source item path as `UserList[]`; this
+was source-shape evidence, not a reason to loosen identity validation.
+
+Cell 4 and the authoritative notebook now unwrap only the exact `UserList`
+container before applying the existing `Id`, `UserId`, or `ContentId` member
+checks. Arbitrary dictionaries still fail closed. Regression coverage confirms
+deduplication inside the wrapper and full role/party closure, and mapper writes
+remain disabled.
