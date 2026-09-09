@@ -48,8 +48,6 @@ Do not invent a timezone, choose a latest timestamp implicitly, or enable writes
 
 ## Metadata `oscal-version` read-only validation
 
-Latest screenshot result:
-
 - Source rows: **2,813**
 - Unique source records: **2,813**
 - Graph source records: **2,813**
@@ -67,4 +65,38 @@ Latest screenshot result:
 - Validation performed writes: **False**
 - **RESULT: PASSED**
 
-This confirms one valid metadata node per source record and valid `oscal-version` coverage across all 2,813 records, with no duplicate/orphan/malformed metadata findings and no writes performed.
+## Metadata `document-id` read-only validation
+
+Latest screenshot result:
+
+- Document-id mapping rows: **1**
+- Mapping contract valid: **True**
+- Source rows: **2,813**
+- Unique source records: **2,813**
+- Blank source record IDs: **0**
+- Duplicate source record IDs: **0**
+- Source parse errors: **0**
+- Populated `TRACKING_ID` values: **2,813**
+- Absent `TRACKING_ID` values: **0**
+- Invalid `TRACKING_ID` values: **0**
+- Graph source records: **2,813**
+- Blank graph source record IDs: **0**
+- Missing graph records: **0**
+- Orphan graph records: **0**
+- Expected document-id nodes: **2,813**
+- Generated document-id nodes: **2,813**
+- Missing document-id nodes: **0**
+- Unexpected document-id nodes: **0**
+- Duplicate document-id nodes: **0**
+- Non-singleton document-id nodes: **0**
+- Malformed document-id payloads: **0**
+- Unexpected payload shapes: **0**
+- Missing identifiers: **0**
+- Non-string identifiers: **0**
+- Blank identifiers: **0**
+- Identifier value mismatches: **0**
+- Exact identifier matches: **2,813**
+- Validation performed writes: **False**
+- **RESULT: PASSED**
+
+This confirms the `TRACKING_ID` → OSCAL metadata document-id mapping is complete and exact for all 2,813 SSP source records, with zero duplicate/orphan/malformed/mismatch findings and no writes performed.
