@@ -185,8 +185,12 @@ Approved Archer-specific attributes mapped as OSCAL properties produce:
 
 Archer select IDs are resolved through `ARCHER_META_VALUE`. Property identity
 uses source field plus normalized value. Identical properties deduplicate;
-conflicting payloads for one identity fail. Transient helper fields such as
-`HELPER_PTA_CALC` and `PACKAGE_TYPE_HELPER_CALC` never become OSCAL properties.
+conflicting payloads for one identity fail. `PACKAGE_TYPE_HELPER_CALC` is
+intentionally excluded by its Notes. **Known discrepancy from clearer Excel
+evidence:** the current code also skips `HELPER_PTA_CALC`, but row 35's Notes
+require a custom property under system characteristics. That is a pending fix,
+not correct exclusion behavior. `PACKAGE_TYPE` also needs its property name
+reconciled with the Notes example. See [done and next](SSP_DONE_AND_NEXT.md).
 
 Security impact is an optional assembly with three objectives:
 
@@ -471,4 +475,3 @@ Return one package containing:
 9. known-gap list, separated from actual defects; and
 10. final disposition: Pass, Pass with known gaps, or Fail, with each failure
     tied to one business rule or acceptance check in this guide.
-

@@ -2,6 +2,13 @@
 
 Last reconciled: 2026-09-10
 
+**Short current summary: [SSP — done and next](SSP_DONE_AND_NEXT.md).**
+The clearer Excel review identifies a skipped `HELPER_PTA_CALC` property and
+a `PACKAGE_TYPE` property-name mismatch. Both are pending corrections under
+System Characteristics; Control Implementation is parked. No new code or run
+is implied by this documentation update. Historical checkpoints below retain
+their original scope and do not establish completeness against the new evidence.
+
 ## Verified notebook
 
 - Current live Snowflake notebook: `NB_ARCHER_OSCAL_MAPPER_V2`.
@@ -680,7 +687,16 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-### Latest Excel review — one control-count correction proposed, not coded
+### Latest Excel review — two System Characteristics corrections, not coded
+
+Model **SSP**, target `system-security-plan.system-characteristics.props[]`:
+map `HELPER_PTA_CALC` according to row 35's Calculated/custom-property Notes,
+and reconcile `PACKAGE_TYPE` to the example property name
+`authorization-package-type`. The distinct `PACKAGE_TYPE_HELPER_CALC` remains
+excluded by its explicit do-not-map Notes. See the
+[short summary](SSP_DONE_AND_NEXT.md). No code change or notebook rerun yet.
+
+### Parked — control-count correction proposed, not coded
 
 Model: **SSP**. The new Control Implementation screenshots do contain a
 detailed Option 1 example in Notes for
@@ -724,20 +740,22 @@ persisted to DIM/FACT or exported. This does not add mapping rows or establish
 complete SSP conformance. Each next mapping handoff identifies the OSCAL model,
 exact target path, source field and transformation rule.
 
-Separately, the user requested ten additional Excel-defined SSP rows. The available
-concrete contracts are already implemented; the remaining documented candidates
+Separately, the user requested ten additional Excel-defined SSP rows. The earlier
+review considered the available concrete contracts implemented; that conclusion
+is superseded by the two clearer-screenshot discrepancies above. Other candidates
 include 50 blank-target control rows and TBD mappings. The full current
 workbook/CSV is not present in the repository.
 
-Provide the current SSP mapping export with Archer field, OSCAL model, approved
+For a complete ten-row backlog, use a current SSP mapping export with Archer field, OSCAL model, approved
 target path, mapping type and Notes. To build ten genuinely new mappings it
 must contain ten additional executable rows, or the owner must supply their
 missing targets/rules. No target paths will be invented or existing work counted
 again. Details and count reconciliation:
 [accepted checkpoint](checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
 
-The assembly step is complete; missing approved contracts/source data remain
-the constraint on starting genuinely additional field mappings.
+The assembly step is complete. The two evidenced property corrections can move
+forward without waiting for a full workbook export; additional rows still need
+their own approved contracts and source evidence.
 
 ### Previous implementation handoff — superseded by successful run above
 

@@ -12,6 +12,11 @@ by a dispatcher or a target node exists.
 
 ## Current position
 
+- Start with [SSP — done and next](SSP_DONE_AND_NEXT.md) for the short summary.
+  Clearer Excel Notes supersede the old helper classification: `HELPER_PTA_CALC`
+  should map to SC `props[]` but is skipped. `PACKAGE_TYPE` has a property-name
+  discrepancy. Neither correction has been coded; Control Implementation is parked.
+
 - Last accepted live baseline: 70,102 nodes, 67,289 edges, zero duplicate keys,
   zero dangling edges; pre-write validation passed and no DIM/FACT writes [E13].
 - Mapped-scope JSON assembly is now live accepted: 2,813 documents and roots,
@@ -94,7 +99,7 @@ The following eight screenshot-approved Extension Property sources route to
 | `FINANCIAL_SYSTEM` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
 | `MISSION_CRITICAL` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
 | `CRITICAL_INFRASTRUCTURE` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
-| `PACKAGE_TYPE` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
+| `PACKAGE_TYPE` | Collection route implemented and included in accepted release, but clearer Notes example specifies `authorization-package-type` while code emits `package-type`. Naming correction pending; not fully complete [E5, E13, short summary]. |
 | `PIA_REQUIRED` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
 | `INFORMATION_CLASSIFICATION` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
 
@@ -164,7 +169,8 @@ source/decision gaps, not completed components.
 | `SSP.import-profile.href` | Approved profile URI and governed registry/config mapping required [E7, E11]. |
 | `SSP.system-characteristics.system-information.information-types[]` | Registry, collection identity and title/description sources not established [E7, E11]. |
 | `SSP.control-implementation` / `implemented-requirements[]` | Structural mapping, description and control IDs needed; screenshot control rows largely have blank paths, so model labels cannot supply targets [E1, E7]. |
-| `HELPER_PTA_CALC`, `PACKAGE_TYPE_HELPER_CALC` | Transient/calculated helpers excluded from final payloads by design [E1, E8]. |
+| `HELPER_PTA_CALC` | Pending correction: clearer row 35 Notes specify a Calculated custom property at `SSP.system-characteristics.props[]`; current Cell 4 incorrectly skips it. Removing the skip alone is insufficient because the property dispatcher currently accepts only Extension Property. |
+| `PACKAGE_TYPE_HELPER_CALC` | Intentionally excluded: separate row 36 Notes explicitly say transient calculation field - do not map. |
 | Whole SSP acceptance | Required-source gaps, timestamp conformance and downstream branches remain; full assembled schema/constraint validation not established [E7, E11]. |
 
 ## Reporting and update rules
@@ -184,11 +190,13 @@ assembly acceptance, not an additional field mapping or full SSP conformance.
 Every subsequent mapping handoff names the model, full OSCAL path, source field
 and transformation rule.
 
-The next requested target is **ten additional SSP mapping rows**. No ten
-additional executable contracts can currently be established from the repo:
-concrete evidenced rows already have handlers; remaining candidates have blank
-paths, TBD rules or missing sources. Await the current SSP workbook/export with
-ten approved nonblank targets/rules. Do not relabel previous work as ten new rows.
+The broader requested target remains **ten additional SSP mapping rows**.
+The immediate work is the two System Characteristics corrections above, followed
+by the remaining Excel sweep. Clearer screenshots invalidate the earlier blanket
+claim that every concrete evidenced row already has a handler. They do not yet
+establish ten new executable contracts or a full-workbook completion percentage.
+Do not relabel previous work as ten new rows or wait for a full export before
+addressing the already evidenced corrections.
 
 1. Update this register after each material implementation or accepted run and
    add a dated manager report under `docs/daily/YYYY-MM-DD.md`.

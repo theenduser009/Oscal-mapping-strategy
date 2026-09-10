@@ -2,6 +2,9 @@
 
 This repository is the durable checkpoint for the metadata-driven Archer-to-OSCAL mapper.
 
+**Start here: [SSP — done and next](docs/SSP_DONE_AND_NEXT.md).** A short summary
+of accepted work, the two System Characteristics corrections, and parked work.
+
 ## Authoritative files
 
 - [`notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`](notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py) — the complete seven-cell Snowflake/Snowpark notebook source.
