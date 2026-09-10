@@ -1,6 +1,6 @@
 # Current Status
 
-Last reconciled: 2026-09-09
+Last reconciled: 2026-09-10
 
 ## Verified notebook
 
@@ -11,8 +11,8 @@ Last reconciled: 2026-09-09
 ## Verified mapper checkpoint
 
 ```text
-Graph nodes: 67683
-Graph edges: 64870
+Graph nodes: 67671
+Graph edges: 64858
 Duplicate node keys: 0
 Duplicate edge keys: 0
 Dangling source edges: 0
@@ -21,11 +21,11 @@ PRE-WRITE VALIDATION PASSED
 EXECUTE_WRITES = False
 ```
 
-The metadata completion run is accepted. The governed roles and parties were
-materialized, the prior responsible-party identifier error was cleared, every
-structural key check passed, and no DIM/FACT write occurred. The durable
-[checkpoint](checkpoints/2026-09-09-ssp-graph-67683-64870.md) records the
-complete Cell 7 result.
+The latest component identity/type run is accepted. Every structural key check
+passed, no DIM/FACT write occurred, and the 12-node/12-edge reduction from the
+prior accepted graph exactly matches the already-proved cross-field component
+deduplication. The earlier metadata and system-characteristics releases remain
+accepted.
 
 The existing-registry `system-characteristics` collection-contract release is
 now runtime-accepted. All 114 repository tests pass, and the live rerun kept
@@ -561,25 +561,36 @@ and Cell 2 currently loads no referenced component table. Those remaining
 fields need an approved lookup source keyed by `ContentId`; they are not
 invented here.
 
+The subsequent aggregate-only
+[component lookup discovery](ssp_component_lookup_discovery_2026-09-10.md)
+completed successfully with zero profiling failures and no writes. It
+reconciled 4,792 component occurrences to 1,436 distinct IDs and proved that
+all 1,436 appear in at least one candidate object. The three generic
+`ARCHER_META_CONTENT` layers match every ID but expose no recognized hydration
+fields, so they are identity evidence only—not title, description, or status
+sources. The interconnections-named RAW object matches 1,428 IDs and the
+software-named RAW object matches seven. The remaining one governed ID is the
+hardware reference; table-to-Excel-field ownership is not inferred from those
+object names.
+
+The evidence is not yet a hydration contract. Interconnections have complete
+`INTERCONNECTION_NAME` coverage, only 968 populated `DESCRIPTION` values, a
+small third-party-name/description subset, and no observed status field.
+Software has two possible title fields and four possible status fields for all
+seven records. Hardware has no proved type-specific source. No source, field,
+precedence, or status transformation has been approved.
+
 ## Immediate next action
 
-Do not rerun the component source-contract extraction or Cells 1 through 7.
-The component identity/type release is accepted. The next production increment
-is component hydration. Run the one-time aggregate-only
-[lookup-source discovery](../notebooks/validation/RUN_AFTER_07_ssp_component_lookup_source_discovery.py)
-in the same still-open notebook session. It uses the accepted graph's governed
-component instance keys, scans only the configured Archer database and schema,
-and reports candidate object/key uniqueness, union and overlap coverage, and
-title/description/status-like relational fields or top-level JSON keys. It
-does not collect or print component identifiers, source-record identifiers,
-payloads, or values; it performs no DDL or DML and does not approve a source.
-Snowflake notebook-generated temporary target objects are excluded from the
-catalog candidates by normalized name token, including the observed leading-
-character name variant; they are execution artifacts, not approved Archer
-source objects. Any remaining object-specific key, direct-field, or JSON
-profiling failure is now listed by safe object name and stage instead of
-terminating the cell. A run containing any such failure is explicitly marked
-as an incomplete catalog scan and cannot approve a lookup source.
-Post its complete output. No default values will be invented and mapper writes
-remain disabled. All 122 repository tests pass.
+Do not rerun Cells 1 through 7, the component source-contract extraction, or
+the broad lookup discovery. Run only the new read-only
+[Excel-driven component source-routing audit](../notebooks/validation/RUN_AFTER_07_ssp_component_source_routing_audit.py)
+in the same still-open notebook session. It derives exactly the six approved
+component mappings from the canonical Excel rows, reconciles them to the
+accepted component graph, and profiles only the two hydration-bearing RAW
+objects from the completed discovery. It reports
+source-field routing and title/description/status coverage in aggregate, does
+not print identifiers or values, performs no DDL or DML, and cannot approve a
+source or transformation. Post its complete output. Mapper writes remain
+disabled. All 133 repository tests pass.
 
