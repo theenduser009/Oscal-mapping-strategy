@@ -573,6 +573,9 @@ and reports candidate object/key uniqueness, union and overlap coverage, and
 title/description/status-like relational fields or top-level JSON keys. It
 does not collect or print component identifiers, source-record identifiers,
 payloads, or values; it performs no DDL or DML and does not approve a source.
+Snowflake notebook-generated temporary target objects are excluded from the
+catalog candidates; they are execution artifacts, not approved Archer source
+objects.
 Post its complete output. No default values will be invented and mapper writes
-remain disabled. All 121 repository tests pass.
+remain disabled. All 122 repository tests pass.
 
