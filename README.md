@@ -29,8 +29,10 @@ Cell 6 validates the graph and target load frames before any merge. Cell 7 is th
 
 The latest accepted read-only Snowflake run passed graph and pre-write
 validation with 67,671 nodes, 64,858 edges, zero duplicate or dangling keys,
-and no writes. This is the component identity/type release; its exact
-12-node/12-edge reduction matches the proved cross-field deduplication.
+and no writes. It also confirmed 1,435 approved component hydration rows: 7
+software and 1,428 interconnections, with 7 software descriptions and 968
+interconnection descriptions. The exact graph stability proves hydration
+changed payload content without changing node or edge identity.
 
 The earlier 67,683-node / 64,870-edge graph was confirmed after the
 system-characteristics collection-contract release. That release remains
@@ -97,11 +99,11 @@ or missing lookup rows before graph construction, and collects only the 1,435
 currently routed title/description records. It neither prints component values
 nor adds a write path. All 156 repository tests pass.
 
-Run the updated Cells 1 through 7 once in order with `EXECUTE_WRITES = False`,
-then record the complete Cell 7 output. Do not rerun the component discovery,
-source-contract extraction, or source-routing audit. For the accepted source
-snapshot, graph counts should remain 67,671 nodes and 64,858 edges; only
-component payload content changes.
+The component hydration run is accepted; do not rerun Cells 1 through 7 or the
+component discovery, source-contract extraction, or source-routing audit for
+this release. Keep `EXECUTE_WRITES = False` and use the
+[tester guide](docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md) for the formal
+mapped-scope acceptance cycle.
 
 ## Read-only inspection SQL
 

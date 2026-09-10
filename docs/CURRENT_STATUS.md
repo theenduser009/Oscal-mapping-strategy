@@ -21,11 +21,13 @@ PRE-WRITE VALIDATION PASSED
 EXECUTE_WRITES = False
 ```
 
-The latest component identity/type run is accepted. Every structural key check
-passed, no DIM/FACT write occurred, and the 12-node/12-edge reduction from the
-prior accepted graph exactly matches the already-proved cross-field component
-deduplication. The earlier metadata and system-characteristics releases remain
-accepted.
+The partial component hydration run is accepted. It retained 67,671 nodes and
+64,858 edges, loaded 1,435 approved hydration rows (7 software and 1,428
+interconnections), and found 7 software plus 968 interconnection descriptions.
+Every structural key check passed and no DIM/FACT write occurred. The durable
+[component hydration checkpoint](checkpoints/2026-09-10_ssp_component_hydration_run.md)
+records the full output. The preceding component identity/type release and the
+earlier metadata and system-characteristics releases remain accepted.
 
 The existing-registry `system-characteristics` collection-contract release is
 now runtime-accepted. All 114 repository tests pass, and the live rerun kept
@@ -628,7 +630,7 @@ The remaining real blockers are field-contract or source-data decisions:
   fields cover small subsets, and no status candidate was found.
 - Hardware: its one reference has no proved hydration source.
 
-## Partial component hydration — APPROVED AND IMPLEMENTED; RUNTIME PENDING
+## Partial component hydration — RUNTIME ACCEPTED
 
 The owner approved this evidence-backed increment:
 
@@ -669,16 +671,20 @@ hydrated from the approved occurrence. Node keys, instance keys, UUID policy,
 and containment edges are unchanged. Cell 5 also rejects any unapproved
 component status field.
 
+The live read-only Cell 7 run completed successfully with 1,435 hydration
+lookup rows: 7 software rows with 7 descriptions and 1,428 interconnection
+rows with 968 descriptions. The graph remained 67,671 nodes and 64,858 edges,
+with zero duplicate keys, zero dangling edges, pre-write validation passed,
+and `EXECUTE_WRITES = False`. This is the expected result because hydration
+changes payload content without changing node or edge identity.
+
 ## Immediate next action
 
-Run the updated Cells 1 through 7 once in order with
-`EXECUTE_WRITES = False`. Do not rerun the component source-contract
-extraction, broad lookup discovery, or source-routing audit. Post the complete
-Cell 7 output. For the accepted snapshot, the lookup summary should show 1,435
-rows (7 software and 1,428 interconnection), with 7 software descriptions and
-968 interconnection descriptions. The graph should remain 67,671 nodes and
-64,858 edges because only payload fields changed. All 156 repository tests
-pass.
+Do not rerun the mapper, component source-contract extraction, broad lookup
+discovery, or source-routing audit for this release. The component hydration
+run is accepted. Keep `EXECUTE_WRITES = False` and use the tester guide below
+for the formal mapped-scope, payload, hierarchy, PK/FK, negative, and known-gap
+acceptance cycle. All 156 repository tests pass.
 
 The tester handoff is documented in
 [`SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md`](SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md).
