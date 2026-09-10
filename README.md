@@ -86,12 +86,13 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The component identity/type release is ready. In the current notebook session,
-replace [Cell 4](notebooks/cells/04_parsing_transform_payload_helpers.py) and
-[Cell 5](notebooks/cells/05_registry_graph_builder.py), then run Cells 4, 5,
-and 7 with `EXECUTE_WRITES = False`. Do not run registry setup or another
-standalone validator. Post the complete Cell 7 output. All 114 repository tests
-pass.
+The component identity/type release is accepted. Its read-only mapper run
+completed with 67,671 nodes and 64,858 edges, with no duplicate or dangling
+keys and no writes. The exact 12-node and 12-edge reduction matches the 12
+cross-field component IDs already captured by the source-contract checkpoint.
+The next production increment is an approved referenced-record lookup keyed by
+`ContentId` so component title, description, and status can be hydrated without
+inventing defaults. All 114 repository tests pass.
 
 ## Read-only inspection SQL
 
@@ -99,3 +100,4 @@ pass.
 - [Drill into `system-characteristics` and all descendant payloads](sql/drill_down_system_characteristics.sql)
 
 - [Inspect security-impact-level and extract confidentiality, integrity, and availability](sql/drill_down_security_impact_level.sql)
+
