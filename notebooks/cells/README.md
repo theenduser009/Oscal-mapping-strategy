@@ -108,13 +108,14 @@ it. The one-time aggregate-only
 is also complete: all 1,436 governed IDs were found, zero profiling stages
 failed, and no writes occurred. Do not rerun that broad discovery.
 
-Run only the read-only
+The read-only
 [Excel-driven component source-routing audit](../validation/RUN_AFTER_07_ssp_component_source_routing_audit.py)
-in the same still-open session. It derives exactly the six approved component
-mappings from the canonical Excel rows and compares every active component
-type with both RAW objects that contain hydration-bearing fields. It prints
-aggregate routing and field coverage only, performs no DDL or DML, and does
-not approve or configure a source or transformation.
+is complete. It proved one unambiguous RAW route for software and one for both
+active interconnection fields, while hardware has no hydration-bearing source.
+Its JSON-null reporting false positive is corrected and did not affect route,
+field, or graph results. Do not rerun this audit. The next code change is the
+owner-approved partial title/description hydration release; status, missing
+descriptions, and hardware remain explicit gaps.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and
