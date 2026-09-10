@@ -590,3 +590,31 @@ profiling. Object-specific key, direct-field, and JSON profiling failures are
 recorded by safe object name and stage; they cannot contribute evidence to an
 approved source, and any such failure forces an incomplete-scan conclusion.
 
+## 2026-09-10 — Route component hydration from the Excel contract
+
+The aggregate lookup discovery completed with zero profiling failures and no
+writes. All 1,436 governed component IDs were found, but the three generic
+`ARCHER_META_CONTENT` layers matched every ID while exposing no recognized
+title, description, or status fields. They remain identity evidence only and
+are not treated as hydration sources.
+
+The next audit follows the user's declared authority boundary: the canonical
+Excel crosswalk supplies the exact six component reference mappings and their
+component types. The accepted discovery supplies source-shape evidence. Only
+`ARCHER_CONTENT_INTERCONNECTIONS_RAW` and
+`ARCHER_CONTENT_SOFTWARE_RAW` are reprofiled because they are the two observed
+RAW objects with hydration-bearing fields. Their names do not establish
+component-type ownership; the audit compares both objects to every active
+Excel-defined component type. This bounded rescan
+avoids another 52-object catalog pass without inferring approval from table
+names or row counts.
+
+The routing audit reports source-field-to-object coverage and candidate title,
+description, and status coverage in aggregate. It preserves the known
+blockers: one hardware reference has no proved type-specific source;
+interconnection description is incomplete and status is absent; software
+title and status choices are ambiguous. It cannot configure a source, choose
+a field, define precedence, or invent a status transformation. A future
+hydrator may be built only from an explicit evidence-backed contract after
+these results are reviewed.
+
