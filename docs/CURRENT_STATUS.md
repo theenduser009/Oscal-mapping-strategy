@@ -580,17 +580,79 @@ Software has two possible title fields and four possible status fields for all
 seven records. Hardware has no proved type-specific source. No source, field,
 precedence, or status transformation has been approved.
 
+## Component source-routing audit — EXECUTED; ROUTES PROVED
+
+The Excel-driven routing audit completed read-only and reproduced the accepted
+baseline exactly:
+
+```text
+Canonical Excel component mapping rows: 6
+Reference occurrences: 4804
+Distinct source-record/component/type pairs: 4792
+Graph component nodes: 4792
+Distinct component IDs: 1436
+Invalid reference members: 0
+Cross-type component IDs: 0
+Source pairs missing from graph: 0
+Graph pairs missing from source: 0
+Invalid graph component nodes: 0
+Lookup source profiling failures: 0
+Accepted-baseline drift checks: 0
+Writes executed: False
+```
+
+The source routing is now evidence-backed rather than inferred from object
+names. All seven software IDs match only
+`ARCHER_CONTENT_SOFTWARE_RAW`. All 1,405 primary interconnection IDs and all
+82 connecting-information-system IDs match only
+`ARCHER_CONTENT_INTERCONNECTIONS_RAW`. The one hardware ID matches neither
+hydration-bearing candidate. The two inactive Excel fields have no runtime
+references.
+
+The run printed `Unexpected non-array reference roots: 15632`, but that count
+is a reporting defect rather than proved source-shape failure: SQL `IS NOT
+NULL` also includes a VARIANT containing JSON `null`. It did not affect array
+extraction, route matching, field coverage, or graph reconciliation. The cell
+now reports JSON-null roots separately and treats only other non-array values
+as unexpected. The count reconciles exactly: 2,813 records × six fields =
+16,878 roots; the prior source-contract audit proved 1,246 populated array
+roots; 16,878 − 1,246 = 15,632 absent JSON-null roots. No repeat run is
+required for the accepted routing evidence.
+
+The remaining real blockers are field-contract or source-data decisions:
+
+- Software: source route complete; `SOFTWARE_NAME` versus `BUSINESS_NAME` and
+  four status candidates require a governed choice. `DESCRIPTION` is complete.
+- Interconnections: source route complete; `INTERCONNECTION_NAME` is complete,
+  `DESCRIPTION` is populated for only 968 of 1,428 IDs, alternate third-party
+  fields cover small subsets, and no status candidate was found.
+- Hardware: its one reference has no proved hydration source.
+
 ## Immediate next action
 
-Do not rerun Cells 1 through 7, the component source-contract extraction, or
-the broad lookup discovery. Run only the new read-only
-[Excel-driven component source-routing audit](../notebooks/validation/RUN_AFTER_07_ssp_component_source_routing_audit.py)
-in the same still-open notebook session. It derives exactly the six approved
-component mappings from the canonical Excel rows, reconciles them to the
-accepted component graph, and profiles only the two hydration-bearing RAW
-objects from the completed discovery. It reports
-source-field routing and title/description/status coverage in aggregate, does
-not print identifiers or values, performs no DDL or DML, and cannot approve a
-source or transformation. Post its complete output. Mapper writes remain
-disabled. All 133 repository tests pass.
+Do not rerun Cells 1 through 7, the component source-contract extraction, the
+broad lookup discovery, or the source-routing audit. The next step is one
+owner-approved partial hydration contract, not another diagnostic run. The
+recommended evidence-backed increment is:
+
+```text
+software:
+  source = ARCHER_CONTENT_SOFTWARE_RAW
+  title = SOFTWARE_NAME
+  description = DESCRIPTION
+  status = deferred pending approved field/value crosswalk
+
+interconnection:
+  source = ARCHER_CONTENT_INTERCONNECTIONS_RAW
+  title = INTERCONNECTION_NAME
+  description = DESCRIPTION when populated; preserve missing-source gap
+  status = deferred because no source candidate exists
+
+hardware:
+  retain current UUID/type only until its source is supplied
+```
+
+After owner approval, implement these title/description fields in Cells 2, 4,
+and 5 as one tested release. Do not invent missing descriptions or status
+values. Mapper writes remain disabled. All 133 repository tests pass.
 
