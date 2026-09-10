@@ -11,8 +11,8 @@ Last reconciled: 2026-09-10
 ## Verified mapper checkpoint
 
 ```text
-Graph nodes: 67671
-Graph edges: 64858
+Graph nodes: 70102
+Graph edges: 67289
 Duplicate node keys: 0
 Duplicate edge keys: 0
 Dangling source edges: 0
@@ -21,7 +21,7 @@ PRE-WRITE VALIDATION PASSED
 EXECUTE_WRITES = False
 ```
 
-The partial component hydration run is accepted. It retained 67,671 nodes and
+The earlier partial component hydration run is accepted. It retained 67,671 nodes and
 64,858 edges, loaded 1,435 approved hydration rows (7 software and 1,428
 interconnections), and found 7 software plus 968 interconnection descriptions.
 Every structural key check passed and no DIM/FACT write occurred. The durable
@@ -680,7 +680,46 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-### Latest update — authorization-date implementation ready; live run pending
+### Current checkpoint — SUCCESS; resume mapped-scope SSP assembly
+
+The newest [live result](live-snowflake-results.md) completes the date/property
+release: **70,102 nodes, 67,289 edges, zero duplicate or dangling keys,
+pre-write validation passed, writes false**. Hydration remains 1,435 lookup
+rows, with 7 software and 968 interconnection descriptions. This is now the
+accepted graph-runtime baseline, not final SSP conformance or per-field equality
+proof. The prior failure is resolved at this checkpoint.
+
+**Model: SSP. Active branch: `system-security-plan.system-implementation.components[]`.
+Assembly root: `system-security-plan`.** The component release's unfinished
+step is assembling the accepted graph into JSON. No assembler run result has
+been posted yet.
+
+In the same still-active notebook session, copy the full
+[mapped-scope assembler](../notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py)
+into one new Python cell and run only it. Do not rerun the seven cells, registry
+setup or contract reports. Keep `EXECUTE_WRITES = False`; post its full aggregate
+output without source values or generated documents. If the session has restarted,
+run Cells 1–7 once to recreate the graph, then the assembler.
+
+This creates transient JSON from existing mapped nodes. It does not add new
+mapping rows or establish complete SSP conformance. From now on each mapping
+handoff identifies the OSCAL model, exact target path, source field and rule.
+
+Separately, the user requested ten additional Excel-defined SSP rows. The available
+concrete contracts are already implemented; the remaining documented candidates
+include 50 blank-target control rows and TBD mappings. The full current
+workbook/CSV is not present in the repository.
+
+Provide the current SSP mapping export with Archer field, OSCAL model, approved
+target path, mapping type and Notes. To build ten genuinely new mappings it
+must contain ten additional executable rows, or the owner must supply their
+missing targets/rules. No target paths will be invented or existing work counted
+again. Details and count reconciliation:
+[accepted checkpoint](checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
+
+The missing next-ten contracts do not block assembling the accepted graph.
+
+### Previous implementation handoff — superseded by successful run above
 
 The latest [live report](live-snowflake-results.md) inspected **54 canonical
 SSP mappings** and identified two unsupported contracts. It supplied the exact
@@ -697,7 +736,7 @@ require source evidence instead of guessing. Existing `published` and
 `last-modified` values are unchanged. The all-null row is also unchanged:
 absent values skip, populated values fail without an approved contract.
 
-**Run now:** replace only
+The now-completed run instruction was to replace only
 [Cell 4](../notebooks/cells/04_parsing_transform_payload_helpers.py), then run
 **4, 5, 6, 7** in the existing session with `EXECUTE_WRITES = False`.
 If the session restarted, run all seven. No registry setup or contract-report
@@ -706,7 +745,8 @@ only if Cell 7 succeeds.
 
 203 local tests pass, including date conversion, invalid dates/offsets,
 unchanged metadata timestamps and canonicalization-to-graph regressions.
-**Live acceptance and actual Archer date-format coverage remain pending.**
+The successful run above now establishes runtime acceptance for this release;
+exact field-level coverage remains distinct from that acceptance.
 See the [date release checkpoint](checkpoints/2026-09-10_ssp_authorization_date_mapping.md).
 
 The new [mapping register](MAPPING_PROGRESS.md) tracks source field, OSCAL
@@ -734,7 +774,8 @@ other branches, timestamp rules, or registry definitions are changed.
 
 The prior instruction was to replace Cell 3 and rerun the graph. That run
 reached the authorization-date failure, now addressed in the release above.
-Use the current Cell 4 run instruction, not the older report instruction.
+Both the Cell 4 run and older report instructions are now superseded by the
+successful checkpoint; no repeat run is required.
 
 All **189 local tests** pass, including eight new regressions through actual
 Pandas canonicalization and existing property/graph logic. The graph test

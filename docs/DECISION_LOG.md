@@ -1,5 +1,32 @@
 # Decision Log
 
+## 2026-09-10 — Resume assembly; identify model and path in every handoff
+
+The user requested that each next mapping explicitly name its OSCAL model and
+path. Include the source field and transformation rule as well. Current model:
+SSP; active branch: `system-security-plan.system-implementation.components[]`.
+The next step is the already-published mapped-scope assembler at root
+`system-security-plan`, not a new field mapping. Run only that cell in the
+accepted graph's still-active session. A restarted session requires rebuilding
+the graph first. Writes remain off. Do not let the separate next-ten contract
+inventory reopen accepted metadata work or delay this pending assembly step.
+
+## 2026-09-10 — Accept latest run; ten additional rows need approved contracts
+
+The user posted a successful date/property release: 70,102 nodes, 67,289 edges,
+zero duplicate/dangling keys, pre-write passed, writes false. Record this as
+the accepted graph-runtime baseline, distinct from per-field equality and
+whole-SSP conformance. The increase from the previous baseline is 2,431 nodes
+and edges; exact path attribution is not established by aggregate counts alone.
+No repeated mapper run is required.
+
+The user requested ten additional mappings today. The inventory could not
+establish ten unimplemented executable SSP contracts: known concrete mappings
+already have handlers, 50 control rows have blank paths, and other candidates
+remain TBD or lack sources. Request the current SSP workbook/export containing
+approved additional source/path/type/Notes contracts. Do not invent targets or
+recount existing work to meet the requested quantity.
+
 ## 2026-09-10 — Implement the reported authorization-date mapping
 
 The owner supplied the complete rejected-row report: `ATOIATO_DATE` to

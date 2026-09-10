@@ -141,10 +141,15 @@ to DateDatatype. The current [Cell 4](04_parsing_transform_payload_helpers.py)
 implements valid ISO timestamp/date to `YYYY-MM-DD` without timezone conversion.
 Null skips; invalid/ambiguous formats fail. Existing metadata dates are unchanged.
 
-**Replace only Cell 4, then run 4, 5, 6, 7** in the current session with writes
-disabled. If the session restarted, run all seven. Do not repeat registry setup
-or contract reports. Post Cell 7 output; run the assembler only after success.
-203 local tests pass; this release still needs live acceptance.
+The latest run now **passed**: 70,102 nodes, 67,289 edges, no duplicates or
+dangling edges, pre-write validation passed and writes disabled.
+No repeat run, registry setup or report is needed in the still-active session.
+**Next: run only the [mapped-scope assembler](../validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py)
+in a new Python cell.** Model: SSP; active branch:
+`system-security-plan.system-implementation.components[]`; assembly root:
+`system-security-plan`. Post aggregate output; keep writes disabled. If the
+session restarted, rebuild the graph with Cells 1–7 first.
+[Accepted checkpoint and assembly handoff](../../docs/checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

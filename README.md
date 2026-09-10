@@ -123,11 +123,17 @@ implements ISO timestamp/date to `YYYY-MM-DD`, retaining the source calendar
 date and leaving metadata timestamps untouched. Invalid or ambiguous formats
 still fail; the all-null security-category mapping is not implicitly approved.
 
-**Replace only [Cell 4](notebooks/cells/04_parsing_transform_payload_helpers.py)**,
-then run **4, 5, 6, 7** in the existing session with writes disabled. If the
-session restarted, run all seven. No registry setup or report rerun is needed.
-Post Cell 7 output; run the assembler only after success. 203 local tests pass;
-live acceptance is pending. [Release details](docs/checkpoints/2026-09-10_ssp_authorization_date_mapping.md).
+The latest run is **accepted: 70,102 nodes, 67,289 edges, zero duplicate/dangling
+keys, pre-write checks passed, no writes**.
+[Accepted checkpoint](docs/checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
+Do not repeat the seven cells or diagnostic reports in the still-active session.
+**Next: run the [mapped-scope SSP assembler](notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py)
+once in a new Python cell after the accepted Cell 7.** Model: **SSP**; active
+branch: `system-security-plan.system-implementation.components[]`; assembly
+root: `system-security-plan`. This assembles existing mappings, not new fields
+or a complete conformant SSP. Keep writes disabled and post the aggregate output.
+Additional mapping rows need approved source-to-path contracts; see the
+[mapping register](docs/MAPPING_PROGRESS.md).
 
 ## Read-only inspection SQL
 

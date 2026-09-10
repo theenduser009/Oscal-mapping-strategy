@@ -12,24 +12,24 @@ by a dispatcher or a target node exists.
 
 ## Current position
 
-- Last accepted live baseline: 67,671 nodes, 64,858 edges, zero duplicate keys,
-  zero dangling edges; pre-write validation passed and no DIM/FACT writes [E4].
+- Last accepted live baseline: 70,102 nodes, 67,289 edges, zero duplicate keys,
+  zero dangling edges; pre-write validation passed and no DIM/FACT writes [E13].
 - That run included partial component hydration: 1,435 lookup rows, comprising
   7 software and 1,428 interconnection rows; descriptions available for 7 and
   968 respectively [E4]. These are lookup counts, not completed SSP counts.
-- The newer hardened full mapper run remains unsuccessful. The latest contract
-  report inspected 54 canonical mappings and rejected two: `ATOIATO_DATE` and
-  `RECOMMENDED_SECURITY_CATEGORY`. This is contract-dispatch evidence only;
-  neither 54 nor the remaining 52 is a completed-mapping count.
+- The latest full mapper run succeeded after the date/property fixes [E13].
+  The preceding contract report inspected 54 canonical mappings and rejected
+  two contracts. Those historical classifier counts are not completed-field
+  counts; graph success is not independent value-by-value proof.
 - Authorization-date handler is implemented; local verification passed (203 tests).
   Its artifact contract is
   `Transform`, destination `SC.date-authorized`, Notes `Convert timestamp to
-  DateDatatype`. No successful live acceptance is recorded for this change.
+  DateDatatype`. The current release is live accepted [E13].
 - The second rejection has type `Extension Property`, destination
   `SC.security-impact-level`, Notes `All Nulls`. That note does not establish an
   approved property destination or transformation. It remains unresolved.
 - Keep `EXECUTE_WRITES = False`. A healthy prior graph does not establish final
-  OSCAL schema conformance or acceptance of the latest implementation.
+  OSCAL schema conformance or field-specific payload equality.
 
 ## Status vocabulary
 
@@ -78,7 +78,7 @@ every party attribute [E7, E8].
 | `OPERATIONAL_STATUS` | SC: `SSP.system-characteristics.status.state` | Implemented crosswalk, live accepted; 2,771 generated valid, 42 missing source values [E6, E7, E8]. |
 | `AUTHORIZATION_BOUNDARY_DESCRIPTION` | SC: `SSP.system-characteristics.authorization-boundary.description` | Artifact targets boundary parent; handler supplies description. Live accepted; 2,519 generated valid, 294 missing source values [E1, E6, E7, E8]. |
 | `AUTHORIZATION_COMMENTS` | SC: `SSP.system-characteristics.status.remarks` | Explicit remarks handler implemented; preserve artifact target despite Extension Property label [E1, E8]. |
-| `ATOIATO_DATE` | SC: `SSP.system-characteristics.date-authorized` | Implemented and locally tested: ISO date/timestamp to `YYYY-MM-DD`, preserving source calendar date without timezone shift; null skips, invalid/non-ISO rejects. Live acceptance pending [E12]. |
+| `ATOIATO_DATE` | SC: `SSP.system-characteristics.date-authorized` | Implemented, locally tested and included in the successful live release: ISO date/timestamp to `YYYY-MM-DD`, no timezone shift; null skips, invalid/non-ISO rejects. Separate field-population/equality proof not recorded [E12, E13]. |
 | `RECOMMENDED_SECURITY_CATEGORY` | SC: `SSP.system-characteristics.security-impact-level` | Unresolved rejected Extension Property contract; Notes All Nulls are not a completion or routing rule. |
 
 The following eight screenshot-approved Extension Property sources route to
@@ -86,14 +86,14 @@ The following eight screenshot-approved Extension Property sources route to
 
 | Archer source | Implementation / acceptance |
 | --- | --- |
-| `INFORMATION_SYSTEM_TYPE` | Routing correction implemented and locally tested; newer full live run still fails [E5]. |
-| `FISMA_REPORTABLE` | Same approved collection route; live acceptance of correction pending [E5]. |
-| `FINANCIAL_SYSTEM` | Same approved collection route; live acceptance of correction pending [E5]. |
-| `MISSION_CRITICAL` | Same approved collection route; live acceptance of correction pending [E5]. |
-| `CRITICAL_INFRASTRUCTURE` | Same approved collection route; live acceptance of correction pending [E5]. |
-| `PACKAGE_TYPE` | Same approved collection route; live acceptance of correction pending [E5]. |
-| `PIA_REQUIRED` | Same approved collection route; live acceptance of correction pending [E5]. |
-| `INFORMATION_CLASSIFICATION` | Same approved collection route; live acceptance of correction pending [E5]. |
+| `INFORMATION_SYSTEM_TYPE` | Routing correction implemented, locally tested and included in live accepted release; per-field population/equality not recorded [E5, E13]. |
+| `FISMA_REPORTABLE` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
+| `FINANCIAL_SYSTEM` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
+| `MISSION_CRITICAL` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
+| `CRITICAL_INFRASTRUCTURE` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
+| `PACKAGE_TYPE` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
+| `PIA_REQUIRED` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
+| `INFORMATION_CLASSIFICATION` | Same approved collection route, included in accepted release; field-specific proof not recorded [E5, E13]. |
 
 Their original artifact paths remain provenance; canonical routing does not
 authorize rewriting arbitrary unregistered fields [E5].
@@ -108,7 +108,7 @@ Security-impact mappings below share prefix
 | `RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY`, `AVAILABILITY_CONTROL_CATEGORY_OVERRIDE`, `PROGRAMSITE_AVAILABILITY_CONTROL_CATEGORY`, `CNSS_AVAILABILITY_RATING` | `security-objective-availability` |
 
 The FIPS conversion and complete-only assembly have prior live acceptance;
-the newer strict source/target dispatch release is still pending live acceptance.
+the newer strict source/target dispatch release also completed its live run [E13].
 The assembly emits only when
 all three objectives exist: prior evidence identified 270 complete, 90 partial
 and 2,453 empty assemblies. Empty/partial assemblies are omitted; no defaults or
@@ -143,6 +143,20 @@ source/decision gaps, not completed components.
 
 ## Reporting and update rules
 
+**Immediate step:** Model **SSP**, active path
+`system-security-plan.system-implementation.components[]`; assemble existing
+mapped nodes under `system-security-plan` using the
+[mapped-scope assembler](../notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py).
+Its live result is pending. This is assembly, not an additional field mapping.
+Every subsequent mapping handoff names the model, full OSCAL path, source field
+and transformation rule.
+
+The next requested target is **ten additional SSP mapping rows**. No ten
+additional executable contracts can currently be established from the repo:
+concrete evidenced rows already have handlers; remaining candidates have blank
+paths, TBD rules or missing sources. Await the current SSP workbook/export with
+ten approved nonblank targets/rules. Do not relabel previous work as ten new rows.
+
 1. Update this register after each material implementation or accepted run and
    add a dated manager report under `docs/daily/YYYY-MM-DD.md`.
 2. Record source field, original artifact path/type/Notes, implemented target,
@@ -175,6 +189,7 @@ source/decision gaps, not completed components.
 - [E10: Historical artifact scope/progress audit](checkpoints/2026-09-09_SSP_MAPPING_ARTIFACT_PROGRESS_AUDIT.md).
 - [E11: Pinned minimum SSP contract](OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md).
 - [E12: Authorization-date contract and implementation checkpoint](checkpoints/2026-09-10_ssp_authorization_date_mapping.md).
+- [E13: Successful date/property release and next-ten scope](checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
 
 Latest 54-row/two-rejection evidence is the owner-supplied live report at remote
 commit `23c61dc6c92804fb833ff9ede0c62ceb8c37f34a`,
