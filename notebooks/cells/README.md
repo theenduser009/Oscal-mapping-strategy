@@ -85,8 +85,8 @@ zero of 2,813 records meeting the complete minimum contract.
 
 The required-source readiness, mapping-artifact progress, metadata timestamp,
 OSCAL-version, and document-ID checks have been executed. The latest accepted
-read-only mapper run has 67,683 nodes and 64,870 edges with every structural
-gate passing and no writes. The metadata branch is accepted.
+read-only mapper run has 67,671 nodes and 64,858 edges with every structural
+gate passing and no writes. The metadata branch remains accepted.
 
 The system-characteristics property and system-ID collection contracts across
 [Cell 4](04_parsing_transform_payload_helpers.py) and
@@ -103,11 +103,18 @@ array, all six declared component types, and 12 IDs shared across fields.
 The component identity/type release in [Cell 4](04_parsing_transform_payload_helpers.py)
 and [Cell 5](05_registry_graph_builder.py) is runtime-accepted at 67,671 nodes
 and 64,858 edges, with all structural gates passing and no writes. Do not rerun
-it. Full title, description, and status hydration still requires a referenced
-component lookup source. Run the one-time aggregate-only
+it. The one-time aggregate-only
 [lookup-source discovery](../validation/RUN_AFTER_07_ssp_component_lookup_source_discovery.py)
-in the same session and post its complete output; it does not approve or modify
-any database source.
+is also complete: all 1,436 governed IDs were found, zero profiling stages
+failed, and no writes occurred. Do not rerun that broad discovery.
+
+Run only the read-only
+[Excel-driven component source-routing audit](../validation/RUN_AFTER_07_ssp_component_source_routing_audit.py)
+in the same still-open session. It derives exactly the six approved component
+mappings from the canonical Excel rows and compares every active component
+type with both RAW objects that contain hydration-bearing fields. It prints
+aggregate routing and field coverage only, performs no DDL or DML, and does
+not approve or configure a source or transformation.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and
