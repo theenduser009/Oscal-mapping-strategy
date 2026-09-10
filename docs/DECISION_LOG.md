@@ -581,9 +581,12 @@ neither collected nor printed. The cell performs no DDL or DML, stops on an
 incomplete candidate scan, and cannot approve or configure a source. The full
 suite contains 122 passing tests.
 
-The first Snowflake run exposed a notebook-generated temporary target object
-through `INFORMATION_SCHEMA`. That object is not an Archer lookup source and
-failed aggregate profiling. Discovery now excludes the observed `$JS_USR_`
-notebook artifact prefix, Snowpark temporary-object prefix, and objects whose
-metadata type is temporary before candidate profiling.
+The first Snowflake runs exposed a notebook-generated temporary target object
+through `INFORMATION_SCHEMA`, including a leading-character name variant.
+That object is not an Archer lookup source. Discovery now excludes the
+normalized `JS_USR_TARGET_TABLE_TMP` name token, Snowpark temporary-object
+prefix, and objects whose metadata type is temporary before candidate
+profiling. Object-specific key, direct-field, and JSON profiling failures are
+recorded by safe object name and stage; they cannot contribute evidence to an
+approved source, and any such failure forces an incomplete-scan conclusion.
 
