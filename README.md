@@ -93,13 +93,19 @@ writes. The three generic metadata layers contain identity only; two RAW
 objects contain hydration evidence, while hardware source,
 interconnection completeness/status, and software field choices remain open.
 
-Run only the new read-only
+The
 [Excel-driven component source-routing audit](notebooks/validation/RUN_AFTER_07_ssp_component_source_routing_audit.py)
-in the same still-open notebook session; do not rerun Cells 1 through 7 or the
-broad discovery. It reconciles the exact six approved Excel component mappings
-to the two evidence-backed RAW objects, reports only aggregate coverage, and
-cannot approve or configure a lookup source or transformation. Post its full
-output for the hydration contract. All 133 repository tests pass.
+is complete and must not be rerun. It proved that all seven software IDs route
+only to `ARCHER_CONTENT_SOFTWARE_RAW`, while both active interconnection fields
+route only to `ARCHER_CONTENT_INTERCONNECTIONS_RAW`; the one hardware ID has no
+hydration-bearing match. A JSON-null reporting false positive is corrected in
+the cell and did not affect those reconciled routes.
+
+The next build is a single owner-approved partial hydration release: software
+`SOFTWARE_NAME` and `DESCRIPTION`, plus interconnection
+`INTERCONNECTION_NAME` and populated `DESCRIPTION`. Status fields, missing
+descriptions, and hardware remain explicit gaps. Do not rerun any accepted
+diagnostic or mapper cell. All 133 repository tests pass.
 
 ## Read-only inspection SQL
 
