@@ -3,6 +3,9 @@
 Last reconciled: 2026-09-10
 
 **Short current summary: [SSP — done and next](SSP_DONE_AND_NEXT.md).**
+**Current direction:** SSP leftovers are parked while other Excel models are
+reviewed. The [model/path progress and clarification queue](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue)
+separates status, evidence/reason, and information needed for each scope.
 The clearer Excel review identifies a skipped `HELPER_PTA_CALC` property and
 a `PACKAGE_TYPE` property-name mismatch. Both are pending corrections under
 System Characteristics; Control Implementation is parked. No new code or run
@@ -687,7 +690,15 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-### Latest Excel review — two System Characteristics corrections, not coded
+### Active review — other Excel models; SSP corrections parked
+
+The owner chose to pause remaining SSP work and inspect other Excel models.
+Assessment Results score properties are a reviewed candidate, not an implemented
+new release. The progress register now records exact observed paths, status,
+reasons and clarification needs, including nested parent identity and registry
+evidence. No mapper configuration, notebook code or database state changed.
+
+### Parked Excel review — two System Characteristics corrections, not coded
 
 Model **SSP**, target `system-security-plan.system-characteristics.props[]`:
 map `HELPER_PTA_CALC` according to row 35's Calculated/custom-property Notes,

@@ -1,16 +1,20 @@
-# Archer to OSCAL SSP mapping progress
+# Archer to OSCAL mapping progress
 
 Last updated: 2026-09-10. Owner: SSP mapper implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
-workbook. All target paths are under `system-security-plan` (abbreviated `SSP`).
+workbook. In the detailed SSP register, `system-security-plan` is abbreviated `SSP`.
 `M`, `SC`, and `SI` mean OSCAL SSP Metadata, System Characteristics, and System
 Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
 ## Current position
+
+- **Owner direction:** park the remaining SSP corrections and review other
+  Excel-defined models. Preserve accepted work. Assessment Results is a reviewed
+  next candidate, not an implemented or accepted new-model release.
 
 - Start with [SSP — done and next](SSP_DONE_AND_NEXT.md) for the short summary.
   Clearer Excel Notes supersede the old helper classification: `HELPER_PTA_CALC`
@@ -49,6 +53,72 @@ by a dispatcher or a target node exists.
 | In progress / pending live | Work or deployment verification remains; no live-success claim. |
 | Missing source | The observed population lacks a source value or a governed lookup. |
 | Deferred / unresolved | No approved executable contract, business decision, or concrete target yet. |
+
+## Model/path status and clarification queue
+
+This is the quick view of **what is done, what is not, why, and what information
+is needed**. The source-field detail and evidence follow. Grouped rows are not
+an Excel-row count. "Done in scope" means the stated implementation/release is
+accepted, not full model completeness or independent proof of every value.
+No business question and no field-level test evidence are different things.
+
+### SSP — accepted work preserved; remaining corrections parked
+
+| OSCAL model | Full OSCAL element path | Field / scope | Status | Why / evidence | Additional information or clarification needed |
+| --- | --- | --- | --- | --- | --- |
+| SSP | `system-security-plan.metadata.document-ids[].identifier` | `TRACKING_ID` | Done in scope | Exact match for 2,813 records [E2]. | None. |
+| SSP | `system-security-plan.metadata.title` | Approved `AUTHORIZATION_PACKAGE_NAME` reuse | Done in scope | Completion rule implemented; metadata release accepted [E7, E8]. | No current business question; separate exact title proof not recorded. |
+| SSP | `system-security-plan.metadata.version` | Controlled `1.0` | Done in scope | Approved configuration, not an Excel source row [E7]. | None. |
+| SSP | `system-security-plan.metadata.oscal-version` | Configured OSCAL version | Done in scope | All 2,813 metadata nodes checked [E2]. | None. |
+| SSP | `system-security-plan.metadata.last-modified` | Two Last Updated sources | Implemented; accepted exception | Resolver accepted; one source empty, populated timestamps timezone-naive [E3, E7]. | Preserve values now. Source timezone only needed for later conformance work. |
+| SSP | `system-security-plan.metadata.published` | Two First Published sources | Done in scope | Resolver in accepted release; conflicting populated values fail [E1, E7]. | No current business question; field-specific completeness proof not recorded. |
+| SSP | `system-security-plan.metadata.props` (literal Excel path) | Confirmed-in-Archer field | Deferred | TBD, source-empty, literal path not the active collection path [E1, E7]. | Approved target and property name/value rule; populated source evidence. |
+| SSP | `system-security-plan.metadata.responsible-parties[]` | Five approved assignments | Done in scope | Role/party references implemented; release accepted [E7, E8]. | None for those five fields. |
+| SSP | `system-security-plan.metadata.responsible-parties[]` | Four TBD fields listed below | Deferred | ISSE, ISA, AODR and SISSO are separate unresolved rows [E1, E7]. | Approved role assignment, reference semantics and Notes for each field. |
+| SSP | `system-security-plan.metadata.roles[]`; `system-security-plan.metadata.parties[]` | Support for five approved assignments | Done in scope | Definitions, stable identity and reference closure implemented [E7, E8]; not extra Excel rows. | None for current scope. |
+| SSP | `system-security-plan.system-characteristics.system-ids[].id` | `SAP_ID` | Done in scope | Accepted identity rule; prior valid coverage 2,813 [E6, E7]. | None. |
+| SSP | `system-security-plan.system-characteristics.system-name` | `AUTHORIZATION_PACKAGE_NAME` | Done in scope | Accepted release; prior valid coverage 2,813 [E6, E7]. | None. |
+| SSP | `system-security-plan.system-characteristics.system-name-short` | `ACRONYM` | Done in scope | Implemented and live accepted [E1, E6]. | No current business question; exact equality not separately recorded. |
+| SSP | `system-security-plan.system-characteristics.description` | `MISSION_PURPOSE` | Implemented; source gap | 33 missing source descriptions [E6, E7]. | Missing descriptions from the source owner for full record coverage. |
+| SSP | `system-security-plan.system-characteristics.status.state` | `OPERATIONAL_STATUS` | Implemented; source gap | Crosswalk accepted; 42 missing source values [E6, E7]. | Missing source statuses for full record coverage. |
+| SSP | `system-security-plan.system-characteristics.authorization-boundary.description` | Boundary description | Implemented; source gap | 294 missing source descriptions [E6, E7]. | Missing source boundary descriptions. |
+| SSP | `system-security-plan.system-characteristics.status.remarks` | `AUTHORIZATION_COMMENTS` | Implemented | Explicit remarks handler exists despite Extension Property label [E1, E8]. | No current question; separate field proof not recorded. |
+| SSP | `system-security-plan.system-characteristics.date-authorized` | `ATOIATO_DATE` | Done in scope | Date handler tested and live accepted [E12, E13]. | None; no timezone conversion requested. |
+| SSP | `system-security-plan.system-characteristics.props[]` | Seven approved fields other than `PACKAGE_TYPE`, listed below | Done in routing scope | Property routes included in accepted release [E5, E13]; not every field's exact Notes/value agreement is proven. | No newly identified question for these seven; retain field-level review separately. |
+| SSP | `system-security-plan.system-characteristics.props[]` | `PACKAGE_TYPE` | Pending correction; parked | Code name is `package-type`; Notes example says `authorization-package-type`. | No additional source table needed for naming correction. The sample value is not a constant. |
+| SSP | `system-security-plan.system-characteristics.props[]` | `HELPER_PTA_CALC` | Not implemented; parked | Calculated/custom-property row is incorrectly skipped. | Full Notes and expected property name/value rule if not available in the artifact. Do not invent a PTA formula. |
+| SSP | `system-security-plan.system-characteristics.props[]` | `PACKAGE_TYPE_HELPER_CALC` | Intentionally excluded | Notes explicitly say transient calculation field — do not map. | None; exclusion is not a completed mapping. |
+| SSP | `system-security-plan.system-characteristics.security-impact-level` | Eleven CIA source-to-member mappings below | Done in complete-only assembly scope | Conversion and omission of incomplete CIA assemblies accepted [E6, E7, E13]. | Missing objectives are source gaps; no invented defaults or precedence. |
+| SSP | `system-security-plan.system-characteristics.security-impact-level` | `RECOMMENDED_SECURITY_CATEGORY` | Deferred | All Nulls does not define a populated-value rule [E12]. | Approved destination and transform/value policy. |
+| SSP | `system-security-plan.system-characteristics.security-sensitivity-level` | `SECURITY_CATEGORY` | Review pending; parked | Clearer screenshot shows Direct row absent from prior register; implementation not reconciled. | Engineering must compare this exact row with canonical output before claiming completion. |
+| SSP | `system-security-plan.system-implementation.components[]` | Six Reference fields below | Done in agreed reference scope | Identity/type and approved partial hydration accepted [E4, E9]. Some input/hydration gaps remain. | None for current reference scope. Extra hydration requires separate source proof; no unlisted component-status mapping. |
+| SSP | **Unconfirmed**; Notes propose `system-security-plan.control-implementation.props[]` | Control-count candidate and other blank-target control rows | Deferred; parked | Notes placement conflicts with pinned standard; alternative not approved. | Owner-approved target, source count versus calculation, property name/value policy and namespace; see [proposal](checkpoints/2026-09-10_ssp_control_count_mapping_proposal.md). |
+
+CIA member suffixes are `security-objective-confidentiality`,
+`security-objective-integrity`, and `security-objective-availability` on the full
+security-impact path above. Their exact source-field grouping is retained below.
+
+### Other Excel models — review queue, not completed releases
+
+| OSCAL model | Excel target path | Field / scope | Status | Why not complete | Additional information or clarification needed |
+| --- | --- | --- | --- | --- | --- |
+| Assessment Results | `assessment-results.results[].observations[].props[]` | Score fields including `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE`, `SECURITY_COMPLIANCE_SCORE` | Candidate; not implemented | Observations/property Notes visible, but current governed property code is SSP-specific. | Exact name/value rules, source shape, result/observation grouping and stable identity; current registry for full nested path. |
+| Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
+| Profile | `profile.imports[]` | `BASELINE_RECOMMENDATION` | Review pending | Conditional import example in Notes does not supply an approved import reference. | Baseline-to-URI mapping, intended import structure and selection rule; reconcile Extension Property label with target. |
+| POA&M | **Not yet confirmed from reviewed row** | `POAMS` | Review pending | Reference row evidenced, full contract not reconciled. | Exact target and Notes, reference shape, identity and parent relationship. |
+| Assessment Plan | **Full paths/Notes still to reconcile** | Request, approval and preassessment-review fields | Review pending | Separate model rows visible; no accepted implementation release. | Exact targets/Notes, task grouping, property/value rules and source shape. |
+
+These candidates come from the owner's clearer Excel screenshots. The
+[historical registry snapshot](checkpoints/2026-09-09-oscal-element-registry-collection-snapshot.md)
+shows Assessment Results collections for results, result properties and
+observations; it does not establish observation properties. This is not a fresh
+live schema check. The [generic graph contract](ARCHITECTURE_CONTEXT.md)
+requires parent-instance context for nested collections; do not guess it.
+
+Update this queue with every accepted change. Keep a code defect, missing source,
+business question, unreviewed row and intentional exclusion distinct. Unknown
+paths stay unknown; no question silently becomes an approved mapping. No global
+completion percentage is asserted.
 
 ## Metadata register
 
@@ -191,8 +261,8 @@ Every subsequent mapping handoff names the model, full OSCAL path, source field
 and transformation rule.
 
 The broader requested target remains **ten additional SSP mapping rows**.
-The immediate work is the two System Characteristics corrections above, followed
-by the remaining Excel sweep. Clearer screenshots invalidate the earlier blanket
+The two System Characteristics corrections are parked by owner direction while
+other Excel models are reviewed. Clearer screenshots invalidate the earlier blanket
 claim that every concrete evidenced row already has a handler. They do not yet
 establish ten new executable contracts or a full-workbook completion percentage.
 Do not relabel previous work as ten new rows or wait for a full export before
