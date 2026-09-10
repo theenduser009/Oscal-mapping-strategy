@@ -98,4 +98,23 @@ Interpretation: this screenshot evidence does **not** establish Control Implemen
 
 Next validation should be against the generated OSCAL DIM/FACT and registry to establish which `control-implementation` / `implemented-requirements` branches actually materialize and reconcile, separately from the unresolved Excel backlog.
 
+## 2026-09-10 — Broader mapping-workbook screenshot evidence
+Five additional screenshots of `archer_to_oscal_mapping.xlsx` were reviewed as visual evidence of the mapping artifact across multiple model areas. These screenshots expand the previous Control Implementation-only checkpoint; they do not replace the workbook as the authoritative source.
+
+Visible SSP / related mappings include:
+- authorization-package metadata timestamp fields mapped to SSP metadata timestamp targets with `Transform` semantics.
+- `TRACKING_ID` mapped under SSP metadata/document identifiers.
+- `SAP_ID` and authorization-package/system-characteristics fields visible in the SSP section.
+- `OPERATIONAL_STATUS` mapped to the SSP system-characteristics status/state area with transform semantics.
+- `INFORMATION_SYSTEM_TYPE`, `FISMA_REPORTABLE`, `FINANCIAL_SYSTEM`, `MISSION_CRITICAL`, `CRITICAL_INFRASTRUCTURE`, `PACKAGE_TYPE`, `PIA_REQUIRED`, and related system-characteristics fields shown as direct/extension/calculated/TBD candidates depending on row.
+- security-impact candidate rows for confidentiality, integrity, and availability are visibly targeted to `system-security-plan.system-characteristics.security-impact-level` child objectives with Direct/Transform semantics and FIPS-199-oriented notes.
+- responsible-party candidate fields (`INFORMATION_OWNER_IO`, `INFORMATION_SYSTEM_OWNER_ISO`, `AUTHORIZING_OFFICIAL_AO`, `INFORMATION_SYSTEM_SECURITY_OFFICER_ISSO`, `PRIVACY_OFFICER_PO`, etc.) visibly target `system-security-plan.metadata.responsible-parties[]`; some are Transform and some remain TBD / need analysis.
+- component reference rows for `SOFTWARE`, `HARDWARE`, `INTERCONNECTIONS`, `INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM`, and `SAP_INTAKE_FORM_INTERCONNECTIONS` target the SSP system-implementation components branch.
+
+Control Implementation evidence remains consistent with the prior checkpoint: many control-related rows are `Extension Property` candidates with blank concrete OSCAL element paths and notes such as `May map to props[] or calculated from implemented-requirements count`. Examples visible across the screenshots include control counts, allocated/inherited/archived controls, control risk thresholds, assessor fields, master controls, helper fields, and POA&M-related control counts. This is unresolved mapping-design backlog, not proof of a populated `control-implementation` branch.
+
+The screenshots also visibly contain Assessment Results rows. Risk/scoring fields such as vulnerability, antivirus, patch, compliance, authorization-package risk, and device-risk scores target Assessment Results observation/property paths and are generally marked `Extension Property` with notes indicating Archer-specific risk scoring mapped as observations. This confirms that the workbook is multi-model and that these rows must not be counted as SSP Control Implementation completion.
+
+Accuracy guardrail: only text/paths sufficiently legible in the supplied screenshots are recorded here. No obscured cell value, truncated path, null percentage, or off-screen workbook row is inferred. For exact row-level reconciliation, use the actual workbook/CSV rather than these images.
+
 Source: phone screenshots supplied in ChatGPT conversation on 2026-09-10.
