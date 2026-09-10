@@ -367,7 +367,13 @@ def run_component_source_routing_audit():
         _routing_int(row, "ROOT_ROWS")
         for row in root_type_rows
         if str(_routing_row_value(row, "ROOT_TYPE") or "").upper()
-        != "ARRAY"
+        not in {"ARRAY", "NULL_VALUE"}
+    )
+    json_null_root_rows = sum(
+        _routing_int(row, "ROOT_ROWS")
+        for row in root_type_rows
+        if str(_routing_row_value(row, "ROOT_TYPE") or "").upper()
+        == "NULL_VALUE"
     )
 
     array_roots_df = reference_roots_df.filter(
@@ -781,6 +787,7 @@ def run_component_source_routing_audit():
     print("Graph component nodes:", graph_component_nodes)
     print("Distinct component IDs:", distinct_component_ids)
     print("Invalid reference members:", invalid_reference_members)
+    print("JSON-null reference roots:", json_null_root_rows)
     print("Unexpected non-array reference roots:", unexpected_root_rows)
     print("Cross-type component IDs:", cross_type_component_ids)
     print("Source pairs missing from graph:", source_pairs_without_graph)
