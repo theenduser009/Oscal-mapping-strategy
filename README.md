@@ -96,19 +96,17 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The accepted component hydration run is the baseline. The next release
-hardens the Excel-defined mapping contracts in Cell 4: the four approved SSP
+The component hydration and hardened mapper release is accepted. Cell 4
+enforces the Excel-defined mapping contracts: the four approved SSP
 text mappings and the eleven security-impact source/objective pairs are exact,
 unresolved Archer select IDs fail closed, unsupported transformation types no
 longer fall through as raw direct values, and the reviewed legacy security
 vocabulary is synchronized across the mapper and validators.
 
-The same release adds the read-only mapped-scope assembler. Because Cell 4
-changed, run updated Cells 1 through 7 once in order with
-`EXECUTE_WRITES = False`; after Cell 7 passes, run only the mapped-scope
-assembler in that same session. It assembles the accepted graph into transient
-JSON documents and prints aggregate counts only. It does not claim complete or
-schema-valid OSCAL and adds no write path.
+The same release's read-only mapped-scope assembler has also passed in Snowflake.
+It assembled **2,813 transient SSP JSON documents**, consuming **70,102 nodes**
+and **67,289 edges**, with **zero writes**. No repeat mapper or assembly run is
+needed. It does not claim complete or schema-valid OSCAL and adds no write path.
 
 The latest runtime identified `INFORMATION_SYSTEM_TYPE` incorrectly owned by
 the system-characteristics parent. This routing defect is corrected in
@@ -126,12 +124,12 @@ still fail; the all-null security-category mapping is not implicitly approved.
 The latest run is **accepted: 70,102 nodes, 67,289 edges, zero duplicate/dangling
 keys, pre-write checks passed, no writes**.
 [Accepted checkpoint](docs/checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
-Do not repeat the seven cells or diagnostic reports in the still-active session.
-**Next: run the [mapped-scope SSP assembler](notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py)
-once in a new Python cell after the accepted Cell 7.** Model: **SSP**; active
-branch: `system-security-plan.system-implementation.components[]`; assembly
-root: `system-security-plan`. This assembles existing mappings, not new fields
-or a complete conformant SSP. Keep writes disabled and post the aggregate output.
+**Assembly accepted:** Model **SSP**, root `system-security-plan`, all currently
+mapped branches including `system-security-plan.system-implementation.components[]`.
+[Assembly checkpoint](docs/checkpoints/2026-09-10_ssp_mapped_scope_assembly_accepted.md).
+The graph-to-JSON handoff is complete for mapped scope. Keep writes disabled;
+do not rerun the notebook, registry setup, diagnostic reports or assembler for
+this accepted result.
 Additional mapping rows need approved source-to-path contracts; see the
 [mapping register](docs/MAPPING_PROGRESS.md).
 

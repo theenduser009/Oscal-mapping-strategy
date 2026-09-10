@@ -1,5 +1,15 @@
 # Decision Log
 
+## 2026-09-10 — Accept mapped-scope SSP assembly
+
+The user posted the successful assembler output: 2,813 documents, 2,813 roots,
+70,102 nodes and 67,289 edges consumed, writes false. Accept the graph-to-JSON
+step for model SSP, root `system-security-plan`, across all currently mapped
+branches including system implementation components. No rerun is required.
+The result explicitly leaves complete-SSP and schema-valid claims false.
+Documents remain transient in the notebook; no persistence/export is implied.
+This closes the prior assembly handoff, not additional Excel mapping rows.
+
 ## 2026-09-10 — Resume assembly; identify model and path in every handoff
 
 The user requested that each next mapping explicitly name its OSCAL model and

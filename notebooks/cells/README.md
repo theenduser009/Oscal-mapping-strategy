@@ -122,13 +122,12 @@ only when populated. Hardware, subsystems, the inactive SAP route, and every
 component status field remain deferred because the Excel/source evidence does
 not supply those values.
 
-The next release hardens Cell 4 against mapping-contract drift and adds the
+The accepted release hardens Cell 4 against mapping-contract drift and adds the
 read-only
 [mapped-scope assembler](../validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py).
-Run updated Cells 1 through 7 once with writes disabled, then run the assembler
-in the same session. It assembles one transient mapped-scope JSON document per
-source record and prints only aggregate counts. It is not a complete-SSP or
-OSCAL-schema-validity claim.
+Both the mapper and assembler have now passed in Snowflake. The assembler
+produced 2,813 transient mapped-scope JSON documents and printed only aggregate
+counts. It is not a complete-SSP or OSCAL-schema-validity claim.
 
 The latest Cell 7 failure names `INFORMATION_SYSTEM_TYPE`: Cell 3 assigned an
 approved extension property to the parent instead of `props[]`. The current
@@ -143,13 +142,12 @@ Null skips; invalid/ambiguous formats fail. Existing metadata dates are unchange
 
 The latest run now **passed**: 70,102 nodes, 67,289 edges, no duplicates or
 dangling edges, pre-write validation passed and writes disabled.
-No repeat run, registry setup or report is needed in the still-active session.
-**Next: run only the [mapped-scope assembler](../validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py)
-in a new Python cell.** Model: SSP; active branch:
-`system-security-plan.system-implementation.components[]`; assembly root:
-`system-security-plan`. Post aggregate output; keep writes disabled. If the
-session restarted, rebuild the graph with Cells 1–7 first.
-[Accepted checkpoint and assembly handoff](../../docs/checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
+The assembler also **passed**: 2,813 documents and roots, consuming that exact
+graph with no writes. Model: SSP; assembly root: `system-security-plan`, including
+`system-security-plan.system-implementation.components[]`.
+No repeat mapper run, registry setup, report or assembly run is needed.
+Keep writes disabled.
+[Accepted assembly checkpoint](../../docs/checkpoints/2026-09-10_ssp_mapped_scope_assembly_accepted.md).
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

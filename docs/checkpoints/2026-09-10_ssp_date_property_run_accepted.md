@@ -27,7 +27,14 @@ parent and does not itself add nodes. The equal delta is consistent with added
 child nodes, but the aggregate output alone does not prove exact per-path
 attribution or exclude source changes. No per-field population is invented.
 
-## Next step — assemble the accepted SSP graph
+## Subsequent checkpoint — assembly accepted
+
+The [mapped-scope SSP assembly](2026-09-10_ssp_mapped_scope_assembly_accepted.md)
+subsequently passed for all 2,813 roots/documents and consumed this exact graph,
+with zero writes. The original run instructions below are retained as history;
+**do not rerun this accepted step**.
+
+## Original next-step handoff — now completed
 
 - OSCAL model: **SSP**.
 - Active branch: `system-security-plan.system-implementation.components[]`.
@@ -40,7 +47,8 @@ rerun Cells 1–7, registry setup or diagnostic reports. Keep writes disabled.
 Post the complete aggregate output, not source payloads or assembled documents.
 If the session restarted, run Cells 1–7 once to recreate the graph first.
 
-No live assembler result is recorded yet. Assembly creates transient JSON from
+At the time of the original handoff, no live assembler result was recorded.
+The subsequent checkpoint above now accepts that result. Assembly creates transient JSON from
 existing nodes; it does not implement additional mappings or prove whole-SSP
 completeness/schema conformance. Every new mapping handoff will identify its
 OSCAL model, exact path, Archer field and rule.

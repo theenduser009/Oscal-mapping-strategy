@@ -14,6 +14,9 @@ by a dispatcher or a target node exists.
 
 - Last accepted live baseline: 70,102 nodes, 67,289 edges, zero duplicate keys,
   zero dangling edges; pre-write validation passed and no DIM/FACT writes [E13].
+- Mapped-scope JSON assembly is now live accepted: 2,813 documents and roots,
+  consuming that exact graph with no writes. Full SSP/schema-valid claims
+  remain false; this is an assembly milestone, not new mapping rows [E14].
 - That run included partial component hydration: 1,435 lookup rows, comprising
   7 software and 1,428 interconnection rows; descriptions available for 7 and
   968 respectively [E4]. These are lookup counts, not completed SSP counts.
@@ -143,11 +146,10 @@ source/decision gaps, not completed components.
 
 ## Reporting and update rules
 
-**Immediate step:** Model **SSP**, active path
-`system-security-plan.system-implementation.components[]`; assemble existing
-mapped nodes under `system-security-plan` using the
-[mapped-scope assembler](../notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py).
-Its live result is pending. This is assembly, not an additional field mapping.
+**Completed step:** Model **SSP**, assembly root `system-security-plan`, including
+`system-security-plan.system-implementation.components[]`. All 2,813 mapped-scope
+documents assembled successfully [E14]. No repeated run is needed. This is
+assembly acceptance, not an additional field mapping or full SSP conformance.
 Every subsequent mapping handoff names the model, full OSCAL path, source field
 and transformation rule.
 
@@ -190,6 +192,7 @@ ten approved nonblank targets/rules. Do not relabel previous work as ten new row
 - [E11: Pinned minimum SSP contract](OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md).
 - [E12: Authorization-date contract and implementation checkpoint](checkpoints/2026-09-10_ssp_authorization_date_mapping.md).
 - [E13: Successful date/property release and next-ten scope](checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
+- [E14: Successful mapped-scope SSP JSON assembly](checkpoints/2026-09-10_ssp_mapped_scope_assembly_accepted.md).
 
 Latest 54-row/two-rejection evidence is the owner-supplied live report at remote
 commit `23c61dc6c92804fb833ff9ede0c62ceb8c37f34a`,

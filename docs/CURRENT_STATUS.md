@@ -680,7 +680,7 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-### Current checkpoint — SUCCESS; resume mapped-scope SSP assembly
+### Current checkpoint — mapped-scope SSP assembly ACCEPTED
 
 The newest [live result](live-snowflake-results.md) completes the date/property
 release: **70,102 nodes, 67,289 edges, zero duplicate or dangling keys,
@@ -689,21 +689,21 @@ rows, with 7 software and 968 interconnection descriptions. This is now the
 accepted graph-runtime baseline, not final SSP conformance or per-field equality
 proof. The prior failure is resolved at this checkpoint.
 
-**Model: SSP. Active branch: `system-security-plan.system-implementation.components[]`.
-Assembly root: `system-security-plan`.** The component release's unfinished
-step is assembling the accepted graph into JSON. No assembler run result has
-been posted yet.
+**Model: SSP. Assembly root: `system-security-plan`.** The assembly includes
+all currently mapped branches, including the active component branch
+`system-security-plan.system-implementation.components[]`.
 
-In the same still-active notebook session, copy the full
-[mapped-scope assembler](../notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py)
-into one new Python cell and run only it. Do not rerun the seven cells, registry
-setup or contract reports. Keep `EXECUTE_WRITES = False`; post its full aggregate
-output without source values or generated documents. If the session has restarted,
-run Cells 1–7 once to recreate the graph, then the assembler.
+The latest posted result confirms **2,813 documents and 2,813 roots assembled**,
+consuming **70,102 nodes and 67,289 edges**. Result:
+`MAPPED-SCOPE ASSEMBLY PASSED`; writes false; complete SSP claim false;
+OSCAL schema-valid claim false. The component release's graph-to-JSON step is
+now accepted. [Assembly checkpoint](checkpoints/2026-09-10_ssp_mapped_scope_assembly_accepted.md).
 
-This creates transient JSON from existing mapped nodes. It does not add new
-mapping rows or establish complete SSP conformance. From now on each mapping
-handoff identifies the OSCAL model, exact target path, source field and rule.
+**No repeat notebook, registry, report or assembly run is required.** Keep
+`EXECUTE_WRITES = False`. Documents are transient in the notebook session, not
+persisted to DIM/FACT or exported. This does not add mapping rows or establish
+complete SSP conformance. Each next mapping handoff identifies the OSCAL model,
+exact target path, source field and transformation rule.
 
 Separately, the user requested ten additional Excel-defined SSP rows. The available
 concrete contracts are already implemented; the remaining documented candidates
@@ -717,7 +717,8 @@ missing targets/rules. No target paths will be invented or existing work counted
 again. Details and count reconciliation:
 [accepted checkpoint](checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
 
-The missing next-ten contracts do not block assembling the accepted graph.
+The assembly step is complete; missing approved contracts/source data remain
+the constraint on starting genuinely additional field mappings.
 
 ### Previous implementation handoff — superseded by successful run above
 
