@@ -84,37 +84,97 @@ Mapped-scope assembly consumed the successful in-memory graph checkpoint.
 
 Interpretation: all 2,813 SSP source/root records were assembled successfully for the currently mapped scope. This validates mapped-scope assembly only; it deliberately does not claim complete SSP coverage or OSCAL schema validity. No writes were executed.
 
-## 2026-09-10 — Control Implementation mapping-artifact screenshot checkpoint
-Phone screenshots of `archer_to_oscal_mapping.xlsx` filtered to `OSCAL_Model = SSP - Control Implementation` were reviewed.
+## 2026-09-10 — Clearer mapping-workbook screenshot reconciliation
+The clearer screenshots of `archer_to_oscal_mapping.xlsx` were re-reviewed and supersede the earlier visual transcription where they provide better legibility. This remains screenshot evidence only; the workbook/CSV is authoritative for exact row-level reconciliation.
 
-Observed mapping-artifact state:
-- approximately **50 of 609** workbook records are visible under this filter.
-- the displayed Control Implementation rows are predominantly `Mapping_Type = Extension Property`.
-- many displayed rows have a **blank `OSCAL_Element_Path`** rather than an approved concrete Control Implementation target path.
-- repeated note pattern: `May map to props[] or calculated from implemented-requirements count`.
-- visible examples include `COUNT_OF_CONTROLS`, `ALLOCATE_BASELINE_CONTROLS`, `CONTROL_SET_VERSION_NUMBER`, `COUNT_OF_CONTROLS_WITHOUT_IMPLEMENTATION_DETAILS`, `COUNT_OF_CONTROLS_WITH_OPEN_POAMS`, `NUMBER_OF_CONTROLS_BEING_INHERITED_BY_OTHERS`, `ARCHIVE_CONTROLS`, `BASELINE_CONTROLS_ALLOCATED_DATE`, `FULL_CONTROL_ASSESSMENT_HELPER`, `CONTROL_RISK_APPETITE`, `CONTROL_OWNER_CO`, `ALLOCATED_CONTROLS`, `INHERITED_CONTROLS`, `MASTER_CONTROLS`, and other control-related fields.
+### SSP metadata and system-characteristics mappings visibly confirmed
+- `ARCHER_CONTENT_AUTHORIZATION_PACKAGE_CONFIRMED_IN_ARCHER` -> `system-security-plan.metadata.props` — `TBD`.
+- `ARCHER_CONTENT_AUTHORIZATION_PACKAGE_FIRST_PUBLISHED` -> `system-security-plan.metadata.published` — `Transform`; note indicates timestamp conversion to DateTimeWithTimezoneDatatype.
+- `ARCHER_CONTENT_AUTHORIZATION_PACKAGE_LAST_UPDATED` -> `system-security-plan.metadata.last-modified` — `Transform`; note indicates timestamp conversion to DateTimeWithTimezoneDatatype.
+- `SUBSYSTEMS` -> `system-security-plan.system-implementation.components[]` — `Reference`; create component entries with type `system`.
+- `TRACKING_ID` -> `system-security-plan.metadata.document-ids[].identifier` — `Direct`.
+- `FIRST_PUBLISHED` -> `system-security-plan.metadata.published` — `Transform`.
+- `LAST_UPDATED` -> `system-security-plan.metadata.last-modified` — `Transform`.
+- `SAP_ID` -> `system-security-plan.system-characteristics.system-ids[].id` — `Direct`.
+- `AUTHORIZATION_PACKAGE_NAME` -> `system-security-plan.system-characteristics.system-name` — `Direct`.
+- `ACRONYM` -> `system-security-plan.system-characteristics.system-name-short` — `Direct`.
+- `OPERATIONAL_STATUS` -> `system-security-plan.system-characteristics.status.state` — `Transform`; note shows mapping to OSCAL status enum values.
+- `INFORMATION_SYSTEM_TYPE` -> `system-security-plan.system-characteristics` — `Extension Property`; notes describe recognized system-type semantics.
+- `FISMA_REPORTABLE` -> `system-security-plan.system-characteristics.props[]` — `Extension Property`, property name `fisma-reportable`.
+- `FINANCIAL_SYSTEM` -> `system-security-plan.system-characteristics.props[]` — `Extension Property`, property name `financial-system`.
+- `MISSION_CRITICAL` -> `system-security-plan.system-characteristics.props[]` — `Extension Property`, property name `mission-critical`.
+- `CRITICAL_INFRASTRUCTURE` -> `system-security-plan.system-characteristics.props[]` — `Extension Property`, property name `critical-infrastructure`.
+- `MISSION_PURPOSE` -> `system-security-plan.system-characteristics.description` — `Direct`.
+- `PACKAGE_TYPE` -> `system-security-plan.system-characteristics.props[]` — `Extension Property`.
+- `AUTHORIZATION_BOUNDARY_DESCRIPTION` -> `system-security-plan.system-characteristics.authorization-boundary.description` — `Direct`.
+- `AUTHORIZATION_DECISION` -> `system-security-plan.system-characteristics.status.state` — `TBD` in the visible workbook row.
+- `HELPER_PIA_CALC` -> system-characteristics custom property/props area — `Calculated`; note says helper field maps to a custom property within system-characteristics.
+- `PACKAGE_TYPE_HELPER_CALC` -> system-characteristics custom property/props area — `Calculated`; note says transient calculation field, do not map.
+- `AUTHORIZATION_COMMENTS` -> `system-security-plan.system-characteristics.status.remarks` — `Extension Property`; note says Archer authorization comments map to remarks in the status block.
+- `PIA_REQUIRED` -> `system-security-plan.system-characteristics.props[]` — `Extension Property`, property name `pia-required`.
+- `INFORMATION_CLASSIFICATION` -> `system-security-plan.system-characteristics.props[]` — `Extension Property`.
+- `DAILY_LOSS_AMOUNT_FROM_OUTAGE` -> `system-security-plan.system-characteristics.props[]` — `TBD`; visible note says `All Nulls`.
 
-Interpretation: this screenshot evidence does **not** establish Control Implementation completion. The workbook still contains many Control Implementation candidates whose final OSCAL target/semantics are unresolved. In particular, a note suggesting `props[]` or a calculation from `implemented-requirements` is design evidence, not an approved mapping contract. Do not auto-map these fields or claim Control Implementation completeness from the current artifact.
+### Security-impact mappings visibly confirmed
+The clearer screenshots show confidentiality, integrity, and availability candidate mappings under `system-security-plan.system-characteristics.security-impact-level`, generally `Direct/Transform`, with notes to map to FIPS-199 impact level (`low/moderate/high`). Visible source fields include:
+- `RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY`
+- `CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE`
+- `RECOMMENDED_INTEGRITY_CONTROL_CATEGORY`
+- `INTEGRITY_CONTROL_CATEGORY_OVERRIDE`
+- `AVAILABILITY_CONTROL_CATEGORY_OVERRIDE`
+- `RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY`
+- `PROGRAMSITE_INTEGRITY_CONTROL_CATEGORY`
+- `PROGRAMSITE_AVAILABILITY_CONTROL_CATEGORY`
+- `CNSS_AVAILABILITY_RATING`
+- `CNSS_CONFIDENTIALITY_RATING`
+- `CNSS_INTEGRITY_RATING`
 
-Next validation should be against the generated OSCAL DIM/FACT and registry to establish which `control-implementation` / `implemented-requirements` branches actually materialize and reconcile, separately from the unresolved Excel backlog.
+`SECURITY_CATEGORY` is also visible as an SSP System Characteristics direct mapping candidate, while `RECOMMENDED_SECURITY_CATEGORY` was separately rejected by the runtime mapping contract earlier and must not be treated as approved merely because related workbook rows exist.
 
-## 2026-09-10 — Broader mapping-workbook screenshot evidence
-Five additional screenshots of `archer_to_oscal_mapping.xlsx` were reviewed as visual evidence of the mapping artifact across multiple model areas. These screenshots expand the previous Control Implementation-only checkpoint; they do not replace the workbook as the authoritative source.
+### Responsible-party mappings visibly confirmed
+The screenshots clearly show fields targeting `system-security-plan.metadata.responsible-parties[]`:
+- `INFORMATION_OWNER_IO` — `Transform`; create party/link with role-id `system-owner` or `information-owner`.
+- `INFORMATION_SYSTEM_OWNER_ISO` — `Transform`; create party/link with role-id `system-owner` or `information-owner`.
+- `SENIOR_INFORMATION_SYSTEMS_SECURITY_OFFICER_SISSO` — `TBD`; needs analysis.
+- `AUTHORIZING_OFFICIAL_AO` — `Transform`; create party/link with role-id `authorizing-official`.
+- `INFORMATION_SYSTEM_SECURITY_OFFICER_ISSO` — `Transform`; create party/link with role-id `system-security-officer`.
+- `INFORMATION_SYSTEM_SECURITY_ENGINEER_ISSE` — `TBD`; needs analysis.
+- `INFORMATION_SYSTEM_ADMINISTRATOR_ISA` — `TBD`; needs analysis.
+- `AUTHORIZING_OFFICIAL_DESIGNATED_REPRESENTATIVE_AODR` — `TBD`; needs analysis.
+- `PRIVACY_OFFICER_PO` — `Transform`; create party/link with role-id `privacy-officer`.
 
-Visible SSP / related mappings include:
-- authorization-package metadata timestamp fields mapped to SSP metadata timestamp targets with `Transform` semantics.
-- `TRACKING_ID` mapped under SSP metadata/document identifiers.
-- `SAP_ID` and authorization-package/system-characteristics fields visible in the SSP section.
-- `OPERATIONAL_STATUS` mapped to the SSP system-characteristics status/state area with transform semantics.
-- `INFORMATION_SYSTEM_TYPE`, `FISMA_REPORTABLE`, `FINANCIAL_SYSTEM`, `MISSION_CRITICAL`, `CRITICAL_INFRASTRUCTURE`, `PACKAGE_TYPE`, `PIA_REQUIRED`, and related system-characteristics fields shown as direct/extension/calculated/TBD candidates depending on row.
-- security-impact candidate rows for confidentiality, integrity, and availability are visibly targeted to `system-security-plan.system-characteristics.security-impact-level` child objectives with Direct/Transform semantics and FIPS-199-oriented notes.
-- responsible-party candidate fields (`INFORMATION_OWNER_IO`, `INFORMATION_SYSTEM_OWNER_ISO`, `AUTHORIZING_OFFICIAL_AO`, `INFORMATION_SYSTEM_SECURITY_OFFICER_ISSO`, `PRIVACY_OFFICER_PO`, etc.) visibly target `system-security-plan.metadata.responsible-parties[]`; some are Transform and some remain TBD / need analysis.
-- component reference rows for `SOFTWARE`, `HARDWARE`, `INTERCONNECTIONS`, `INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM`, and `SAP_INTAKE_FORM_INTERCONNECTIONS` target the SSP system-implementation components branch.
+### System Implementation component references visibly confirmed
+- `SOFTWARE` -> `system-security-plan.system-implementation.components[]` — `Reference`; create component entries with type `software`.
+- `HARDWARE` -> `system-security-plan.system-implementation.components[]` — `Reference`; create component entries with type `hardware`.
+- `INTERCONNECTIONS` -> `system-security-plan.system-implementation.components[]` — `Reference`; create component entries with type `interconnection`.
+- `INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM` -> `system-security-plan.system-implementation.components[]` — `Reference`.
+- `SAP_INTAKE_FORM_INTERCONNECTIONS` -> `system-security-plan.system-implementation.components[]` — `Reference`; create component entries with type `interconnection`.
 
-Control Implementation evidence remains consistent with the prior checkpoint: many control-related rows are `Extension Property` candidates with blank concrete OSCAL element paths and notes such as `May map to props[] or calculated from implemented-requirements count`. Examples visible across the screenshots include control counts, allocated/inherited/archived controls, control risk thresholds, assessor fields, master controls, helper fields, and POA&M-related control counts. This is unresolved mapping-design backlog, not proof of a populated `control-implementation` branch.
+These component-reference rows are consistent with the runtime component hydration checkpoint (1,435 lookup rows, 1,428 interconnection rows, 7 software rows), but they do not by themselves prove the entire SSP `system-implementation` branch is complete.
 
-The screenshots also visibly contain Assessment Results rows. Risk/scoring fields such as vulnerability, antivirus, patch, compliance, authorization-package risk, and device-risk scores target Assessment Results observation/property paths and are generally marked `Extension Property` with notes indicating Archer-specific risk scoring mapped as observations. This confirms that the workbook is multi-model and that these rows must not be counted as SSP Control Implementation completion.
+### Control Implementation backlog visibly confirmed
+The screenshots show a large set of `SSP - Control Implementation` rows, predominantly `Mapping_Type = Extension Property`, with many blank concrete `OSCAL_Element_Path` cells. Repeated note: `May map to props[] or calculated from implemented-requirements count`.
 
-Accuracy guardrail: only text/paths sufficiently legible in the supplied screenshots are recorded here. No obscured cell value, truncated path, null percentage, or off-screen workbook row is inferred. For exact row-level reconciliation, use the actual workbook/CSV rather than these images.
+Clearly visible examples include `COUNT_OF_CONTROLS`, `ALLOCATE_BASELINE_CONTROLS`, `CONTROL_SET_VERSION_NUMBER`, `COUNT_OF_CONTROLS_WITHOUT_IMPLEMENTATION_DETAILS`, `COUNT_OF_CONTROLS_WITH_OPEN_POAMS`, `NUMBER_OF_CONTROLS_BEING_INHERITED_BY_OTHERS`, `ARCHIVE_CONTROLS`, `BASELINE_CONTROLS_ALLOCATED_DATE`, `FULL_CONTROL_ASSESSMENT_HELPER`, `CONTROL_RISK_APPETITE`, `PCT_CURRENT_CONTROL_RISK_THRESHOLD`, `CONTROL_RISK_THRESHOLD_HELPER`, `COUNT_OF_CONTROLS_NOT_ASSESSED`, `COUNT_OF_INHERITED_CONTROLS_THAT_HAVE_BEEN_ARCHIVED`, `PCT_OF_SATISFIED_CONTROLS`, `CONTROL_OWNER_CO`, `SECURITY_CONTROL_ASSESSOR_SCA`, `ADD_ADDITIONAL_CONTROLS`, `ALLOCATED_CONTROLS`, `ARCHIVED_CONTROLS`, `INHERITED_CONTROL_SELECTION`, `INHERITABLE_CONTROLS`, `LINK_CNSS_CONTROLS_BY_CONFIDENTIALITY_RATING`, `LINK_CNSS_CONTROLS_BY_INTEGRITY_RATING`, `LINK_CNSS_CONTROLS_BY_AVAILABILITY_RATING`, `HELPER_ALLOCATED_CONTROLS`, `PRECONTROL_ALLOCATION_PROGRESS_VIEW`, `COUNT_OF_FULLY_IMPLEMENTED_CONTROLS`, `CONTROL_SET_VERSION_NUMBER_HRC`, `GS_LAB_CONTROL_ENTITY`, `CONTROL_STANDARDS`, `MASTER_CONTROLS`, `ALLOCATED_CONTROLS_PARTIAL_CONTROL_PROVIDERS`, `ALTERNATE_SECURITY_CONTROL_ASSESSOR_SCA_TEXT`, `EXPORT_CONTROL_ASSESSOR_ECA_TEXT`, `SECURITY_CONTROL_ASSESSOR_SCA_TEXT`, `EXPORT_CONTROLLED_DATA_ITAREAR_IF_APPLICABLE`, `COUNT_OF_CONTROLS_WITH_OPEN_POAMS`, `COUNT_OF_CONTROLS_MISSING_POAMRBD`, `ALTERNATE_SECURITY_CONTROL_ASSESSOR_SCA`, `ALLOCATED_CONTROLS_AUTHORIZATION_PACKAGE`, `CONTROL_SET_TO_ASSESS`, `CHANGE_CONTROL`, `HELPER_OTS_CONTROLS`, `COUNT_OF_INHERITED_CONTROLS`, `COUNT_OF_ACTUAL_CONTROLS_IMPLEMENTED`, `DATE_CONTINUE_TO_CONTROL_IMPLEMENTATION`, `_CURRENT_CONTROL_RISK_THRESHOLD`, `_OF_SATISFIED_CONTROLS`, and `HELPER_ALLOCATED_CONTROLS`.
 
-Source: phone screenshots supplied in ChatGPT conversation on 2026-09-10.
+Interpretation: these rows remain unresolved mapping-design backlog. A `props[]`/calculated suggestion in Notes is not an approved target contract and must not be converted into Control Implementation nodes automatically.
+
+### Assessment Results mappings visibly confirmed
+The workbook contains a substantial Assessment Results section. Visible risk/scoring fields target `assessment-results.results[].observations[].props[]` (path text is visually truncated in places but the observations/property branch is clear) and are generally `Extension Property`, with notes stating Archer-specific risk scoring maps as observation.
+
+Clearly visible examples include `RISK_ACCEPTANCE_RBDS`, `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE`, `SECURITY_COMPLIANCE_SCORE`, `STANDARD_OPERATING_ENVIRONMENT_SCORE`, `COMPUTER_PASSWORD_AGE_SCORE`, `VULNERABILITY_REPORTING_SCORE`, `SECURITY_COMPLIANCE_REPORTING_SCORE`, `TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE`, `AVG_AUTHORIZATION_PACKAGE_RISK_SCORE`, `RISK_SCORE_GRADE`, `AVG_VULNERABILITY_SCORE`, `AVG_PATCH_SCORE`, `AVG_SECURITY_COMPLIANCE_REPORTING_SCORE`, `AVG_ANTIVIRUS_SCORE`, `AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE`, `AVG_COMPUTER_PASSWORD_AGE_SCORE`, `AVG_VULNERABILITY_REPORTING_SCORE`, `AVG_SECURITY_COMPLIANCE_SCORE`, `TOTAL_PACKAGE_INHERENT_RISK`, `TOTAL_PACKAGE_RESIDUAL_RISK`, `ADJUSTED_TOTAL_RISK_SCORE`, `ADJUSTED_AVERAGE_RISK_SCORE`, `CURRENT_HIGHEST_DEVICE_RISK_SCORE`, `CURRENT_AVERAGE_DEVICE_RISK_SCORE`, `CURRENT_CONTROL_RISK_SCORE`, `PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD`, `PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD`, `BASELINE_HIGHEST_DEVICE_RISK_SCORE`, `BASELINE_AVERAGE_DEVICE_RISK_SCORE`, `BASELINE_CONTROL_RISK_SCORE`, `CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD`, `CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD`, `INITIAL_RISK_ASSESSMENT`, and `RISK_ASSESSMENT_REPORT`.
+
+### Other model evidence visible
+- `FINDINGS` is visible as an Assessment Results reference row targeting a findings branch.
+- `POAMS` is visible as a POA&M reference row.
+- `REPORT_TO_BEGIN_ASSESSMENT`, `APPROVAL_TO_BEGIN_ASSESSMENT`, and `PREASSESSMENT_REVIEW_COMMENTS` are visible under Security Assessment Plan-related mappings.
+- `BASELINE_RECOMMENDATION` is visible under Profile with target `profile.imports[]` and `Extension Property` semantics.
+
+### Accuracy / completion conclusion
+These clearer screenshots materially improve the transcription of the workbook. They confirm that SSP metadata, system-characteristics, responsible-party, security-impact, and component-reference mappings have substantial concrete target coverage, while the Control Implementation area still contains a large unresolved mapping backlog. Assessment Results is a separate model area and must not be counted toward SSP completion.
+
+Do **not** claim full SSP completion from this workbook evidence. The correct next completion proof remains generated DIM/FACT + registry reconciliation for the `system-implementation`, `control-implementation`, and `implemented-requirements` branches, followed by assembled OSCAL schema/constraint validation.
+
+Accuracy guardrail: no obscured/truncated value is treated as exact unless sufficiently legible in the clearer screenshots. Exact workbook/CSV values take precedence over this visual transcription.
+
+Source: clearer phone screenshots supplied in ChatGPT conversation on 2026-09-10.
