@@ -90,9 +90,13 @@ The component identity/type release is accepted. Its read-only mapper run
 completed with 67,671 nodes and 64,858 edges, with no duplicate or dangling
 keys and no writes. The exact 12-node and 12-edge reduction matches the 12
 cross-field component IDs already captured by the source-contract checkpoint.
-The next production increment is an approved referenced-record lookup keyed by
-`ContentId` so component title, description, and status can be hydrated without
-inventing defaults. All 114 repository tests pass.
+Run the one-time aggregate-only
+[component lookup-source discovery](notebooks/validation/RUN_AFTER_07_ssp_component_lookup_source_discovery.py)
+in the same session; do not rerun Cells 1 through 7. It profiles Snowflake
+objects that match the governed `ContentId` set, reports key uniqueness and
+title/description/status field coverage, and never prints identifiers or
+values. Post its complete output for source review. All 121 repository tests
+pass.
 
 ## Read-only inspection SQL
 
