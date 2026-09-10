@@ -1,9 +1,10 @@
-# Assessment Results — grouped mapping work
+# Assessment Results — score mapping
 
 Active source: Source One, Archer Authorization Package `CURATED_JSON`.
-SSP is parked and preserved. The first four observation-score mappings are now
-implemented in a separate read-only cell; live Snowflake acceptance is pending.
-The remaining grouped rows are not implemented by this release.
+SSP is parked and preserved. The first four observation-score mappings are
+live accepted. The same separate read-only cell now implements thirteen more
+matching fields: seventeen selected fields in total. This expanded release is
+pending a live run; it does not complete all 45 AR mapping rows.
 
 ## Four groups in the posted CSV
 
@@ -15,7 +16,7 @@ Counts include that duplicate and do not count multiline Notes as rows.
 
 | Group | Literal target in CSV | Type | Row occurrences | Next work |
 | --- | --- | --- | ---: | --- |
-| Observation scores | `assessment-results.results[].observations[]` | Extension Property | 20 | First four fields implemented; live run pending. Remaining rows are not enabled. 19 distinct fields; duplicate requires reconciliation. |
+| Observation scores | `assessment-results.results[].observations[]` | Extension Property | 20 | 17 fields implemented: 4 live accepted, 13 pending live. Three occurrences / two distinct fields remain excluded for duplicate/Notes questions. |
 | Observation or property | `assessment-results.results[].observations[] or props[]` | Extension Property | 17 | Select one exact destination and value representation. The literal `or` is an alternative, not a nested property path. |
 | Workflow audit properties | `assessment-results.results[].props[]` | Extension Property | 7 | Notes make inclusion conditional on audit-trail need. Confirm inclusion and property name/value rules. Model label is `Extension Properties`, but the path targets Assessment Results. |
 | Finding references | `assessment-results.results[].findings[]` | Reference | 1 | Establish reference shape, finding identity and result-parent association. Keep separate from scores. |
@@ -25,7 +26,7 @@ Grouping shares code; it does not combine field values into one score, merge
 distinct observations, or discard source/parent identity. Different Notes remain
 separate contracts even when paths match.
 
-## First batch — implemented; live run pending
+## First batch — live accepted
 
 Start with `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE`, and
 `SECURITY_COMPLIANCE_SCORE`. The CSV Notes say to map these as observations.
@@ -55,18 +56,66 @@ identity functions; every containment edge references its actual parent.
 The current registry must confirm these three existing paths and their rules.
 The cell neither inserts registry rows nor uses the SSP DIM/FACT loader.
 
-### Run one mapping cell
+The [uploaded run](ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10)
+records 2,813 emitted observations for **each** of these four fields, zero missing
+or invalid values, 16,878 nodes, 14,065 edges and 2,813 partial documents. Mapping
+and registry errors, duplicate keys and dangling edges are all zero. No database
+writes occurred. This establishes live acceptance for those four fields, not
+full-model completeness or independent source-to-payload equality for every value.
 
-Copy [Assessment Results score mapper](../notebooks/assessment_results/01_map_observation_scores.py)
-into one new Python cell and run it in the existing notebook session. It needs
+## Expanded batch — thirteen additional fields, pending live
+
+The owner requested continuing the matching score group. All fields below use
+the same exact Excel path `assessment-results.results[].observations[]`,
+`Extension Property` type, and Notes `Archer-specific risk scoring - map as observation`.
+Each source scalar becomes the value of one named property inside its own
+observation. These are source-provided scores and grades: **do not calculate new
+averages, totals or grade bands from their names**.
+
+| Additional Archer field | Property name inside its observation |
+| --- | --- |
+| `STANDARD_OPERATING_ENVIRONMENT_SCORE` | `standard-operating-environment-score` |
+| `COMPUTER_PASSWORD_AGE_SCORE` | `computer-password-age-score` |
+| `VULNERABILITY_REPORTING_SCORE` | `vulnerability-reporting-score` |
+| `SECURITY_COMPLIANCE_REPORTING_SCORE` | `security-compliance-reporting-score` |
+| `TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE` | `total-authorization-package-risk-score` |
+| `AVG_AUTHORIZATION_PACKAGE_RISK_SCORE` | `avg-authorization-package-risk-score` |
+| `RISK_SCORE_GRADE` | `risk-score-grade` |
+| `AVG_VULNERABILITY_SCORE` | `avg-vulnerability-score` |
+| `AVG_PATCH_SCORE` | `avg-patch-score` |
+| `AVG_ANTIVIRUS_SCORE` | `avg-antivirus-score` |
+| `AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE` | `avg-standard-operating-environment-score` |
+| `AVG_COMPUTER_PASSWORD_AGE_SCORE` | `avg-computer-password-age-score` |
+| `AVG_VULNERABILITY_REPORTING_SCORE` | `avg-vulnerability-reporting-score` |
+
+The original four remain selected and their payload/identity rules are unchanged.
+`AVG_SECURITY_COMPLIANCE_SCORE` remains excluded because it appears twice in the
+transcription. `TOTAL_PACKAGE_INHERENT_RISK` remains excluded because the earlier
+owner-provided Notes differ from the CSV. Neither uncertainty blocks these
+thirteen matching fields. Findings, result-level workflow properties and the
+literal `observations[] or props[]` group remain outside this release.
+
+Against the posted 45-row inventory: **4 accepted + 13 implemented/pending live
++ 28 not enabled = 45**. Do not count the thirteen as live accepted until the
+expanded report is posted. Missing values are source gaps, not exercised mappings.
+
+### Replace and run only the Assessment Results mapping cell
+
+Refresh [Assessment Results score mapper](../notebooks/assessment_results/01_map_observation_scores.py),
+copy the complete file, and **replace the separate AR cell you just ran**. Run
+that cell once in the existing notebook session. This is the actual mapper,
+not the grouping report or SSP assembler. It needs
 the inputs from Cell 2 and helpers from Cell 4; keep `EXECUTE_WRITES = False`.
 **Do not replace SSP Cells 4 or 5, change the model in CONFIG, or rerun Cell 7.**
 If the session closed, initialize the unchanged Cells 1, 2 and 4, then run this
-new cell. Cell 4 only defines helpers, so Cell 3 is not required for this batch.
+AR cell. Cell 4 only defines helpers, so Cell 3 is not required for this batch.
 
 Post only `AR_SCORE_RUN_REPORT`, which is printed automatically. Do not post
 source payloads or the document objects. A successful result says
 `MAPPED_SCOPE_BUILT` and reports per-field emitted/missing counts and key checks.
+Confirm `MAPPING_RELEASE` is `ar-observation-scores-v2-17-fields` and the
+report lists 17 selected fields. With the same 45 mapping rows, 28 other rows
+should be reported as not processed; changed inputs may have different totals.
 `BLOCKED` means inspect the listed contract errors or invalid counts; no batch
 outputs are released. Missing source values do not count as exercised mappings.
 
@@ -81,7 +130,8 @@ before running this mapping cell.
 - This CSV supersedes the earlier summary that placed all scores directly at
   `assessment-results.results[].observations[].props[]`. No AR emission code was
   released under that interpretation. The later owner-approved inline score
-  property representation above applies only to the first four fields.
+  property representation applies to the selected matching score fields, not
+  the unresolved alternatives or workflow/finding groups.
 - The owner verbally confirmed “Archer specific risk scoring, map as observation
   or property” for Excel rows 74, 75, 98, 99, 134, 135, 136, 141, 143, 156, 157,
   158, 460, 571, 573, 599 and 604. Row 460 is `RISK_ASSESSMENT`. That wording
@@ -113,9 +163,11 @@ The historical registry has result and observation identity conventions, but
 does not prove the current nested-property contract. Registry writes require a
 separately approved setup after the schema and collection rules are known.
 
-Nine focused local grouping tests passed before this implementation release.
-The separate score mapper passes 20 focused payload/identity tests; the full
-repository suite passes 232 local tests. These are not live Snowflake results. The
-accepted SSP cells, registry, DIM and FACT remain unchanged. Live Assessment
-Results execution is unverified until its report is posted. Track decisions in
+The expanded release passes 24 score-mapper tests; the full repository suite
+passes **236 local tests**. A separate local check using the posted CSV and
+synthetic source values confirms 17 selected fields and 28 excluded row
+occurrences. Verification covers payloads, exact contracts, parent/child keys,
+exclusions and first-four compatibility. Local tests do not establish live
+acceptance of the thirteen new fields. The accepted
+SSP cells, registry, DIM and FACT remain unchanged. Track decisions in
 [Mapping Progress](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue).

@@ -1,4 +1,4 @@
-# Assessment Results batch 1: actual in-memory mapping, not a grouping report.
+# Assessment Results release 2: cumulative mapping of 17 approved score fields.
 # Run in the existing notebook session after Cells 2 and 4 have initialized.
 # Does not change CONFIG, SSP outputs, registry, DIM or FACT. No database writes.
 import datetime
@@ -8,9 +8,16 @@ import re
 from decimal import Decimal
 
 
+AR_SCORE_RELEASE = "ar-observation-scores-v2-17-fields"
 AR_SCORE_FIELDS = (
     "VULNERABILITY_SCORE", "ANTIVIRUS_SCORE", "PATCH_SCORE",
     "SECURITY_COMPLIANCE_SCORE",
+    "STANDARD_OPERATING_ENVIRONMENT_SCORE", "COMPUTER_PASSWORD_AGE_SCORE",
+    "VULNERABILITY_REPORTING_SCORE", "SECURITY_COMPLIANCE_REPORTING_SCORE",
+    "TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE", "AVG_AUTHORIZATION_PACKAGE_RISK_SCORE",
+    "RISK_SCORE_GRADE", "AVG_VULNERABILITY_SCORE", "AVG_PATCH_SCORE",
+    "AVG_ANTIVIRUS_SCORE", "AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE",
+    "AVG_COMPUTER_PASSWORD_AGE_SCORE", "AVG_VULNERABILITY_REPORTING_SCORE",
 )
 AR_ROOT_PATH = "assessment-results"
 AR_RESULT_PATH = "assessment-results.results[]"
@@ -180,6 +187,7 @@ def build_ar_score_batch(source_records, mapping_rows, registry_rows, config, he
     registry_errors, registry = _ar_registry_contract(registry_rows)
     report = {
         "MODEL": "ASSESSMENT_RESULTS", "TARGET_PATH": AR_OBSERVATION_PATH,
+        "MAPPING_RELEASE": AR_SCORE_RELEASE,
         "STATUS": "BLOCKED", "SELECTED_FIELDS": list(AR_SCORE_FIELDS),
         "OTHER_AR_MAPPING_ROWS_NOT_PROCESSED": outside_batch,
         "MAPPING_CONTRACT_ERRORS": mapping_errors, "REGISTRY_CONTRACT_ERRORS": registry_errors,
@@ -296,7 +304,9 @@ if __name__ == "__main__":
     AR_SCORE_NODES = []
     AR_SCORE_EDGES = []
     AR_SCORE_DOCUMENTS = {}
-    AR_SCORE_RUN_REPORT = {"STATUS": "NOT_RUN", "WRITES_EXECUTED": False}
+    AR_SCORE_RUN_REPORT = {
+        "STATUS": "NOT_RUN", "WRITES_EXECUTED": False, "MAPPING_RELEASE": AR_SCORE_RELEASE,
+    }
     required = ("source_df", "mapping_artifact_pdf", "element_registry_df", "CONFIG")
     if any(name not in globals() for name in required):
         raise RuntimeError("Initialize existing notebook Cells 1, 2 and 4 first; no SSP rerun is needed")

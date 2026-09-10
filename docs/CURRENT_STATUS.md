@@ -6,18 +6,29 @@ Last reconciled: 2026-09-10
 **Current direction:** SSP leftovers are parked while other Excel models are
 reviewed. The [model/path progress and clarification queue](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue)
 separates status, evidence/reason, and information needed for each scope.
-**Assessment Results batch 1 is implemented; live run pending.** The owner
-approved one observation per score field with the score in a named property
-inside that observation. The [new separate mapping cell](../notebooks/assessment_results/01_map_observation_scores.py)
-implements `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE` and
-`SECURITY_COMPLIANCE_SCORE` at `assessment-results.results[].observations[]`.
-It builds actual in-memory nodes, edges and mapped-subset documents, with no
-database writes. Run it after existing Cells 2 and 4 are initialized; do not
-replace SSP cells, change CONFIG's model or rerun Cell 7.
-See [complete run instructions and remaining groups](ASSESSMENT_RESULTS_START_HERE.md).
-The CSV's other rows remain pending: grouping 45 occurrences / 44 distinct
-field names was not implementation or live acceptance. SSP code and the
-accepted baseline stay unchanged. No successful AR runtime is recorded yet.
+**Assessment Results batch 1 is live accepted; thirteen more fields are implemented,
+pending live.** The [uploaded AR checkpoint](ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10)
+records `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE` and
+`SECURITY_COMPLIANCE_SCORE` each emitted for 2,813 records, with zero missing or
+invalid values. The run produced 16,878 nodes, 14,065 edges and 2,813 partial
+documents, with no contract errors, duplicate keys, dangling edges or writes.
+
+The [same separate mapping cell](../notebooks/assessment_results/01_map_observation_scores.py)
+now adds thirteen matching fields at `assessment-results.results[].observations[]`.
+The representation remains one named score property inside one observation per
+field. No score formula, registry write or SSP change is introduced. Current AR
+inventory: **45 rows = 4 accepted + 13 implemented/pending live + 28 not enabled**.
+This is not full Assessment Results completeness or OSCAL schema validation.
+
+**Next run:** refresh the linked mapper and replace only the separate AR cell
+you just ran, then run it once with writes disabled. It needs the existing
+inputs from Cell 2 and helpers from Cell 4. Do not replace SSP cells, change
+CONFIG's model, rerun Cell 7, or run the grouping report/SSP assembler.
+If the session closed, initialize unchanged Cells 1, 2 and 4 first.
+Post its printed report, identified by `ar-observation-scores-v2-17-fields`.
+See the [thirteen-field list, exclusions and full run instructions](ASSESSMENT_RESULTS_START_HERE.md).
+All 236 local tests pass. The CSV-backed local check used synthetic source
+values, not live Snowflake data; the thirteen new fields still need their run.
 The clearer Excel review identifies a skipped `HELPER_PTA_CALC` property and
 a `PACKAGE_TYPE` property-name mismatch. Both are pending corrections under
 System Characteristics; Control Implementation is parked. Those SSP corrections
@@ -703,13 +714,14 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-### Active review — other Excel models; SSP corrections parked
+### Active implementation — Assessment Results; SSP corrections parked
 
-The owner chose to pause remaining SSP work and inspect other Excel models.
-Assessment Results score properties are a reviewed candidate, not an implemented
-new release. The progress register now records exact observed paths, status,
-reasons and clarification needs, including nested parent identity and registry
-evidence. No mapper configuration, notebook code or database state changed.
+The owner chose to pause remaining SSP work and continue matching Assessment
+Results score mappings. Batch one is accepted; the cumulative seventeen-field
+mapper adds thirteen fields pending live acceptance. Follow the single AR-cell
+run instruction at the top of this page. The [progress register](MAPPING_PROGRESS.md)
+separates accepted fields, newly implemented fields and unresolved rows.
+No SSP mapper configuration, registry, DIM or FACT changes are part of this release.
 
 ### Parked Excel review — two System Characteristics corrections, not coded
 
