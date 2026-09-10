@@ -70,4 +70,18 @@ Result: `OSCAL MAPPING RUN COMPLETE` with Nodes **70,102**, Edges **67,289**, Wr
 
 Interpretation: the mapper now completes the in-memory SSP graph and pre-write graph integrity checks successfully at this checkpoint. This is not yet a production write-readiness/conformance claim because writes remain disabled and downstream semantic/schema readiness gates still apply.
 
+## 2026-09-10 — SSP mapped-scope assembly passed
+Mapped-scope assembly consumed the successful in-memory graph checkpoint.
+
+- documents assembled: **2,813**
+- graph nodes consumed: **70,102**
+- graph edges consumed: **67,289**
+- root nodes consumed: **2,813**
+- writes executed: **False**
+- result: **MAPPED-SCOPE ASSEMBLY PASSED**
+- complete SSP claim: **False**
+- OSCAL schema-valid claim: **False**
+
+Interpretation: all 2,813 SSP source/root records were assembled successfully for the currently mapped scope. This validates mapped-scope assembly only; it deliberately does not claim complete SSP coverage or OSCAL schema validity. No writes were executed.
+
 Source: phone screenshots supplied in ChatGPT conversation on 2026-09-10.
