@@ -679,3 +679,11 @@ rows (7 software and 1,428 interconnection), with 7 software descriptions and
 968 interconnection descriptions. The graph should remain 67,671 nodes and
 64,858 edges because only payload fields changed. All 156 repository tests
 pass.
+
+The tester handoff is documented in
+[`SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md`](SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md).
+It explains OSCAL and mapper business behavior before giving the field-to-node,
+payload, deterministic PK, FACT-to-DIM FK, hierarchy, negative, safety, and
+known-gap test cases. Use that document as the QA contract for this merged
+release.
+
