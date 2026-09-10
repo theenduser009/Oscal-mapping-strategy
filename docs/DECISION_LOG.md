@@ -1,5 +1,19 @@
 # Decision Log
 
+## 2026-09-10 — Excel-defined scope only; components scope reconfirmed
+
+The user reiterated that implementation must follow the Excel field, model,
+element path, mapping type and Notes, not the OSCAL conformance checklist.
+The recorded Excel/component contract evidence has six Reference rows targeting
+`system-security-plan.system-implementation.components[]`; all six identity/type
+handlers already exist. Two source fields had no observed populated references.
+There is no confirmed separate Excel component-status row. The earlier proposal
+to treat `components[].status.state` as the next mapping is withdrawn; it came
+from the conformance checklist. Keep that gap separate from executable backlog.
+Existing explicitly approved partial hydration is preserved. No mapper code or
+database changes are required for this scope clarification. Do not infer any
+unrecorded workbook row or fill blank/TBD targets without an approved contract.
+
 ## 2026-09-10 — Accept mapped-scope SSP assembly
 
 The user posted the successful assembler output: 2,813 documents, 2,813 roots,

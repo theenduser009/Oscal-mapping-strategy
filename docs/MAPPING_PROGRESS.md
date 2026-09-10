@@ -132,6 +132,18 @@ All six reference fields below target SI:
 | `SAP_INTAKE_FORM_INTERCONNECTIONS` | Type `interconnection`, stable reference identity/UUID; no observed active references; hydration deferred. |
 
 Identity/type and the approved partial hydration are live accepted [E4, E9].
+**Excel scope reconfirmed 2026-09-10:** the recorded screenshot and component
+contract evidence contains six `Reference` rows, all targeting
+`system-security-plan.system-implementation.components[]`, with notes declaring
+their component types [E1, E9]. All six reference handlers are implemented.
+`SUBSYSTEMS` and `SAP_INTAKE_FORM_INTERCONNECTIONS` had no populated references
+in the recorded run; that is not live proof of populated-input behavior.
+No separate Excel row for `components[].status.state` is confirmed in this
+evidence. Do not promote that conformance gap into the next mapping task.
+The owner-approved partial hydration remains valid; it is not authorization
+to add other unlisted child fields. This is a bounded evidence statement, not
+a claim to have parsed the complete current workbook.
+
 Interconnection lookup coverage is 1,428 titles and 968 descriptions: 460
 descriptions remain absent. Component status is not emitted. These are missing
 source/decision gaps, not completed components.
