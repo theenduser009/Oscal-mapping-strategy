@@ -131,6 +131,7 @@ class ComponentSourceRoutingAuditTests(unittest.TestCase):
         )
         self.assertIn("AMBIGUOUS_{}_SOURCE_ROUTE", self.source)
         self.assertIn("category_populated_ids", self.source)
+        self.assertIn('{"ARRAY", "NULL_VALUE"}', self.source)
 
     def test_exact_six_excel_rows_produce_the_source_type_contract(self):
         contract = self.helpers["_routing_mapping_contract"](
