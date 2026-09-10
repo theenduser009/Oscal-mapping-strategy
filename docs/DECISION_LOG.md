@@ -546,3 +546,22 @@ release therefore emits only evidence-backed UUID and type fields and does not
 claim complete OSCAL components. Completing that branch requires an approved
 referenced-record lookup keyed by `ContentId`. The full test suite has 114
 passing tests, and runtime validation remains read-only.
+
+## 2026-09-10 — Accept component identity/type runtime release
+
+The post-release Cell 7 run completed read-only with 67,671 nodes and 64,858
+edges, zero duplicate node or edge keys, zero dangling source or target edges,
+and passed pre-write validation. No DIM or FACT changes were made.
+
+The prior accepted graph had 67,683 nodes and 64,870 edges. The exact reduction
+of 12 nodes and 12 containment edges matches the 12 governed component IDs
+already proved to overlap across source fields. The run therefore confirms the
+intended `ContentId` deduplication and is accepted; it is not evidence of data
+loss. No component source-contract extraction or mapper rerun is needed.
+
+The next root-to-leaf production increment is component hydration. Before code
+changes, establish an approved Archer referenced-record lookup keyed by
+`ContentId` and prove key uniqueness, reference coverage, and the exact source
+fields and enumerations for title, description, and status. Missing or
+ambiguous lookup rows must fail closed rather than receive invented defaults.
+
