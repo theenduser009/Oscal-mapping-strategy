@@ -680,35 +680,40 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-### Latest update — authorization-date contract missing; HOLD full reruns
+### Latest update — authorization-date implementation ready; live run pending
 
-The latest [live result](live-snowflake-results.md) names **`ATOIATO_DATE` →
-`system-security-plan.system-characteristics.date-authorized`** as the next
-unsupported handler. Component hydration again loaded 1,435 rows successfully.
-The posted error truncates the mapping type and does not include the Excel
-Notes. Repository, reachable history, and workspace review found no approved
-date conversion rule. A historical payload containing this field does not
-establish its intended transformation semantics.
+The latest [live report](live-snowflake-results.md) inspected **54 canonical
+SSP mappings** and identified two unsupported contracts. It supplied the exact
+`ATOIATO_DATE` → `system-security-plan.system-characteristics.date-authorized`
+rule: type `Transform`, Notes `Convert timestamp to DateDatatype`.
+The second row is `RECOMMENDED_SECURITY_CATEGORY` with Notes `All Nulls`.
+These are contract counts, not populated-record counts or completed mappings.
 
-**Superseding run instruction:** do not repeat Cells 1–7 or the assembler now.
-Run only the new
-[in-memory mapping contract report](../notebooks/validation/RUN_AFTER_04_ssp_mapping_contract_report.py)
-in the existing session. It lists **all** unsupported canonical rows with
-their original Excel paths, mapping types, Notes and transformation logic.
-It does not query Snowflake, read source values, count populated records, or
-change mapper/registry/DIM/FACT data. Post the complete report in the status
-file so remaining contracts can be reconciled together before another run.
+Cell 4 now implements the authorization-date rule for valid ISO date/timestamp
+strings and native dates: emit `YYYY-MM-DD` on the existing parent singleton,
+retain the source calendar day, and make no timezone shift. The parser checks
+calendar/time/offset validity; ambiguous locale strings, epochs and wrappers
+require source evidence instead of guessing. Existing `published` and
+`last-modified` values are unchanged. The all-null row is also unchanged:
+absent values skip, populated values fail without an approved contract.
 
-No authorization-date handler is being guessed or published. The missing
-date format, output normalization and null/invalid-date rules must come from
-the mapping contract (or its owner if Notes are incomplete). The current
-task record confirms GPT-6 Astra, and the focused evidence review used that
-model explicitly. OpenAI Docs was used only to check the model request; it
-did not determine mapping semantics.
+**Run now:** replace only
+[Cell 4](../notebooks/cells/04_parsing_transform_payload_helpers.py), then run
+**4, 5, 6, 7** in the existing session with `EXECUTE_WRITES = False`.
+If the session restarted, run all seven. No registry setup or contract-report
+rerun is needed. Post Cell 7's complete output. Run the mapped-scope assembler
+only if Cell 7 succeeds.
 
-193 local tests pass, including report tests that collect multiple rejected
-contracts, retain Notes, exclude source values and require no database objects.
-This is evidence collection, **not a production fix or live acceptance**.
+203 local tests pass, including date conversion, invalid dates/offsets,
+unchanged metadata timestamps and canonicalization-to-graph regressions.
+**Live acceptance and actual Archer date-format coverage remain pending.**
+See the [date release checkpoint](checkpoints/2026-09-10_ssp_authorization_date_mapping.md).
+
+The new [mapping register](MAPPING_PROGRESS.md) tracks source field, OSCAL
+model/path, implementation, live acceptance, payload proof and remaining gaps.
+[Today's report](daily/2026-09-10.md) is ready for manager review; it has not been
+sent to the manager. Daily reporting in this task is scheduled for **5 PM
+Eastern**. Keep the computer and app running for scheduled local-file work.
 
 ### Previous correction — property routing (retained for context)
 
@@ -728,8 +733,8 @@ artifact paths/explicit targets remain available, with a separate
 other branches, timestamp rules, or registry definitions are changed.
 
 The prior instruction was to replace Cell 3 and rerun the graph. That run
-now has the authorization-date failure above. **Do not repeat that instruction**;
-use the current in-memory report instead. Keep `EXECUTE_WRITES = False`.
+reached the authorization-date failure, now addressed in the release above.
+Use the current Cell 4 run instruction, not the older report instruction.
 
 All **189 local tests** pass, including eight new regressions through actual
 Pandas canonicalization and existing property/graph logic. The graph test

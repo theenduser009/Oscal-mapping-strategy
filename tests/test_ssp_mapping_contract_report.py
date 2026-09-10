@@ -26,7 +26,8 @@ class MappingContractReportTests(unittest.TestCase):
         return result["mapping_contract_report_result"], output.getvalue()
 
     def test_reports_all_rejections_with_notes_and_no_source_values(self):
-        date = _mapping_row("ATOIATO_DATE", SC, "date-authorized", "Transform")
+        # Wrong type must still be reported after the approved Transform was added.
+        date = _mapping_row("ATOIATO_DATE", SC, "date-authorized", "Reference")
         date.update(NOTES="Fixture notes, not an approved date contract.",
                     TRANSFORMATION_LOGIC="Fixture rule for report preservation.",
                     CURATED_JSON="must-not-print", SOURCE_RECORD_ID="must-not-print")

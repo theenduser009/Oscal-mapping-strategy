@@ -136,13 +136,15 @@ approved extension property to the parent instead of `props[]`. The current
 screenshot-confirmed property sources. It preserves the original artifact
 path and leaves the strict Cell 4 guards unchanged.
 
-The next live failure is `ATOIATO_DATE` → `date-authorized`, whose mapping
-type/Notes are not fully recorded. **Do not rerun the mapper or assembler.**
-In the current session run only the
-[in-memory mapping contract report](../validation/RUN_AFTER_04_ssp_mapping_contract_report.py)
-and post its output. It prints every unsupported row with its Excel Notes;
-no database query or source-value access is involved. Keep writes disabled.
-193 local tests pass; live acceptance is still pending and no date rule is guessed.
+The contract report supplied the `ATOIATO_DATE` Transform rule: convert timestamp
+to DateDatatype. The current [Cell 4](04_parsing_transform_payload_helpers.py)
+implements valid ISO timestamp/date to `YYYY-MM-DD` without timezone conversion.
+Null skips; invalid/ambiguous formats fail. Existing metadata dates are unchanged.
+
+**Replace only Cell 4, then run 4, 5, 6, 7** in the current session with writes
+disabled. If the session restarted, run all seven. Do not repeat registry setup
+or contract reports. Post Cell 7 output; run the assembler only after success.
+203 local tests pass; this release still needs live acceptance.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

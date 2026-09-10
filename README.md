@@ -7,6 +7,8 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 - [`notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`](notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py) — the complete seven-cell Snowflake/Snowpark notebook source.
 - [`notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py`](notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py) — the guarded, insert-only setup cell for the governed metadata role and party registry paths.
 - [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) — verified state, safety gate, and the single next action.
+- [`docs/MAPPING_PROGRESS.md`](docs/MAPPING_PROGRESS.md) — Archer field-to-OSCAL mapping register: implementation, live evidence, and pending gaps.
+- [Today's manager report](docs/daily/2026-09-10.md) — daily change and cumulative progress; reports are scheduled for 5 PM Eastern.
 - [`docs/ARCHITECTURE_CONTEXT.md`](docs/ARCHITECTURE_CONTEXT.md) — design guardrails that must survive future edits.
 - [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) — dated project decisions and GitHub checkpoints.
 - [`docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md`](docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md) — pinned version sources and the first-tier required SSP contract.
@@ -115,13 +117,17 @@ screenshot-confirmed extension-property fields now use the existing `props[]`
 collection while retaining the original artifact path. Unknown transformations
 still fail; no database changes or new registry rows are needed.
 
-The subsequent live run now rejects `ATOIATO_DATE` → `date-authorized`.
-Its full mapping type/Notes are not yet recorded. **Hold further full mapper
-and assembler runs.** Run only the
-[in-memory mapping contract report](notebooks/validation/RUN_AFTER_04_ssp_mapping_contract_report.py)
-in the existing session and post its complete output. It lists all unsupported
-rows and Excel Notes without querying Snowflake or accessing source values.
-No date handler is invented; 193 local tests pass, but live acceptance is pending.
+The subsequent report supplied the exact `ATOIATO_DATE` → `date-authorized`
+contract: Transform, Notes `Convert timestamp to DateDatatype`. Cell 4 now
+implements ISO timestamp/date to `YYYY-MM-DD`, retaining the source calendar
+date and leaving metadata timestamps untouched. Invalid or ambiguous formats
+still fail; the all-null security-category mapping is not implicitly approved.
+
+**Replace only [Cell 4](notebooks/cells/04_parsing_transform_payload_helpers.py)**,
+then run **4, 5, 6, 7** in the existing session with writes disabled. If the
+session restarted, run all seven. No registry setup or report rerun is needed.
+Post Cell 7 output; run the assembler only after success. 203 local tests pass;
+live acceptance is pending. [Release details](docs/checkpoints/2026-09-10_ssp_authorization_date_mapping.md).
 
 ## Read-only inspection SQL
 

@@ -173,6 +173,8 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
 
     def test_real_graph_has_one_parent_and_linked_deduplicated_properties(self):
         rows = [mapping(), mapping(),
+                mapping("ATOIATO_DATE", SC + ".date-authorized",
+                        OSCAL_FIELD_NAME="date-authorized", MAPPING_TYPE="Transform"),
                 mapping("ACRONYM", SC + ".system-name-short",
                         OSCAL_FIELD_NAME="system-name-short", MAPPING_TYPE="Direct")]
         canonical = self.canonicalize(rows)
@@ -188,7 +190,8 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             graph = runpy.run_path(str(CELLS / "05_registry_graph_builder.py"), init_globals=helpers)
         source = Frame([{"SOURCE_RECORD_ID": record, "CURATED_JSON": {
-            "ACRONYM": "Example", "INFORMATION_SYSTEM_TYPE": {"ValuesListIds": ["101", "101"]}
+            "ACRONYM": "Example", "INFORMATION_SYSTEM_TYPE": {"ValuesListIds": ["101", "101"]},
+            "ATOIATO_DATE": "2026-09-10T23:50:00-12:00",
         }} for record in ("r1", "r2")])
         nodes, edges = graph["build_oscal_graph"](source, None, registry(), "SSP", "Archer", "fixture")
         self.assertEqual(len(nodes.rows), 6)
@@ -197,7 +200,8 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
         self.assertEqual(len(keyed), 6)
         for node in nodes.rows:
             if node["ELEMENT_PATH"] == SC:
-                self.assertEqual(json.loads(node["METADATA_JSON"]), {"system-name-short": "Example"})
+                self.assertEqual(json.loads(node["METADATA_JSON"]),
+                                 {"system-name-short": "Example", "date-authorized": "2026-09-10"})
             if node["ELEMENT_PATH"] == PROPS:
                 self.assertEqual(json.loads(node["METADATA_JSON"]),
                                  {"name": "information-system-type", "value": "Mission Critical"})

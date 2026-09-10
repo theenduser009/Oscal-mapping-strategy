@@ -503,6 +503,8 @@ print("Mapped registry owner paths:", len(MAPPINGS_BY_ELEMENT_PATH))
 
 # %% Cell 4 - Generic parsing, transformation, and payload helpers
 
+import datetime
+
 SKIP_VALUE = object()
 
 RESPONSIBLE_PARTY_ROLE_DEFINITIONS = {
@@ -1552,6 +1554,41 @@ def transform_last_modified(value):
     return _preserve_metadata_timestamp(value, "last-modified")
 
 
+def transform_authorization_date(value):
+    # Excel contract: ATOIATO_DATE -> date-authorized, Transform,
+    # Notes: Convert timestamp to DateDatatype.
+    # Retain the source calendar date; do not invent a timezone or shift days.
+    value = _to_python(value)
+    if not _has_value(value):
+        return SKIP_VALUE
+    error_message = (
+        "ATOIATO_DATE requires a valid ISO date or ISO timestamp "
+        "(YYYY-MM-DD, or YYYY-MM-DDTHH:MM:SS with optional fraction/offset); "
+        "numeric epochs, locale dates and object wrappers require source review"
+    )
+    try:
+        if isinstance(value, (datetime.datetime, datetime.date)):
+            return datetime.date(value.year, value.month, value.day).isoformat()
+        if not isinstance(value, str):
+            raise ValueError(error_message)
+        text = value.strip()
+        if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
+            return datetime.date.fromisoformat(text).isoformat()
+        if not re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt ][0-9]{2}:[0-9]{2}:[0-9]{2}"
+            r"(?:\.[0-9]{1,9})?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?",
+            text,
+        ):
+            raise ValueError(error_message)
+        normalized = text[:10] + "T" + text[11:]
+        if normalized[-1:] in {"Z", "z"}:
+            normalized = normalized[:-1] + "+00:00"
+        return datetime.datetime.fromisoformat(normalized).date().isoformat()
+    except (ValueError, TypeError, OverflowError):
+        # Do not include source values or record IDs in notebook errors.
+        raise ValueError(error_message) from None
+
+
 def transform_metadata_title(value):
     value = _to_python(value)
     if not isinstance(value, str) or not value.strip():
@@ -1905,6 +1942,19 @@ def _mapping_handler_for_row(mapping_row):
             "Authorization comments",
         )
         handler = "approved-text"
+    elif source_field == "ATOIATO_DATE" or (
+        owner_path == SYSTEM_CHARACTERISTICS_ELEMENT_PATH
+        and target_field == "date-authorized"
+    ):
+        _validate_exact_mapping(
+            mapping_row,
+            "ATOIATO_DATE",
+            SYSTEM_CHARACTERISTICS_ELEMENT_PATH,
+            "date-authorized",
+            "transform",
+            "Authorization date",
+        )
+        handler = "authorization-date"
     elif owner_path == METADATA_ELEMENT_PATH and target_field == "published":
         if mapping_type != "transform":
             raise ValueError("Metadata published mapping type must be Transform")
@@ -2001,6 +2051,8 @@ def apply_mapping_transform(mapping_row, value, source_record_id):
         return transform_security_objective(value)
     if handler == "status-state":
         return transform_status_state(value)
+    if handler == "authorization-date":
+        return transform_authorization_date(value)
     if handler == "published":
         return transform_published(value)
     if handler == "last-modified":

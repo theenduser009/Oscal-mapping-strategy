@@ -1,5 +1,23 @@
 # Decision Log
 
+## 2026-09-10 — Implement the reported authorization-date mapping
+
+The owner supplied the complete rejected-row report: `ATOIATO_DATE` to
+`system-characteristics.date-authorized`, `Transform`, Notes `Convert timestamp
+to DateDatatype`, and explicitly requested implementation. Add one exact
+handler in Cell 4 for valid ISO date/timestamp to `YYYY-MM-DD`, retaining
+the source calendar date without timezone conversion. Keep the existing
+empty-value policy and fail on invalid/ambiguous source formats. Metadata
+timestamps and the null-only security-category behavior remain unchanged.
+203 local tests pass; the next action is replace Cell 4 and run 4 through 7,
+writes disabled. Live acceptance is pending.
+
+The user also requested a durable field/model/path progress register and a
+daily manager-ready report, and approved 5 PM Eastern. These are recorded in
+`docs/MAPPING_PROGRESS.md` and `docs/daily/2026-09-10.md`; the daily heartbeat
+is active. Reports distinguish local implementation, live acceptance and
+payload evidence, and are delivered to the user, not sent to the manager.
+
 ## 2026-09-10 — Stop serial mapper reruns; collect missing date and batch contracts
 
 The latest runtime error identifies `ATOIATO_DATE` targeting `date-authorized`.
