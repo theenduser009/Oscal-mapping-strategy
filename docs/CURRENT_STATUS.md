@@ -574,8 +574,12 @@ title/description/status-like relational fields or top-level JSON keys. It
 does not collect or print component identifiers, source-record identifiers,
 payloads, or values; it performs no DDL or DML and does not approve a source.
 Snowflake notebook-generated temporary target objects are excluded from the
-catalog candidates; they are execution artifacts, not approved Archer source
-objects.
+catalog candidates by normalized name token, including the observed leading-
+character name variant; they are execution artifacts, not approved Archer
+source objects. Any remaining object-specific key, direct-field, or JSON
+profiling failure is now listed by safe object name and stage instead of
+terminating the cell. A run containing any such failure is explicitly marked
+as an incomplete catalog scan and cannot approve a lookup source.
 Post its complete output. No default values will be invented and mapper writes
 remain disabled. All 122 repository tests pass.
 
