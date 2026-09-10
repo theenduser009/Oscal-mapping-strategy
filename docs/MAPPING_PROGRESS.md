@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-10. Owner: SSP mapper implementation team.
+Last updated: 2026-09-10, 5:00 PM Eastern report. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -11,6 +11,15 @@ the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
 ## Current position
+
+- [End-of-day report](daily/2026-09-10.md): today's accepted SSP hydration,
+  date/property release and mapped-scope assembly are separated from AR planning.
+  Current inventory is 43 distinct Archer fields / 44 implemented source-target
+  entries (metadata 11, system characteristics 27, components 6), not 44 fully
+  verified Excel rows. The count includes the package-type route with its open
+  naming correction and excludes the unimplemented PTA helper, unreconciled
+  security category, controlled versions and deferred fields. AR adds zero
+  implemented mappings. No full-workbook completion percentage is established.
 
 - **Owner direction:** park the remaining SSP corrections and review other
   Excel-defined models. Preserve accepted work. Assessment Results is now the
@@ -273,9 +282,10 @@ assembly acceptance, not an additional field mapping or full SSP conformance.
 Every subsequent mapping handoff names the model, full OSCAL path, source field
 and transformation rule.
 
-The broader requested target remains **ten additional SSP mapping rows**.
-The two System Characteristics corrections are parked by owner direction while
-other Excel models are reviewed. Clearer screenshots invalidate the earlier blanket
+The earlier request for **ten additional SSP mapping rows** is retained as
+history; the current priority is Source One across Excel-defined models, starting
+with Assessment Results. The two System Characteristics corrections are parked
+by owner direction. Clearer screenshots invalidate the earlier blanket
 claim that every concrete evidenced row already has a handler. They do not yet
 establish ten new executable contracts or a full-workbook completion percentage.
 Do not relabel previous work as ten new rows or wait for a full export before
