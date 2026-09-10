@@ -141,7 +141,7 @@ class ComponentLookupSourceDiscoveryTests(unittest.TestCase):
         self.assertTrue(
             is_internal(
                 {
-                    "table_name": "$JS_USR_TARGET_TABLE_TMP",
+                    "table_name": "_$JS_USR_TARGET_TABLE_TMP",
                     "table_type": "BASE TABLE",
                 }
             )
@@ -268,6 +268,11 @@ class ComponentLookupSourceDiscoveryTests(unittest.TestCase):
         self.assertNotIn("matched_key_rows_df.collect", source)
         self.assertIn("SOURCE-OBJECT", source)
         self.assertNotIn("SOURCE APPROVED", source)
+        self.assertIn("JSUSRTARGETTABLETMP", source)
+        self.assertIn("KEY_PROFILE", source)
+        self.assertIn("DIRECT_FIELD_PROFILE", source)
+        self.assertIn("JSON_KEY_PROFILE", source)
+        self.assertIn("INCOMPLETE CATALOG SCAN", source)
 
     def test_identifier_and_display_helpers_are_sanitized(self):
         quote = self.helpers["_lookup_quote_identifier"]
