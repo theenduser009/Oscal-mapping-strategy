@@ -6,6 +6,15 @@ Last reconciled: 2026-09-10
 **Current direction:** SSP leftovers are parked while other Excel models are
 reviewed. The [model/path progress and clarification queue](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue)
 separates status, evidence/reason, and information needed for each scope.
+**Assessment Results is selected for grouped implementation.** The newly posted
+CSV has [four literal target/rule groups](ASSESSMENT_RESULTS_START_HERE.md):
+20 observation-score row occurrences, 17 unresolved observation-or-property
+rows, 7 conditional workflow properties and 1 finding-reference row. These are
+45 occurrences / 44 distinct field names, not completed mappings. No notebook
+run is needed to obtain these groups. The CSV corrects the earlier blanket
+nested-observation-property interpretation. The first batch still needs its
+observation score payload representation confirmed; no AR handler or live run
+is complete yet. SSP production code and the accepted baseline stay unchanged.
 The clearer Excel review identifies a skipped `HELPER_PTA_CALC` property and
 a `PACKAGE_TYPE` property-name mismatch. Both are pending corrections under
 System Characteristics; Control Implementation is parked. No new code or run

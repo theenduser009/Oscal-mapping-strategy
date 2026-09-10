@@ -13,8 +13,13 @@ by a dispatcher or a target node exists.
 ## Current position
 
 - **Owner direction:** park the remaining SSP corrections and review other
-  Excel-defined models. Preserve accepted work. Assessment Results is a reviewed
-  next candidate, not an implemented or accepted new-model release.
+  Excel-defined models. Preserve accepted work. Assessment Results is now the
+  selected model; [start here](ASSESSMENT_RESULTS_START_HERE.md). The owner
+  requested grouping by matching path/type/Notes. The new CSV has four AR-target
+  groups: 45 row occurrences, 44 distinct field names, not completed mappings.
+  Observation-only and observation-or-property targets are separate. The first
+  batch needs its score payload representation confirmed; no AR emission code
+  or accepted new-model run is complete yet.
 
 - Start with [SSP — done and next](SSP_DONE_AND_NEXT.md) for the short summary.
   Clearer Excel Notes supersede the old helper classification: `HELPER_PTA_CALC`
@@ -102,13 +107,21 @@ security-impact path above. Their exact source-field grouping is retained below.
 
 | OSCAL model | Excel target path | Field / scope | Status | Why not complete | Additional information or clarification needed |
 | --- | --- | --- | --- | --- | --- |
-| Assessment Results | `assessment-results.results[].observations[].props[]` | Score fields including `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE`, `SECURITY_COMPLIANCE_SCORE` | Candidate; not implemented | Observations/property Notes visible, but current governed property code is SSP-specific. | Exact name/value rules, source shape, result/observation grouping and stable identity; current registry for full nested path. |
+| Assessment Results | `assessment-results.results[].observations[]` | 20 score-row occurrences / 19 distinct fields, starting with vulnerability, antivirus, patch and security-compliance scores | Grouped; not implemented | New CSV specifies the observation collection, not a nested payload member [E15]. | Confirm how the observation carries the original score; proposed named property remains unapproved. Reconcile duplicate field and inherent-risk Notes discrepancy. |
+| Assessment Results | `assessment-results.results[].observations[] or props[]` (literal unresolved choice) | 17 risk rows, including `RISK_ASSESSMENT` | Deferred destination choice | Path and Notes both retain alternatives [E15]; this is not `observations[].props[]`. | One approved full path, value placement and name/conversion rule; no score recalculation assumed. |
+| Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Grouped; conditional scope | Notes say to include if needed for audit trail [E15]. | Confirm audit-trail inclusion and property name/value rules; keep result-level properties separate from observation properties. |
 | Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
 | Profile | `profile.imports[]` | `BASELINE_RECOMMENDATION` | Review pending | Conditional import example in Notes does not supply an approved import reference. | Baseline-to-URI mapping, intended import structure and selection rule; reconcile Extension Property label with target. |
-| POA&M | **Not yet confirmed from reviewed row** | `POAMS` | Review pending | Reference row evidenced, full contract not reconciled. | Exact target and Notes, reference shape, identity and parent relationship. |
+| POA&M | `plan-of-action-and-milestones.poam-items[]` | `POAMS` | Review pending | New CSV confirms Reference target and linking Notes [E15]; no handler accepted. | Reference shape, identity and parent relationship. |
 | Assessment Plan | **Full paths/Notes still to reconcile** | Request, approval and preassessment-review fields | Review pending | Separate model rows visible; no accepted implementation release. | Exact targets/Notes, task grouping, property/value rules and source shape. |
 
-These candidates come from the owner's clearer Excel screenshots. The
+The new [CSV transcription](transcribed_mapping_rows.csv) [E15] contains 51 records,
+including 45 with Assessment Results targets. It is not the full workbook and
+has one duplicated `AVG_SECURITY_COMPLIANCE_SCORE` occurrence. The
+[group details](ASSESSMENT_RESULTS_START_HERE.md) preserve that duplicate and the
+conflict between earlier verbal Notes and the inherent-risk transcription.
+The former blanket nested-observation-property target in this queue is superseded;
+no AR mapper was implemented under that interpretation. The
 [historical registry snapshot](checkpoints/2026-09-09-oscal-element-registry-collection-snapshot.md)
 shows Assessment Results collections for results, result properties and
 observations; it does not establish observation properties. This is not a fresh
@@ -302,6 +315,7 @@ addressing the already evidenced corrections.
 - [E12: Authorization-date contract and implementation checkpoint](checkpoints/2026-09-10_ssp_authorization_date_mapping.md).
 - [E13: Successful date/property release and next-ten scope](checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
 - [E14: Successful mapped-scope SSP JSON assembly](checkpoints/2026-09-10_ssp_mapped_scope_assembly_accepted.md).
+- [E15: Newly posted mapping CSV transcription](transcribed_mapping_rows.csv) — reviewed at source commit `3533260a0c739444b02b0fc88a25cd0c3c456c87`; 51 records, not the complete original workbook.
 
 Latest 54-row/two-rejection evidence is the owner-supplied live report at remote
 commit `23c61dc6c92804fb833ff9ede0c62ceb8c37f34a`,

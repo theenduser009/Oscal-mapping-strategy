@@ -5,6 +5,9 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 **Start here: [SSP — done and next](docs/SSP_DONE_AND_NEXT.md).** A short summary
 of accepted work, the two System Characteristics corrections, and parked work.
 
+**Active model: [Assessment Results — start here](docs/ASSESSMENT_RESULTS_START_HERE.md).**
+Grouped Excel mappings, confirmed Notes, and the one read-only input needed next.
+
 ## Authoritative files
 
 - [`notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`](notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py) — the complete seven-cell Snowflake/Snowpark notebook source.
