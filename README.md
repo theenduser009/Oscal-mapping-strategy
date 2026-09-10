@@ -108,12 +108,19 @@ assembler in that same session. It assembles the accepted graph into transient
 JSON documents and prints aggregate counts only. It does not claim complete or
 schema-valid OSCAL and adds no write path.
 
-The first hardened runtime stopped on a populated mapping with no approved
-handler. No write occurred, and the previously accepted graph remains the
-baseline. Before another full mapper run, replace and run updated Cell 4, then
-run the dispatcher coverage diagnostic once. It reports every affected Excel
-row together using mapping metadata and aggregate counts only. Post that output
-before rerunning Cells 5 through 7. All 181 repository tests pass.
+The latest runtime identified `INFORMATION_SYSTEM_TYPE` incorrectly owned by
+the system-characteristics parent. This routing defect is corrected in
+[Cell 3](notebooks/cells/03_canonical_mapping_contract.py): the eight
+screenshot-confirmed extension-property fields now use the existing `props[]`
+collection while retaining the original artifact path. Unknown transformations
+still fail; no database changes or new registry rows are needed.
+
+Replace **only Cell 3** with its complete current file. In the still-open
+session, run Cells **3, 4, 5, 6, 7** in order with `EXECUTE_WRITES = False`.
+If the session was restarted, run all seven. After Cell 7 passes, run the
+mapped-scope assembler. Post the new output in the status file.
+All 189 local tests pass, including canonicalization-to-graph regressions;
+the corrected live Snowflake run is still pending.
 
 ## Read-only inspection SQL
 

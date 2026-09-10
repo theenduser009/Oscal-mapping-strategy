@@ -130,12 +130,16 @@ in the same session. It assembles one transient mapped-scope JSON document per
 source record and prints only aggregate counts. It is not a complete-SSP or
 OSCAL-schema-validity claim.
 
-The first hardened Cell 7 run stopped because a populated Excel row has no
-approved dispatcher handler. Before another full run, replace and run updated
-Cell 4, then run the one-pass
-[mapping dispatcher coverage diagnostic](../validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py).
-Post its aggregate mapping-metadata output before running Cells 5 through 7.
-All 181 repository tests pass.
+The latest Cell 7 failure names `INFORMATION_SYSTEM_TYPE`: Cell 3 assigned an
+approved extension property to the parent instead of `props[]`. The current
+[Cell 3](03_canonical_mapping_contract.py) fixes that routing for the eight
+screenshot-confirmed property sources. It preserves the original artifact
+path and leaves the strict Cell 4 guards unchanged.
+
+Replace **only Cell 3**, then run **3, 4, 5, 6, 7** in the existing session,
+with writes disabled. If the session restarted, run all seven in order.
+Run the assembler only after Cell 7 passes; no registry setup is needed.
+All 189 local tests pass; live acceptance of this correction is pending.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

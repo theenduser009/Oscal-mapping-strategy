@@ -1,5 +1,17 @@
 # Decision Log
 
+## 2026-09-10 — Correct approved extension-property ownership in Cell 3
+
+The latest live Cell 7 error identifies `INFORMATION_SYSTEM_TYPE` attached to
+the characteristics parent. Correct the canonical route for the eight
+screenshot-confirmed extension-property sources, preserving raw artifact
+paths and Cell 4's strict handler guards. The existing active `props[]`
+registry is required; no new registry row or source rule is invented.
+189 local tests pass, including an artifact-to-graph regression. Replace only
+Cell 3 and run 3 through 7 in the active session, writes disabled; live
+acceptance is pending. See the
+[routing checkpoint](checkpoints/2026-09-10_ssp_property_routing_fix.md).
+
 ## 2026-09-08 — Repository reconciliation
 
 - `NB_ARCHER_OSCAL_MAPPER_V1` is the only current mapper notebook.

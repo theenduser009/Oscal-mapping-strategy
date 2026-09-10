@@ -102,8 +102,69 @@ def _mapping_owner_path(mapping_path):
     return None
 
 
+# These eight sources are explicitly identified as extension properties in
+# docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md. Some artifact rows
+# name a parent-level pseudo-field instead of the props[] collection. Resolve
+# that approved intent before grouping; never put pseudo-fields on the parent.
+APPROVED_SSP_EXTENSION_PROPERTY_FIELDS = {
+    "INFORMATION_SYSTEM_TYPE",
+    "FISMA_REPORTABLE",
+    "FINANCIAL_SYSTEM",
+    "MISSION_CRITICAL",
+    "CRITICAL_INFRASTRUCTURE",
+    "PACKAGE_TYPE",
+    "PIA_REQUIRED",
+    "INFORMATION_CLASSIFICATION",
+}
+_SSP_CHARACTERISTICS_PATH = "system-security-plan.system-characteristics"
+_SSP_PROPERTIES_PATH = _SSP_CHARACTERISTICS_PATH + ".props[]"
+
+
+def _canonical_mapping_path(mapping_row):
+    artifact_path = str(mapping_row["OSCAL_ELEMENT_PATH"]).strip()
+    source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+    mapping_type = re.sub(
+        r"[^a-z0-9]+", "-", str(mapping_row.get("MAPPING_TYPE") or "").lower()
+    ).strip("-")
+    if (
+        CONFIG["OSCAL_MODEL"].upper() != "SSP"
+        or source_field not in APPROVED_SSP_EXTENSION_PROPERTY_FIELDS
+        or mapping_type != "extension-property"
+    ):
+        return artifact_path
+
+    # Restrict normalization to the characteristics parent, a direct
+    # unregistered leaf, or its actual props collection. Do not move mappings
+    # out of another registered branch or arbitrary nested path.
+    owner = _mapping_owner_path(artifact_path)
+    if owner not in {_SSP_CHARACTERISTICS_PATH, _SSP_PROPERTIES_PATH}:
+        return artifact_path
+    relative_path = artifact_path[len(_SSP_CHARACTERISTICS_PATH):].lstrip(".")
+    direct_leaf = not any(token in relative_path for token in (".", "[", "]"))
+    properties_path = (
+        artifact_path == _SSP_PROPERTIES_PATH
+        or artifact_path in {
+            _SSP_PROPERTIES_PATH + ".name",
+            _SSP_PROPERTIES_PATH + ".value",
+        }
+    )
+    if not (direct_leaf or properties_path):
+        return artifact_path
+    if _SSP_PROPERTIES_PATH not in active_registry_paths:
+        raise ValueError(
+            "Approved SSP extension property requires active registry path "
+            + _SSP_PROPERTIES_PATH
+        )
+    return _SSP_PROPERTIES_PATH + ".value"
+
+
+# Retain the original artifact path and explicit target column for provenance.
+# Only the canonical route determines registry ownership and derived fields.
+canonical_mapping_pdf["CANONICAL_ELEMENT_PATH"] = canonical_mapping_pdf.apply(
+    _canonical_mapping_path, axis=1
+)
 canonical_mapping_pdf["OWNER_ELEMENT_PATH"] = canonical_mapping_pdf[
-    "OSCAL_ELEMENT_PATH"
+    "CANONICAL_ELEMENT_PATH"
 ].map(_mapping_owner_path)
 canonical_mapping_pdf = canonical_mapping_pdf[
     canonical_mapping_pdf["OWNER_ELEMENT_PATH"].notna()
@@ -116,7 +177,7 @@ if canonical_mapping_pdf.empty:
     )
 
 canonical_mapping_pdf["FIELD_RELATIVE_PATH"] = canonical_mapping_pdf.apply(
-    lambda row: str(row["OSCAL_ELEMENT_PATH"])[
+    lambda row: str(row["CANONICAL_ELEMENT_PATH"])[
         len(str(row["OWNER_ELEMENT_PATH"])):
     ].lstrip("."),
     axis=1,

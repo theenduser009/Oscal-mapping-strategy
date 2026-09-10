@@ -680,22 +680,32 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-The accepted component hydration run remains the baseline. The first runtime
-of the hardened Cell 4 release stopped in Cell 7 with `Mapping has no approved
-transformation handler`. This proves at least one populated Excel row is
-outside the explicit dispatcher contract; the sanitized traceback did not name
-the row. Validation stopped before writes, so no DIM or FACT data changed.
+The accepted component hydration run remains the baseline. The newest
+[live result](live-snowflake-results.md) is a **Cell 7 mapper failure**, not a
+recorded failure of the standalone dispatcher diagnostic. Hydration loaded
+1,435 rows successfully before the mapper rejected `INFORMATION_SYSTEM_TYPE`
+as an `extension-property` owned by `system-security-plan.system-characteristics`.
+The recorded target-field text is truncated; its exact suffix is not assumed.
 
-Cell 4 now exposes one pure dispatcher classifier and includes safe mapping
-metadata in future unsupported-handler errors. The standalone
-[`RUN_AFTER_04_ssp_mapping_dispatch_coverage.py`](../notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py)
-uses that exact classifier and one aggregate Snowpark query to report every
-rejected populated row together. It prints only source-field name, owner path,
-target field, mapping type, and populated-record count—never source values or
-record identifiers—and performs no DDL or DML.
+**Cause and correction:** Cell 3 used registry-prefix matching alone and left
+the approved property on the parent. Cell 4 correctly requires property
+instances to belong to `props[]`. Cell 3 now routes the eight explicitly
+screenshot-confirmed property sources into that existing collection. Original
+artifact paths/explicit targets remain available, with a separate
+`CANONICAL_ELEMENT_PATH` for ownership. No source values, unknown transforms,
+other branches, timestamp rules, or registry definitions are changed.
 
-Replace and run updated Cell 4, then run only the dispatcher coverage
-diagnostic and post its complete output. Do not run Cells 5 through 7 or the
-mapped-scope assembler yet. Once every reported row is reconciled against the
-Excel contract, one corrected mapper run will cover the whole batch. Keep
-`EXECUTE_WRITES = False`. All 181 repository tests pass.
+Replace **only [Cell 3](../notebooks/cells/03_canonical_mapping_contract.py)**.
+In the existing session, run **Cells 3, 4, 5, 6, 7** in order with
+`EXECUTE_WRITES = False`; if the session restarted, run all seven instead.
+No registry setup or separate diagnostic run is required for this correction.
+After Cell 7 passes, run the mapped-scope assembler. Post the complete output;
+do not proceed to the assembler if any mapper error remains.
+
+All **189 local tests** pass, including eight new regressions through actual
+Pandas canonicalization and existing property/graph logic. The graph test
+checks one parent per source record, deduplicated property payloads and
+within-record parent/child keys. Snowflake transport and unrelated component
+lookup I/O are faked locally; **live acceptance is pending**, and this does not
+prove all externally loaded Excel rows are supported. See the
+[routing correction checkpoint](checkpoints/2026-09-10_ssp_property_routing_fix.md).
