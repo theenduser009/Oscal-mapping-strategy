@@ -55,6 +55,27 @@ COMPONENT_SOURCE_TYPES = {
     "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM": "interconnection",
     "SAP_INTAKE_FORM_INTERCONNECTIONS": "interconnection",
 }
+COMPONENT_HYDRATION_CONTRACT = {
+    "software": {
+        "source_table": (
+            "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_SOFTWARE_RAW"
+        ),
+        "title_field": "SOFTWARE_NAME",
+        "description_field": "DESCRIPTION",
+    },
+    "interconnection": {
+        "source_table": (
+            "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_INTERCONNECTIONS_RAW"
+        ),
+        "title_field": "INTERCONNECTION_NAME",
+        "description_field": "DESCRIPTION",
+    },
+}
+COMPONENT_HYDRATION_SOURCE_FIELDS = {
+    "SOFTWARE": "software",
+    "INTERCONNECTIONS": "interconnection",
+    "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM": "interconnection",
+}
 DOCUMENT_IDS_ELEMENT_PATH = "system-security-plan.metadata.document-ids[]"
 METADATA_ELEMENT_PATH = "system-security-plan.metadata"
 METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
@@ -320,6 +341,489 @@ def _component_reference_content_ids(value):
             content_id = _canonical_component_content_id(member)
         content_ids.append(content_id)
     return content_ids
+
+
+def _component_row_value(row, name):
+    try:
+        return row[name]
+    except (KeyError, TypeError, IndexError):
+        pass
+    values = row.as_dict(recursive=True) if hasattr(row, "as_dict") else {}
+    expected = re.sub(r"[^A-Z0-9]", "", str(name).upper())
+    for key, value in values.items():
+        normalized = re.sub(r"[^A-Z0-9]", "", str(key).upper())
+        if normalized == expected:
+            return value
+    return None
+
+
+def _component_text(value, label, required):
+    if value is None:
+        if required:
+            raise ValueError(f"Component hydration {label} is missing")
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"Component hydration {label} must be text")
+    normalized = value.strip()
+    if not normalized:
+        if required:
+            raise ValueError(f"Component hydration {label} is blank")
+        return None
+    return normalized
+
+
+def _hydrate_component_payload(
+    component_type,
+    content_id,
+    hydration_lookups,
+):
+    payload = {"type": component_type}
+    contract = COMPONENT_HYDRATION_CONTRACT.get(component_type)
+    if contract is None:
+        return payload
+    if not isinstance(hydration_lookups, dict):
+        raise ValueError("Component hydration lookup is unavailable")
+    type_lookup = hydration_lookups.get(component_type)
+    if not isinstance(type_lookup, dict) or content_id not in type_lookup:
+        raise ValueError("Component hydration lookup record is missing")
+    lookup_payload = type_lookup[content_id]
+    if not isinstance(lookup_payload, dict):
+        raise ValueError("Component hydration lookup payload is invalid")
+
+    payload["title"] = _component_text(
+        lookup_payload.get("title"),
+        "title",
+        required=True,
+    )
+    description = _component_text(
+        lookup_payload.get("description"),
+        "description",
+        required=(component_type == "software"),
+    )
+    if description is not None:
+        payload["description"] = description
+    return payload
+
+
+def _build_component_hydration_lookups(
+    source_dataframe,
+    mapping_rows,
+    hydration_source_dfs,
+):
+    if CONFIG.get("EXECUTE_WRITES", False):
+        raise RuntimeError(
+            "Component hydration must be built before guarded writes"
+        )
+    if not isinstance(hydration_source_dfs, dict):
+        raise RuntimeError("Component hydration sources are unavailable")
+    if set(hydration_source_dfs) != set(COMPONENT_HYDRATION_CONTRACT):
+        raise RuntimeError("Component hydration source contract is incomplete")
+    source_contract = globals().get("COMPONENT_HYDRATION_SOURCE_CONTRACT")
+    if source_contract != COMPONENT_HYDRATION_CONTRACT:
+        raise RuntimeError("Component hydration source contract has drifted")
+
+    component_rows_by_field = {}
+    unexpected_component_rows = 0
+    for row in mapping_rows:
+        source_field = str(row.get("SOURCE_FIELD_NAME") or "").strip()
+        if source_field in COMPONENT_SOURCE_TYPES:
+            component_rows_by_field.setdefault(source_field, []).append(row)
+        else:
+            unexpected_component_rows += 1
+
+    if unexpected_component_rows:
+        raise RuntimeError("Canonical component mapping contract has drifted")
+    if set(component_rows_by_field) != set(COMPONENT_SOURCE_TYPES):
+        raise RuntimeError("Canonical component mapping contract has drifted")
+    for source_field, rows in component_rows_by_field.items():
+        if len(rows) != 1:
+            raise RuntimeError(
+                "Canonical component mapping is duplicated"
+            )
+        if _component_mapping_type(rows[0]) != COMPONENT_SOURCE_TYPES[source_field]:
+            raise RuntimeError("Canonical component mapping type drifted")
+
+    from snowflake.snowpark.functions import (
+        col as hydration_col,
+        count as hydration_count,
+        count_distinct as hydration_count_distinct,
+        length as hydration_length,
+        lit as hydration_lit,
+        parse_json as hydration_parse_json,
+        trim as hydration_trim,
+        typeof as hydration_typeof,
+        upper as hydration_upper,
+        when as hydration_when,
+    )
+
+    def hydration_nonblank(column):
+        return (
+            column.is_not_null()
+            & (
+                hydration_length(hydration_trim(column.cast("string")))
+                > hydration_lit(0)
+            )
+        )
+
+    source_columns = {
+        str(name).strip().upper(): name for name in source_dataframe.columns
+    }
+    if not {"SOURCE_RECORD_ID", "CURATED_JSON"}.issubset(source_columns):
+        raise RuntimeError("Component hydration source columns are missing")
+
+    source_json = hydration_parse_json(
+        hydration_col(source_columns["CURATED_JSON"]).cast("string")
+    )
+    route_frames = []
+    scalar_types = (
+        "VARCHAR",
+        "INTEGER",
+        "DECIMAL",
+        "NUMBER",
+        "FIXED",
+        "REAL",
+        "DOUBLE",
+    )
+    for source_field, component_type in (
+        COMPONENT_HYDRATION_SOURCE_FIELDS.items()
+    ):
+        roots_df = source_dataframe.select(
+            hydration_lit(source_field).alias("_SOURCE_FIELD"),
+            hydration_lit(component_type).alias("_COMPONENT_TYPE"),
+            source_json.getItem(source_field).alias("_REFERENCE_ROOT"),
+        )
+        invalid_roots = roots_df.filter(
+            hydration_col("_REFERENCE_ROOT").is_not_null()
+            & ~hydration_upper(
+                hydration_typeof(hydration_col("_REFERENCE_ROOT"))
+            ).isin("ARRAY", "NULL_VALUE")
+        ).count()
+        if invalid_roots:
+            raise RuntimeError(
+                "Approved component reference root has invalid shape"
+            )
+
+        members_df = roots_df.filter(
+            hydration_upper(
+                hydration_typeof(hydration_col("_REFERENCE_ROOT"))
+            )
+            == hydration_lit("ARRAY")
+        ).join_table_function(
+            "flatten",
+            hydration_col("_REFERENCE_ROOT"),
+        )
+        member_value = hydration_col("VALUE")
+        member_type = hydration_upper(hydration_typeof(member_value))
+        object_content_id = member_value.getItem("ContentId")
+        object_id_type = hydration_upper(hydration_typeof(object_content_id))
+        component_id_value = (
+            hydration_when(
+                (member_type == hydration_lit("OBJECT"))
+                & object_id_type.isin(*scalar_types),
+                object_content_id,
+            )
+            .when(member_type.isin(*scalar_types), member_value)
+            .otherwise(hydration_lit(None))
+        )
+        member_ids_df = members_df.select(
+            hydration_col("_SOURCE_FIELD"),
+            hydration_col("_COMPONENT_TYPE"),
+            hydration_trim(component_id_value.cast("string")).alias(
+                "_COMPONENT_ID"
+            ),
+        )
+        invalid_members = member_ids_df.filter(
+            ~hydration_nonblank(hydration_col("_COMPONENT_ID"))
+        ).count()
+        if invalid_members:
+            raise RuntimeError(
+                "Approved component reference contains an invalid ContentId"
+            )
+        route_frames.append(member_ids_df)
+
+    component_routes_df = route_frames[0]
+    for route_frame in route_frames[1:]:
+        component_routes_df = component_routes_df.union_all(route_frame)
+
+    type_collisions = (
+        component_routes_df.select(
+            hydration_col("_COMPONENT_TYPE"),
+            hydration_col("_COMPONENT_ID"),
+        )
+        .distinct()
+        .group_by(hydration_col("_COMPONENT_ID"))
+        .agg(
+            hydration_count_distinct(
+                hydration_col("_COMPONENT_TYPE")
+            ).alias("_TYPE_COUNT")
+        )
+        .filter(hydration_col("_TYPE_COUNT") > hydration_lit(1))
+        .count()
+    )
+    if type_collisions:
+        raise RuntimeError("Component hydration identity has a type collision")
+
+    hydration_lookups = {}
+    for component_type, contract in COMPONENT_HYDRATION_CONTRACT.items():
+        routed_ids_df = (
+            component_routes_df.filter(
+                hydration_col("_COMPONENT_TYPE")
+                == hydration_lit(component_type)
+            )
+            .select(
+                hydration_col("_COMPONENT_ID").alias("_ROUTE_ID")
+            )
+            .distinct()
+        )
+        lookup_source_df = hydration_source_dfs[component_type]
+        lookup_columns = {
+            str(name).strip().upper(): name
+            for name in lookup_source_df.columns
+        }
+        if not {"CONTENT_ID", "CURATED_JSON"}.issubset(lookup_columns):
+            raise RuntimeError(
+                "Approved component lookup source columns are missing"
+            )
+        lookup_rows_df = lookup_source_df.select(
+            hydration_trim(
+                hydration_col(lookup_columns["CONTENT_ID"]).cast("string")
+            ).alias("_LOOKUP_ID"),
+            hydration_parse_json(
+                hydration_col(lookup_columns["CURATED_JSON"]).cast("string")
+            ).alias("_LOOKUP_JSON"),
+        )
+        key_summary = lookup_rows_df.agg(
+            hydration_count(hydration_lit(1)).alias("_TOTAL_ROWS"),
+            hydration_count(
+                hydration_when(
+                    hydration_nonblank(hydration_col("_LOOKUP_ID")),
+                    hydration_lit(1),
+                )
+            ).alias("_NONBLANK_ROWS"),
+            hydration_count_distinct(
+                hydration_col("_LOOKUP_ID")
+            ).alias("_DISTINCT_IDS"),
+            hydration_count(
+                hydration_when(
+                    hydration_upper(
+                        hydration_typeof(hydration_col("_LOOKUP_JSON"))
+                    )
+                    != hydration_lit("OBJECT"),
+                    hydration_lit(1),
+                )
+            ).alias("_INVALID_JSON_ROWS"),
+        ).collect()[0]
+        total_rows = int(_component_row_value(key_summary, "_TOTAL_ROWS") or 0)
+        nonblank_rows = int(
+            _component_row_value(key_summary, "_NONBLANK_ROWS") or 0
+        )
+        distinct_ids = int(
+            _component_row_value(key_summary, "_DISTINCT_IDS") or 0
+        )
+        invalid_lookup_json_rows = int(
+            _component_row_value(key_summary, "_INVALID_JSON_ROWS") or 0
+        )
+        if total_rows != nonblank_rows:
+            raise RuntimeError(
+                "Approved component lookup contains a missing ContentId"
+            )
+        if nonblank_rows != distinct_ids:
+            raise RuntimeError(
+                "Approved component lookup contains duplicate ContentId values"
+            )
+        if invalid_lookup_json_rows:
+            raise RuntimeError(
+                "Approved component lookup contains invalid curated JSON"
+            )
+
+        matched_df = routed_ids_df.join(
+            lookup_rows_df,
+            routed_ids_df["_ROUTE_ID"] == lookup_rows_df["_LOOKUP_ID"],
+            "left",
+        )
+        title_value = hydration_col("_LOOKUP_JSON").getItem(
+            contract["title_field"]
+        )
+        description_value = hydration_col("_LOOKUP_JSON").getItem(
+            contract["description_field"]
+        )
+        title_is_valid = (
+            hydration_upper(hydration_typeof(title_value))
+            == hydration_lit("VARCHAR")
+        ) & hydration_nonblank(title_value)
+        description_type = hydration_upper(
+            hydration_typeof(description_value)
+        )
+        description_is_text = description_type == hydration_lit("VARCHAR")
+        description_is_nonblank = (
+            description_is_text & hydration_nonblank(description_value)
+        )
+        if component_type == "software":
+            invalid_description_condition = ~description_is_nonblank
+        else:
+            description_is_absent = (
+                description_value.is_null()
+                | (description_type == hydration_lit("NULL_VALUE"))
+                | (description_is_text & ~hydration_nonblank(description_value))
+            )
+            invalid_description_condition = ~(
+                description_is_absent | description_is_nonblank
+            )
+
+        match_summary = matched_df.agg(
+            hydration_count(hydration_lit(1)).alias("_MATCHED_ROWS"),
+            hydration_count(
+                hydration_when(
+                    hydration_col("_LOOKUP_ID").is_null(),
+                    hydration_lit(1),
+                )
+            ).alias("_MISSING_LOOKUP_ROWS"),
+            hydration_count(
+                hydration_when(~title_is_valid, hydration_lit(1))
+            ).alias("_INVALID_TITLE_ROWS"),
+            hydration_count(
+                hydration_when(
+                    invalid_description_condition,
+                    hydration_lit(1),
+                )
+            ).alias("_INVALID_DESCRIPTION_ROWS"),
+        ).collect()[0]
+        routed_id_count = int(
+            _component_row_value(match_summary, "_MATCHED_ROWS") or 0
+        )
+        missing_lookup_rows = int(
+            _component_row_value(match_summary, "_MISSING_LOOKUP_ROWS") or 0
+        )
+        invalid_title_rows = int(
+            _component_row_value(match_summary, "_INVALID_TITLE_ROWS") or 0
+        )
+        invalid_description_rows = int(
+            _component_row_value(
+                match_summary,
+                "_INVALID_DESCRIPTION_ROWS",
+            )
+            or 0
+        )
+        if missing_lookup_rows:
+            raise RuntimeError(
+                "Approved component hydration lookup record is missing"
+            )
+        if invalid_title_rows:
+            raise RuntimeError(
+                "Approved component hydration title is missing or invalid"
+            )
+        if invalid_description_rows:
+            raise RuntimeError(
+                "Approved component hydration description is invalid"
+            )
+
+        projected_df = matched_df.select(
+            hydration_col("_ROUTE_ID").alias("COMPONENT_ID"),
+            hydration_trim(title_value.cast("string")).alias("TITLE"),
+            hydration_when(
+                description_is_nonblank,
+                hydration_trim(description_value.cast("string")),
+            )
+            .otherwise(hydration_lit(None))
+            .alias("DESCRIPTION"),
+        )
+        type_lookup = {}
+        for row in projected_df.to_local_iterator():
+            content_id = _canonical_component_content_id(
+                _component_row_value(row, "COMPONENT_ID")
+            )
+            if content_id in type_lookup:
+                raise RuntimeError(
+                    "Component hydration lookup contains duplicate routed IDs"
+                )
+            type_lookup[content_id] = {
+                "title": _component_row_value(row, "TITLE"),
+                "description": _component_row_value(row, "DESCRIPTION"),
+            }
+        if len(type_lookup) != routed_id_count:
+            raise RuntimeError(
+                "Component hydration lookup collection is incomplete"
+            )
+        hydration_lookups[component_type] = type_lookup
+
+    print(
+        "Component hydration lookup rows:",
+        sum(len(type_lookup) for type_lookup in hydration_lookups.values()),
+    )
+    for component_type in sorted(hydration_lookups):
+        type_lookup = hydration_lookups[component_type]
+        print(
+            f"Component hydration {component_type} rows:",
+            len(type_lookup),
+        )
+        print(
+            f"Component hydration {component_type} descriptions:",
+            sum(
+                1
+                for payload in type_lookup.values()
+                if payload.get("description") is not None
+            ),
+        )
+    return hydration_lookups
+
+
+def _build_component_instances(
+    source_obj,
+    source_record_id,
+    mapping_rows,
+    component_hydration_lookups,
+):
+    components = {}
+    for mapping_row in mapping_rows:
+        source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+        source_value = resolve_json_path(source_obj, source_field)
+        transformed = apply_mapping_transform(
+            mapping_row,
+            source_value,
+            source_record_id,
+        )
+        if transformed is SKIP_VALUE:
+            continue
+        component_type = _component_mapping_type(mapping_row)
+        is_approved_hydration_route = (
+            COMPONENT_HYDRATION_SOURCE_FIELDS.get(source_field)
+            == component_type
+        )
+        for content_id in _component_reference_content_ids(transformed):
+            existing = components.get(content_id)
+            if existing is None:
+                components[content_id] = {
+                    "type": component_type,
+                    "hydrate": is_approved_hydration_route,
+                }
+                continue
+            if existing["type"] != component_type:
+                raise ValueError(
+                    "Component ContentId resolves to conflicting types"
+                )
+            existing["hydrate"] = (
+                existing["hydrate"] or is_approved_hydration_route
+            )
+
+    instances = []
+    for content_id in sorted(components):
+        component = components[content_id]
+        if component["hydrate"] and component_hydration_lookups is not None:
+            payload = _hydrate_component_payload(
+                component["type"],
+                content_id,
+                component_hydration_lookups,
+            )
+        else:
+            payload = {"type": component["type"]}
+        instances.append(
+            {
+                "instance_key": content_id,
+                "payload": payload,
+                "parent_instance_key": None,
+            }
+        )
+    return instances
 
 
 def transform_fips_199(value):
@@ -757,6 +1261,7 @@ def build_element_instances(
     source_record_id,
     element_path,
     mapping_rows,
+    component_hydration_lookups=None,
 ):
     is_collection = "[]" in element_path
     instances = []
@@ -779,6 +1284,14 @@ def build_element_instances(
         return _active_responsible_party_assignment_instances(
             source_obj,
             source_record_id,
+        )
+
+    if element_path == COMPONENTS_ELEMENT_PATH:
+        return _build_component_instances(
+            source_obj,
+            source_record_id,
+            mapping_rows,
+            component_hydration_lookups,
         )
 
     if element_path == METADATA_ELEMENT_PATH:
@@ -864,19 +1377,6 @@ def build_element_instances(
                 )
             continue
 
-        if element_path == COMPONENTS_ELEMENT_PATH:
-            component_type = _component_mapping_type(mapping_row)
-            for content_id in _component_reference_content_ids(transformed):
-                _append_unique_collection_instance(
-                    instances,
-                    {
-                        "instance_key": content_id,
-                        "payload": {"type": component_type},
-                        "parent_instance_key": None,
-                    },
-                )
-            continue
-
         if element_path.endswith("responsible-parties[]"):
             instances.append(
                 {
@@ -944,8 +1444,6 @@ def build_element_instances(
             },
         )
 
-    if element_path == COMPONENTS_ELEMENT_PATH:
-        instances.sort(key=lambda item: item["instance_key"])
     return instances
 
 

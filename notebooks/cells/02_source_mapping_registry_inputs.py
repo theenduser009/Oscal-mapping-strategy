@@ -4,7 +4,49 @@ import pandas as pd
 
 
 def _normalized_columns(columns):
-    return {str(name).strip().upper(): name for name in columns}
+    normalized = {}
+    for name in columns:
+        key = str(name).strip().upper()
+        if key in normalized:
+            raise RuntimeError(
+                "Source schema contains duplicate normalized column names"
+            )
+        normalized[key] = name
+    return normalized
+
+
+def _required_lookup_column(columns, expected_name, component_type):
+    matches = [
+        name
+        for name in columns
+        if str(name).strip().upper() == expected_name
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            "Approved component hydration source must expose exactly one "
+            + expected_name
+            + " column: "
+            + component_type
+        )
+    return matches[0]
+
+
+COMPONENT_HYDRATION_SOURCE_CONTRACT = {
+    "software": {
+        "source_table": (
+            "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_SOFTWARE_RAW"
+        ),
+        "title_field": "SOFTWARE_NAME",
+        "description_field": "DESCRIPTION",
+    },
+    "interconnection": {
+        "source_table": (
+            "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_INTERCONNECTIONS_RAW"
+        ),
+        "title_field": "INTERCONNECTION_NAME",
+        "description_field": "DESCRIPTION",
+    },
+}
 
 
 raw_input_df = session.table(CONFIG["RAW_TABLE"])
@@ -69,6 +111,30 @@ selected_distinct_count = source_df.select("SOURCE_RECORD_ID").distinct().count(
 if selected_source_count != selected_distinct_count:
     raise ValueError("Source selection did not produce one row per CONTENT_ID")
 
+# Keep the approved lookup sources lazy in Cell 2. Cell 5 asks Cell 4 to join
+# only the component IDs referenced by this SSP run, then validates duplicate
+# keys and missing hydration rows before any graph node is built.
+COMPONENT_HYDRATION_SOURCE_DFS = {}
+for component_type, contract in COMPONENT_HYDRATION_SOURCE_CONTRACT.items():
+    lookup_source_df = session.table(contract["source_table"])
+    lookup_content_id_column = _required_lookup_column(
+        lookup_source_df.columns,
+        "CONTENT_ID",
+        component_type,
+    )
+    lookup_curated_json_column = _required_lookup_column(
+        lookup_source_df.columns,
+        "CURATED_JSON",
+        component_type,
+    )
+
+    COMPONENT_HYDRATION_SOURCE_DFS[component_type] = (
+        lookup_source_df.select(
+            col(lookup_content_id_column).alias("CONTENT_ID"),
+            col(lookup_curated_json_column).alias("CURATED_JSON"),
+        )
+    )
+
 mapping_artifact_pdf = pd.read_csv(
     CONFIG["MAPPING_FILE"],
     encoding="cp1252",
@@ -108,3 +174,7 @@ print("Selected source rows:", selected_source_count)
 print("Source order columns:", source_order_columns)
 print("Mapping rows:", mapping_df.count())
 print("Archer select values:", len(ARCHER_VALUE_LOOKUP))
+print(
+    "Approved component hydration sources:",
+    len(COMPONENT_HYDRATION_SOURCE_DFS),
+)

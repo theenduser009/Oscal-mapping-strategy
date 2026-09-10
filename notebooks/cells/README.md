@@ -113,9 +113,15 @@ The read-only
 is complete. It proved one unambiguous RAW route for software and one for both
 active interconnection fields, while hardware has no hydration-bearing source.
 Its JSON-null reporting false positive is corrected and did not affect route,
-field, or graph results. Do not rerun this audit. The next code change is the
-owner-approved partial title/description hydration release; status, missing
-descriptions, and hardware remain explicit gaps.
+field, or graph results. Do not rerun this audit.
+
+The owner-approved partial hydration release is now synchronized across the
+complete notebook and split Cells 2, 4, and 5. Software uses `SOFTWARE_NAME`
+and required `DESCRIPTION`; the two active interconnection routes use
+`INTERCONNECTION_NAME` and include `DESCRIPTION` only when populated. Hardware,
+subsystems, the inactive SAP route, and every status field remain deferred.
+Run updated Cells 1 through 7 once with writes disabled and post the complete
+Cell 7 output. All 156 repository tests pass.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and
@@ -127,4 +133,3 @@ their reusable `person` party objects. Cell 5 requires real `metadata.roles[]`
 and `metadata.parties[]` registry rows, uses each party payload UUID as the
 party node OSCAL UUID, and fails closed unless every role and party reference
 resolves exactly once. The four `TBD` responsible-party rows remain excluded.
-

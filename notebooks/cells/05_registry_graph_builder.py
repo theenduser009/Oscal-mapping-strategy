@@ -170,6 +170,16 @@ def _payload_with_instance_uuid(element_path, payload, oscal_uuid):
     existing_uuid = payload.get("uuid")
     if existing_uuid not in (None, "") and existing_uuid != oscal_uuid:
         raise ValueError("Component payload uuid conflicts with node uuid")
+    if "status" in payload:
+        raise ValueError("Component status hydration is not approved")
+    for field_name in ("title", "description"):
+        if field_name not in payload:
+            continue
+        field_value = payload[field_name]
+        if not isinstance(field_value, str) or not field_value.strip():
+            raise ValueError(
+                f"Component payload {field_name} must be nonblank text"
+            )
     updated_payload = dict(payload)
     updated_payload["uuid"] = oscal_uuid
     return updated_payload
@@ -480,6 +490,21 @@ def build_oscal_graph(
         raise ValueError(f"Expected one registry root; found {root_paths}")
     root_path = root_paths[0]
 
+    component_hydration_lookups = None
+    if model_key.upper() == "SSP":
+        hydration_source_dfs = globals().get(
+            "COMPONENT_HYDRATION_SOURCE_DFS"
+        )
+        if hydration_source_dfs is None:
+            raise RuntimeError(
+                "Run the updated Cell 2 before building the SSP graph"
+            )
+        component_hydration_lookups = _build_component_hydration_lookups(
+            source_df,
+            MAPPINGS_BY_ELEMENT_PATH.get(COMPONENTS_ELEMENT_PATH, []),
+            hydration_source_dfs,
+        )
+
     node_rows = []
     edge_rows = []
     load_timestamp = datetime.datetime.now(datetime.timezone.utc)
@@ -498,6 +523,7 @@ def build_oscal_graph(
                 source_record_id,
                 path,
                 mapping_rows,
+                component_hydration_lookups,
             )
 
             # Structural singleton containers are materialized even without a

@@ -651,3 +651,21 @@ interconnection `INTERCONNECTION_NAME` plus populated `DESCRIPTION`. Software
 status, interconnection status, missing interconnection descriptions, and the
 hardware source remain deferred rather than defaulted or inferred.
 
+## 2026-09-10 — Approve and implement partial component hydration
+
+The owner approved the evidence-backed partial hydration contract. Software
+routes to `ARCHER_CONTENT_SOFTWARE_RAW` and uses `SOFTWARE_NAME` plus required
+`DESCRIPTION`. The two active interconnection fields route to
+`ARCHER_CONTENT_INTERCONNECTIONS_RAW`, use `INTERCONNECTION_NAME`, and include
+`DESCRIPTION` only when it is populated. Status, hardware, subsystems, and the
+inactive SAP interconnection route remain deferred.
+
+Cells 2, 4, and 5 now implement the contract without changing component
+identity. The lookup relation is built server-side from only approved Excel
+routes and joined on canonical `ContentId`; only the bounded routed title and
+description rows enter the Python graph builder. Duplicate, missing, malformed,
+or cross-type lookup evidence fails before graph construction. Missing
+interconnection descriptions are omitted, never invented. No DDL/DML was
+added, and mapper writes remain disabled. The authoritative notebook and split
+cells are synchronized, and all 156 repository tests pass. One read-only
+Cells 1-through-7 runtime acceptance run remains.

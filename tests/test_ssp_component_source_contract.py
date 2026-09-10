@@ -393,7 +393,7 @@ class ComponentReferenceEmissionTests(unittest.TestCase):
         ]
         with self.assertRaisesRegex(
             ValueError,
-            "Collection identity resolves to conflicting payloads",
+            "Component ContentId resolves to conflicting types",
         ) as raised:
             self.cell_4["build_element_instances"](
                 {

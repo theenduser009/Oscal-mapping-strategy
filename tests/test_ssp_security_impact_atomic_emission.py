@@ -116,6 +116,8 @@ def _load_cell_5_for_empty_graph():
                     "RUN_ID": "unit-test-run",
                 },
                 "MAPPINGS_BY_ELEMENT_PATH": {},
+                "COMPONENT_HYDRATION_SOURCE_DFS": {},
+                "_build_component_hydration_lookups": lambda *args: None,
                 "build_element_instances": lambda *args: [],
                 "datetime": datetime,
                 "json": json,

@@ -628,12 +628,9 @@ The remaining real blockers are field-contract or source-data decisions:
   fields cover small subsets, and no status candidate was found.
 - Hardware: its one reference has no proved hydration source.
 
-## Immediate next action
+## Partial component hydration — APPROVED AND IMPLEMENTED; RUNTIME PENDING
 
-Do not rerun Cells 1 through 7, the component source-contract extraction, the
-broad lookup discovery, or the source-routing audit. The next step is one
-owner-approved partial hydration contract, not another diagnostic run. The
-recommended evidence-backed increment is:
+The owner approved this evidence-backed increment:
 
 ```text
 software:
@@ -652,7 +649,33 @@ hardware:
   retain current UUID/type only until its source is supplied
 ```
 
-After owner approval, implement these title/description fields in Cells 2, 4,
-and 5 as one tested release. Do not invent missing descriptions or status
-values. Mapper writes remain disabled. All 133 repository tests pass.
+The release is now implemented in the authoritative notebook and synchronized
+split Cells 2, 4, and 5. Cell 2 opens only the two exact approved RAW lookup
+sources. Cell 4 validates the exact six Excel component mappings, extracts only
+the three approved hydration routes server-side, joins by canonical
+`ContentId`, and collects only routed ID/title/description rows. It rejects
+ambiguous physical columns, blank or duplicate lookup IDs, missing approved
+lookup rows, malformed lookup JSON, missing or non-text titles, incomplete
+software descriptions, populated non-text interconnection descriptions, and
+cross-type identities before graph construction. No identifier or source value
+is printed.
 
+Component assembly is source-field gated. `SOFTWARE`, `INTERCONNECTIONS`, and
+`INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM` can hydrate. `SUBSYSTEMS`,
+`HARDWARE`, and `SAP_INTAKE_FORM_INTERCONNECTIONS` retain UUID/type-only
+behavior even if an identically named lookup record exists. A component seen
+in both an approved and deferred interconnection field is emitted once and is
+hydrated from the approved occurrence. Node keys, instance keys, UUID policy,
+and containment edges are unchanged. Cell 5 also rejects any unapproved
+component status field.
+
+## Immediate next action
+
+Run the updated Cells 1 through 7 once in order with
+`EXECUTE_WRITES = False`. Do not rerun the component source-contract
+extraction, broad lookup discovery, or source-routing audit. Post the complete
+Cell 7 output. For the accepted snapshot, the lookup summary should show 1,435
+rows (7 software and 1,428 interconnection), with 7 software descriptions and
+968 interconnection descriptions. The graph should remain 67,671 nodes and
+64,858 edges because only payload fields changed. All 156 repository tests
+pass.

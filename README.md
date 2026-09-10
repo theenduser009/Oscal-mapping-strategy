@@ -41,8 +41,10 @@ The component source contract is now captured: all 4,804 populated references
 use either `ContentId,LevelId` objects or scalar content IDs. The mapper now
 uses the registry-governed content ID as component identity, emits the declared
 component type and deterministic UUID, and rejects cross-type identity
-conflicts. Title, description, and status remain blocked on a referenced-record
-lookup source and are not defaulted.
+conflicts. The owner-approved partial hydration release now adds software title
+and description plus interconnection title and populated description from the
+two proved RAW lookup sources. Status, missing interconnection descriptions,
+and hardware hydration remain explicit gaps and are not defaulted.
 
 The earlier 2,585 aggregate was corrected: under pinned OSCAL SSP 1.2.3,
 2,453 no-objective security-impact assemblies are optional absences. Cell 4
@@ -87,25 +89,18 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The component identity/type release and broad lookup discovery are accepted.
-The discovery found all 1,436 governed IDs with zero profiling failures and no
-writes. The three generic metadata layers contain identity only; two RAW
-objects contain hydration evidence, while hardware source,
-interconnection completeness/status, and software field choices remain open.
+The partial component hydration release is implemented in the authoritative
+notebook and synchronized split Cells 2, 4, and 5. It performs bounded,
+server-side joins from only the three approved Excel routes, rejects duplicate
+or missing lookup rows before graph construction, and collects only the 1,435
+currently routed title/description records. It neither prints component values
+nor adds a write path. All 156 repository tests pass.
 
-The
-[Excel-driven component source-routing audit](notebooks/validation/RUN_AFTER_07_ssp_component_source_routing_audit.py)
-is complete and must not be rerun. It proved that all seven software IDs route
-only to `ARCHER_CONTENT_SOFTWARE_RAW`, while both active interconnection fields
-route only to `ARCHER_CONTENT_INTERCONNECTIONS_RAW`; the one hardware ID has no
-hydration-bearing match. A JSON-null reporting false positive is corrected in
-the cell and did not affect those reconciled routes.
-
-The next build is a single owner-approved partial hydration release: software
-`SOFTWARE_NAME` and `DESCRIPTION`, plus interconnection
-`INTERCONNECTION_NAME` and populated `DESCRIPTION`. Status fields, missing
-descriptions, and hardware remain explicit gaps. Do not rerun any accepted
-diagnostic or mapper cell. All 133 repository tests pass.
+Run the updated Cells 1 through 7 once in order with `EXECUTE_WRITES = False`,
+then record the complete Cell 7 output. Do not rerun the component discovery,
+source-contract extraction, or source-routing audit. For the accepted source
+snapshot, graph counts should remain 67,671 nodes and 64,858 edges; only
+component payload content changes.
 
 ## Read-only inspection SQL
 
@@ -113,4 +108,3 @@ diagnostic or mapper cell. All 133 repository tests pass.
 - [Drill into `system-characteristics` and all descendant payloads](sql/drill_down_system_characteristics.sql)
 
 - [Inspect security-impact-level and extract confidentiality, integrity, and availability](sql/drill_down_security_impact_level.sql)
-

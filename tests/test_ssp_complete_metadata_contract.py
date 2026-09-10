@@ -182,6 +182,8 @@ def _load_cell_5_for_graph(cell_4, mapping_rows=None, build_override=None):
                     "RUN_ID": "unit-test-run",
                 },
                 "MAPPINGS_BY_ELEMENT_PATH": mappings,
+                "COMPONENT_HYDRATION_SOURCE_DFS": {},
+                "_build_component_hydration_lookups": lambda *args: None,
                 "RESPONSIBLE_PARTY_ROLE_IDS": EXPECTED_ROLE_IDS,
                 "build_element_instances": (
                     build_override
@@ -591,8 +593,19 @@ class CompleteMetadataContractTests(unittest.TestCase):
                 self.assertEqual(party_uuid_counts.get(party_uuid), 1)
 
     def test_graph_rejects_party_payload_uuid_mismatch(self):
-        def build_with_mismatch(source_obj, source_record_id, path, rows):
-            del source_obj, source_record_id, rows
+        def build_with_mismatch(
+            source_obj,
+            source_record_id,
+            path,
+            rows,
+            component_hydration_lookups=None,
+        ):
+            del (
+                source_obj,
+                source_record_id,
+                rows,
+                component_hydration_lookups,
+            )
             if path == PARTIES_PATH:
                 return [
                     {
