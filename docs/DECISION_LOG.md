@@ -618,3 +618,36 @@ a field, define precedence, or invent a status transformation. A future
 hydrator may be built only from an explicit evidence-backed contract after
 these results are reviewed.
 
+## 2026-09-10 — Accept component source routes; keep fields unapproved
+
+The Excel-driven routing audit reproduced all accepted identity baselines:
+4,804 reference occurrences, 4,792 source-record/component/type pairs and
+graph nodes, and 1,436 distinct component IDs. Source-to-graph and
+graph-to-source differences were both zero, as were cross-type identities,
+invalid reference members, candidate-profile failures, and baseline drift.
+Writes remained disabled.
+
+The matrix proves routing without using object names as authority: software's
+seven IDs match only `ARCHER_CONTENT_SOFTWARE_RAW`; the 1,405 primary and 82
+connecting-system interconnection IDs match only
+`ARCHER_CONTENT_INTERCONNECTIONS_RAW`; the single hardware ID matches neither
+hydration-bearing candidate. These routes are accepted as evidence. Candidate
+title, description, and status fields remain unapproved.
+
+The original conclusion also listed `REFERENCE_SHAPE_GAP` because 15,632
+VARIANT JSON-null fields passed an SQL `IS NOT NULL` filter and were counted as
+non-array roots. Snowflake JSON null is distinct from SQL NULL. This was a
+reporting-only defect: the extraction already admitted arrays only and all
+reference and graph counts reconciled exactly. The audit now separates
+`NULL_VALUE` roots from genuinely unexpected types. The arithmetic also
+reconciles: 2,813 records times six fields is 16,878 roots, and the previously
+proved 1,246 populated arrays leave exactly 15,632 absent JSON-null roots. No
+database behavior or accepted routing result changed, and another audit run is
+not required.
+
+The next implementation requires one explicit partial hydration contract.
+The recommended scope is software `SOFTWARE_NAME` plus `DESCRIPTION`, and
+interconnection `INTERCONNECTION_NAME` plus populated `DESCRIPTION`. Software
+status, interconnection status, missing interconnection descriptions, and the
+hardware source remain deferred rather than defaulted or inferred.
+
