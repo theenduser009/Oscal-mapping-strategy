@@ -136,10 +136,13 @@ approved extension property to the parent instead of `props[]`. The current
 screenshot-confirmed property sources. It preserves the original artifact
 path and leaves the strict Cell 4 guards unchanged.
 
-Replace **only Cell 3**, then run **3, 4, 5, 6, 7** in the existing session,
-with writes disabled. If the session restarted, run all seven in order.
-Run the assembler only after Cell 7 passes; no registry setup is needed.
-All 189 local tests pass; live acceptance of this correction is pending.
+The next live failure is `ATOIATO_DATE` → `date-authorized`, whose mapping
+type/Notes are not fully recorded. **Do not rerun the mapper or assembler.**
+In the current session run only the
+[in-memory mapping contract report](../validation/RUN_AFTER_04_ssp_mapping_contract_report.py)
+and post its output. It prints every unsupported row with its Excel Notes;
+no database query or source-value access is involved. Keep writes disabled.
+193 local tests pass; live acceptance is still pending and no date rule is guessed.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

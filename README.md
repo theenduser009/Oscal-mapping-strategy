@@ -115,12 +115,13 @@ screenshot-confirmed extension-property fields now use the existing `props[]`
 collection while retaining the original artifact path. Unknown transformations
 still fail; no database changes or new registry rows are needed.
 
-Replace **only Cell 3** with its complete current file. In the still-open
-session, run Cells **3, 4, 5, 6, 7** in order with `EXECUTE_WRITES = False`.
-If the session was restarted, run all seven. After Cell 7 passes, run the
-mapped-scope assembler. Post the new output in the status file.
-All 189 local tests pass, including canonicalization-to-graph regressions;
-the corrected live Snowflake run is still pending.
+The subsequent live run now rejects `ATOIATO_DATE` → `date-authorized`.
+Its full mapping type/Notes are not yet recorded. **Hold further full mapper
+and assembler runs.** Run only the
+[in-memory mapping contract report](notebooks/validation/RUN_AFTER_04_ssp_mapping_contract_report.py)
+in the existing session and post its complete output. It lists all unsupported
+rows and Excel Notes without querying Snowflake or accessing source values.
+No date handler is invented; 193 local tests pass, but live acceptance is pending.
 
 ## Read-only inspection SQL
 

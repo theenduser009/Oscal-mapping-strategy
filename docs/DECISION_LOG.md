@@ -1,5 +1,17 @@
 # Decision Log
 
+## 2026-09-10 — Stop serial mapper reruns; collect missing date and batch contracts
+
+The latest runtime error identifies `ATOIATO_DATE` targeting `date-authorized`.
+Full mapping type and Notes are absent from the posted error; no approved date
+semantics were found in repository/history/workspace evidence. Do not invent
+a transform or treat a historical populated payload as approval. The previous
+full-run instruction is withdrawn until the unsupported contract batch is
+available. A small in-memory report now prints every rejected canonical
+mapping's type, original/canonical paths, Notes and transformation logic.
+It performs no Snowflake query and accesses no source rows. The 193-test
+local suite passes; no production date mapping or live success is claimed.
+
 ## 2026-09-10 — Correct approved extension-property ownership in Cell 3
 
 The latest live Cell 7 error identifies `INFORMATION_SYSTEM_TYPE` attached to
