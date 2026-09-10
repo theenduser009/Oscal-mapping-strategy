@@ -547,6 +547,14 @@ the ID. Cell 5 adds the node's deterministic OSCAL UUID to its component
 payload and verifies the recorded parent, collection flag, `CONTENT_ID` rule,
 and `$` item path. No registry DML is required.
 
+The read-only post-release Cell 7 run is accepted. It completed with **67,671
+nodes** and **64,858 edges**, zero duplicate node or edge keys, zero dangling
+source or target edges, passed pre-write validation, and
+`EXECUTE_WRITES = False`; no DIM or FACT changes were made. Relative to the
+previous accepted graph, both counts decreased by exactly 12. That matches the
+12 governed component IDs already proved to overlap across source fields, so
+the change is the intended identity deduplication rather than data loss.
+
 This is a component identity/type release, not full component hydration. The
 source references do not contain the required title, description, or status,
 and Cell 2 currently loads no referenced component table. Those remaining
@@ -555,9 +563,9 @@ invented here.
 
 ## Immediate next action
 
-In the still-open notebook session, replace Cells 4 and 5 from the repository,
-then run Cell 4, Cell 5, and Cell 7. Keep `EXECUTE_WRITES = False`; do not run
-registry setup or another standalone validator. If the session has closed,
-run Cells 1 through 7 in order. Post the complete Cell 7 output. Component node
-counts may decrease only where the same governed content ID is repeated across
-fields; any conflicting cross-type ID will stop safely for review.
+Do not rerun the component source-contract extraction or Cells 1 through 7.
+The component identity/type release is accepted. The next production increment
+is component hydration: establish the approved referenced-record lookup keyed
+by `ContentId`, then map evidence-backed title, description, and status fields.
+No default values will be invented and mapper writes remain disabled.
+
