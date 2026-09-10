@@ -565,3 +565,19 @@ changes, establish an approved Archer referenced-record lookup keyed by
 fields and enumerations for title, description, and status. Missing or
 ambiguous lookup rows must fail closed rather than receive invented defaults.
 
+## 2026-09-10 — Add aggregate-only component lookup discovery
+
+The repository contains no referenced component table name or approved source
+field for component title, description, or status. A standalone read-only
+discovery cell now derives the governed component-ID set directly from the
+accepted Cell 7 graph and profiles every bounded, metadata-visible `ContentId`
+object in the configured Archer database and schema.
+
+All identifier matching, uniqueness checks, field-population counts, union
+coverage, and cross-object ambiguity checks remain inside Snowflake aggregate
+operations. Only table/column or top-level JSON key names and counts are
+returned. Component IDs, source-record IDs, payloads, and source values are
+neither collected nor printed. The cell performs no DDL or DML, stops on an
+incomplete candidate scan, and cannot approve or configure a source. The full
+suite contains 121 passing tests.
+
