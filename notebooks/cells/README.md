@@ -100,11 +100,14 @@ The one-time aggregate
 is complete. It proved arrays of `ContentId,LevelId` objects plus one scalar-ID
 array, all six declared component types, and 12 IDs shared across fields.
 
-The component identity/type release is now in [Cell 4](04_parsing_transform_payload_helpers.py)
-and [Cell 5](05_registry_graph_builder.py). In the still-open session, replace
-and run Cells 4 and 5, then run Cell 7 once with writes disabled. Full title,
-description, and status hydration still requires a referenced component lookup
-source and is not claimed by this release.
+The component identity/type release in [Cell 4](04_parsing_transform_payload_helpers.py)
+and [Cell 5](05_registry_graph_builder.py) is runtime-accepted at 67,671 nodes
+and 64,858 edges, with all structural gates passing and no writes. Do not rerun
+it. Full title, description, and status hydration still requires a referenced
+component lookup source. Run the one-time aggregate-only
+[lookup-source discovery](../validation/RUN_AFTER_07_ssp_component_lookup_source_discovery.py)
+in the same session and post its complete output; it does not approve or modify
+any database source.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and
@@ -116,3 +119,4 @@ their reusable `person` party objects. Cell 5 requires real `metadata.roles[]`
 and `metadata.parties[]` registry rows, uses each party payload UUID as the
 party node OSCAL UUID, and fails closed unless every role and party reference
 resolves exactly once. The four `TBD` responsible-party rows remain excluded.
+
