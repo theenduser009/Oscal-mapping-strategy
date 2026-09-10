@@ -1,0 +1,64 @@
+Archer_Field_Name,NULL%,OSCAL_Model,OSCAL_Element_Path,Mapping_Type,Notes
+POAMS,,POA&M,plan-of-action-and-milestones.poam-items[],Reference,Link to poam-item UUIDs in POA&M model
+ADD_OVERLAY,,Profile,Multiple - See Notes,Extension Property,"The Target Mapping ElementsDepending on the specific behavior specified by the row's data in the column, it maps into three main operations inside an OSCAL profile/imports: Maps here if ADD_OVERLAY functions as an introduction of an entirely new external regulatory baseline or overlay file to mix into the current profile/merge: Maps here if the column dictates how controls from different overlays combine, resolve overlaps, or establish control priority over one another. profile/modify/alters: Maps here if the row contains tailored changes—such as adding specialized organizational parameters, custom text (adds), or deleting b...
+If you are generating a full OSCAL ecosystem where this recommendation dictates the control set imported into a profile, it maps to the import array of an OSCA...
+{
+  ""profile"": {
+    ""id"": ""system-recommended-profile"",
+    ""imports"": [
+      {
+        ""href"": ""https://nist.gov"",
+        ""include-all"": {}
+      }
+    ]
+  }
+}"
+BASELINE_RECOMMENDATION,,Profile,profile.imports[],Extension Property,
+REQUEST_TO_BEGIN_ASSESSMENT,,Security Assessment Plan,security-assessment-plan.tasks[],Extension Property,
+APPROVAL_TO_BEGIN_ASSESSMENT,,Security Assessment Plan,security-assessment-plan.tasks[],Extension Property,
+PREASSESSMENT_REVIEW_COMMENTS,,Security Assessment Plan,security-assessment-plan.tasks[].remarks,Extension Property,Needs analysis
+WORKFLOW_CURRENT_NODE,,Extension Properties,assessment-results.results[].props[],Extension Property,Workflow tracking field - map to props[] if needed for audit trail
+WORKFLOW_PROCESS_VERSION,,Extension Properties,assessment-results.results[].props[],Extension Property,Workflow tracking field - map to props[] if needed for audit trail
+WORKFLOW_JOB_STATUS,,Extension Properties,assessment-results.results[].props[],Extension Property,Workflow tracking field - map to props[] if needed for audit trail
+WORKFLOW_STATUS,,Extension Properties,assessment-results.results[].props[],Extension Property,Workflow tracking field - map to props[] if needed for audit trail
+DUE_DATE,,Extension Properties,assessment-results.results[].props[],Extension Property,Workflow tracking field - map to props[] if needed for audit trail
+WORKFLOW_CURRENT_NODE_HRTN,,Extension Properties,assessment-results.results[].props[],Extension Property,Workflow tracking field - map to props[] if needed for audit trail
+WORKFLOW_STATUS_CHANGED,,Extension Properties,assessment-results.results[].props[],Extension Property,Workflow tracking field - map to props[] if needed for audit trail
+FINDINGS,,Assessment Results,assessment-results.results[].findings[],Reference,Link to finding UUIDs in Assessment Results model
+RISK_ACCEPTANCE_RBDS,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+VULNERABILITY_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+ANTIVIRUS_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+PATCH_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+SECURITY_COMPLIANCE_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+STANDARD_OPERATING_ENVIRONMENT_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+COMPUTER_PASSWORD_AGE_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+VULNERABILITY_REPORTING_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+SECURITY_COMPLIANCE_REPORTING_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_AUTHORIZATION_PACKAGE_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+RISK_SCORE_GRADE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_VULNERABILITY_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_PATCH_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_SECURITY_COMPLIANCE_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_ANTIVIRUS_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_COMPUTER_PASSWORD_AGE_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_VULNERABILITY_REPORTING_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+AVG_SECURITY_COMPLIANCE_SCORE,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+TOTAL_PACKAGE_INHERENT_RISK,,Assessment Results,assessment-results.results[].observations[],Extension Property,Archer-specific risk scoring - map as observation
+TOTAL_PACKAGE_RESIDUAL_RISK,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+ADJUSTED_TOTAL_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+ADJUSTED_AVERAGE_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+CURRENT_HIGHEST_DEVICE_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+CURRENT_AVERAGE_DEVICE_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+CURRENT_CONTROL_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+BASELINE_HIGHEST_DEVICE_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+BASELINE_AVERAGE_DEVICE_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+BASELINE_CONTROL_RISK_SCORE,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+RISK_ASSESSMENT,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+INITIAL_RISK_ASSESSMENT,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
+RISK_ASSESSMENT_REPORT,,Assessment Results,assessment-results.results[].observations[] or props[],Extension Property,Archer-specific risk scoring - map as observation or property
