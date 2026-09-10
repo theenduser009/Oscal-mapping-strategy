@@ -579,5 +579,11 @@ operations. Only table/column or top-level JSON key names and counts are
 returned. Component IDs, source-record IDs, payloads, and source values are
 neither collected nor printed. The cell performs no DDL or DML, stops on an
 incomplete candidate scan, and cannot approve or configure a source. The full
-suite contains 121 passing tests.
+suite contains 122 passing tests.
+
+The first Snowflake run exposed a notebook-generated temporary target object
+through `INFORMATION_SCHEMA`. That object is not an Archer lookup source and
+failed aggregate profiling. Discovery now excludes the observed `$JS_USR_`
+notebook artifact prefix, Snowpark temporary-object prefix, and objects whose
+metadata type is temporary before candidate profiling.
 
