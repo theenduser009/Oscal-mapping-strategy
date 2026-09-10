@@ -45,4 +45,29 @@ Rejected row 2:
 
 Engineering interpretation: the current blocker is explicitly a mapping-governance/handler-contract problem. Do not invent date conversion semantics or approve the security-impact source implicitly. Resolve the approved transform/dispatch contract first.
 
+## 2026-09-10 — Successful SSP graph run after handler fixes
+Run ID: `20260910T185412Z`; Model: `SSP`.
+
+Component hydration completed successfully:
+- lookup rows: **1435**
+- interconnection rows: **1428**
+- interconnection descriptions: **968**
+- software rows: **7**
+- software descriptions: **7**
+
+Graph validation:
+- graph nodes: **70,102**
+- graph edges: **67,289**
+- duplicate node keys: **0**
+- duplicate edge keys: **0**
+- dangling source edges: **0**
+- dangling target edges: **0**
+- pre-write validation: **PASSED**
+- `EXECUTE_WRITES = False`
+- DIM/FACT changes: **none**
+
+Result: `OSCAL MAPPING RUN COMPLETE` with Nodes **70,102**, Edges **67,289**, Writes **False**.
+
+Interpretation: the mapper now completes the in-memory SSP graph and pre-write graph integrity checks successfully at this checkpoint. This is not yet a production write-readiness/conformance claim because writes remain disabled and downstream semantic/schema readiness gates still apply.
+
 Source: phone screenshots supplied in ChatGPT conversation on 2026-09-10.
