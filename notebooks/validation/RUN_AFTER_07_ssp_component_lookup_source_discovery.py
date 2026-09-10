@@ -196,10 +196,22 @@ def _lookup_catalog_objects(table_rows, column_rows):
     return objects
 
 
+def _lookup_is_internal_object(metadata):
+    table_name = str(metadata.get("table_name") or "").strip().upper()
+    table_type = str(metadata.get("table_type") or "").strip().upper()
+    return (
+        table_name.startswith("$JS_USR_")
+        or table_name.startswith("SNOWPARK_TEMP_")
+        or "TEMPORARY" in table_type
+    )
+
+
 def _lookup_content_id_objects(objects):
     candidates = []
     ambiguous = []
     for metadata in objects.values():
+        if _lookup_is_internal_object(metadata):
+            continue
         key_columns = [
             item
             for item in metadata["columns"]
