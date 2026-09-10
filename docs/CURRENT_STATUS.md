@@ -6,19 +6,23 @@ Last reconciled: 2026-09-10
 **Current direction:** SSP leftovers are parked while other Excel models are
 reviewed. The [model/path progress and clarification queue](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue)
 separates status, evidence/reason, and information needed for each scope.
-**Assessment Results is selected for grouped implementation.** The newly posted
-CSV has [four literal target/rule groups](ASSESSMENT_RESULTS_START_HERE.md):
-20 observation-score row occurrences, 17 unresolved observation-or-property
-rows, 7 conditional workflow properties and 1 finding-reference row. These are
-45 occurrences / 44 distinct field names, not completed mappings. No notebook
-run is needed to obtain these groups. The CSV corrects the earlier blanket
-nested-observation-property interpretation. The first batch still needs its
-observation score payload representation confirmed; no AR handler or live run
-is complete yet. SSP production code and the accepted baseline stay unchanged.
+**Assessment Results batch 1 is implemented; live run pending.** The owner
+approved one observation per score field with the score in a named property
+inside that observation. The [new separate mapping cell](../notebooks/assessment_results/01_map_observation_scores.py)
+implements `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE` and
+`SECURITY_COMPLIANCE_SCORE` at `assessment-results.results[].observations[]`.
+It builds actual in-memory nodes, edges and mapped-subset documents, with no
+database writes. Run it after existing Cells 2 and 4 are initialized; do not
+replace SSP cells, change CONFIG's model or rerun Cell 7.
+See [complete run instructions and remaining groups](ASSESSMENT_RESULTS_START_HERE.md).
+The CSV's other rows remain pending: grouping 45 occurrences / 44 distinct
+field names was not implementation or live acceptance. SSP code and the
+accepted baseline stay unchanged. No successful AR runtime is recorded yet.
 The clearer Excel review identifies a skipped `HELPER_PTA_CALC` property and
 a `PACKAGE_TYPE` property-name mismatch. Both are pending corrections under
-System Characteristics; Control Implementation is parked. No new code or run
-is implied by this documentation update. Historical checkpoints below retain
+System Characteristics; Control Implementation is parked. Those SSP corrections
+remain uncoded and no SSP rerun is required for the separate AR release.
+Historical checkpoints below retain
 their original scope and do not establish completeness against the new evidence.
 
 ## Verified notebook

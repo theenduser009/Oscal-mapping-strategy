@@ -18,8 +18,14 @@ by a dispatcher or a target node exists.
   entries (metadata 11, system characteristics 27, components 6), not 44 fully
   verified Excel rows. The count includes the package-type route with its open
   naming correction and excludes the unimplemented PTA helper, unreconciled
-  security category, controlled versions and deferred fields. AR adds zero
-  implemented mappings. No full-workbook completion percentage is established.
+  security category, controlled versions and deferred fields. That 5 PM snapshot
+  preceded the AR implementation below. No full-workbook percentage is established.
+
+- **After the 5 PM report:** the owner approved inline score properties inside
+  one observation per field. Four AR mappings are now implemented in the
+  [separate score mapper](../notebooks/assessment_results/01_map_observation_scores.py),
+  with live acceptance pending. The SSP inventory above is unchanged. Do not
+  count the remaining grouped AR rows as implemented or this release as live accepted.
 
 - **Owner direction:** park the remaining SSP corrections and review other
   Excel-defined models. Preserve accepted work. Assessment Results is now the
@@ -27,8 +33,8 @@ by a dispatcher or a target node exists.
   requested grouping by matching path/type/Notes. The new CSV has four AR-target
   groups: 45 row occurrences, 44 distinct field names, not completed mappings.
   Observation-only and observation-or-property targets are separate. The first
-  batch needs its score payload representation confirmed; no AR emission code
-  or accepted new-model run is complete yet.
+  four score fields are implemented following the subsequent owner approval;
+  no accepted new-model run is recorded yet.
 
 - Start with [SSP — done and next](SSP_DONE_AND_NEXT.md) for the short summary.
   Clearer Excel Notes supersede the old helper classification: `HELPER_PTA_CALC`
@@ -116,7 +122,8 @@ security-impact path above. Their exact source-field grouping is retained below.
 
 | OSCAL model | Excel target path | Field / scope | Status | Why not complete | Additional information or clarification needed |
 | --- | --- | --- | --- | --- | --- |
-| Assessment Results | `assessment-results.results[].observations[]` | 20 score-row occurrences / 19 distinct fields, starting with vulnerability, antivirus, patch and security-compliance scores | Grouped; not implemented | New CSV specifies the observation collection, not a nested payload member [E15]. | Confirm how the observation carries the original score; proposed named property remains unapproved. Reconcile duplicate field and inherent-risk Notes discrepancy. |
+| Assessment Results | `assessment-results.results[].observations[]` | `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE`, `SECURITY_COMPLIANCE_SCORE` | Implemented; pending live acceptance | Owner approved each score as a named property inside its own observation; separate mapper builds nodes/edges and mapped-subset JSON [E16]. | Run only the new score mapper and post aggregate results. Missing values are not populated-input evidence. |
+| Assessment Results | `assessment-results.results[].observations[]` | Remaining 16 occurrences / 15 distinct fields in the observation-only CSV group | Grouped; not enabled | The first release selects only the four fields above [E15, E16]. | Reconcile the duplicated score field and inherent-risk Notes discrepancy; extend only matching approved contracts. |
 | Assessment Results | `assessment-results.results[].observations[] or props[]` (literal unresolved choice) | 17 risk rows, including `RISK_ASSESSMENT` | Deferred destination choice | Path and Notes both retain alternatives [E15]; this is not `observations[].props[]`. | One approved full path, value placement and name/conversion rule; no score recalculation assumed. |
 | Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Grouped; conditional scope | Notes say to include if needed for audit trail [E15]. | Confirm audit-trail inclusion and property name/value rules; keep result-level properties separate from observation properties. |
 | Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
@@ -130,7 +137,9 @@ has one duplicated `AVG_SECURITY_COMPLIANCE_SCORE` occurrence. The
 [group details](ASSESSMENT_RESULTS_START_HERE.md) preserve that duplicate and the
 conflict between earlier verbal Notes and the inherent-risk transcription.
 The former blanket nested-observation-property target in this queue is superseded;
-no AR mapper was implemented under that interpretation. The
+no AR mapper was implemented under that interpretation. The subsequent approved
+inline-property representation is implemented only for the first four score
+fields and creates no extra property registry nodes [E16]. The
 [historical registry snapshot](checkpoints/2026-09-09-oscal-element-registry-collection-snapshot.md)
 shows Assessment Results collections for results, result properties and
 observations; it does not establish observation properties. This is not a fresh
@@ -326,6 +335,7 @@ addressing the already evidenced corrections.
 - [E13: Successful date/property release and next-ten scope](checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
 - [E14: Successful mapped-scope SSP JSON assembly](checkpoints/2026-09-10_ssp_mapped_scope_assembly_accepted.md).
 - [E15: Newly posted mapping CSV transcription](transcribed_mapping_rows.csv) — reviewed at source commit `3533260a0c739444b02b0fc88a25cd0c3c456c87`; 51 records, not the complete original workbook.
+- [E16: First four Assessment Results observation-score mappings](ASSESSMENT_RESULTS_START_HERE.md) — approved inline property representation, separate in-memory mapper, live acceptance pending.
 
 Latest 54-row/two-rejection evidence is the owner-supplied live report at remote
 commit `23c61dc6c92804fb833ff9ede0c62ceb8c37f34a`,
