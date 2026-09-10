@@ -95,8 +95,10 @@ Run the one-time aggregate-only
 in the same session; do not rerun Cells 1 through 7. It profiles Snowflake
 objects that match the governed `ContentId` set, reports key uniqueness and
 title/description/status field coverage, and never prints identifiers or
-values. Post its complete output for source review. All 122 repository tests
-pass.
+values. Generated notebook temporary objects are excluded by normalized name;
+any other object-specific profiling failure is reported safely and forces an
+incomplete/no-approval result instead of crashing the cell. Post its complete
+output for source review. All 122 repository tests pass.
 
 ## Read-only inspection SQL
 
