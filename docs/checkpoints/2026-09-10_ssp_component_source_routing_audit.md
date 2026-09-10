@@ -107,3 +107,23 @@ Blocking reason count: 8
 8. `REFERENCE_SHAPE_GAP`
 
 No lookup source, field, precedence rule, or status transformation was configured by this audit. The audit explicitly remains non-authorizing and read-only.
+
+## Review note
+
+The displayed `Unexpected non-array reference roots: 15,632` count is not
+valid shape-gap evidence. The audit used SQL `IS NOT NULL`, which includes a
+VARIANT containing JSON `null`; Snowflake distinguishes that value from SQL
+`NULL`. The reference extraction itself still accepted only arrays, reproduced
+the complete 4,804/4,792/1,436 baseline, and reconciled both source-to-graph
+directions at zero. The earlier component source-contract audit had already
+proved the two active member shapes.
+
+The count reconciles exactly: 2,813 source records × six governed component
+fields = 16,878 roots. The accepted source-contract audit proved 1,246
+populated array roots, leaving 16,878 − 1,246 = 15,632 absent JSON-null roots.
+
+The routing cell has been corrected to report JSON-null roots separately and
+to count only non-array, non-JSON-null roots as unexpected. This reporting-only
+correction does not change any route, match, field-coverage, graph, or database
+result recorded above.
+
