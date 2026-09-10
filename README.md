@@ -27,14 +27,15 @@ Cell 6 validates the graph and target load frames before any merge. Cell 7 is th
 ## Latest verified checkpoint
 
 The latest accepted read-only Snowflake run passed graph and pre-write
-validation with 67,683 nodes, 64,870 edges, zero duplicate or dangling keys,
-and no writes. The governed metadata roles and parties are now present, and
-the responsible-party stable-identifier failure is closed.
+validation with 67,671 nodes, 64,858 edges, zero duplicate or dangling keys,
+and no writes. This is the component identity/type release; its exact
+12-node/12-edge reduction matches the proved cross-field deduplication.
 
-The same clean cardinality was confirmed after the system-characteristics
-collection-contract release. That release is runtime-accepted; no further
-metadata or system-characteristics rerun is pending. Work now moves to the
-next evidence-backed downstream SSP branch, with writes still disabled.
+The earlier 67,683-node / 64,870-edge graph was confirmed after the
+system-characteristics collection-contract release. That release remains
+accepted; no further metadata or system-characteristics rerun is pending.
+Work now moves to the next evidence-backed downstream SSP branch, with writes
+still disabled.
 
 The component source contract is now captured: all 4,804 populated references
 use either `ContentId,LevelId` objects or scalar content IDs. The mapper now
@@ -86,19 +87,19 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The component identity/type release is accepted. Its read-only mapper run
-completed with 67,671 nodes and 64,858 edges, with no duplicate or dangling
-keys and no writes. The exact 12-node and 12-edge reduction matches the 12
-cross-field component IDs already captured by the source-contract checkpoint.
-Run the one-time aggregate-only
-[component lookup-source discovery](notebooks/validation/RUN_AFTER_07_ssp_component_lookup_source_discovery.py)
-in the same session; do not rerun Cells 1 through 7. It profiles Snowflake
-objects that match the governed `ContentId` set, reports key uniqueness and
-title/description/status field coverage, and never prints identifiers or
-values. Generated notebook temporary objects are excluded by normalized name;
-any other object-specific profiling failure is reported safely and forces an
-incomplete/no-approval result instead of crashing the cell. Post its complete
-output for source review. All 122 repository tests pass.
+The component identity/type release and broad lookup discovery are accepted.
+The discovery found all 1,436 governed IDs with zero profiling failures and no
+writes. The three generic metadata layers contain identity only; two RAW
+objects contain hydration evidence, while hardware source,
+interconnection completeness/status, and software field choices remain open.
+
+Run only the new read-only
+[Excel-driven component source-routing audit](notebooks/validation/RUN_AFTER_07_ssp_component_source_routing_audit.py)
+in the same still-open notebook session; do not rerun Cells 1 through 7 or the
+broad discovery. It reconciles the exact six approved Excel component mappings
+to the two evidence-backed RAW objects, reports only aggregate coverage, and
+cannot approve or configure a lookup source or transformation. Post its full
+output for the hydration contract. All 133 repository tests pass.
 
 ## Read-only inspection SQL
 
