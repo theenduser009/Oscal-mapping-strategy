@@ -565,7 +565,14 @@ invented here.
 
 Do not rerun the component source-contract extraction or Cells 1 through 7.
 The component identity/type release is accepted. The next production increment
-is component hydration: establish the approved referenced-record lookup keyed
-by `ContentId`, then map evidence-backed title, description, and status fields.
-No default values will be invented and mapper writes remain disabled.
+is component hydration. Run the one-time aggregate-only
+[lookup-source discovery](../notebooks/validation/RUN_AFTER_07_ssp_component_lookup_source_discovery.py)
+in the same still-open notebook session. It uses the accepted graph's governed
+component instance keys, scans only the configured Archer database and schema,
+and reports candidate object/key uniqueness, union and overlap coverage, and
+title/description/status-like relational fields or top-level JSON keys. It
+does not collect or print component identifiers, source-record identifiers,
+payloads, or values; it performs no DDL or DML and does not approve a source.
+Post its complete output. No default values will be invented and mapper writes
+remain disabled. All 121 repository tests pass.
 
