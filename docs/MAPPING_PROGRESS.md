@@ -169,6 +169,14 @@ source/decision gaps, not completed components.
 
 ## Reporting and update rules
 
+**Newest Excel evidence:** row 66's Notes contain an Option 1 property example
+for `COUNT_OF_CONTROLS_WITHOUT_IMPLEMENTATION_DETAILS`, not merely the generic
+properties-or-calculation note. The example's control-implementation parent
+does not allow properties in the pinned standard. A
+[metadata property correction](checkpoints/2026-09-10_ssp_control_count_mapping_proposal.md)
+is proposed to the mapping owner; target, value policy and namespace are not yet
+approved. No code changed and no mapping completion is claimed for that row.
+
 **Completed step:** Model **SSP**, assembly root `system-security-plan`, including
 `system-security-plan.system-implementation.components[]`. All 2,813 mapped-scope
 documents assembled successfully [E14]. No repeated run is needed. This is

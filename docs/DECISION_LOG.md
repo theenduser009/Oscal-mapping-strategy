@@ -1,5 +1,21 @@
 # Decision Log
 
+## 2026-09-10 — Control Notes example reviewed; standard-compatible proposal only
+
+The user did not approve implementing Option 1 as a custom extension and asked
+for a recommendation. The actual image, unlike the generic GitHub summary,
+contains a worked row-66 count-property example. Preserve that business intent
+but do not implement its nonstandard control-implementation props/UUID shape.
+Propose metadata.props[] as a supported home for the SSP-wide count, keeping the
+Control Implementation business grouping. Copying Archer's count is a proposed
+policy, not something established by the word Calculated. Target/value policy
+and an organizational namespace need mapping-owner approval; no code, registry
+or database changes are authorized by this proposal. Sample values are not data.
+See the [one-row proposal](checkpoints/2026-09-10_ssp_control_count_mapping_proposal.md).
+
+The earlier hypothetical component exact-target guard remains deferred after
+the user confirmed their rows stop at components[]. It is not the next build.
+
 ## 2026-09-10 — Focused component validation; exact-target guard finding
 
 The user requested validation of the six Excel-defined component Reference

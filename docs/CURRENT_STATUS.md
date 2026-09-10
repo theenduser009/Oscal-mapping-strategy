@@ -680,6 +680,25 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
+### Latest Excel review — one control-count correction proposed, not coded
+
+Model: **SSP**. The new Control Implementation screenshots do contain a
+detailed Option 1 example in Notes for
+`COUNT_OF_CONTROLS_WITHOUT_IMPLEMENTATION_DETAILS`. The earlier generic
+summary omitted it. Its proposed `control-implementation.props[]` location
+conflicts with the pinned standard model; no custom extension was approved.
+
+Recommended mapping-owner review: use
+`system-security-plan.metadata.props[]` for the SSP-wide summary, with property
+name `controls-missing-implementation-details-count`. Copying the existing
+Archer count is proposed, not yet confirmed. The namespace also needs approval.
+Keep the original Excel evidence unchanged. The
+[one-row correction proposal](checkpoints/2026-09-10_ssp_control_count_mapping_proposal.md)
+contains the observed Notes, standard-model evidence and exact decisions.
+**No mapper/registry code changes or Snowflake run are needed until the row is approved.**
+No new mapping has been counted as complete. The existing accepted graph and
+assembly remain valid for their recorded scope.
+
 ### Current checkpoint — mapped-scope SSP assembly ACCEPTED
 
 The newest [live result](live-snowflake-results.md) completes the date/property
