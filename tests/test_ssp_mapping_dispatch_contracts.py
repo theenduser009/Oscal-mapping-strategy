@@ -17,6 +17,12 @@ CELL_4_PATH = (
     / "cells"
     / "04_parsing_transform_payload_helpers.py"
 )
+DISPATCH_DIAGNOSTIC_PATH = (
+    REPO_ROOT
+    / "notebooks"
+    / "validation"
+    / "RUN_AFTER_04_ssp_mapping_dispatch_coverage.py"
+)
 VALIDATION_PATHS = (
     REPO_ROOT
     / "notebooks"
@@ -342,6 +348,92 @@ class MappingDispatchContractTests(unittest.TestCase):
                 tbd_row, "value", "private-record"
             ),
             self.cell["SKIP_VALUE"],
+        )
+
+    def test_classifier_failure_names_only_safe_mapping_metadata(self):
+        row = _mapping_row(
+            "UNAPPROVED_POPULATED_FIELD",
+            SYSTEM_CHARACTERISTICS_PATH,
+            "unapproved-target",
+            "Transform",
+        )
+        with self.assertRaisesRegex(ValueError, "no approved") as raised:
+            self.cell["apply_mapping_transform"](
+                row, "private-source-value", "private-record-id"
+            )
+        message = str(raised.exception)
+        for expected in (
+            "source_field=UNAPPROVED_POPULATED_FIELD",
+            "owner_path=system-security-plan.system-characteristics",
+            "target_field=unapproved-target",
+            "mapping_type=transform",
+        ):
+            self.assertIn(expected, message)
+        self.assertNotIn("private-source-value", message)
+        self.assertNotIn("private-record-id", message)
+
+    def test_read_only_diagnostic_reuses_classifier_and_keeps_every_row(self):
+        source = DISPATCH_DIAGNOSTIC_PATH.read_text(encoding="utf-8")
+        self.assertIn('"_mapping_handler_for_row": globals().get(', source)
+        self.assertGreaterEqual(source.count('"_mapping_handler_for_row"'), 3)
+        self.assertNotIn("to_local_iterator", source)
+        self.assertNotIn("SOURCE_RECORD_ID", source)
+
+        tree = ast.parse(source)
+        called_attributes = {
+            node.func.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+        }
+        self.assertFalse(
+            called_attributes
+            & {
+                "delete",
+                "insert_into",
+                "merge",
+                "save_as_table",
+                "truncate",
+                "update",
+                "write",
+            }
+        )
+        self.assertIn("agg", called_attributes)
+        self.assertIn("collect", called_attributes)
+
+        definitions = source.split(
+            "mapping_dispatch_coverage_result =", 1
+        )[0]
+        namespace = {
+            "_target_field_name": self.cell["_target_field_name"]
+        }
+        exec(compile(definitions, str(DISPATCH_DIAGNOSTIC_PATH), "exec"), namespace)
+
+        rejected = _mapping_row(
+            "REJECTED_FIELD",
+            SYSTEM_CHARACTERISTICS_PATH,
+            "rejected-target",
+            "Transform",
+        )
+        accepted = _mapping_row(
+            "DIRECT_FIELD",
+            SYSTEM_CHARACTERISTICS_PATH,
+            "direct-target",
+            "Direct",
+        )
+        result = namespace["_dispatch_rejected_rows"](
+            [rejected, accepted, dict(rejected)],
+            self.cell["_mapping_handler_for_row"],
+        )
+        self.assertEqual(len(result), 2)
+        self.assertEqual(
+            set(result[0]),
+            {
+                "SOURCE_FIELD_NAME",
+                "OWNER_ELEMENT_PATH",
+                "TARGET_FIELD",
+                "MAPPING_TYPE",
+            },
         )
 
     def test_explicit_status_comments_and_party_handlers_are_preserved(self):

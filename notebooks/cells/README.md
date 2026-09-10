@@ -128,7 +128,14 @@ read-only
 Run updated Cells 1 through 7 once with writes disabled, then run the assembler
 in the same session. It assembles one transient mapped-scope JSON document per
 source record and prints only aggregate counts. It is not a complete-SSP or
-OSCAL-schema-validity claim. All 179 repository tests pass.
+OSCAL-schema-validity claim.
+
+The first hardened Cell 7 run stopped because a populated Excel row has no
+approved dispatcher handler. Before another full run, replace and run updated
+Cell 4, then run the one-pass
+[mapping dispatcher coverage diagnostic](../validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py).
+Post its aggregate mapping-metadata output before running Cells 5 through 7.
+All 181 repository tests pass.
 
 The current graph is healthy but is not a complete SSP. Component hydration,
 required whole-document branches, assembled-document schema validation, and

@@ -695,3 +695,24 @@ missing-description, import-profile, information-type, or control branches are
 complete, and it does not claim OSCAL schema validity. All 179 repository tests
 pass; one read-only Cells 1-through-7 run followed by the assembler remains the
 runtime acceptance gate.
+
+## 2026-09-10 — Stop hardened run and add one-pass dispatcher coverage
+
+The first live run of the hardened mapper stopped in Cell 7 because a populated
+canonical Excel row had no approved transformation handler. The prior error was
+intentionally sanitized but omitted the mapping-row identity, making it
+non-actionable. No write occurred, and the accepted component hydration graph
+remains the production baseline.
+
+Cell 4 now separates pure row classification into one function used by the
+runtime transform and diagnostic. Empty or deferred rows still omit before
+strict classification. Unsupported-handler errors now include only safe Excel
+mapping metadata and never include a source record ID or value.
+
+The new post-Cell-4 dispatcher coverage diagnostic classifies all canonical
+rows and executes one aggregate Snowpark query only for rejected source fields.
+It reports every populated rejection together with source-field name, owner
+path, target field, mapping type, and populated-record count. It performs no
+DDL or DML. The next step is to run this diagnostic once and reconcile the
+entire reported batch before another graph build. All 181 repository tests
+pass.

@@ -1357,17 +1357,15 @@ def _resolve_metadata_timestamp_cluster(
     return resolved_values[0]
 
 
-def apply_mapping_transform(mapping_row, value, source_record_id):
+def _mapping_handler_for_row(mapping_row):
     source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
     mapping_type = _mapping_type_token(mapping_row)
     status = str(mapping_row.get("STATUS") or "").lower()
 
     if source_field in TRANSIENT_SOURCE_FIELDS:
-        return SKIP_VALUE
+        return "skip"
     if "tbd" in mapping_type or "more information" in status:
-        return SKIP_VALUE
-    if not _has_value(value):
-        return SKIP_VALUE
+        return "skip"
 
     owner_path = str(mapping_row.get("OWNER_ELEMENT_PATH") or "").strip()
     target_field = _target_field_name(mapping_row)
@@ -1437,7 +1435,8 @@ def apply_mapping_transform(mapping_row, value, source_record_id):
         )
         handler = "direct"
     elif source_field in RESPONSIBLE_PARTY_ROLE_IDS:
-        _is_executable_responsible_party_mapping(mapping_row)
+        if not _is_executable_responsible_party_mapping(mapping_row):
+            return "skip"
         handler = "responsible-party"
     elif owner_path == COMPONENTS_ELEMENT_PATH:
         _component_mapping_type(mapping_row)
@@ -1452,7 +1451,42 @@ def apply_mapping_transform(mapping_row, value, source_record_id):
     elif mapping_type == "direct":
         handler = "direct"
     else:
-        raise ValueError("Mapping has no approved transformation handler")
+        safe_metadata = {
+            "source_field": source_field,
+            "owner_path": owner_path,
+            "target_field": target_field,
+            "mapping_type": mapping_type,
+        }
+        safe_metadata = {
+            key: re.sub(r"[\r\n\t]+", " ", str(value)).strip()
+            for key, value in safe_metadata.items()
+        }
+        raise ValueError(
+            "Mapping has no approved transformation handler: "
+            + "; ".join(
+                key + "=" + safe_metadata[key]
+                for key in (
+                    "source_field",
+                    "owner_path",
+                    "target_field",
+                    "mapping_type",
+                )
+            )
+        )
+    return handler
+
+
+def apply_mapping_transform(mapping_row, value, source_record_id):
+    # A configured row with no source value emits nothing. Keep this omission
+    # ahead of strict row classification so known no-source mappings do not
+    # make an otherwise valid run fail.
+    if not _has_value(value):
+        return SKIP_VALUE
+
+    source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
+    handler = _mapping_handler_for_row(mapping_row)
+    if handler == "skip":
+        return SKIP_VALUE
 
     if handler == "approved-text":
         return transform_approved_text(value)

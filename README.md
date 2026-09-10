@@ -12,6 +12,7 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 - [`docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md`](docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md) — pinned version sources and the first-tier required SSP contract.
 - [`docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md`](docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md) — tester-facing business rules, field-to-node expectations, PK/FK checks, known gaps, and complete acceptance procedure.
 - [`notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py`](notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py) — the read-only post-Cell-7 assembler for one transient mapped-scope SSP document per Archer record.
+- [`notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py`](notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py) — the one-pass, aggregate-only diagnostic for populated Excel rows that lack an approved Cell 4 handler.
 - [`docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md`](docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md) — filtered visual evidence from the SSP mapping workbook; it is not a replacement for the complete workbook.
 
 The earlier three-cell `ssp_props_read_only_cells.py` and its copy pages were temporary diagnostics. They have been removed to prevent them from being mistaken for the production mapper.
@@ -105,7 +106,14 @@ changed, run updated Cells 1 through 7 once in order with
 `EXECUTE_WRITES = False`; after Cell 7 passes, run only the mapped-scope
 assembler in that same session. It assembles the accepted graph into transient
 JSON documents and prints aggregate counts only. It does not claim complete or
-schema-valid OSCAL and adds no write path. All 179 repository tests pass.
+schema-valid OSCAL and adds no write path.
+
+The first hardened runtime stopped on a populated mapping with no approved
+handler. No write occurred, and the previously accepted graph remains the
+baseline. Before another full mapper run, replace and run updated Cell 4, then
+run the dispatcher coverage diagnostic once. It reports every affected Excel
+row together using mapping metadata and aggregate counts only. Post that output
+before rerunning Cells 5 through 7. All 181 repository tests pass.
 
 ## Read-only inspection SQL
 

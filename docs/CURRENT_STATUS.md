@@ -680,24 +680,22 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-The component hydration run above is accepted. The next implementation release
-is ready and does not reopen metadata. It adds exact, fail-closed Cell 4
-contracts for the four approved SSP text mappings, the eleven approved
-security-impact source/objective pairs, governed Archer select-value wrappers,
-responsible-party transforms, and every supported mapping-type dispatcher.
-Unsupported or misrouted populated mappings now stop with a sanitized error
-instead of silently becoming raw direct values. The eight reviewed legacy
-security labels are also aligned across all three validators.
+The accepted component hydration run remains the baseline. The first runtime
+of the hardened Cell 4 release stopped in Cell 7 with `Mapping has no approved
+transformation handler`. This proves at least one populated Excel row is
+outside the explicit dispatcher contract; the sanitized traceback did not name
+the row. Validation stopped before writes, so no DIM or FACT data changed.
 
-The release also adds
-[`RUN_AFTER_07_ssp_mapped_scope_assembly.py`](../notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py).
-It consumes the already validated in-memory graph and assembles one transient
-mapped-scope SSP JSON document per source record. It performs no DDL or DML,
-prints no identifiers or payloads, and explicitly makes neither a complete-SSP
-nor an OSCAL-schema-validity claim.
+Cell 4 now exposes one pure dispatcher classifier and includes safe mapping
+metadata in future unsupported-handler errors. The standalone
+[`RUN_AFTER_04_ssp_mapping_dispatch_coverage.py`](../notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py)
+uses that exact classifier and one aggregate Snowpark query to report every
+rejected populated row together. It prints only source-field name, owner path,
+target field, mapping type, and populated-record count—never source values or
+record identifiers—and performs no DDL or DML.
 
-Run updated Cells 1 through 7 once in order with
-`EXECUTE_WRITES = False`. After Cell 7 passes, run only the mapped-scope
-assembler in the same notebook session and post its aggregate output. Do not
-rerun the registry setup, broad lookup discovery, source-contract extraction,
-or source-routing audit. All 179 repository tests pass.
+Replace and run updated Cell 4, then run only the dispatcher coverage
+diagnostic and post its complete output. Do not run Cells 5 through 7 or the
+mapped-scope assembler yet. Once every reported row is reconciled against the
+Excel contract, one corrected mapper run will cover the whole batch. Keep
+`EXECUTE_WRITES = False`. All 181 repository tests pass.
