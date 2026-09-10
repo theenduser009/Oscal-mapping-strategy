@@ -1,5 +1,18 @@
 # Decision Log
 
+## 2026-09-10 — Focused component validation; exact-target guard finding
+
+The user requested validation of the six Excel-defined component Reference
+mappings. All 36 focused source-contract/partial-hydration tests passed; source,
+declared type, identity, deduplication, registry parent and approved hydration
+checks were reviewed. A synthetic wrong-target probe exposed one missing guard:
+a component descendant target can retain the collection owner and be processed
+as a whole-component reference. No such wrong-target row is established in the
+accepted live evidence. Keep that run accepted. Exact-path/target-field guards
+and a regression test are proposed for approval; no code was changed during
+this read-only validation. Do not silently strengthen production dispatch or
+ask for another live run based solely on this synthetic finding.
+
 ## 2026-09-10 — Excel-defined scope only; components scope reconfirmed
 
 The user reiterated that implementation must follow the Excel field, model,

@@ -144,6 +144,17 @@ The owner-approved partial hydration remains valid; it is not authorization
 to add other unlisted child fields. This is a bounded evidence statement, not
 a claim to have parsed the complete current workbook.
 
+**Focused validation 2026-09-10:** 13 component-source-contract tests and 23
+partial-hydration tests passed. Current six-row source/type contracts match the
+recorded evidence. One prevention gap remains: `_component_mapping_type` checks
+source, Reference type and notes but not the exact target path/field. A synthetic
+row aimed at `components[].title` can still emit a whole component because its
+owner is `components[]`. This does not prove a defect in the current accepted
+six-row live mapping. No code change has been made; an exact-target guard and
+regression test are proposed, not implemented. Two source fields remain without
+populated live evidence, and two-SSP shared-ContentId graph integration is not
+covered by the focused test files reviewed.
+
 Interconnection lookup coverage is 1,428 titles and 968 descriptions: 460
 descriptions remain absent. Component status is not emitted. These are missing
 source/decision gaps, not completed components.
