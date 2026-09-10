@@ -198,10 +198,11 @@ def _lookup_catalog_objects(table_rows, column_rows):
 
 def _lookup_is_internal_object(metadata):
     table_name = str(metadata.get("table_name") or "").strip().upper()
+    compact_name = _lookup_compact_name(table_name)
     table_type = str(metadata.get("table_type") or "").strip().upper()
     return (
-        table_name.startswith("$JS_USR_")
-        or table_name.startswith("SNOWPARK_TEMP_")
+        "JSUSRTARGETTABLETMP" in compact_name
+        or compact_name.startswith("SNOWPARKTEMP")
         or "TEMPORARY" in table_type
     )
 
@@ -378,6 +379,7 @@ def run_component_lookup_source_discovery():
 
     profiles = []
     membership_dfs = []
+    scan_failures = []
     for metadata in content_id_objects:
         table_name = metadata["table_name"]
         display_name = ".".join(
@@ -421,11 +423,8 @@ def run_component_lookup_source_discovery():
                 count_distinct(col("_COMPONENT_ID")).alias("MATCHED_IDS"),
             ).collect()[0]
         except Exception:
-            raise RuntimeError(
-                "Read-only aggregate profiling failed for metadata object "
-                + display_name
-                + "; no lookup source was selected"
-            ) from None
+            scan_failures.append(display_name + " | KEY_PROFILE")
+            continue
 
         total_rows = _lookup_int(key_summary, "TOTAL_ROWS")
         nonblank_key_rows = _lookup_int(
@@ -493,15 +492,15 @@ def run_component_lookup_source_discovery():
             len(direct_fields)
             > LOOKUP_DISCOVERY_MAX_DIRECT_FIELDS_PER_OBJECT
         ):
-            raise RuntimeError(
-                "Likely field metadata exceeds the safe per-object limit; "
-                "no lookup source was selected"
+            scan_failures.append(
+                profile["display_name"] + " | DIRECT_FIELD_LIMIT"
             )
+            direct_fields = []
         if len(json_columns) > 1:
-            raise RuntimeError(
-                "More than one CuratedJson-like column exists in a matching "
-                "object; no lookup source was selected"
+            scan_failures.append(
+                profile["display_name"] + " | JSON_COLUMN_AMBIGUITY"
             )
+            json_columns = []
 
         table_name = metadata["table_name"]
         candidate_table_df = session.table([database, schema, table_name])
@@ -510,78 +509,85 @@ def run_component_lookup_source_discovery():
         )
 
         if direct_fields:
-            select_expressions = [key_expression.alias("_LOOKUP_ID")]
-            aliases = []
-            for index, field_metadata in enumerate(direct_fields):
-                alias = "FIELD_{:03d}".format(index)
-                aliases.append(alias)
-                select_expressions.append(
-                    lookup_col(field_metadata["name"]).alias(alias)
-                )
-            candidate_fields_df = candidate_table_df.select(
-                *select_expressions
-            ).filter(lookup_nonblank(col("_LOOKUP_ID")))
-            matched_fields_df = component_ids_df.join(
-                candidate_fields_df,
-                component_ids_df["_COMPONENT_ID"]
-                == candidate_fields_df["_LOOKUP_ID"],
-                "inner",
-            )
-            aggregate_expressions = [
-                count_distinct(
-                    when(
-                        lookup_nonblank(col(alias)),
-                        col("_COMPONENT_ID"),
-                    )
-                ).alias("POPULATED_{:03d}".format(index))
-                for index, alias in enumerate(aliases)
-            ]
             try:
+                select_expressions = [
+                    key_expression.alias("_LOOKUP_ID")
+                ]
+                aliases = []
+                for index, field_metadata in enumerate(direct_fields):
+                    alias = "FIELD_{:03d}".format(index)
+                    aliases.append(alias)
+                    select_expressions.append(
+                        lookup_col(field_metadata["name"]).alias(alias)
+                    )
+                candidate_fields_df = candidate_table_df.select(
+                    *select_expressions
+                ).filter(lookup_nonblank(col("_LOOKUP_ID")))
+                matched_fields_df = component_ids_df.join(
+                    candidate_fields_df,
+                    component_ids_df["_COMPONENT_ID"]
+                    == candidate_fields_df["_LOOKUP_ID"],
+                    "inner",
+                )
+                aggregate_expressions = [
+                    count_distinct(
+                        when(
+                            lookup_nonblank(col(alias)),
+                            col("_COMPONENT_ID"),
+                        )
+                    ).alias("POPULATED_{:03d}".format(index))
+                    for index, alias in enumerate(aliases)
+                ]
                 direct_summary = matched_fields_df.agg(
                     *aggregate_expressions
                 ).collect()[0]
             except Exception:
-                raise RuntimeError(
-                    "Read-only field profiling failed for metadata object "
-                    + profile["display_name"]
-                    + "; no lookup source was selected"
-                ) from None
+                scan_failures.append(
+                    profile["display_name"] + " | DIRECT_FIELD_PROFILE"
+                )
+                direct_summary = None
 
-            for index, field_metadata in enumerate(direct_fields):
-                populated_ids = _lookup_int(
-                    direct_summary,
-                    "POPULATED_{:03d}".format(index),
-                )
-                profile["direct_field_evidence"].append(
-                    {
-                        "category": field_metadata["category"],
-                        "name": field_metadata["name"],
-                        "populated_ids": populated_ids,
-                        "coverage_percent": round(
-                            100.0 * populated_ids / profile["matched_ids"],
-                            2,
-                        ),
-                    }
-                )
+            if direct_summary is not None:
+                for index, field_metadata in enumerate(direct_fields):
+                    populated_ids = _lookup_int(
+                        direct_summary,
+                        "POPULATED_{:03d}".format(index),
+                    )
+                    profile["direct_field_evidence"].append(
+                        {
+                            "category": field_metadata["category"],
+                            "name": field_metadata["name"],
+                            "populated_ids": populated_ids,
+                            "coverage_percent": round(
+                                100.0
+                                * populated_ids
+                                / profile["matched_ids"],
+                                2,
+                            ),
+                        }
+                    )
 
         if json_columns:
-            json_metadata = json_columns[0]
-            json_expression = lookup_col(json_metadata["name"])
-            if json_metadata["data_type"] not in LOOKUP_SEMISTRUCTURED_TYPES:
-                json_expression = parse_json(
-                    json_expression.cast("string")
-                )
-            candidate_json_df = candidate_table_df.select(
-                key_expression.alias("_LOOKUP_ID"),
-                json_expression.alias("_JSON_OBJECT"),
-            ).filter(lookup_nonblank(col("_LOOKUP_ID")))
-            matched_json_df = component_ids_df.join(
-                candidate_json_df,
-                component_ids_df["_COMPONENT_ID"]
-                == candidate_json_df["_LOOKUP_ID"],
-                "inner",
-            )
             try:
+                json_metadata = json_columns[0]
+                json_expression = lookup_col(json_metadata["name"])
+                if (
+                    json_metadata["data_type"]
+                    not in LOOKUP_SEMISTRUCTURED_TYPES
+                ):
+                    json_expression = parse_json(
+                        json_expression.cast("string")
+                    )
+                candidate_json_df = candidate_table_df.select(
+                    key_expression.alias("_LOOKUP_ID"),
+                    json_expression.alias("_JSON_OBJECT"),
+                ).filter(lookup_nonblank(col("_LOOKUP_ID")))
+                matched_json_df = component_ids_df.join(
+                    candidate_json_df,
+                    component_ids_df["_COMPONENT_ID"]
+                    == candidate_json_df["_LOOKUP_ID"],
+                    "inner",
+                )
                 json_key_rows = (
                     matched_json_df.join_table_function(
                         "flatten",
@@ -609,17 +615,15 @@ def run_component_lookup_source_discovery():
                     .collect()
                 )
             except Exception:
-                raise RuntimeError(
-                    "Read-only CuratedJson key profiling failed for metadata "
-                    "object "
-                    + profile["display_name"]
-                    + "; no lookup source was selected"
-                ) from None
-            if len(json_key_rows) > LOOKUP_DISCOVERY_MAX_JSON_KEYS_PER_OBJECT:
-                raise RuntimeError(
-                    "CuratedJson key profiling exceeds the safe key limit; "
-                    "no lookup source was selected"
+                scan_failures.append(
+                    profile["display_name"] + " | JSON_KEY_PROFILE"
                 )
+                json_key_rows = []
+            if len(json_key_rows) > LOOKUP_DISCOVERY_MAX_JSON_KEYS_PER_OBJECT:
+                scan_failures.append(
+                    profile["display_name"] + " | JSON_KEY_LIMIT"
+                )
+                json_key_rows = []
 
             for row in json_key_rows:
                 key_name = str(_lookup_row_value(row, "_JSON_KEY"))
@@ -641,23 +645,30 @@ def run_component_lookup_source_discovery():
                 )
 
     if membership_dfs:
-        combined_membership_df = membership_dfs[0]
-        for membership_df in membership_dfs[1:]:
-            combined_membership_df = combined_membership_df.union_all(
-                membership_df
+        try:
+            combined_membership_df = membership_dfs[0]
+            for membership_df in membership_dfs[1:]:
+                combined_membership_df = combined_membership_df.union_all(
+                    membership_df
+                )
+            combined_membership_df = combined_membership_df.distinct()
+            combined_matched_ids = combined_membership_df.select(
+                col("_COMPONENT_ID")
+            ).distinct().count()
+            cross_object_ambiguous_ids = (
+                combined_membership_df.group_by(col("_COMPONENT_ID"))
+                .agg(
+                    count_distinct(col("_LOOKUP_OBJECT")).alias(
+                        "OBJECT_COUNT"
+                    )
+                )
+                .filter(col("OBJECT_COUNT") > lit(1))
+                .count()
             )
-        combined_membership_df = combined_membership_df.distinct()
-        combined_matched_ids = combined_membership_df.select(
-            col("_COMPONENT_ID")
-        ).distinct().count()
-        cross_object_ambiguous_ids = (
-            combined_membership_df.group_by(col("_COMPONENT_ID"))
-            .agg(
-                count_distinct(col("_LOOKUP_OBJECT")).alias("OBJECT_COUNT")
-            )
-            .filter(col("OBJECT_COUNT") > lit(1))
-            .count()
-        )
+        except Exception:
+            scan_failures.append("CATALOG | CROSS_OBJECT_PROFILE")
+            combined_matched_ids = 0
+            cross_object_ambiguous_ids = 0
     else:
         combined_matched_ids = 0
         cross_object_ambiguous_ids = 0
@@ -679,6 +690,7 @@ def run_component_lookup_source_discovery():
     print("Component-node occurrences:", component_node_occurrences)
     print("Distinct governed component IDs:", distinct_component_ids)
     print("ContentId metadata objects profiled:", len(profiles))
+    print("Metadata objects that failed safely:", len(scan_failures))
     print("Objects with governed-ID matches:", len(matched_profiles))
     print("Objects with zero governed-ID matches:", len(profiles) - len(matched_profiles))
     print("Distinct IDs matched by any object:", combined_matched_ids)
@@ -687,6 +699,10 @@ def run_component_lookup_source_discovery():
         distinct_component_ids - combined_matched_ids,
     )
     print("IDs matching more than one object:", cross_object_ambiguous_ids)
+    if scan_failures:
+        print("Failed metadata objects (names only):")
+        for failure in scan_failures:
+            print("  ", failure)
 
     for profile in profiles:
         if not profile["matched_ids"]:
@@ -779,7 +795,12 @@ def run_component_lookup_source_discovery():
     ]
 
     print("\n=== DISCOVERY CONCLUSION ===")
-    if len(strong_candidates) == 1 and cross_object_ambiguous_ids == 0:
+    if scan_failures:
+        print(
+            "RESULT: INCOMPLETE CATALOG SCAN; FAILED OBJECTS WERE NOT USED "
+            "AND NO SOURCE CAN BE APPROVED"
+        )
+    elif len(strong_candidates) == 1 and cross_object_ambiguous_ids == 0:
         print(
             "RESULT: SINGLE FULL-COVERAGE METADATA CANDIDATE; "
             "OWNER APPROVAL AND STATUS-TRANSFORMATION REVIEW REQUIRED"
