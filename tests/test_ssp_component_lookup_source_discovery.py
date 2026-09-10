@@ -60,6 +60,13 @@ class ComponentLookupSourceDiscoveryTests(unittest.TestCase):
                     "ROW_COUNT": 10,
                 }
             ),
+            _Row(
+                {
+                    "TABLE_NAME": "$JS_USR_TARGET_TABLE_TMP_1",
+                    "TABLE_TYPE": "BASE TABLE",
+                    "ROW_COUNT": 5,
+                }
+            ),
         ]
         column_rows = [
             _Row(
@@ -102,6 +109,14 @@ class ComponentLookupSourceDiscoveryTests(unittest.TestCase):
                     "ORDINAL_POSITION": 1,
                 }
             ),
+            _Row(
+                {
+                    "TABLE_NAME": "$JS_USR_TARGET_TABLE_TMP_1",
+                    "COLUMN_NAME": "CONTENT_ID",
+                    "DATA_TYPE": "VARCHAR",
+                    "ORDINAL_POSITION": 1,
+                }
+            ),
         ]
         objects = self.helpers["_lookup_catalog_objects"](
             table_rows,
@@ -119,6 +134,33 @@ class ComponentLookupSourceDiscoveryTests(unittest.TestCase):
         self.assertEqual(
             candidates[0]["key_column"]["name"],
             "CONTENT_ID",
+        )
+
+    def test_internal_and_temporary_objects_are_excluded(self):
+        is_internal = self.helpers["_lookup_is_internal_object"]
+        self.assertTrue(
+            is_internal(
+                {
+                    "table_name": "$JS_USR_TARGET_TABLE_TMP",
+                    "table_type": "BASE TABLE",
+                }
+            )
+        )
+        self.assertTrue(
+            is_internal(
+                {
+                    "table_name": "ANY_NAME",
+                    "table_type": "LOCAL TEMPORARY",
+                }
+            )
+        )
+        self.assertFalse(
+            is_internal(
+                {
+                    "table_name": "ARCHER_COMPONENT_RAW",
+                    "table_type": "BASE TABLE",
+                }
+            )
         )
 
     def test_multiple_content_id_like_columns_are_ambiguous(self):
