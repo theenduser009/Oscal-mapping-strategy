@@ -95,7 +95,7 @@ Run the one-time aggregate-only
 in the same session; do not rerun Cells 1 through 7. It profiles Snowflake
 objects that match the governed `ContentId` set, reports key uniqueness and
 title/description/status field coverage, and never prints identifiers or
-values. Post its complete output for source review. All 121 repository tests
+values. Post its complete output for source review. All 122 repository tests
 pass.
 
 ## Read-only inspection SQL
