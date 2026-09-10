@@ -237,9 +237,9 @@ class SystemCharacteristicsPropertyTests(unittest.TestCase):
         self.assertNotEqual(instances[0]["instance_key"], "singleton")
 
     def test_duplicate_system_id_mapping_is_deduplicated(self):
-        rows = [_system_id_row("SAP_ID"), _system_id_row("SAP_ID_COPY")]
+        rows = [_system_id_row("SAP_ID"), _system_id_row("SAP_ID")]
         instances = self.cell_4["build_element_instances"](
-            {"SAP_ID": "same-id", "SAP_ID_COPY": "same-id"},
+            {"SAP_ID": "same-id"},
             "private-source-record",
             SYSTEM_IDS_PATH,
             rows,
@@ -249,14 +249,18 @@ class SystemCharacteristicsPropertyTests(unittest.TestCase):
     def test_conflicting_singleton_candidates_fail_without_values(self):
         target = "security-objective-confidentiality"
         rows = [
-            _security_objective_row("RECOMMENDED_CONFIDENTIALITY", target),
-            _security_objective_row("OVERRIDE_CONFIDENTIALITY", target),
             _security_objective_row(
-                "INTEGRITY",
+                "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY", target
+            ),
+            _security_objective_row(
+                "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE", target
+            ),
+            _security_objective_row(
+                "RECOMMENDED_INTEGRITY_CONTROL_CATEGORY",
                 "security-objective-integrity",
             ),
             _security_objective_row(
-                "AVAILABILITY",
+                "RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY",
                 "security-objective-availability",
             ),
         ]
@@ -266,10 +270,10 @@ class SystemCharacteristicsPropertyTests(unittest.TestCase):
         ) as raised:
             self.cell_4["build_element_instances"](
                 {
-                    "RECOMMENDED_CONFIDENTIALITY": "Low",
-                    "OVERRIDE_CONFIDENTIALITY": "High",
-                    "INTEGRITY": "Moderate",
-                    "AVAILABILITY": "Low",
+                    "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY": "Low",
+                    "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE": "High",
+                    "RECOMMENDED_INTEGRITY_CONTROL_CATEGORY": "Moderate",
+                    "RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY": "Low",
                 },
                 "private-source-record",
                 SECURITY_IMPACT_PATH,
@@ -280,23 +284,27 @@ class SystemCharacteristicsPropertyTests(unittest.TestCase):
 
     def test_identical_singleton_candidates_are_order_independent(self):
         target = "security-objective-confidentiality"
-        first = _security_objective_row("FIRST_CONFIDENTIALITY", target)
-        second = _security_objective_row("SECOND_CONFIDENTIALITY", target)
+        first = _security_objective_row(
+            "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY", target
+        )
+        second = _security_objective_row(
+            "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE", target
+        )
         other_rows = [
             _security_objective_row(
-                "INTEGRITY",
+                "RECOMMENDED_INTEGRITY_CONTROL_CATEGORY",
                 "security-objective-integrity",
             ),
             _security_objective_row(
-                "AVAILABILITY",
+                "RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY",
                 "security-objective-availability",
             ),
         ]
         source_obj = {
-            "FIRST_CONFIDENTIALITY": "Low",
-            "SECOND_CONFIDENTIALITY": "low",
-            "INTEGRITY": "Moderate",
-            "AVAILABILITY": "High",
+            "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY": "Low",
+            "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE": "low",
+            "RECOMMENDED_INTEGRITY_CONTROL_CATEGORY": "Moderate",
+            "RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY": "High",
         }
 
         forward = self.cell_4["build_element_instances"](

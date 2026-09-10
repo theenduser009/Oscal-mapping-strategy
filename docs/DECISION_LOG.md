@@ -669,3 +669,29 @@ interconnection descriptions are omitted, never invented. No DDL/DML was
 added, and mapper writes remain disabled. The authoritative notebook and split
 cells are synchronized, and all 156 repository tests pass. One read-only
 Cells 1-through-7 runtime acceptance run remains.
+
+## 2026-09-10 — Harden Excel contracts and add mapped-scope assembly
+
+The checked-in evidence contains no additional approved SSP path/source pair
+that can be implemented without inventing a source, registry contract, or
+business rule. The release therefore advances every currently approved use
+case in two ways instead of guessing new mappings.
+
+Cell 4 now validates the four approved SSP text source/path/field contracts and
+the exact eleven security-impact source/objective contracts. It also resolves
+only governed Archer select wrappers, rejects unresolved IDs, requires the
+approved responsible-party transform, and fails closed for populated mappings
+with no supported handler. The eight reviewed legacy security labels are
+synchronized across the mapper and its three validators. Empty and explicitly
+deferred mappings retain their established omission behavior.
+
+A new post-Cell-7 mapped-scope assembler turns the validated DIM/FACT-style
+graph into one transient nested SSP JSON document per source record. It checks
+root cardinality, registry parentage and collection semantics, edge ownership,
+cycles, orphans, payload collisions, and UUID consistency. It prints aggregate
+counts only and performs no writes. The output is deliberately labeled mapped
+scope: it does not claim the source-blocked hardware, component-status,
+missing-description, import-profile, information-type, or control branches are
+complete, and it does not claim OSCAL schema validity. All 179 repository tests
+pass; one read-only Cells 1-through-7 run followed by the assembler remains the
+runtime acceptance gate.

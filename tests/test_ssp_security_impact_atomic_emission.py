@@ -35,7 +35,11 @@ OBJECTIVE_FIELDS = (
     "security-objective-integrity",
     "security-objective-availability",
 )
-SOURCE_FIELDS = ("CONFIDENTIALITY", "INTEGRITY", "AVAILABILITY")
+SOURCE_FIELDS = (
+    "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY",
+    "RECOMMENDED_INTEGRITY_CONTROL_CATEGORY",
+    "RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY",
+)
 
 
 def _load_cell_4():
@@ -179,9 +183,9 @@ class SecurityImpactAtomicEmissionTests(unittest.TestCase):
     def test_complete_cia_emits_one_singleton(self):
         instances = self._build(
             {
-                "CONFIDENTIALITY": "Low",
-                "INTEGRITY": "Moderate",
-                "AVAILABILITY": "High",
+                SOURCE_FIELDS[0]: "Low",
+                SOURCE_FIELDS[1]: "Moderate",
+                SOURCE_FIELDS[2]: "High",
             }
         )
 
@@ -203,8 +207,8 @@ class SecurityImpactAtomicEmissionTests(unittest.TestCase):
     def test_zero_one_or_two_objectives_emit_no_instance(self):
         cases = (
             {},
-            {"CONFIDENTIALITY": "Low"},
-            {"CONFIDENTIALITY": "Low", "INTEGRITY": "Moderate"},
+            {SOURCE_FIELDS[0]: "Low"},
+            {SOURCE_FIELDS[0]: "Low", SOURCE_FIELDS[1]: "Moderate"},
         )
 
         for populated_source in cases:
@@ -213,9 +217,9 @@ class SecurityImpactAtomicEmissionTests(unittest.TestCase):
 
     def test_reviewed_legacy_labels_remain_allowed_and_unchanged(self):
         source_values = {
-            "CONFIDENTIALITY": "Legacy LOE A",
-            "INTEGRITY": "Legacy LOE C + DFARS",
-            "AVAILABILITY": "Legacy LOE D + DFARS",
+            SOURCE_FIELDS[0]: "Legacy LOE A",
+            SOURCE_FIELDS[1]: "Legacy LOE C + DFARS",
+            SOURCE_FIELDS[2]: "Legacy LOE D + DFARS",
         }
 
         instances = self._build(source_values)

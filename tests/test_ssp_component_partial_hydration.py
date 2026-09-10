@@ -604,7 +604,6 @@ class ComponentPartialHydrationRepositoryTests(unittest.TestCase):
             "THIRD_PARTY_NAME",
             "THIRD_PARTY_DESCRIPTION",
             "INSTALL_STATUS",
-            "OPERATIONAL_STATUS",
             "RECORD_STATUS",
             "SERVICENOW_LIFE_CYCLE_STAGE_STATUS",
         ):

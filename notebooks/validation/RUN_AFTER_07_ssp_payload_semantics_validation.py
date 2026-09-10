@@ -77,7 +77,9 @@ ALLOWED_SECURITY_VALUES = {
 
 REVIEWED_LEGACY_SECURITY_VALUES = {
     "legacy-loe-a",
+    "legacy-loe-a-+-dfars",
     "legacy-loe-b",
+    "legacy-loe-b-+-dfars",
     "legacy-loe-c",
     "legacy-loe-c-+-dfars",
     "legacy-loe-d",

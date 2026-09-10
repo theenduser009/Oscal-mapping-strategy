@@ -680,16 +680,24 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-Do not rerun the mapper, component source-contract extraction, broad lookup
-discovery, or source-routing audit for this release. The component hydration
-run is accepted. Keep `EXECUTE_WRITES = False` and use the tester guide below
-for the formal mapped-scope, payload, hierarchy, PK/FK, negative, and known-gap
-acceptance cycle. All 156 repository tests pass.
+The component hydration run above is accepted. The next implementation release
+is ready and does not reopen metadata. It adds exact, fail-closed Cell 4
+contracts for the four approved SSP text mappings, the eleven approved
+security-impact source/objective pairs, governed Archer select-value wrappers,
+responsible-party transforms, and every supported mapping-type dispatcher.
+Unsupported or misrouted populated mappings now stop with a sanitized error
+instead of silently becoming raw direct values. The eight reviewed legacy
+security labels are also aligned across all three validators.
 
-The tester handoff is documented in
-[`SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md`](SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md).
-It explains OSCAL and mapper business behavior before giving the field-to-node,
-payload, deterministic PK, FACT-to-DIM FK, hierarchy, negative, safety, and
-known-gap test cases. Use that document as the QA contract for this merged
-release.
+The release also adds
+[`RUN_AFTER_07_ssp_mapped_scope_assembly.py`](../notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py).
+It consumes the already validated in-memory graph and assembles one transient
+mapped-scope SSP JSON document per source record. It performs no DDL or DML,
+prints no identifiers or payloads, and explicitly makes neither a complete-SSP
+nor an OSCAL-schema-validity claim.
 
+Run updated Cells 1 through 7 once in order with
+`EXECUTE_WRITES = False`. After Cell 7 passes, run only the mapped-scope
+assembler in the same notebook session and post its aggregate output. Do not
+rerun the registry setup, broad lookup discovery, source-contract extraction,
+or source-routing audit. All 179 repository tests pass.

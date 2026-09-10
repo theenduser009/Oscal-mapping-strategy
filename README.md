@@ -11,6 +11,7 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 - [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) — dated project decisions and GitHub checkpoints.
 - [`docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md`](docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md) — pinned version sources and the first-tier required SSP contract.
 - [`docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md`](docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md) — tester-facing business rules, field-to-node expectations, PK/FK checks, known gaps, and complete acceptance procedure.
+- [`notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py`](notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py) — the read-only post-Cell-7 assembler for one transient mapped-scope SSP document per Archer record.
 - [`docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md`](docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md) — filtered visual evidence from the SSP mapping workbook; it is not a replacement for the complete workbook.
 
 The earlier three-cell `ssp_props_read_only_cells.py` and its copy pages were temporary diagnostics. They have been removed to prevent them from being mistaken for the production mapper.
@@ -92,18 +93,19 @@ availability objectives are emitted. Missing values are never invented.
 
 ## Immediate next action
 
-The partial component hydration release is implemented in the authoritative
-notebook and synchronized split Cells 2, 4, and 5. It performs bounded,
-server-side joins from only the three approved Excel routes, rejects duplicate
-or missing lookup rows before graph construction, and collects only the 1,435
-currently routed title/description records. It neither prints component values
-nor adds a write path. All 156 repository tests pass.
+The accepted component hydration run is the baseline. The next release
+hardens the Excel-defined mapping contracts in Cell 4: the four approved SSP
+text mappings and the eleven security-impact source/objective pairs are exact,
+unresolved Archer select IDs fail closed, unsupported transformation types no
+longer fall through as raw direct values, and the reviewed legacy security
+vocabulary is synchronized across the mapper and validators.
 
-The component hydration run is accepted; do not rerun Cells 1 through 7 or the
-component discovery, source-contract extraction, or source-routing audit for
-this release. Keep `EXECUTE_WRITES = False` and use the
-[tester guide](docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md) for the formal
-mapped-scope acceptance cycle.
+The same release adds the read-only mapped-scope assembler. Because Cell 4
+changed, run updated Cells 1 through 7 once in order with
+`EXECUTE_WRITES = False`; after Cell 7 passes, run only the mapped-scope
+assembler in that same session. It assembles the accepted graph into transient
+JSON documents and prints aggregate counts only. It does not claim complete or
+schema-valid OSCAL and adds no write path. All 179 repository tests pass.
 
 ## Read-only inspection SQL
 
@@ -111,4 +113,3 @@ mapped-scope acceptance cycle.
 - [Drill into `system-characteristics` and all descendant payloads](sql/drill_down_system_characteristics.sql)
 
 - [Inspect security-impact-level and extract confidentiality, integrity, and availability](sql/drill_down_security_impact_level.sql)
-

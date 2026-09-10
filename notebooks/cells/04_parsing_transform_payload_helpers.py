@@ -37,7 +37,13 @@ TRANSIENT_SOURCE_FIELDS = {
 SECURITY_IMPACT_ELEMENT_PATH = (
     "system-security-plan.system-characteristics.security-impact-level"
 )
+SYSTEM_CHARACTERISTICS_ELEMENT_PATH = (
+    "system-security-plan.system-characteristics"
+)
 STATUS_ELEMENT_PATH = "system-security-plan.system-characteristics.status"
+AUTHORIZATION_BOUNDARY_ELEMENT_PATH = (
+    "system-security-plan.system-characteristics.authorization-boundary"
+)
 SYSTEM_CHARACTERISTICS_PROPS_ELEMENT_PATH = (
     "system-security-plan.system-characteristics.props[]"
 )
@@ -86,6 +92,56 @@ RESPONSIBLE_PARTIES_ELEMENT_PATH = (
 METADATA_TITLE_SOURCE_FIELD = "AUTHORIZATION_PACKAGE_NAME"
 APPROVED_RESPONSIBLE_PARTY_TYPE = "person"
 METADATA_TIMESTAMP_FIELDS = ("published", "last-modified")
+
+APPROVED_TEXT_MAPPING_CONTRACTS = {
+    "AUTHORIZATION_PACKAGE_NAME": {
+        "owner_path": SYSTEM_CHARACTERISTICS_ELEMENT_PATH,
+        "target_field": "system-name",
+    },
+    "ACRONYM": {
+        "owner_path": SYSTEM_CHARACTERISTICS_ELEMENT_PATH,
+        "target_field": "system-name-short",
+    },
+    "MISSION_PURPOSE": {
+        "owner_path": SYSTEM_CHARACTERISTICS_ELEMENT_PATH,
+        "target_field": "description",
+    },
+    "AUTHORIZATION_BOUNDARY_DESCRIPTION": {
+        "owner_path": AUTHORIZATION_BOUNDARY_ELEMENT_PATH,
+        "target_field": "description",
+    },
+}
+
+SECURITY_IMPACT_SOURCE_OBJECTIVES = {
+    "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY": (
+        "security-objective-confidentiality"
+    ),
+    "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE": (
+        "security-objective-confidentiality"
+    ),
+    "RECOMMENDED_INTEGRITY_CONTROL_CATEGORY": "security-objective-integrity",
+    "INTEGRITY_CONTROL_CATEGORY_OVERRIDE": "security-objective-integrity",
+    "RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY": (
+        "security-objective-availability"
+    ),
+    "AVAILABILITY_CONTROL_CATEGORY_OVERRIDE": (
+        "security-objective-availability"
+    ),
+    "PROGRAMSITE_INTEGRITY_CONTROL_CATEGORY": "security-objective-integrity",
+    "PROGRAMSITE_AVAILABILITY_CONTROL_CATEGORY": (
+        "security-objective-availability"
+    ),
+    "CNSS_AVAILABILITY_RATING": "security-objective-availability",
+    "CNSS_CONFIDENTIALITY_RATING": "security-objective-confidentiality",
+    "CNSS_INTEGRITY_RATING": "security-objective-integrity",
+}
+
+ARCHER_SELECT_ID_CONTAINER_KEYS = {
+    "valuelistid",
+    "valuelistids",
+    "valueslistid",
+    "valueslistids",
+}
 
 SECURITY_OBJECTIVE_FIELDS = {
     "security-objective-confidentiality",
@@ -190,6 +246,13 @@ def _extract_reference_ids(value):
         ):
             if key in value and _has_value(value[key]):
                 return _extract_reference_ids(value[key])
+        for key, item in value.items():
+            key_token = re.sub(r"[^a-z0-9]+", "", str(key).lower())
+            if (
+                key_token in ARCHER_SELECT_ID_CONTAINER_KEYS
+                and _has_value(item)
+            ):
+                return _extract_reference_ids(item)
         return value
     if isinstance(value, list):
         flattened = []
@@ -203,13 +266,40 @@ def _extract_reference_ids(value):
     return value
 
 
+def _contains_archer_select_id_container(value):
+    value = _to_python(value)
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_token = re.sub(r"[^a-z0-9]+", "", str(key).lower())
+            if key_token in ARCHER_SELECT_ID_CONTAINER_KEYS:
+                return True
+            if _contains_archer_select_id_container(item):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_archer_select_id_container(item) for item in value)
+    return False
+
+
 def resolve_archer_select_value(value):
+    strict_select_ids = _contains_archer_select_id_container(value)
     extracted = _extract_reference_ids(value)
 
     def resolve_one(item):
         if item is None:
             return None
-        return ARCHER_VALUE_LOOKUP.get(str(item).strip(), item)
+        item = _to_python(item)
+        if isinstance(item, (dict, list, bool)):
+            if strict_select_ids:
+                raise ValueError("Archer select-value container is invalid")
+            return item
+        key = str(item).strip()
+        if strict_select_ids:
+            if key not in ARCHER_VALUE_LOOKUP or not _has_value(
+                ARCHER_VALUE_LOOKUP[key]
+            ):
+                raise ValueError("Archer select-value ID is unresolved")
+            return ARCHER_VALUE_LOOKUP[key]
+        return ARCHER_VALUE_LOOKUP.get(key, item)
 
     if isinstance(extracted, list):
         resolved = [resolve_one(item) for item in extracted]
@@ -966,16 +1056,25 @@ def transform_metadata_title(value):
     return value
 
 
+def transform_approved_text(value):
+    value = _to_python(value)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Approved OSCAL text source must be nonblank text")
+    return value
+
+
 def _is_executable_responsible_party_mapping(mapping_row):
     source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
     if source_field not in RESPONSIBLE_PARTY_ROLE_DEFINITIONS:
         return False
 
-    mapping_type = str(
-        mapping_row.get("MAPPING_TYPE") or "Direct"
-    ).strip().lower()
+    mapping_type = _mapping_type_token(mapping_row)
     status = str(mapping_row.get("STATUS") or "").strip().lower()
-    return "tbd" not in mapping_type and "more information" not in status
+    if "tbd" in mapping_type or "more information" in status:
+        return False
+    if mapping_type != "transform":
+        raise ValueError("Responsible-party mapping type must be Transform")
+    return True
 
 
 def _active_responsible_party_role_instances(source_obj, source_record_id):
@@ -1153,6 +1252,68 @@ def _target_field_name(mapping_row):
     return _stable_property_name(str(mapping_row["SOURCE_FIELD_NAME"]))
 
 
+def _mapping_type_token(mapping_row):
+    return re.sub(
+        r"[^a-z0-9]+",
+        "-",
+        str(mapping_row.get("MAPPING_TYPE") or "Direct").strip().lower(),
+    ).strip("-")
+
+
+def _validate_approved_text_mapping(mapping_row):
+    source_field = str(mapping_row.get("SOURCE_FIELD_NAME") or "").strip()
+    contract = APPROVED_TEXT_MAPPING_CONTRACTS.get(source_field)
+    if contract is None:
+        return False
+    if (
+        str(mapping_row.get("OWNER_ELEMENT_PATH") or "").strip()
+        != contract["owner_path"]
+        or _target_field_name(mapping_row) != contract["target_field"]
+        or _mapping_type_token(mapping_row) != "direct"
+    ):
+        raise ValueError("Approved OSCAL text mapping contract does not match")
+    return True
+
+
+def _validate_security_objective_mapping(mapping_row):
+    source_field = str(mapping_row.get("SOURCE_FIELD_NAME") or "").strip()
+    owner_path = str(mapping_row.get("OWNER_ELEMENT_PATH") or "").strip()
+    target_field = _target_field_name(mapping_row)
+    expected_target = SECURITY_IMPACT_SOURCE_OBJECTIVES.get(source_field)
+
+    if expected_target is None:
+        if owner_path == SECURITY_IMPACT_ELEMENT_PATH:
+            raise ValueError("Security-impact mapping source is not approved")
+        return False
+    if (
+        owner_path != SECURITY_IMPACT_ELEMENT_PATH
+        or target_field != expected_target
+        or _mapping_type_token(mapping_row)
+        not in {"direct", "transform", "direct-transform"}
+    ):
+        raise ValueError("Security-impact source/target contract does not match")
+    return True
+
+
+def _validate_exact_mapping(
+    mapping_row,
+    source_field,
+    owner_path,
+    target_field,
+    mapping_type,
+    label,
+):
+    if (
+        str(mapping_row.get("SOURCE_FIELD_NAME") or "").strip()
+        != source_field
+        or str(mapping_row.get("OWNER_ELEMENT_PATH") or "").strip()
+        != owner_path
+        or _target_field_name(mapping_row) != target_field
+        or _mapping_type_token(mapping_row) != mapping_type
+    ):
+        raise ValueError(f"{label} mapping contract does not match")
+
+
 def _resolve_metadata_timestamp_cluster(
     source_obj,
     mapping_rows,
@@ -1198,10 +1359,7 @@ def _resolve_metadata_timestamp_cluster(
 
 def apply_mapping_transform(mapping_row, value, source_record_id):
     source_field = str(mapping_row["SOURCE_FIELD_NAME"]).strip()
-    mapping_type = str(mapping_row.get("MAPPING_TYPE") or "Direct").lower()
-    transform_logic = str(
-        mapping_row.get("TRANSFORMATION_LOGIC") or ""
-    ).lower()
+    mapping_type = _mapping_type_token(mapping_row)
     status = str(mapping_row.get("STATUS") or "").lower()
 
     if source_field in TRANSIENT_SOURCE_FIELDS:
@@ -1214,46 +1372,110 @@ def apply_mapping_transform(mapping_row, value, source_record_id):
     owner_path = str(mapping_row.get("OWNER_ELEMENT_PATH") or "").strip()
     target_field = _target_field_name(mapping_row)
 
-    if source_field in RESPONSIBLE_PARTY_ROLE_IDS:
+    if _validate_approved_text_mapping(mapping_row):
+        handler = "approved-text"
+    elif (
+        source_field in SECURITY_IMPACT_SOURCE_OBJECTIVES
+        or owner_path == SECURITY_IMPACT_ELEMENT_PATH
+    ):
+        _validate_security_objective_mapping(mapping_row)
+        handler = "security-objective"
+    elif source_field == "OPERATIONAL_STATUS" or (
+        owner_path == STATUS_ELEMENT_PATH and target_field == "state"
+    ):
+        _validate_exact_mapping(
+            mapping_row,
+            "OPERATIONAL_STATUS",
+            STATUS_ELEMENT_PATH,
+            "state",
+            "transform",
+            "System status",
+        )
+        handler = "status-state"
+    elif source_field == "AUTHORIZATION_COMMENTS" or (
+        owner_path == STATUS_ELEMENT_PATH and target_field == "remarks"
+    ):
+        _validate_exact_mapping(
+            mapping_row,
+            "AUTHORIZATION_COMMENTS",
+            STATUS_ELEMENT_PATH,
+            "remarks",
+            "extension-property",
+            "Authorization comments",
+        )
+        handler = "approved-text"
+    elif owner_path == METADATA_ELEMENT_PATH and target_field == "published":
+        if mapping_type != "transform":
+            raise ValueError("Metadata published mapping type must be Transform")
+        handler = "published"
+    elif (
+        owner_path == METADATA_ELEMENT_PATH and target_field == "last-modified"
+    ):
+        if mapping_type != "transform":
+            raise ValueError(
+                "Metadata last-modified mapping type must be Transform"
+            )
+        handler = "last-modified"
+    elif owner_path == DOCUMENT_IDS_ELEMENT_PATH and target_field == "identifier":
+        _validate_exact_mapping(
+            mapping_row,
+            "TRACKING_ID",
+            DOCUMENT_IDS_ELEMENT_PATH,
+            "identifier",
+            "direct",
+            "Document identifier",
+        )
+        handler = "document-identifier"
+    elif owner_path == SYSTEM_IDS_ELEMENT_PATH and target_field == "id":
+        _validate_exact_mapping(
+            mapping_row,
+            "SAP_ID",
+            SYSTEM_IDS_ELEMENT_PATH,
+            "id",
+            "direct",
+            "System identifier",
+        )
+        handler = "direct"
+    elif source_field in RESPONSIBLE_PARTY_ROLE_IDS:
+        _is_executable_responsible_party_mapping(mapping_row)
+        handler = "responsible-party"
+    elif owner_path == COMPONENTS_ELEMENT_PATH:
+        _component_mapping_type(mapping_row)
+        handler = "component-reference"
+    elif owner_path == SYSTEM_CHARACTERISTICS_PROPS_ELEMENT_PATH:
+        if mapping_type != "extension-property":
+            raise ValueError(
+                "System-characteristics property mapping type must be "
+                "Extension Property"
+            )
+        handler = "governed-property"
+    elif mapping_type == "direct":
+        handler = "direct"
+    else:
+        raise ValueError("Mapping has no approved transformation handler")
+
+    if handler == "approved-text":
+        return transform_approved_text(value)
+    if handler == "responsible-party":
         return transform_responsible_party(
             source_record_id, source_field, value
         )
-
-    if (
-        owner_path == SECURITY_IMPACT_ELEMENT_PATH
-        and target_field in SECURITY_OBJECTIVE_FIELDS
-    ):
+    if handler == "security-objective":
         return transform_security_objective(value)
-
-    if owner_path == STATUS_ELEMENT_PATH and target_field == "state":
+    if handler == "status-state":
         return transform_status_state(value)
-
-    if owner_path == METADATA_ELEMENT_PATH and target_field == "published":
+    if handler == "published":
         return transform_published(value)
-
-    if (
-        owner_path == METADATA_ELEMENT_PATH
-        and target_field == "last-modified"
-    ):
+    if handler == "last-modified":
         return transform_last_modified(value)
-
-    if owner_path == DOCUMENT_IDS_ELEMENT_PATH and target_field == "identifier":
+    if handler == "document-identifier":
         return transform_document_identifier(value)
-
-    if "fips" in transform_logic or "security objective" in transform_logic:
-        transformed = transform_fips_199(value)
-        return transformed if _has_value(transformed) else SKIP_VALUE
-
-    if (
-        "archer" in transform_logic
-        or "select value" in transform_logic
-        or "lookup" in transform_logic
-        or "extension" in mapping_type
-    ):
+    if handler == "governed-property":
         transformed = resolve_archer_select_value(value)
         return transformed if _has_value(transformed) else SKIP_VALUE
-
-    return _to_python(value)
+    if handler in {"component-reference", "direct"}:
+        return _to_python(value)
+    raise RuntimeError("Approved mapping handler did not return a value")
 
 
 def build_element_instances(
