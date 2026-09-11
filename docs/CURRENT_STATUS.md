@@ -4,6 +4,15 @@ Last reconciled: 2026-09-11
 
 ## Active incident — Matillion raw-to-curated null field loss
 
+**Immediate requested action: view the complete corrected JSON, not another null-only report.**
+[Run the full conversion preview SELECT](../sql/matillion/READ_ONLY_authorization_package_full_conversion_preview.sql)
+with no edits or inputs. The configured authorization-package raw table is filled
+in. Inspect RAW_FIELD_CONTENTS, CURRENT_CURATED_JSON and PROPOSED_CURATED_JSON to
+compare raw field IDs/values with mapped names, populated values and retained nulls.
+No write or Matillion change occurs. Published without a test run as requested;
+live Snowflake verification and deployment remain pending. Earlier null-only
+reports are optional, not the required next action.
+
 **SSP write pilot paused by owner; it has not run.** The current priority is the
 reported production field-ID/name loss in the upstream Matillion conversion.
 The [incident diagnosis and bounded candidate](RAW_CURATED_NULL_FIELD_FIX.md)

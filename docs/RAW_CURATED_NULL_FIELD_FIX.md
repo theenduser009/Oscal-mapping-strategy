@@ -17,6 +17,42 @@ the assembled JSON. This behavior is documented by Snowflake
 This is one confirmed loss mechanism, not proof that every missing field ID has
 the same cause. Source/data evidence for specific affected records is still needed.
 
+## Start here — complete corrected curated JSON before writing
+
+[Copy the complete conversion preview SQL](../sql/matillion/READ_ONLY_authorization_package_full_conversion_preview.sql).
+
+**Copy the full file into one Snowflake SQL cell and run. No replacements.**
+The source table is already set to
+`RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW` from Cell 1.
+No record-ID input, Matillion variable, previous query or notebook rerun is needed.
+
+This is the requested preview of the **actual correction**, not a null-only list.
+For each eligible raw record, open **PROPOSED_CURATED_JSON** to see both populated
+values and named JSON-null values. Compare **RAW_FIELD_CONTENTS** (raw IDs and
+values) with **CURRENT_CURATED_JSON** and **PROPOSED_CURATED_JSON** (mapped names
+and converted values). Current/proposed content IDs and key counts are alongside.
+
+The preview runs the same metadata lookup/type-conversion pipeline and
+null-retaining aggregation as the candidate. It includes already-curated records
+for inspection only. There are **no writes or Matillion changes**.
+
+Only rows with `PREVIEW_READY_NOT_WRITTEN` have a proposed JSON document to inspect.
+Duplicate raw IDs, duplicate output keys, missing names/IDs and unsupported root
+shapes are blocked explicitly. The original converter processes only the first
+root-array item; this preview conservatively blocks multi-item root arrays
+instead of presenting their first item as full coverage. Missing/invalid raw IDs
+are grouped into a diagnostic row, not emitted as fabricated record identities.
+Existing strict casts/nested extraction can still raise an error. A ready preview
+does not prove every raw field ID is covered; inspect the affected field.
+
+**Published without running tests at the owner's request. Snowflake verification
+and production deployment are still pending.** Full-table execution consumes
+warehouse compute. Keep source values in Snowflake; share only redacted evidence.
+The production UPDATE still skips populated curated JSON; viewing a proposed
+repair here does not authorize or perform a historical backfill.
+
+The older null-only reports below are optional and are **not the next step**.
+
 ## Copy, paste, run — all records, no inputs
 
 [Open the all-record null-field-name SQL](../sql/matillion/READ_ONLY_authorization_package_all_null_field_names.sql).
