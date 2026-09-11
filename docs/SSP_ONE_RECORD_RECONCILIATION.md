@@ -1,106 +1,94 @@
 # SSP — replace one reviewed development record
 
-Status: **implemented and locally tested; live replacement is not yet accepted**.
+Status: **v2 implemented; live replacement remains pending**.
 
-The owner approved replacing only the SSP record selected by the same lowest-root
-rule used in the posted comparison. That evidence showed 21 old DIM rows and
-20 old FACT rows, versus 19 new nodes and 18 new edges, with zero key overlap.
-The subsequent new-record-only pilot found no eligible record, including after
-the owner rebuilt Cells 1–7. Those attempts reported no target DML and no
-persistence. This replacement is separately authorized; it is not a guard bypass.
+## Current owner-approved policy — no permanent backup
+
+On September 11, the owner approved skipping permanent backup creation for
+**only the previously reviewed SSP development record**. The earlier v1 attempt
+passed old-key checks and stopped before target DML because its execution role
+could not create a permanent backup in the curated schema. This change removes
+that backup-creation operation; it does not grant privileges or establish that
+target INSERT/DELETE permissions are available.
+
+The cell's `SSP_RECONCILE_BACKUP_POLICY = "TRANSACTION_ONLY_DEV"` is already set.
+Temporary old/new snapshots, transaction rollback, rollback rehearsal, exact
+record scope and primary/foreign-key/readback checks remain required.
+**After COMMIT, there is no separate durable copy of the old graph.**
+Temporary snapshots must not be treated as permanent recovery protection.
+This is not authorization to skip backups for another record, bulk load or production.
 
 ## Run once
 
 Open [RECONCILE_SSP_ONE_RECORD_WRITE.py](../notebooks/persistence/RECONCILE_SSP_ONE_RECORD_WRITE.py).
 
-1. In the current accepted SSP notebook session, paste the complete file into
-   **one new Python cell**. It is standalone: no old pilot or diagnostic is needed.
-2. At line 10 set **SSP_RECONCILE_MODE = "COMMIT"**.
-3. Keep **CONFIG["EXECUTE_WRITES"] = False**. Pause all other writers to the SSP
-   development DIM/FACT tables and do not run other cells concurrently.
-4. Run only the new reconciliation cell once. Post the complete printed report,
-   including the backup-table names. Do not start a bulk load afterward.
+1. Replace only your separate reconciliation Python cell with the complete file.
+2. At line 10 set `SSP_RECONCILE_MODE = "COMMIT"`. Leave the preset backup policy unchanged.
+3. Keep `CONFIG["EXECUTE_WRITES"] = False` and pause other writers to the SSP DEV targets.
+4. In the same accepted notebook session, run only that replacement cell once
+   and post its complete printed report. No old pilot, registry or error-history rerun is needed.
 
-If the session has closed, first rebuild the unchanged SSP Cells 1–7 with writes
-disabled. The required accepted graph is still 70,102 nodes / 67,289 edges.
-A separate PREVIEW run is optional, not required: COMMIT performs every preflight
-check before replacing anything. PREVIEW creates only temporary snapshots.
+If the session closed, first rebuild unchanged Cells 1–7 with writes disabled.
+The accepted overall graph remains 70,102 nodes / 67,289 edges.
+PREVIEW is optional and makes no target DML; COMMIT includes the same preflight.
 
-## Scope and recovery protection
+## Scope and checks retained
 
-- Only the configured SSP development DIM and FACT tables are replacement targets.
-  AR, registry, Matillion and other source records are outside this replacement.
-- Choose the deterministic lowest SSP root, freeze it, and require the reviewed
-  candidate shape: 19 nodes / 18 containment edges. Never fall back to another
-  source record if a check fails.
-- Snapshot its existing target scope and require exactly 21 DIM / 20 FACT rows,
-  no duplicate or null keys, zero old/new key overlap, the same source ownership,
-  and one connected legacy tree using parent_of relationships.
-- Every existing relationship touching the selected graph must stay within that
-  record. Cross-record/external endpoints stop replacement; they are not removed.
-- Before target DML, create and verify two uniquely named **permanent backup
-  tables**, containing every column of the old 21/20 rows. No OR REPLACE, DROP or
-  TRUNCATE is used. Backups survive notebook closure and are intentionally retained.
-  Creating these backups requires CREATE TABLE permission in the curated DEV
-  schema; lack of permission stops before any target row is changed.
-- Backup names appear in BACKUP_TABLES. If backup creation partly fails, a listed
-  name is only a proposed name until BACKUPS_VERIFIED is true. Keep any successfully
-  created backup; there is no automatic cleanup.
+- Targets remain the two configured SSP **development** DIM/FACT tables.
+  AR, registry, Matillion and other records are outside this operation.
+- Select the same lowest-root SSP record used in the reviewed comparison:
+  old **21 DIM / 20 FACT**, new **19 DIM / 18 FACT**, zero old/new key overlap.
+  Changed counts, ownership or scope stop the cell; no fallback record is selected.
+- Freeze the complete old/new data. Every edge touching the old record must
+  have both endpoints inside it. Check PK uniqueness/nulls, both FK endpoints,
+  UUID links, relationship type, root, parent counts and connected hierarchy.
+- At the start of each transaction, compare live scoped targets against the old
+  snapshot. Delete only the frozen **20 old FACT keys**, then **21 old DIM keys**,
+  with exact deleted-row counts required.
+- Insert **19 new DIM / 18 new FACT**, verify every projected saved value and key,
+  then repeat the insert-only merges: require zero extra inserts and verify again.
+- Roll back the first transaction and prove the old baseline is restored.
+  Only then repeat replacement in a second transaction and COMMIT.
+- Verify saved data and PK/FK integrity again after commit. Keep old physical keys
+  in the comparison scope so leftover old nodes/edges cannot escape checks.
 
-## What gets verified while writing
+Snowflake uses [READ COMMITTED isolation](https://docs.snowflake.com/en/sql-reference/transactions#read-committed-isolation-level);
+these checks are not a serializable reservation. Other writers must stay paused.
 
-Both rehearsal and commit use the same frozen old/new data:
+## Read the report correctly
 
-1. BEGIN and compare the current target scope and durable backups against the
-   complete old snapshot. Any drift stops before deletion.
-2. Delete only the frozen **20 old FACT keys**, then **21 old DIM keys**.
-   Both exact deleted-row counts are required.
-3. Insert **19 new DIM rows / 18 new FACT rows** and compare every projected saved
-   value, physical key, UUID and parsed JSON payload with the frozen candidate.
-4. Check null/duplicate primary keys, null foreign keys, missing source/target
-   endpoints, UUID link mismatches, relationship type, parent cardinality and
-   the single SSP root. All error counts must be zero.
-5. Repeat the insert-only merges: require **zero new inserts** and verify again.
+Success requires `ONE_RECORD_RECONCILED_AND_VERIFIED`, `PERSISTED: true`,
+`ROLLBACK_RESTORED_BASELINE: true`, and clean final saved-value/key checks.
 
-The first transaction is rolled back and the complete old baseline must be
-restored. Only then does the second transaction repeat replacement and COMMIT.
-The code performs one more saved-value and integrity readback after commit.
+For the approved no-permanent-backup policy, these report fields are expected:
 
-The comparison retains the old physical keys in scope after deletion, so orphaned
-legacy edges or leftover old nodes cannot disappear from verification. These are
-checks for the selected record and all relationships touching it, not a claim
-that every unrelated record in the database has been validated.
+```text
+BACKUP_POLICY: TRANSACTION_ONLY_DEV
+BACKUP_TABLES: {}
+BACKUPS_VERIFIED: false
+RECOVERY_LIMITATION: NO_DURABLE_COPY_AFTER_COMMIT
+```
 
-Snowflake uses [READ COMMITTED isolation](https://docs.snowflake.com/en/sql-reference/transactions#read-committed-isolation-level),
-so the checks are not a serializable reservation: keep other writers paused.
-DELETE statements are bounded by [frozen-key filters](https://docs.snowflake.com/en/sql-reference/sql/delete);
-backups use [CREATE TABLE AS SELECT](https://docs.snowflake.com/en/sql-reference/sql/create-table).
+A replacement error must roll back its transaction; an uncertain BEGIN, COMMIT
+or ROLLBACK reports `UNKNOWN_DO_NOT_RETRY`. A post-commit verification failure can
+report `PERSISTED: true`; that is not a successful rollback. Do not retry, perform
+DDL, or automatically restore after an uncertain result. No automatic restoration
+is provided, and this policy creates no durable backup for later restoration.
 
-## Success, failure and recovery
+Do not rerun after success: the old-shape guard is expected to stop another
+replacement. This does not advance to another record or authorize bulk loading.
 
-Success requires **ONE_RECORD_RECONCILED_AND_VERIFIED**, **PERSISTED: true**,
-verified backups, a restored rehearsal baseline, and clean final READBACK.
-Do not rerun after success: the old 21/20 guard should now stop this one-record
-replacement. It does not advance to another record.
+The callable helper retains `backup_policy="DURABLE"` for callers that explicitly
+need the original behavior; the notebook entry point passes the owner-approved
+development-only policy above. No permanent backup table is created on that path.
+All 339 local tests pass, including seven focused no-backup policy regressions.
+These are not proof of Snowflake write acceptance or complete OSCAL conformance.
 
-A failure during replacement rolls back that transaction. A failed backup or
-preflight makes no target row changes. Permanent backups are still retained.
-A failed post-commit check can report PERSISTED true: it must not be described
-as a successful rollback. Any outcome marked UNKNOWN_DO_NOT_RETRY requires
-transaction-state/readback recovery before any retry or restore. Do not run
-DDL, auto-restore, delete backups, or repeatedly execute the cell in that state.
+## Historical evidence — previous permanent-backup policy
 
-The durable backup tables are the recovery source if a later approved restoration
-is required. Restore is intentionally not automatic: first establish transaction
-state and compare the current record against the saved backup/new snapshot, then
-perform a separately reviewed, scoped transaction. This avoids overwriting later
-changes or running a second replacement after an uncertain commit.
-
-All 332 local repository tests pass, including 16 new reconciliation tests for
-frozen-key deletion, rollback faults, preserved unrelated rows, counts, legacy
-ownership, retained old-edge scope, durable-backup ordering and PK/FK corruption.
-Static code review found no blocking defect. These checks do not establish live
-Snowflake execution, all-record migration, or full OSCAL schema conformance.
+The v1 report and permission finding below are retained verbatim. Their instruction
+to obtain backup-creation permission applied to v1; the owner-approved v2 policy
+above supersedes that requirement only for this reviewed development record.
 
 ## Live Snowflake evidence — 2026-09-11
 

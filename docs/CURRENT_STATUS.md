@@ -2,48 +2,43 @@
 
 Last reconciled: 2026-09-11
 
-## Current action — SSP one-record reconciliation with PK/FK verification
+## Current action — one reviewed SSP DEV record, no permanent backup
 
-The owner reran SSP Cells 1–7 and the v4 insert-only pilot in the same session.
-The reported outcome is still NO_UNSTORED_SSP_RECORD_AVAILABLE in staging,
-with TARGET_DML_ATTEMPTED false and PERSISTED false. Session reconstruction did
-not clear the restriction. Do not repeat the v4 pilot or the prior diagnostics.
+The latest v1 reconciliation reached the reviewed old-key checks, then stopped
+before target DML during permanent-backup creation. Posted query history confirms
+the execution role PUBLIC lacks CREATE TABLE on the curated DEV schema.
+No replacement was persisted by that attempt.
+[Exact failure evidence](SSP_ONE_RECORD_RECONCILIATION.md#exact-backup-failure-retrieved-from-query-history).
 
-The owner then explicitly authorized replacing **only the previously compared
-development record**, with a recoverable backup, rollback rehearsal and readback,
-leaving every other record untouched. The owner also required primary-key and
-foreign-key integrity checks.
+The owner subsequently approved **skipping the permanent backup for this one
+reviewed development record**. The updated
+[reconciliation cell](../notebooks/persistence/RECONCILE_SSP_ONE_RECORD_WRITE.py)
+sets SSP_RECONCILE_BACKUP_POLICY = "TRANSACTION_ONLY_DEV". No privilege grants,
+backup-location assumptions or bulk-write authorization are introduced.
+After commit, there will be no separate durable copy of the old graph.
 
-The separate [one-record reconciliation cell](../notebooks/persistence/RECONCILE_SSP_ONE_RECORD_WRITE.py)
-is implemented. It reuses the accepted SSP graph and physical-schema handling,
-selects the same lowest root used by the comparison, and requires the reviewed
-old 21 DIM / 20 FACT versus new 19 nodes / 18 edges, with zero old/new key overlap.
-It refuses a changed scope, external relationships, invalid keys or collisions.
+The approved scope stays old 21 DIM / 20 FACT to new 19 DIM / 18 FACT, using the
+same lowest-root record and zero old/new key overlap. Temporary snapshots,
+unchanged-baseline checks, exact frozen-key deletion/counts, rollback rehearsal,
+repeated insert-only merges, PK/FK/UUID/hierarchy checks and post-commit readback
+are retained. Every unrelated record, accepted mapping and registry is unchanged.
 
-**Next action:** copy the complete reconciliation file into one new Python cell,
-set SSP_RECONCILE_MODE = "COMMIT" at line 10, keep CONFIG["EXECUTE_WRITES"] = False
-and other writers paused, and run only that cell in the active accepted session.
-Post its report including BACKUP_TABLES. No new mapper, registry, schema,
-comparison, error-history or old-pilot run is needed in the active session.
+**Next action:** replace only the separate reconciliation Python cell with the
+complete updated file; set SSP_RECONCILE_MODE = "COMMIT" at line 10; keep
+CONFIG["EXECUTE_WRITES"] = False and other SSP writers paused. Run only that cell
+once in the same accepted session, then post the full report. No repeat mapper,
+registry, old pilot or diagnostic run is needed while the accepted session is active.
 
-Before target DML, it creates permanent, non-replacing backups of the selected
-old rows and verifies every backed-up column. Both transactions recheck unchanged
-baseline, delete only frozen old FACT/DIM keys, enforce exact deleted/inserted
-counts, and verify saved values, unique/non-null PKs, both FK endpoints, UUID
-links and the hierarchy. Rehearsal rolls back and restores the full old baseline;
-the second transaction commits and reads back again. Old keys remain in the
-verification scope to catch leftover legacy edges after replacement.
+All **339 local tests pass**, including seven new no-backup policy regressions.
+**Live replacement is still pending.** Skipping permanent CTAS removes the
+confirmed backup-create blocker; target INSERT/DELETE privileges are not yet
+proven. Success must report ONE_RECORD_RECONCILED_AND_VERIFIED, PERSISTED true,
+a restored rehearsal baseline and clean final readback. Under this explicit
+policy BACKUP_TABLES is empty and BACKUPS_VERIFIED is false by design.
+Unknown transaction outcomes require inspection, not automatic reruns.
 
-All **332 local tests pass**, including 16 reconciliation regressions; static
-review found no blocking defect. **Live replacement and persistence acceptance
-remain pending**, not completed by local tests. Success must explicitly report
-ONE_RECORD_RECONCILED_AND_VERIFIED and PERSISTED true. Backups remain available;
-uncertain outcomes require recovery, never blind retries or automatic restoration.
-
-This is a one-record physical persistence test, not bulk SSP/AR loading, full SSP
-schema conformance, or completion of the remaining mappings. Accepted SSP/AR
-mapping work and the accepted Matillion preview are preserved.
-[Run scope, key checks and recovery guide](SSP_ONE_RECORD_RECONCILIATION.md).
+This remains a one-record development persistence test, not bulk SSP/AR loading
+or full OSCAL completeness. [Run instructions and recovery limits](SSP_ONE_RECORD_RECONCILIATION.md).
 
 ## Active incident — Matillion raw-to-curated null field loss
 

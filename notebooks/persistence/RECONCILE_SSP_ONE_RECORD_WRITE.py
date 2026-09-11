@@ -1,13 +1,14 @@
 # Reconcile only the reviewed lowest-root SSP DEV record. Normal writes stay False.
-# PREVIEW creates temporary snapshots only; COMMIT backs up and replaces one reviewed graph.
+# PREVIEW creates temporary snapshots; COMMIT replaces only the reviewed DEV graph.
 # Requires the accepted SSP Cell 7 outputs in the same session; AR is not used.
 import json
 import re
 import uuid
 
 
-SSP_RECONCILE_RELEASE = "ssp-one-record-reconcile-v1"
+SSP_RECONCILE_RELEASE = "ssp-one-record-reconcile-v2-dev-no-backup"
 SSP_RECONCILE_MODE = "PREVIEW"  # Set to COMMIT only for the approved one-record replacement.
+SSP_RECONCILE_BACKUP_POLICY = "TRANSACTION_ONLY_DEV"  # Owner approved: no permanent recovery copy.
 SSP_PILOT_DIM = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT"
 SSP_PILOT_FACT = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY"
 SSP_PILOT_DIM_PK = "PK_OSCAL_SSP_ELEMENT_HASH"
@@ -564,10 +565,13 @@ def _reconcile_create_backups(session, names, backup_names):
     return backup_queries
 
 
-def run_ssp_one_record_reconciliation(session, config, run_result, nodes, edges, mode="PREVIEW"):
+def run_ssp_one_record_reconciliation(session, config, run_result, nodes, edges, mode="PREVIEW",
+                                      backup_policy="DURABLE"):
     _pilot_contract(config, run_result)
     if mode not in ("PREVIEW", "COMMIT"):
         raise PilotError("PILOT_MODE_MUST_BE_PREVIEW_OR_COMMIT")
+    if backup_policy not in ("DURABLE", "TRANSACTION_ONLY_DEV"):
+        raise PilotError("UNAPPROVED_BACKUP_POLICY")
     _pilot_no_transaction(session)
     token = uuid.uuid4().hex.upper()
     schema = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED."
@@ -576,7 +580,11 @@ def run_ssp_one_record_reconciliation(session, config, run_result, nodes, edges,
     report = {"RELEASE": SSP_RECONCILE_RELEASE, "MODEL": "SSP", "MODE": mode,
               "SELECTION": "PREVIOUSLY_REVIEWED_LOWEST_ROOT",
               "WRITE_POLICY": "BACKUP_AND_REPLACE_ONE_REVIEWED_RECORD",
+              "BACKUP_POLICY": backup_policy, "BACKUP_TABLES": {}, "BACKUPS_VERIFIED": False,
               "STATUS": "PREPARING", "TARGET_DML_ATTEMPTED": False, "PERSISTED": False}
+    if backup_policy == "TRANSACTION_ONLY_DEV":
+        report["WRITE_POLICY"] = "REPLACE_ONE_REVIEWED_DEV_RECORD_WITHOUT_DURABLE_BACKUP"
+        report["RECOVERY_LIMITATION"] = "NO_DURABLE_COPY_AFTER_COMMIT"
     phase = "SCHEMA_AND_STAGING"
     try:
         plans = [_pilot_column_plan(_pilot_query(session, "DESC TABLE " + target), kind)
@@ -593,18 +601,23 @@ def run_ssp_one_record_reconciliation(session, config, run_result, nodes, edges,
         if mode == "PREVIEW":
             report["STATUS"] = "RECONCILIATION_PREVIEW_PASSED_NO_TARGET_DML"
             return report
-        phase = "DURABLE_BACKUP"
-        backups = {k: schema + "BACKUP_SSP_RECONCILE_" + token + "_" + k for k in ("DIM", "FACT")}
-        report["BACKUP_TABLES"] = backups
-        backup_queries = _reconcile_create_backups(session, names, backups)
-        report["BACKUPS_VERIFIED"] = True
+        backup_queries = None
+        if backup_policy == "DURABLE":
+            phase = "DURABLE_BACKUP"
+            backups = {k: schema + "BACKUP_SSP_RECONCILE_" + token + "_" + k for k in ("DIM", "FACT")}
+            report["BACKUP_TABLES"] = backups
+            backup_queries = _reconcile_create_backups(session, names, backups)
+            report["BACKUPS_VERIFIED"] = True
+        # The owner waived permanent backups only for this fixed, reviewed DEV scope.
+        # Temporary DB/FB snapshots, transaction rollback and baseline checks still apply.
         deletes = _reconcile_delete_sql(names)
         merges = [_pilot_merge_sql(target, names[kind], pk, plan)
                   for target, kind, pk, plan in zip((SSP_PILOT_DIM, SSP_PILOT_FACT), ("D", "F"),
                                                   (SSP_PILOT_DIM_PK, SSP_PILOT_FACT_PK), plans)]
 
         def before_replace():
-            _pilot_baseline_equal(session, names, backup_queries)
+            if backup_queries is not None:
+                _pilot_baseline_equal(session, names, backup_queries)
             _pilot_baseline_equal(session, names, queries)
             report["TARGET_DML_ATTEMPTED"] = True
 
@@ -630,7 +643,7 @@ def run_ssp_one_record_reconciliation(session, config, run_result, nodes, edges,
         report.update(STATUS=code, PHASE=phase, ERROR_DETAILS=_pilot_error_details(error))
         if code in ("COMMIT_OUTCOME_UNKNOWN", "ROLLBACK_OUTCOME_UNKNOWN", "BEGIN_OUTCOME_UNKNOWN"):
             report["PERSISTED"] = "UNKNOWN_DO_NOT_RETRY"
-        # Keep durable backups. Never perform DDL or auto-restore after uncertain outcomes.
+        # Keep any snapshots/backups. No DDL or auto-restore after uncertain outcomes.
         print(json.dumps(report, indent=2, sort_keys=True, default=str))
         raise PilotError(code) from None
 
@@ -641,5 +654,6 @@ if __name__ == "__main__":
     if any(name not in globals() for name in required):
         raise PilotError("ACCEPTED_SSP_SESSION_OUTPUTS_REQUIRED")
     ssp_reconciliation_report = run_ssp_one_record_reconciliation(
-        session, CONFIG, run_result, final_nodes_df, final_edges_df, SSP_RECONCILE_MODE)
+        session, CONFIG, run_result, final_nodes_df, final_edges_df, SSP_RECONCILE_MODE,
+        backup_policy=SSP_RECONCILE_BACKUP_POLICY)
     print(json.dumps(ssp_reconciliation_report, indent=2, sort_keys=True, default=str))
