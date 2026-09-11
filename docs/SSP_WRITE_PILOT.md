@@ -1,6 +1,13 @@
 # One-record SSP development write pilot
 
-Status: **temporary-view staging correction locally verified; live write/readback pending**.
+Status: **PREVIEW reached target-scope review; no target DML attempted; existing extras unresolved**.
+
+**Current next step supersedes the COMMIT instructions below:** run only the
+[read-only extra-target-row comparison](../notebooks/persistence/READ_ONLY_SSP_PILOT_EXTRA_TARGET_ROWS.py)
+in one new Python cell in the same accepted session, with no edits. Post its
+aggregate report. The latest pilot staged 19 nodes and 18 edges for one record
+but found pre-existing target rows outside that candidate. Do not delete them,
+weaken the guard, or rerun the pilot yet.
 The owner approved one SSP record in the configured development DIM/FACT tables.
 This is not approval for a bulk load, AR writes, registry changes, or deletes.
 

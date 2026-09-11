@@ -2,57 +2,41 @@
 
 Last reconciled: 2026-09-11
 
-## Current action — SSP one-record persistence: temporary-view failure addressed
+## Current action — SSP extra existing rows: read-only comparison
 
-### Latest runtime evidence and bounded correction
+The [posted pilot report](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
+confirms **1 SSP record, 19 candidate nodes, 18 candidate edges**. The temporary
+materialization release reached the existing-target check and stopped with
+`EXTRA_TARGET_ROWS_REQUIRE_REVIEW` in `SCHEMA_AND_STAGING`.
+Mode was PREVIEW, `TARGET_DML_ATTEMPTED = false`, and `PERSISTED = false`.
+No persistent target changes were attempted. This is not write acceptance.
 
-The owner posted [query-history evidence](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
-after the corrected physical-schema pilot failed in **PREVIEW** with error 2003.
-Nothing was persisted and no pilot target DML ran.
+The next action is the
+[standalone read-only extra-row comparison](../notebooks/persistence/READ_ONLY_SSP_PILOT_EXTRA_TARGET_ROWS.py).
+Copy the entire file into **one new Python cell in the same accepted SSP/pilot
+session**, run it unchanged, and post its aggregate report. Do not run the pilot,
+switch to COMMIT, rerun registry setup, or repeat the earlier error-history SQL.
 
-The relevant history contains CREATE_VIEW failures against a Snowpark temporary
-backing object resolved under the curated schema, with the recorded session
-context in a different database/schema. This identifies the failing boundary.
-Snowflake resolves unqualified dependencies in a view's own schema; that is
-consistent with the observed error. The uploaded summary does not conclusively
-rule out a missing backing object or insufficient access. The role name alone
-does not establish privileges. Separate Archer raw-table SELECT errors in that
-history are not treated as the cause of this pilot failure.
+The comparison selects the same deterministic lowest SSP root from the current
+accepted graph and requires the reported 19/18 candidate shape, one root,
+unique decoded keys and closed edge endpoints. It reports DIM/FACT extra rows,
+distinct extra keys, duplicate-key groups, element types, and relationship
+types with endpoint-in-batch flags. FACT scope includes edges touching extra
+same-record DIM nodes, not just the expected 19 nodes. One target SELECT gives
+the classifications in a consistent statement snapshot. Source IDs and payloads
+are not printed; the source-record filter is parameter-bound.
 
-The separate pilot now uses synchronous temporary-table materialization of both
-accepted graph frames instead of cross-schema views. It does not switch roles,
-change session context, guess new source tables, alter registry/table schemas,
-or recalculate mappings. All physical-key/UUID conversions and transaction
-safeguards from the earlier release remain in place. See
-[the staging correction](checkpoints/2026-09-11_ssp_pilot_temp_materialization_fix.md).
+This is explicitly a comparison with the **current accepted graph**, not a
+claim to have recovered the failed pilot's original frozen stage. It contains
+no target DML, deletion, role change, or mapper rebuild. Existing extras are not
+assumed invalid; their disposition needs evidence and, if destructive, separate
+authorization. No guard is weakened and no different record is silently chosen.
 
-Release: `ssp-one-record-write-v3-temp-materialization`.
-**35 focused pilot tests and 298 repository tests pass; live acceptance pending.**
-A staging failure now reports the node/edge materialization step and a query ID
-when Snowflake supplies one, without printing source values or generated SQL.
-
-**Next action:** replace only the separate Python pilot cell with the
-[complete updated pilot](../notebooks/persistence/PILOT_SSP_ONE_RECORD_WRITE.py).
-In the same accepted SSP session, set `SSP_PILOT_MODE = "COMMIT"` for the
-already approved one-record DEV exercise. Keep normal
-`CONFIG["EXECUTE_WRITES"] = False`, pause other target writers, and run no
-concurrent SQL in that session. Run the pilot once and post its report.
-
-COMMIT includes source materialization, physical-schema checks and complete-tree
-validation before any target MERGE, followed by rollback rehearsal, restore
-proof, a one-record commit, repeated-MERGE checks and saved-data readback.
-If staging still cannot access its source, the pilot stops before target DML.
-Do not rerun registry setup, the history query, or accepted SSP/AR mapping cells
-while the accepted session outputs remain available. A restarted/invalid source
-session must be rebuilt explicitly, not repaired by guessing roles.
-
-Acceptance requires `ONE_RECORD_COMMITTED_AND_VERIFIED` and `PERSISTED: true`.
-Neither is recorded for the corrected release yet. Bulk SSP loading and AR
-persistence remain separate and unaccepted. The accepted SSP graph remains
-70,102 nodes / 67,289 edges. No new Excel mappings are counted by this change.
-
-Upstream Matillion preview acceptance remains recorded; no repeat preview is
-requested. Its pipeline execution/readback is still separate from SSP persistence.
+Three local comparison tests pass (SQL shape, validated keys and relational
+scope/count emulation); live Snowflake comparison output is pending. The pilot
+itself is unchanged by this diagnostic. Its physical-schema and staging fixes,
+accepted SSP/AR mappings, and the accepted Matillion preview remain preserved.
+Bulk SSP and AR persistence are still unaccepted.
 
 ## Active incident — Matillion raw-to-curated null field loss
 
