@@ -58,4 +58,43 @@ Observed recent failures included:
 
 Interpretation for Codex: the notebook is encountering object-resolution / authorization failures rather than a DIM/FACT schema-definition problem. Snowpark temporary-object lifetime or session scope is a likely contributor for the `SNOWPARK_TEMP_TABLE_*` failures; source-table naming/authorization should be checked separately for the Archer raw-object failures.
 
-This checkpoint records the actual physical Snowflake table contract and the visible query-history evidence from the notebook screenshots. No database changes were made by creating this documentation.
+## SSP one-record write-pilot markdown result checkpoint
+
+The notebook's one-record SSP pilot reached preview/staging validation but stopped before target DML because the pilot detected additional target rows that require review.
+
+Visible Python exception:
+
+```text
+PilotError: EXTRA_TARGET_ROWS_REQUIRE_REVIEW
+```
+
+The markdown cell immediately below the exception captured the pilot result as:
+
+```json
+{
+  "EDGES": 18,
+  "ERROR_DETAILS": {
+    "CAUSE": "EXTRA_TARGET_ROWS_REQUIRE_REVIEW"
+  },
+  "MODE": "PREVIEW",
+  "MODEL": "SSP",
+  "NODES": 19,
+  "PERSISTED": false,
+  "PHASE": "SCHEMA_AND_STAGING",
+  "RELEASE": "one-record-write-v3-temp-materialization",
+  "SOURCE_RECORDS": 1,
+  "STATUS": "EXTRA_TARGET_ROWS_REQUIRE_REVIEW",
+  "TARGET_DML_ATTEMPTED": false
+}
+```
+
+Important interpretation for Codex:
+
+- The pilot input was exactly `1` source record.
+- Candidate output was `19` nodes and `18` edges.
+- The run was `PREVIEW` only.
+- `PERSISTED = false`.
+- `TARGET_DML_ATTEMPTED = false`.
+- The guardrail intentionally blocked persistence because existing/extra target rows need review before a write is allowed.
+
+This checkpoint records the actual physical Snowflake table contract and the visible notebook/query-history evidence from the screenshots. No database changes were made by creating this documentation.
