@@ -50,17 +50,11 @@ Observed recent failures included:
 
 - `CREATE_VIEW` attempts under role `PUBLIC`, database `USERSC95077009`, schema `PUBLIC`.
 - Error code `2003` (`SQL compilation error`).
-- The visible error message shows a missing/not-authorized transient Snowpark object in curated schema, approximately:
-  `RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.SNOWPARK_TEMP_TABLE_DFATXMI5EU`
-  with message: `does not exist or not authorized`.
+- The visible error message shows a missing/not-authorized transient Snowpark object in curated schema, approximately `RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.SNOWPARK_TEMP_TABLE_DFATXMI5EU`.
 - Additional recent `SELECT` failures under role `RTX_ES_ESC_GRC_RAW_DEV_FULL`, database `RTX_RAW_DEV`, schema `ES_ESC_GRC` also show error code `2003` for Archer source objects that were not found or not authorized.
 - One visible source-object error references `ARCHER_AUTHORIZATION_PACKAGE_DATA_RAW` as not existing or not authorized.
 
-Interpretation for Codex: the notebook is encountering object-resolution / authorization failures rather than a DIM/FACT schema-definition problem. Snowpark temporary-object lifetime or session scope is a likely contributor for the `SNOWPARK_TEMP_TABLE_*` failures; source-table naming/authorization should be checked separately for the Archer raw-object failures.
-
 ## SSP one-record write-pilot markdown result checkpoint
-
-The notebook's one-record SSP pilot reached preview/staging validation but stopped before target DML because the pilot detected additional target rows that require review.
 
 Visible Python exception:
 
@@ -68,14 +62,12 @@ Visible Python exception:
 PilotError: EXTRA_TARGET_ROWS_REQUIRE_REVIEW
 ```
 
-The markdown cell immediately below the exception captured the pilot result as:
+Pilot result:
 
 ```json
 {
   "EDGES": 18,
-  "ERROR_DETAILS": {
-    "CAUSE": "EXTRA_TARGET_ROWS_REQUIRE_REVIEW"
-  },
+  "ERROR_DETAILS": {"CAUSE": "EXTRA_TARGET_ROWS_REQUIRE_REVIEW"},
   "MODE": "PREVIEW",
   "MODEL": "SSP",
   "NODES": 19,
@@ -88,13 +80,53 @@ The markdown cell immediately below the exception captured the pilot result as:
 }
 ```
 
-Important interpretation for Codex:
+## Read-only candidate-vs-target comparison checkpoint
 
-- The pilot input was exactly `1` source record.
-- Candidate output was `19` nodes and `18` edges.
-- The run was `PREVIEW` only.
-- `PERSISTED = false`.
-- `TARGET_DML_ATTEMPTED = false`.
-- The guardrail intentionally blocked persistence because existing/extra target rows need review before a write is allowed.
+A subsequent read-only comparison completed successfully. The notebook explicitly reports:
 
-This checkpoint records the actual physical Snowflake table contract and the visible notebook/query-history evidence from the screenshots. No database changes were made by creating this documentation.
+- `BASELINE = CURRENT_ACCEPTED_GRAPH_NOT_ORIGINAL_FROZEN_SNAPSHOT`
+- `CANDIDATE_NODES = 19`
+- `CANDIDATE_EDGES = 18`
+- `SOURCE_RECORDS = 1`
+- `STATUS = READ_ONLY_COMPARISON_COMPLETE`
+- `TARGET_DML_ATTEMPTED = false`
+
+Visible extra DIM rows by element type:
+
+| Element type | Rows |
+|---|---:|
+| authorization-boundary | 1 |
+| components | 3 |
+| document-ids | 1 |
+| metadata | 1 |
+| props | 3 |
+| responsible-parties | 6 |
+| security-impact-level | 1 |
+| status | 1 |
+| system-characteristics | 1 |
+| system-ids | 1 |
+| system-implementation | 1 |
+| system-security-plan | 1 |
+
+Visible FACT comparison:
+
+- `parent_of`: 20 extra FACT rows; `SOURCE_IN_BATCH=false`, `TARGET_IN_BATCH=false`.
+
+Summary counts reported by the notebook:
+
+| Metric | Count |
+|---|---:|
+| CANDIDATE_EDGES | 18 |
+| CANDIDATE_NODES | 19 |
+| DIM_DUPLICATE_KEY_GROUPS | 0 |
+| EXTRA_DIM_DISTINCT_KEYS | 21 |
+| EXTRA_DIM_ROWS | 21 |
+| EXTRA_FACT_DISTINCT_KEYS | 20 |
+| EXTRA_FACT_ROWS | 20 |
+| FACT_DUPLICATE_KEY_GROUPS | 0 |
+| TARGET_DIM_ROWS | 21 |
+| TARGET_FACT_ROWS | 20 |
+
+Interpretation for Codex: the comparison is now complete and confirms that the currently accepted target graph contains 21 DIM rows and 20 FACT rows relevant to this comparison, while the one-record candidate contains 19 nodes and 18 edges. There are no duplicate DIM or FACT key groups. This is read-only evidence only; no target DML was attempted. The baseline is explicitly the current accepted graph, not an original frozen snapshot, so do not treat this comparison as proof of equivalence to the original pre-existing target state.
+
+This checkpoint records the actual physical Snowflake table contract and visible notebook evidence. No database changes were made by this documentation update.
