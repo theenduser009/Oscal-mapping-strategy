@@ -7,6 +7,16 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
+## Non-negotiable metadata-driven architecture
+
+- The owner's prime requirement is metadata-driven execution, not merely metadata validation of hardcoded field rules.
+- Excel/CSV governs approved source-to-target mappings; the registry governs hierarchy/identity; the reviewed deployment catalog supplies executable transforms, parameters, operators, source bindings and storage contracts.
+- Active source/model routes must use the compiled metadata engine. Do not add source-field or model-name branches to the graph builder, writer or active dispatch.
+- A new approved field or model using existing operators must work through metadata changes alone. Add reusable Python only for genuinely new behavior, with tests and explicit scope.
+- Preserve one public model selector and the same seven cells. Keep original split, V2 split and combined notebook synchronized, including the catalog dependency.
+- Prove accepted SSP and AR17 output parity and metadata-only new-field/third-model execution before publishing changes. Historical compatibility helpers are not the active mapping architecture.
+- Blank or ambiguous metadata is not approval. Keep rejected/deferred rows separate; never silently fall back from partial executable metadata to an older rule.
+
 ## Keep these boundaries explicit
 
 - Matillion converts raw field-ID JSON to the Archer RAW table's CURATED_JSON column. The OSCAL notebook reads that column; it does not perform that upstream conversion.

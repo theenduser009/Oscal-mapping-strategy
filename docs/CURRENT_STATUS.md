@@ -2,51 +2,21 @@
 
 Last reconciled: 2026-09-11
 
-## Current action - approved shared seven-cell consolidation
+## Current action - metadata-driven seven-cell execution
 
-**Latest refinement:** the owner reaffirmed one selector, Excel-driven mappings,
-registry-driven structure and reusable transformations. Cell One now uses
-`SELECTED_MODELS`; internal model routes and compatibility configuration are
-derived, and AR-only cannot inherit SSP targets. All seven original/V2 pages
-and the combined notebook must stay synchronized. This selection-only cleanup
-does not complete the migration of field-specific Python rules into governed
-metadata; AR17 approval gates and all accepted/deferred statuses remain intact.
-Next work is the governed mapping-contract/transform migration under parity.
-No Snowflake rerun is requested for this refinement; the shared live acceptance
-boundary below remains pending.
+**Implemented locally and regression-verified:** Cell One loads the reviewed metadata catalog; Cell Three compiles approved Excel/CSV mappings against registry ownership; Cell Four executes generic operators/transforms. Source/model field rules are no longer selected by the active Python dispatcher. Cell Five, Six and Seven reuse the shared graph, guarded persistence and orchestration paths. Original/V2/combined notebook copies are synchronized.
 
-The owner approved one source feeding multiple OSCAL models through the same
-seven cells, with database writes disabled. Source One now routes SSP and the
-17 accepted Assessment Results fields through one graph builder and one
-contract-driven writer. No separate execution cell was added.
+All **520 local tests pass**, including exact accepted SSP fixture parity, AR17 standalone-output parity and a metadata-only new field/third-model test. This is implementation evidence, not live Snowflake acceptance. No source, registry or target data was written.
 
-**Next implementation action:** consolidate reviewed mapping contracts and
-reusable transform dispatch without changing accepted outputs. The
-[shared workflow guide](SHARED_SEVEN_CELL_MAPPER.md) retains the live PREVIEW
-procedure; this selector-only refinement does not request another run. Local
-regression verification passed all 485 tests; no shared-workflow Snowflake result or
-AR database load is accepted yet. Do not run COMMIT or the old DEV reload.
+**Next action:** deploy the matching seven-cell revision and [metadata catalog](../notebooks/metadata/mapper_contract.v1.json), then validate the shared workflow once in PREVIEW when ready. Upload that JSON to notebook Files alongside the existing approved mapping CSV; there is no additional execution cell. Keep normal writes disabled and do not use COMMIT or rerun the DEV reload. [Exact preview procedure](SHARED_SEVEN_CELL_MAPPER.md#live-preview-procedure---when-requested).
 
-SSP uses its verified physical destination contract. AR has no verified target
-schema and intentionally performs graph-only preview. Missing AR storage does
-not reuse SSP targets. Unknown/contradictory routing blocks; deferred mappings
-and the 34-field AR candidate do not become accepted by consolidation.
-Other source tables/models require explicit reviewed configuration.
+The catalog preserves the existing SSP rules and 17 accepted AR fields. New approved mappings using supported behavior can be added through metadata alone; new field-specific Python is not required. Missing approval, unknown transformations and contradictory contracts stop execution. Rejected/deferred AR rows do not become approved automatically.
 
-The prior full SSP DEV reload remains committed/read-back verified:
-2,813 source records, 70,102 DIM elements, 67,289 FACT dependencies.
-[Accepted live report](SSP_FULL_DEV_RELOAD_2026-09-11.md).
-The reduction from 126,453 old DIM / 122,939 old FACT remains unexplained:
-56,351 fewer DIM and 55,650 fewer FACT rows. No durable before-copy was retained;
-do not label the removed rows duplicates or stale without evidence.
+AR still lacks verified target names/types and is graph-preview-only. Shared daily runtime/writer acceptance and AR persistence remain pending. The other source tables/models are not inferred or enabled.
 
-This code change does not alter the persisted SSP graph, registry, Matillion
-conversion or field acceptance counts. AR remains 17 accepted in memory, with
-candidate/rejected/deferred work separate. Daily deployment and live writer
-acceptance remain pending. [Durable handoff](PROJECT_HANDOFF.md).
+The prior full SSP DEV reload remains committed/read-back verified: **2,813 source records, 70,102 DIM elements, 67,289 FACT dependencies**. [Accepted live report](SSP_FULL_DEV_RELOAD_2026-09-11.md). The reduction from 126,453 old DIM / 122,939 old FACT remains unexplained: 56,351 fewer DIM and 55,650 fewer FACT rows. No durable before-copy was retained; do not call those removed rows duplicates or stale without evidence.
 
-Historical entries below retain earlier incidents. Their superseded run
-requests are not the current action.
+Matillion raw-ID conversion, persisted SSP data, field acceptance counts and unresolved work are unchanged. [Durable handoff](PROJECT_HANDOFF.md). Historical entries below retain earlier incidents; superseded run requests are not the current action.
 
 ## Active incident — Matillion raw-to-curated null field loss
 
@@ -399,7 +369,7 @@ Confirmed source-completeness gaps:
 ```text
 system-characteristics.description: candidate zero=33; generated valid=2780
 status.state: candidate zero=42; generated valid=2771
-authorization-boundary.description: candidate zero=294; generated valid=2519
+authorization-boundary.description: candidate zero=294; generated valid=2520
 ```
 
 These are source completeness issues, not observed mapper-loss discrepancies.
@@ -443,7 +413,7 @@ import-profile: 0 / 0
 system-characteristics: candidate source completeness=2780; generated valid=2780
 system-information: 0 / 0
 status: candidate/generated valid=2771
- authorization-boundary: candidate/generated valid=2519
+ authorization-boundary: candidate/generated valid=2520
 system-implementation: generated structural coverage=2813
 control-implementation: 0 / 0
 system-ids[]: candidate/generated valid=2813

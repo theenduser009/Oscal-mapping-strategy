@@ -92,7 +92,9 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
         original = artifact.copy(deep=True)
         # Execute pure configuration, including derived selector state;
         # exclude Snowflake imports/session acquisition, not its dependencies.
-        config_ns = {"datetime": datetime}
+        import copy
+        config_ns = {"datetime": datetime, "copy": copy, "Path": Path, "json": json,
+                     "__file__": str(CELLS / "01_initialization_and_configuration.py")}
         tree = ast.parse((CELLS / "01_initialization_and_configuration.py").read_text(encoding="utf-8"))
         configuration = []
         for node in tree.body:
@@ -167,10 +169,11 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
         helpers = self.helpers()
         for original in rows:
             with self.subTest(row=original):
-                row = self.canonicalize([original])["CANONICAL_MAPPING_ROWS"][0]
-                self.assertEqual(row["CANONICAL_ELEMENT_PATH"], original["OSCAL_ELEMENT_PATH"])
-                with self.assertRaises(ValueError):
-                    helpers["_mapping_handler_for_row"](row)
+                result = self.canonicalize([original])
+                self.assertEqual(result["CANONICAL_MAPPING_ROWS"], [])
+                report = result["MAPPING_CONTEXTS"][0]["routing_report"]
+                self.assertEqual(report["SELECTED_ROWS"], 0)
+                self.assertEqual(report["BLOCKED_ROWS"] + report["DEFERRED_ROWS"], 1)
         # An unknown collection is now rejected during routing, before dispatch.
         blocked = self.canonicalize([mapping(path=SSP + ".metadata.props[]")])
         self.assertEqual(blocked["MAPPING_CONTEXTS"][0]["routing_report"]["STATUS"], "BLOCKED")

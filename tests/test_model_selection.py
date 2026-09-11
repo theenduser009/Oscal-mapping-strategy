@@ -3,6 +3,7 @@ import ast
 import copy
 from contextlib import redirect_stdout
 import io
+import json
 from pathlib import Path
 import unittest
 
@@ -31,20 +32,16 @@ def cell_namespace(selection=DEFAULT, storage_verified=DEFAULT):
                 selector_count += 1
                 if selection is not DEFAULT:
                     node.value = ast.Name(id="_test_selection", ctx=ast.Load())
-            if "_SSP_STORAGE_CONTRACT" in names and storage_verified is not DEFAULT:
-                if not isinstance(node.value, ast.Dict):
-                    raise AssertionError("Expected an explicit SSP storage contract")
-                for index, key in enumerate(node.value.keys):
-                    if isinstance(key, ast.Constant) and key.value == "VERIFIED":
-                        node.value.values[index] = ast.Name(id="_test_storage_verified", ctx=ast.Load())
-                        break
-                else:
-                    raise AssertionError("Storage contract must declare verification")
+            if "MAPPER_CATALOG" in names and storage_verified is not DEFAULT:
+                node.value = ast.Name(id="_test_catalog", ctx=ast.Load())
         body.append(node)
     if selector_count != 1:
         raise AssertionError("Cell One must expose exactly one SELECTED_MODELS assignment")
+    catalog = json.loads((ROOT / "notebooks/metadata/mapper_contract.v1.json").read_text(encoding="utf-8"))
+    if storage_verified is not DEFAULT:
+        catalog["MODELS"]["SSP"]["STORAGE_CONTRACT"]["VERIFIED"] = storage_verified
     namespace = {"get_active_session": lambda: NoDatabaseIO(), "_test_selection": selection,
-                 "_test_storage_verified": storage_verified}
+                 "_test_catalog": catalog, "__file__": str(CELL)}
     module = ast.fix_missing_locations(ast.Module(body=body, type_ignores=[]))
     with redirect_stdout(io.StringIO()):
         exec(compile(module, str(CELL), "exec"), namespace)
@@ -116,8 +113,9 @@ class ModelSelectionTests(unittest.TestCase):
     def test_ar_selection_preserves_ssp_contract_for_later_explicit_selection(self):
         baseline, ar_only = cell_namespace(("SSP",)), cell_namespace(("ASSESSMENT_RESULTS",))
         self.assertEqual(ar_only["MODEL_CONTRACTS"], baseline["MODEL_CONTRACTS"])
-        self.assertEqual(ar_only["AR_ACCEPTED_FIELDS"], baseline["AR_ACCEPTED_FIELDS"])
-        self.assertEqual(len(ar_only["AR_ACCEPTED_FIELDS"]), 17)
+        rules = ar_only["MODEL_CONTRACTS"]["ASSESSMENT_RESULTS"]["MAPPING_RULES"]
+        self.assertEqual(len(rules), 17)
+        self.assertTrue(all(rule["APPROVAL_STATUS"] == "APPROVED" for rule in rules))
         self.assert_no_targets(ar_only)
 
     def test_unverified_storage_never_enters_compatibility_configuration(self):

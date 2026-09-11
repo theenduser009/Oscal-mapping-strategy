@@ -1,0 +1,1700 @@
+{
+  "CATALOG_VERSION": 1,
+  "RELEASE_ID": "source-one-reviewed-metadata-v1",
+  "PROVENANCE": "Existing accepted SSP and AR17 contracts; no new field approval. Original mapping CSV remains unchanged. Explicit metadata approval is required for new rows.",
+  "CONFIG_DEFAULTS": {
+    "OSCAL_VERSION": "1.2.3",
+    "SSP_DOCUMENT_VERSION": "1.0",
+    "EXECUTE_WRITES": false,
+    "BUILD_COVERAGE_REPORT": true,
+    "SOURCE_SYSTEM_NAME": "ARCHER",
+    "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+    "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+    "ARCHER_META_VALUE_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE",
+    "MAPPING_FILE": "archer_to_oscal_mapping (4).csv",
+    "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
+    "IDENTITY_VERSION": "v1_registry_path_instance",
+    "NODE_UUID_POLICY": "deterministic_uuid5",
+    "SOURCE_ORDER_CANDIDATES": [
+      "DW_LOAD_TIMESTAMP_TZ",
+      "DW_LOAD_TIMESTAMP",
+      "UPDATED_DATE",
+      "LAST_UPDATED_DATE",
+      "MODIFIED_DATE",
+      "CREATE_DATE"
+    ]
+  },
+  "SOURCES": [
+    {
+      "SOURCE_KEY": "source-one",
+      "SOURCE_SYSTEM_NAME": "ARCHER",
+      "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+      "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+      "CONTENT_ID_COLUMN": "CONTENT_ID",
+      "CURATED_JSON_COLUMN": "CURATED_JSON",
+      "MAPPING_FILE": "archer_to_oscal_mapping (4).csv",
+      "MAPPING_SOURCE_COLUMN": null,
+      "SOURCE_ORDER_CANDIDATES": [
+        "DW_LOAD_TIMESTAMP_TZ",
+        "DW_LOAD_TIMESTAMP",
+        "UPDATED_DATE",
+        "LAST_UPDATED_DATE",
+        "MODIFIED_DATE",
+        "CREATE_DATE"
+      ],
+      "LOOKUP_CONTRACTS": {
+        "software": {
+          "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_SOFTWARE_RAW",
+          "title_field": "SOFTWARE_NAME",
+          "description_field": "DESCRIPTION"
+        },
+        "interconnection": {
+          "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_INTERCONNECTIONS_RAW",
+          "title_field": "INTERCONNECTION_NAME",
+          "description_field": "DESCRIPTION"
+        }
+      },
+      "MODEL_BINDINGS": [
+        "SSP",
+        "ASSESSMENT_RESULTS"
+      ]
+    }
+  ],
+  "MODELS": {
+    "SSP": {
+      "MODEL_KEY": "SSP",
+      "ROOT_PATH": "system-security-plan",
+      "POLICY": "metadata-v1",
+      "LOOKUP_GROUPS": [
+        "components"
+      ],
+      "PATH_RULES": [
+        {
+          "SOURCE_FIELDS": [
+            "INFORMATION_SYSTEM_TYPE",
+            "FISMA_REPORTABLE",
+            "FINANCIAL_SYSTEM",
+            "MISSION_CRITICAL",
+            "CRITICAL_INFRASTRUCTURE",
+            "PACKAGE_TYPE",
+            "PIA_REQUIRED",
+            "INFORMATION_CLASSIFICATION"
+          ],
+          "MAPPING_TYPE": "Extension Property",
+          "PARENT_PATH": "system-security-plan.system-characteristics",
+          "COLLECTION_PATH": "system-security-plan.system-characteristics.props[]"
+        }
+      ],
+      "MODEL_ALIASES": [
+        "SSP",
+        "System Security Plan",
+        "SSP - Metadata",
+        "SSP - System Characteristics",
+        "SSP - System Implementation",
+        "SSP - Control Implementation"
+      ],
+      "STORAGE_CONTRACT": {
+        "VERIFIED": true,
+        "PHYSICAL_PROFILE": "BINARY16_UUID32",
+        "MODEL_KEY": "SSP",
+        "ROOT_PATH": "system-security-plan",
+        "ROOT_ELEMENT_TYPE": "system-security-plan",
+        "SOURCE_SYSTEM_NAME": "ARCHER",
+        "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+        "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+        "TARGET_DIM": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT",
+        "TARGET_FACT": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY",
+        "DIM_PK_COLUMN": "PK_OSCAL_SSP_ELEMENT_HASH",
+        "FACT_PK_COLUMN": "PK_FACT_OSCAL_DEPENDENCY_HASH",
+        "IDENTITY_VERSION": "v1_registry_path_instance"
+      },
+      "DEFAULT_ELEMENT": {
+        "operator": "object",
+        "parameters": {
+          "materialize_empty": true
+        },
+        "scope": "singletons-without-collection-ancestors"
+      },
+      "RUNTIME_OPTIONS": {
+        "parse_decimal": false,
+        "null_source_as_empty": true,
+        "aggregate_invalid": false,
+        "allow_nan": true
+      },
+      "ELEMENTS": {
+        "system-security-plan": {
+          "operator": "object",
+          "parameters": {
+            "materialize_empty": true
+          }
+        },
+        "system-security-plan.metadata": {
+          "operator": "object",
+          "parameters": {
+            "materialize_empty": true,
+            "controlled_fields": [
+              {
+                "target": "title",
+                "source_field": "AUTHORIZATION_PACKAGE_NAME",
+                "transform_id": "text",
+                "required": true
+              },
+              {
+                "target": "oscal-version",
+                "config_key": "OSCAL_VERSION",
+                "transform_id": "text",
+                "required": true
+              },
+              {
+                "target": "version",
+                "config_key": "SSP_DOCUMENT_VERSION",
+                "transform_id": "canonical-text",
+                "required": true
+              }
+            ]
+          }
+        },
+        "system-security-plan.metadata.document-ids[]": {
+          "operator": "object",
+          "parameters": {
+            "allow_list_instances": true,
+            "list_identity": "source-field-index"
+          }
+        },
+        "system-security-plan.metadata.roles[]": {
+          "operator": "roles",
+          "parameters": {
+            "registry_contract": {
+              "parent_path": "system-security-plan.metadata",
+              "is_collection": true
+            }
+          }
+        },
+        "system-security-plan.metadata.parties[]": {
+          "operator": "parties",
+          "parameters": {
+            "include_uuid": true,
+            "uuid_from_instance": true,
+            "registry_contract": {
+              "parent_path": "system-security-plan.metadata",
+              "is_collection": true
+            }
+          }
+        },
+        "system-security-plan.metadata.responsible-parties[]": {
+          "operator": "assignments",
+          "parameters": {
+            "registry_contract": {
+              "parent_path": "system-security-plan.metadata",
+              "is_collection": true
+            }
+          }
+        },
+        "system-security-plan.system-characteristics": {
+          "operator": "object",
+          "parameters": {
+            "materialize_empty": true
+          }
+        },
+        "system-security-plan.system-characteristics.props[]": {
+          "operator": "properties",
+          "parameters": {
+            "property_name_rule": "source-field-slug",
+            "registry_contract": {
+              "parent_path": "system-security-plan.system-characteristics",
+              "instance_key_rule": "SOURCE_FIELD_NAME+VALUE",
+              "item_path": "$",
+              "is_collection": true
+            }
+          }
+        },
+        "system-security-plan.system-characteristics.system-ids[]": {
+          "operator": "values",
+          "parameters": {
+            "registry_contract": {
+              "parent_path": "system-security-plan.system-characteristics",
+              "instance_key_rule": "VALUE",
+              "item_path": "$",
+              "is_collection": true
+            }
+          }
+        },
+        "system-security-plan.system-characteristics.security-impact-level": {
+          "operator": "object",
+          "parameters": {
+            "optional_assembly": true,
+            "required_members": [
+              "security-objective-confidentiality",
+              "security-objective-integrity",
+              "security-objective-availability"
+            ]
+          }
+        },
+        "system-security-plan.system-characteristics.status": {
+          "operator": "object",
+          "parameters": {
+            "materialize_empty": true
+          }
+        },
+        "system-security-plan.system-implementation.components[]": {
+          "operator": "references",
+          "parameters": {
+            "include_uuid": true,
+            "registry_contract": {
+              "parent_path": "system-security-plan.system-implementation",
+              "instance_key_rule": "CONTENT_ID",
+              "item_path": "$",
+              "is_collection": true
+            }
+          }
+        }
+      },
+      "REFERENCE_GROUPS": [
+        {
+          "roles_path": "system-security-plan.metadata.roles[]",
+          "parties_path": "system-security-plan.metadata.parties[]",
+          "assignments_path": "system-security-plan.metadata.responsible-parties[]",
+          "party_type": "person",
+          "party_uuid_parts": [
+            "$source_system",
+            "$source_record",
+            "party",
+            "$reference_id"
+          ],
+          "source_namespace": {
+            "SOURCE_SYSTEM_NAME": "ARCHER",
+            "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+            "MODEL_KEY": "SSP"
+          }
+        }
+      ],
+      "MAPPING_RULES": [
+        {
+          "RULE_ID": "ssp:AUTHORIZATION_PACKAGE_NAME:0",
+          "SOURCE_FIELDS": [
+            "AUTHORIZATION_PACKAGE_NAME"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics",
+          "MAPPING_TYPES": [
+            "Direct"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "text",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "system-name"
+          },
+          "TARGET_FIELDS": [
+            "system-name"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:ACRONYM:1",
+          "SOURCE_FIELDS": [
+            "ACRONYM"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics",
+          "MAPPING_TYPES": [
+            "Direct"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "text",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "system-name-short"
+          },
+          "TARGET_FIELDS": [
+            "system-name-short"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:MISSION_PURPOSE:2",
+          "SOURCE_FIELDS": [
+            "MISSION_PURPOSE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics",
+          "MAPPING_TYPES": [
+            "Direct"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "text",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "description"
+          },
+          "TARGET_FIELDS": [
+            "description"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:AUTHORIZATION_BOUNDARY_DESCRIPTION:3",
+          "SOURCE_FIELDS": [
+            "AUTHORIZATION_BOUNDARY_DESCRIPTION"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.authorization-boundary",
+          "MAPPING_TYPES": [
+            "Direct"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "text",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "description"
+          },
+          "TARGET_FIELDS": [
+            "description"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY:4",
+          "SOURCE_FIELDS": [
+            "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-confidentiality"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-confidentiality"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE:5",
+          "SOURCE_FIELDS": [
+            "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-confidentiality"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-confidentiality"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:RECOMMENDED_INTEGRITY_CONTROL_CATEGORY:6",
+          "SOURCE_FIELDS": [
+            "RECOMMENDED_INTEGRITY_CONTROL_CATEGORY"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-integrity"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-integrity"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:INTEGRITY_CONTROL_CATEGORY_OVERRIDE:7",
+          "SOURCE_FIELDS": [
+            "INTEGRITY_CONTROL_CATEGORY_OVERRIDE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-integrity"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-integrity"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY:8",
+          "SOURCE_FIELDS": [
+            "RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-availability"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-availability"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:AVAILABILITY_CONTROL_CATEGORY_OVERRIDE:9",
+          "SOURCE_FIELDS": [
+            "AVAILABILITY_CONTROL_CATEGORY_OVERRIDE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-availability"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-availability"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:PROGRAMSITE_INTEGRITY_CONTROL_CATEGORY:10",
+          "SOURCE_FIELDS": [
+            "PROGRAMSITE_INTEGRITY_CONTROL_CATEGORY"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-integrity"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-integrity"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:PROGRAMSITE_AVAILABILITY_CONTROL_CATEGORY:11",
+          "SOURCE_FIELDS": [
+            "PROGRAMSITE_AVAILABILITY_CONTROL_CATEGORY"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-availability"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-availability"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:CNSS_AVAILABILITY_RATING:12",
+          "SOURCE_FIELDS": [
+            "CNSS_AVAILABILITY_RATING"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-availability"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-availability"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:CNSS_CONFIDENTIALITY_RATING:13",
+          "SOURCE_FIELDS": [
+            "CNSS_CONFIDENTIALITY_RATING"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-confidentiality"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-confidentiality"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:CNSS_INTEGRITY_RATING:14",
+          "SOURCE_FIELDS": [
+            "CNSS_INTEGRITY_RATING"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Direct",
+            "Transform",
+            "Direct/Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "security-objective",
+          "TRANSFORM_PARAMS": {
+            "approved_legacy_values": [
+              "Legacy LOE A",
+              "Legacy LOE A + DFARS",
+              "Legacy LOE B",
+              "Legacy LOE B + DFARS",
+              "Legacy LOE C",
+              "Legacy LOE C + DFARS",
+              "Legacy LOE D",
+              "Legacy LOE D + DFARS"
+            ]
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "security-objective-integrity"
+          },
+          "TARGET_FIELDS": [
+            "security-objective-integrity"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:OPERATIONAL_STATUS:15",
+          "SOURCE_FIELDS": [
+            "OPERATIONAL_STATUS"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.status",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "status-crosswalk",
+          "TRANSFORM_PARAMS": {
+            "crosswalk": {
+              "operational": "operational",
+              "under-development": "under-development",
+              "decommissioned": "disposition",
+              "reauthorize": "other"
+            },
+            "other_remarks_prefix": "Mapped from Archer operational status: ",
+            "other_remarks_suffix": "."
+          },
+          "REPRESENTATION_PARAMS": {
+            "target": "state"
+          },
+          "TARGET_FIELDS": [
+            "state"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:AUTHORIZATION_COMMENTS:16",
+          "SOURCE_FIELDS": [
+            "AUTHORIZATION_COMMENTS"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.status",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "text",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "remarks"
+          },
+          "TARGET_FIELDS": [
+            "remarks"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:ATOIATO_DATE:17",
+          "SOURCE_FIELDS": [
+            "ATOIATO_DATE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "date",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "date-authorized"
+          },
+          "TARGET_FIELDS": [
+            "date-authorized"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:LAST_UPDATED:18",
+          "SOURCE_FIELDS": [
+            "LAST_UPDATED"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "timestamp",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "last-modified"
+          },
+          "TARGET_FIELDS": [
+            "last-modified"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:ARCHER_CONTENT_AUTHORIZATION_PACKAGE_LAST_UPDATED:19",
+          "SOURCE_FIELDS": [
+            "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_LAST_UPDATED"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "timestamp",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "last-modified"
+          },
+          "TARGET_FIELDS": [
+            "last-modified"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:FIRST_PUBLISHED:20",
+          "SOURCE_FIELDS": [
+            "FIRST_PUBLISHED"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "timestamp",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "published"
+          },
+          "TARGET_FIELDS": [
+            "published"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:ARCHER_CONTENT_AUTHORIZATION_PACKAGE_FIRST_PUBLISHED:21",
+          "SOURCE_FIELDS": [
+            "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_FIRST_PUBLISHED"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "timestamp",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "published"
+          },
+          "TARGET_FIELDS": [
+            "published"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:TRACKING_ID:22",
+          "SOURCE_FIELDS": [
+            "TRACKING_ID"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata.document-ids[]",
+          "MAPPING_TYPES": [
+            "Direct"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "identifier",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "identifier"
+          },
+          "TARGET_FIELDS": [
+            "identifier"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:SAP_ID:23",
+          "SOURCE_FIELDS": [
+            "SAP_ID"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.system-ids[]",
+          "MAPPING_TYPES": [
+            "Direct"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "target": "id"
+          },
+          "TARGET_FIELDS": [
+            "id"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:INFORMATION_OWNER_IO:24",
+          "SOURCE_FIELDS": [
+            "INFORMATION_OWNER_IO"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata.responsible-parties[]",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "role_id": "information-owner",
+            "role_title": "Information Owner"
+          }
+        },
+        {
+          "RULE_ID": "ssp:INFORMATION_SYSTEM_OWNER_ISO:25",
+          "SOURCE_FIELDS": [
+            "INFORMATION_SYSTEM_OWNER_ISO"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata.responsible-parties[]",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "role_id": "system-owner",
+            "role_title": "Information System Owner"
+          }
+        },
+        {
+          "RULE_ID": "ssp:AUTHORIZING_OFFICIAL_AO:26",
+          "SOURCE_FIELDS": [
+            "AUTHORIZING_OFFICIAL_AO"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata.responsible-parties[]",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "role_id": "authorizing-official",
+            "role_title": "Authorizing Official"
+          }
+        },
+        {
+          "RULE_ID": "ssp:INFORMATION_SYSTEM_SECURITY_OFFICER_ISSO:27",
+          "SOURCE_FIELDS": [
+            "INFORMATION_SYSTEM_SECURITY_OFFICER_ISSO"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata.responsible-parties[]",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "role_id": "system-security-officer",
+            "role_title": "Information System Security Officer"
+          }
+        },
+        {
+          "RULE_ID": "ssp:PRIVACY_OFFICER_PO:28",
+          "SOURCE_FIELDS": [
+            "PRIVACY_OFFICER_PO"
+          ],
+          "OWNER_PATH": "system-security-plan.metadata.responsible-parties[]",
+          "MAPPING_TYPES": [
+            "Transform"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "role_id": "privacy-officer",
+            "role_title": "Privacy Officer"
+          }
+        },
+        {
+          "RULE_ID": "ssp:SUBSYSTEMS:29",
+          "SOURCE_FIELDS": [
+            "SUBSYSTEMS"
+          ],
+          "OWNER_PATH": "system-security-plan.system-implementation.components[]",
+          "MAPPING_TYPES": [
+            "Reference"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "reference_type": "system"
+          },
+          "NOTES_CONTAINS": [
+            "system"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:SOFTWARE:30",
+          "SOURCE_FIELDS": [
+            "SOFTWARE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-implementation.components[]",
+          "MAPPING_TYPES": [
+            "Reference"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "reference_type": "software",
+            "hydrate_lookup": "software",
+            "description_required": true
+          },
+          "NOTES_CONTAINS": [
+            "software"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:HARDWARE:31",
+          "SOURCE_FIELDS": [
+            "HARDWARE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-implementation.components[]",
+          "MAPPING_TYPES": [
+            "Reference"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "reference_type": "hardware"
+          },
+          "NOTES_CONTAINS": [
+            "hardware"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:INTERCONNECTIONS:32",
+          "SOURCE_FIELDS": [
+            "INTERCONNECTIONS"
+          ],
+          "OWNER_PATH": "system-security-plan.system-implementation.components[]",
+          "MAPPING_TYPES": [
+            "Reference"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "reference_type": "interconnection",
+            "hydrate_lookup": "interconnection"
+          },
+          "NOTES_CONTAINS": [
+            "interconnection"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM:33",
+          "SOURCE_FIELDS": [
+            "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM"
+          ],
+          "OWNER_PATH": "system-security-plan.system-implementation.components[]",
+          "MAPPING_TYPES": [
+            "Reference"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "reference_type": "interconnection",
+            "hydrate_lookup": "interconnection"
+          },
+          "NOTES_CONTAINS": [
+            "interconnection"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:SAP_INTAKE_FORM_INTERCONNECTIONS:34",
+          "SOURCE_FIELDS": [
+            "SAP_INTAKE_FORM_INTERCONNECTIONS"
+          ],
+          "OWNER_PATH": "system-security-plan.system-implementation.components[]",
+          "MAPPING_TYPES": [
+            "Reference"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "direct",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {
+            "reference_type": "interconnection"
+          },
+          "NOTES_CONTAINS": [
+            "interconnection"
+          ]
+        },
+        {
+          "RULE_ID": "ssp:INFORMATION_SYSTEM_TYPE:35",
+          "SOURCE_FIELDS": [
+            "INFORMATION_SYSTEM_TYPE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.props[]",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "archer-select",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ssp:FISMA_REPORTABLE:36",
+          "SOURCE_FIELDS": [
+            "FISMA_REPORTABLE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.props[]",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "archer-select",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ssp:FINANCIAL_SYSTEM:37",
+          "SOURCE_FIELDS": [
+            "FINANCIAL_SYSTEM"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.props[]",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "archer-select",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ssp:MISSION_CRITICAL:38",
+          "SOURCE_FIELDS": [
+            "MISSION_CRITICAL"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.props[]",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "archer-select",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ssp:CRITICAL_INFRASTRUCTURE:39",
+          "SOURCE_FIELDS": [
+            "CRITICAL_INFRASTRUCTURE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.props[]",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "archer-select",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ssp:PACKAGE_TYPE:40",
+          "SOURCE_FIELDS": [
+            "PACKAGE_TYPE"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.props[]",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "archer-select",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ssp:PIA_REQUIRED:41",
+          "SOURCE_FIELDS": [
+            "PIA_REQUIRED"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.props[]",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "archer-select",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ssp:INFORMATION_CLASSIFICATION:42",
+          "SOURCE_FIELDS": [
+            "INFORMATION_CLASSIFICATION"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.props[]",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "archer-select",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ssp:RECOMMENDED_SECURITY_CATEGORY:43",
+          "SOURCE_FIELDS": [
+            "RECOMMENDED_SECURITY_CATEGORY"
+          ],
+          "OWNER_PATH": "system-security-plan.system-characteristics.security-impact-level",
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "APPROVAL_STATUS": "BLOCKED_IF_POPULATED",
+          "TRANSFORM_ID": "reject-populated",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {},
+          "NOTES_EQUALS": "All Nulls"
+        }
+      ],
+      "EXCLUDED_FIELDS": [
+        "HELPER_PTA_CALC",
+        "PACKAGE_TYPE_HELPER_CALC"
+      ],
+      "UNREVIEWED_ROWS": "DEFER"
+    },
+    "ASSESSMENT_RESULTS": {
+      "MODEL_KEY": "ASSESSMENT_RESULTS",
+      "ROOT_PATH": "assessment-results",
+      "POLICY": "metadata-v1",
+      "LOOKUP_GROUPS": [],
+      "MODEL_ALIASES": [
+        "ASSESSMENT_RESULTS",
+        "Assessment Results",
+        "AR"
+      ],
+      "ELEMENT_PATHS": [
+        "assessment-results",
+        "assessment-results.results[]",
+        "assessment-results.results[].observations[]"
+      ],
+      "STORAGE_CONTRACT": null,
+      "ELEMENTS": {
+        "assessment-results": {
+          "operator": "object",
+          "parameters": {
+            "materialize_empty": true,
+            "include_uuid": true,
+            "registry_contract": {
+              "parent_path": null,
+              "is_collection": false
+            }
+          }
+        },
+        "assessment-results.results[]": {
+          "operator": "record",
+          "parameters": {
+            "include_uuid": true,
+            "parent_instance_rule": "singleton",
+            "registry_contract": {
+              "parent_path": "assessment-results",
+              "is_collection": true,
+              "instance_key_rule": "SOURCE_RECORD_ID",
+              "item_path": null
+            }
+          }
+        },
+        "assessment-results.results[].observations[]": {
+          "operator": "observations",
+          "parameters": {
+            "include_uuid": true,
+            "parent_instance_rule": "source-record",
+            "property_name_rule": "source-field-slug",
+            "registry_contract": {
+              "parent_path": "assessment-results.results[]",
+              "is_collection": true,
+              "instance_key_rule": "SOURCE_FIELD_NAME",
+              "item_path": null
+            }
+          }
+        }
+      },
+      "RUNTIME_OPTIONS": {
+        "parse_decimal": true,
+        "null_source_as_empty": false,
+        "aggregate_invalid": true,
+        "allow_nan": false
+      },
+      "MAPPING_RULES": [
+        {
+          "RULE_ID": "ar17:VULNERABILITY_SCORE",
+          "SOURCE_FIELDS": [
+            "VULNERABILITY_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:ANTIVIRUS_SCORE",
+          "SOURCE_FIELDS": [
+            "ANTIVIRUS_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:PATCH_SCORE",
+          "SOURCE_FIELDS": [
+            "PATCH_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:SECURITY_COMPLIANCE_SCORE",
+          "SOURCE_FIELDS": [
+            "SECURITY_COMPLIANCE_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:STANDARD_OPERATING_ENVIRONMENT_SCORE",
+          "SOURCE_FIELDS": [
+            "STANDARD_OPERATING_ENVIRONMENT_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:COMPUTER_PASSWORD_AGE_SCORE",
+          "SOURCE_FIELDS": [
+            "COMPUTER_PASSWORD_AGE_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:VULNERABILITY_REPORTING_SCORE",
+          "SOURCE_FIELDS": [
+            "VULNERABILITY_REPORTING_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:SECURITY_COMPLIANCE_REPORTING_SCORE",
+          "SOURCE_FIELDS": [
+            "SECURITY_COMPLIANCE_REPORTING_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE",
+          "SOURCE_FIELDS": [
+            "TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:AVG_AUTHORIZATION_PACKAGE_RISK_SCORE",
+          "SOURCE_FIELDS": [
+            "AVG_AUTHORIZATION_PACKAGE_RISK_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:RISK_SCORE_GRADE",
+          "SOURCE_FIELDS": [
+            "RISK_SCORE_GRADE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:AVG_VULNERABILITY_SCORE",
+          "SOURCE_FIELDS": [
+            "AVG_VULNERABILITY_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:AVG_PATCH_SCORE",
+          "SOURCE_FIELDS": [
+            "AVG_PATCH_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:AVG_ANTIVIRUS_SCORE",
+          "SOURCE_FIELDS": [
+            "AVG_ANTIVIRUS_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE",
+          "SOURCE_FIELDS": [
+            "AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:AVG_COMPUTER_PASSWORD_AGE_SCORE",
+          "SOURCE_FIELDS": [
+            "AVG_COMPUTER_PASSWORD_AGE_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        },
+        {
+          "RULE_ID": "ar17:AVG_VULNERABILITY_REPORTING_SCORE",
+          "SOURCE_FIELDS": [
+            "AVG_VULNERABILITY_REPORTING_SCORE"
+          ],
+          "OWNER_PATH": "assessment-results.results[].observations[]",
+          "ARTIFACT_PATHS": [
+            "assessment-results.results[].observations[]"
+          ],
+          "MAPPING_TYPES": [
+            "Extension Property"
+          ],
+          "NOTES_EQUALS": "Archer-specific risk scoring map as observation",
+          "EMPTY_COLUMNS": [
+            "OSCAL_FIELD_NAME",
+            "TRANSFORMATION_LOGIC",
+            "MAPPING_NOTES"
+          ],
+          "APPROVAL_STATUS": "APPROVED",
+          "TRANSFORM_ID": "scalar-score",
+          "TRANSFORM_PARAMS": {},
+          "REPRESENTATION_PARAMS": {}
+        }
+      ],
+      "REQUIRED_RULE_IDS": [
+        "ar17:VULNERABILITY_SCORE",
+        "ar17:ANTIVIRUS_SCORE",
+        "ar17:PATCH_SCORE",
+        "ar17:SECURITY_COMPLIANCE_SCORE",
+        "ar17:STANDARD_OPERATING_ENVIRONMENT_SCORE",
+        "ar17:COMPUTER_PASSWORD_AGE_SCORE",
+        "ar17:VULNERABILITY_REPORTING_SCORE",
+        "ar17:SECURITY_COMPLIANCE_REPORTING_SCORE",
+        "ar17:TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE",
+        "ar17:AVG_AUTHORIZATION_PACKAGE_RISK_SCORE",
+        "ar17:RISK_SCORE_GRADE",
+        "ar17:AVG_VULNERABILITY_SCORE",
+        "ar17:AVG_PATCH_SCORE",
+        "ar17:AVG_ANTIVIRUS_SCORE",
+        "ar17:AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE",
+        "ar17:AVG_COMPUTER_PASSWORD_AGE_SCORE",
+        "ar17:AVG_VULNERABILITY_REPORTING_SCORE"
+      ],
+      "REPORT": {
+        "MAPPING_RELEASE": "ar-observation-scores-v2-17-fields",
+        "REPRESENTATION": "one-named-property-per-observation",
+        "TARGET_PATH": "assessment-results.results[].observations[]"
+      },
+      "REFERENCE_GROUPS": [],
+      "UNREVIEWED_ROWS": "DEFER"
+    }
+  }
+}

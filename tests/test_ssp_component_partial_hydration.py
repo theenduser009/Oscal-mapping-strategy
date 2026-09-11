@@ -124,18 +124,10 @@ def _literal_assignment(path, assignment_name):
 
 
 def _source_one_hydration_contract():
-    tree = ast.parse(CELL_1_PATH.read_text(encoding="utf-8"))
-    profiles = next(
-        node.value for node in tree.body
-        if isinstance(node, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "SOURCE_PROFILES"
-                for target in node.targets)
-    )
-    for profile in profiles.elts:
-        fields = {ast.literal_eval(key): value
-                  for key, value in zip(profile.keys, profile.values)}
-        if ast.literal_eval(fields["SOURCE_KEY"]) == "source-one":
-            return ast.literal_eval(fields["LOOKUP_CONTRACTS"])
+    from test_model_selection import cell_namespace
+    for profile in cell_namespace("SSP")["SOURCE_PROFILES"]:
+        if profile["SOURCE_KEY"] == "source-one":
+            return profile["LOOKUP_CONTRACTS"]
     raise AssertionError("Source One hydration contract is missing")
 
 
@@ -148,6 +140,11 @@ def _database_write_attributes(source):
         ("_score_finish", "report"),
         ("_ssp_finish", "context['graph_report']"),
         ("_prepare_model_context", "config"),
+        ("_legacy_prepare_model_context", "config"),
+        ("_metadata_prepare", "report"),
+        ("_metadata_record_complete", "used_parties"),
+        ("_metadata_finish", "report"),
+        ("_prepare_model_context", "options"),
     }
 
     class Calls(ast.NodeVisitor):

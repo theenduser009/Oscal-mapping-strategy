@@ -8,7 +8,9 @@ The files depend on state initialized by the preceding cells. Do not maintain a
 separate implementation here; future mapper corrections must update the
 complete notebook and the affected split cell together.
 
-## Current shared-workflow revision
+## Current metadata-driven workflow revision
+
+Upload [mapper_contract.v1.json](../metadata/mapper_contract.v1.json) to notebook Files alongside the approved mapping CSV. Source/model rules and executable choices come from this reviewed artifact and approved CSV metadata; the live registry supplies hierarchy/identity. [Metadata contract](../metadata/README.md).
 
 Replace all seven matching sections for this revision; do not mix old and new
 interfaces. Cell Seven uses `OSCAL_LOAD_MODE = "PREVIEW"`. Global
@@ -32,7 +34,7 @@ are not part of this consolidated workflow.
 6. [Validation and guarded loader](06_validation_and_guarded_loader.py)
 7. [Mapper orchestrator](07_mapper_orchestrator.py)
 
-Before the metadata-completion release is run for the first time, use the
+Historical setup note (required rows were already present in accepted runs; do not rerun automatically): before the metadata-completion release was first run, the
 [guarded metadata registry setup cell](../setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py)
 to add only the missing `metadata.roles[]` and `metadata.parties[]` rows. Its
 registry-write flag is separate from the mapper and is `False` by default.

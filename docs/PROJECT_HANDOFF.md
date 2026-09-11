@@ -4,44 +4,27 @@ Last reconciled: **2026-09-11**. Purpose: durable context requested by the owner
 
 ## Resume here
 
-**Latest owner direction: simplify, not add another mapper.** The governing
-design is one model selector, Excel-driven mappings, registry-driven structure,
-and reusable transformations. Cell One now derives internal routes and legacy
-configuration from `SELECTED_MODELS`; V2 and the combined notebook must match.
-This is selection cleanup, not completion of all-model metadata-driven dispatch.
-Field-specific SSP rules and the AR17 acceptance gates are deliberately retained.
-Next implementation work is a reviewed mapping-contract/transform migration with
-parity, not implicit expansion to candidate or deferred rows. No database run or
-reload is required merely for this selector change. See the architecture context.
+**Prime requirement: metadata-driven execution, not model-specific Python mapping branches.** The owner authorized all necessary changes. The active seven-cell workflow now loads a reviewed metadata catalog and compiles Excel/CSV mappings plus registry ownership into reusable operators. A new approved field/model using supported behavior does not require field-specific Python. One model selector remains.
 
-**The full SSP DEV reload is accepted. Do not rerun it.** The owner approved
-restoring the shared multi-source/multi-model architecture within the existing
-seven cells, with writes disabled. Source One is configured for SSP and the
-17 accepted AR fields. Cell Five is a shared registry traversal; approved
-model rules live in Cell Four policies. Cell Six uses explicit storage contracts.
+Cell One reads [mapper_contract.v1.json](../notebooks/metadata/mapper_contract.v1.json); Cell Three compiles approved executable rows; Cell Four runs generic transforms/operators. Cells Five through Seven reuse the existing common graph/writer/runner. Legacy helpers remain only for historical diagnostic compatibility; active metadata routes do not use their field/model classifier.
 
-**Next work: migrate reviewed mapping rules into metadata under parity checks.**
-The [shared seven-cell guide](SHARED_SEVEN_CELL_MAPPER.md) retains the preview
-procedure for a separately requested live check; no run is requested merely
-for the selector refinement. Do not mix old and new seven-cell revisions.
-Shared live runtime acceptance and AR persistence remain pending.
-All 485 local repository tests pass, including 65 focused multi-model checks
-and 12 selector checks. This is local evidence, not a Snowflake run.
+All **520 local tests pass**. Independent parity checks match the accepted SSP fixture exactly and the AR17 standalone business output. New-field and third-model tests run through the actual shared builder with legacy classifiers disabled. Original split, V2 split and combined notebook are synchronized.
 
-AR target names/types are not verified; its preview validates only the graph
-and blocks COMMIT. The other six sources and other models are not enabled by
-assumption. No database write, reload, registry change or Matillion execution
-is performed by this code update. The old SSP row reduction remains unresolved.
+**Next: deployment and one live PREVIEW acceptance, not another rewrite or reload.** Upload the reviewed catalog JSON to notebook Files alongside the existing mapping CSV, deploy the matching seven cells, and keep writes disabled. Follow the [shared guide](SHARED_SEVEN_CELL_MAPPER.md). No shared-workflow Snowflake result is accepted yet. Do not mix cell revisions.
+
+**The full SSP DEV reload stays accepted; do not rerun it.** Source One SSP and the 17 previously accepted AR mappings are preserved. AR target names/types remain unverified, so AR cannot COMMIT or inherit SSP destinations. Other sources/models and candidate/rejected/deferred AR rows are not enabled by assumption.
+
+No database write, registry change, Matillion execution or new mapping acceptance occurred in this refactor. The unexplained old-versus-new SSP row reduction remains unresolved.
 
 ## The pipeline and every cell's responsibility
 
 | Step | Existing file / component | What it does |
 | --- | --- | --- |
 | Upstream Matillion | [Null-preserving UPDATE](../sql/matillion/CANDIDATE_raw_curated_preserve_null_keys.sql) | Converts raw field IDs to field names and writes CURATED_JSON on the Archer RAW table. Retains named nulls. Not part of notebook Cells 1-7. |
-| Cell 1 | [Configuration](../notebooks/cells/01_initialization_and_configuration.py) | Explicit source profiles, enabled model routes, mapping bindings, policies and verified storage contracts. Baseline EXECUTE_WRITES is false and initialization rejects true. |
+| Cell 1 | [Configuration](../notebooks/cells/01_initialization_and_configuration.py) | Loads reviewed metadata for source/model bindings, executable rules and verified storage contracts; one model selector. Baseline EXECUTE_WRITES is false and initialization rejects true. |
 | Cell 2 | [Inputs](../notebooks/cells/02_source_mapping_registry_inputs.py) | Reads source-local CONTENT_ID and CURATED_JSON snapshots, each bound mapping artifact, registry and approved lookups; model routes reuse the same source snapshot. Resolves duplicate source IDs by the configured technical ordering, not arbitrary deduplication. |
 | Cell 3 | [Mapping contract](../notebooks/cells/03_canonical_mapping_contract.py) | Compiles isolated source/model contexts, preserving paths/Notes and reporting selected, excluded, deferred and blocked rows. |
-| Cell 4 | [Helpers](../notebooks/cells/04_parsing_transform_payload_helpers.py) | Shared parsing, transformations, identity and approved model-specific payload/registry policies. |
+| Cell 4 | [Helpers](../notebooks/cells/04_parsing_transform_payload_helpers.py) | Generic operators execute the compiled metadata plan; historical field-specific helpers are not active dispatch. |
 | Cell 5 | [Graph builder](../notebooks/cells/05_registry_graph_builder.py) | One generic graph loop builds nodes/edges for each explicit source/model context using the registry. Does not invent populated collections. |
 | Cell 6 | [Validation and guarded loader](../notebooks/cells/06_validation_and_guarded_loader.py) | Shared validate_and_load_oscal and verify_oscal_load use an immutable verified storage contract; targetless AR gets logical graph validation only. Conditional upserts, transaction/readback and obsolete-row blocking remain. |
 | Cell 7 | [Orchestrator](../notebooks/cells/07_mapper_orchestrator.py) | Preflights all source/model routes, builds each through the shared engine and emits OSCAL_PIPELINE_REPORT. MODEL_GRAPHS retains scoped graphs; compatibility outputs refer only to the configured default route. |

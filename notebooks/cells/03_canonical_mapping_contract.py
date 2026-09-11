@@ -24,8 +24,169 @@ MAPPING_COLUMN_ALIASES = {
 
 
 import copy
+import json
 import math
 import re
+
+
+# Engine capabilities, not source/model-specific mapping decisions.
+METADATA_TRANSFORM_IDS = {
+    "direct", "text", "timestamp", "date", "identifier", "archer-select",
+    "scalar-score", "security-objective", "status-crosswalk", "reject-populated", "skip", "canonical-text",
+}
+METADATA_OPERATORS = {
+    "object", "record", "properties", "values", "observations", "references",
+    "roles", "parties", "assignments",
+}
+
+
+def _metadata_object(value, label):
+    if value in (None, ""):
+        return {}
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            raise ValueError(label + " must contain a JSON object") from None
+    if not isinstance(value, dict):
+        raise ValueError(label + " must be an object")
+    return copy.deepcopy(value)
+
+
+def _metadata_words(value):
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+
+def _metadata_rule_candidates(row, contract):
+    return [rule for rule in contract.get("MAPPING_RULES", ())
+            if row.get("SOURCE_FIELD_NAME") in rule.get("SOURCE_FIELDS", ())]
+
+
+def _metadata_rule_matches(row, rule):
+    checks = [row.get("OWNER_ELEMENT_PATH") == rule.get("OWNER_PATH")]
+    for key, value in (
+        ("MAPPING_TYPES", row.get("MAPPING_TYPE")),
+        ("TARGET_FIELDS", row.get("OSCAL_FIELD_NAME") or row.get("FIELD_RELATIVE_PATH")),
+        ("ARTIFACT_PATHS", row.get("OSCAL_ELEMENT_PATH")),
+    ):
+        if key in rule:
+            if key == "MAPPING_TYPES":
+                checks.append(_metadata_words(value) in {_metadata_words(v) for v in rule[key]})
+            else:
+                checks.append(value in rule[key])
+    if "NOTES_EQUALS" in rule:
+        checks.append(_metadata_words(row.get("NOTES")) == _metadata_words(rule["NOTES_EQUALS"]))
+    for token in rule.get("NOTES_CONTAINS", ()):
+        checks.append(_metadata_words(token) in _metadata_words(
+            " ".join(str(row.get(k) or "") for k in ("NOTES", "TRANSFORMATION_LOGIC", "MAPPING_NOTES"))))
+    checks.extend(not row.get(key) for key in rule.get("EMPTY_COLUMNS", ()))
+    return all(checks)
+
+
+def _compile_metadata_mapping(row, contract, elements):
+    result = copy.deepcopy(row)
+    approval = _model_token(row.get("APPROVAL_STATUS"))
+    candidates = _metadata_rule_candidates(row, contract)
+    matches = [rule for rule in candidates if _metadata_rule_matches(row, rule)]
+    if len(matches) > 1:
+        raise ValueError("Multiple approved metadata rules match one mapping")
+    if approval:
+        if approval != "approved":
+            raise ValueError("Mapping metadata is not approved")
+        if candidates and not matches:
+            raise ValueError("Mapping contradicts its current reviewed release contract")
+        chosen = matches[0] if matches else {}
+        if chosen and row.get("TRANSFORM_ID") != chosen.get("TRANSFORM_ID"):
+            raise ValueError("Transform conflicts with the current reviewed release contract")
+        transform = row.get("TRANSFORM_ID")
+        transform_params = _metadata_object(row.get("TRANSFORM_PARAMS"), "TRANSFORM_PARAMS")
+        representation_params = _metadata_object(row.get("REPRESENTATION_PARAMS"), "REPRESENTATION_PARAMS")
+        if chosen:
+            for actual, key in ((transform_params, "TRANSFORM_PARAMS"),
+                                (representation_params, "REPRESENTATION_PARAMS")):
+                if actual != chosen.get(key, {}):
+                    raise ValueError("Parameters conflict with the current reviewed release contract")
+    else:
+        if any(row.get(key) not in (None, "") for key in
+               ("TRANSFORM_ID", "TRANSFORM_PARAMS", "REPRESENTATION", "REPRESENTATION_PARAMS")):
+            raise ValueError("Executable mapping metadata requires explicit approval")
+        if len(matches) != 1:
+            raise ValueError("Mapping requires an explicit approved executable contract")
+        chosen = matches[0]
+        if chosen.get("APPROVAL_STATUS") not in {"APPROVED", "BLOCKED_IF_POPULATED"}:
+            raise ValueError("Release metadata rule is not approved")
+        transform = chosen.get("TRANSFORM_ID")
+        transform_params = _metadata_object(chosen.get("TRANSFORM_PARAMS"), "TRANSFORM_PARAMS")
+        representation_params = _metadata_object(chosen.get("REPRESENTATION_PARAMS"), "REPRESENTATION_PARAMS")
+        approval = chosen["APPROVAL_STATUS"]
+    if transform not in METADATA_TRANSFORM_IDS:
+        raise ValueError("Unknown reusable transform identifier")
+    if chosen.get("APPROVAL_STATUS") == "BLOCKED_IF_POPULATED" and transform != "reject-populated":
+        raise ValueError("Unresolved populated values must remain rejected")
+    owner = row["OWNER_ELEMENT_PATH"]
+    if owner not in elements:
+        raise ValueError("Mapping has no metadata-defined element operator")
+    operator = elements[owner]["operator"]
+    if row.get("REPRESENTATION") not in (None, "", operator):
+        raise ValueError("Mapping representation conflicts with its element operator")
+    result.update(
+        TRANSFORM_ID=transform, TRANSFORM_PARAMS=transform_params,
+        REPRESENTATION=operator, REPRESENTATION_PARAMS=representation_params,
+        APPROVAL_STATUS=(chosen.get("APPROVAL_STATUS") or "APPROVED"),
+        RULE_ID=chosen.get("RULE_ID") or row.get("RULE_ID") or row.get("MAPPING_ID"),
+        CONTRACT_SOURCE="reviewed-catalog" if chosen else "mapping-artifact",
+    )
+    return result
+
+
+def compile_metadata_plan(context):
+    """Compile approved metadata to inert operations; never evaluate Notes as code."""
+    contract = context["model_contract"]
+    definitions = _metadata_object(contract.get("ELEMENTS"), "ELEMENTS")
+    default = _metadata_object(contract.get("DEFAULT_ELEMENT"), "DEFAULT_ELEMENT")
+    default_scope = default.get("scope", "noncollection")
+    if default_scope not in {"noncollection", "singletons-without-collection-ancestors"}:
+        raise ValueError("Unknown default element scope")
+    elements = {}
+    mapped_paths = {row["OWNER_ELEMENT_PATH"] for row in context["mapping_rows"]}
+    for registry in context["registry_rows"]:
+        path = _registry_path(registry)
+        definition = definitions.get(path)
+        collection = str(registry.get("IS_COLLECTION", False)).upper() in {"TRUE", "T", "1", "YES", "Y"}
+        if definition is None:
+            if (not collection and default and
+                    (default_scope != "singletons-without-collection-ancestors" or "[]" not in path)):
+                definition = default
+            elif path in mapped_paths:
+                raise ValueError("Mapped registry path has no metadata-defined operator")
+            else:
+                continue
+        definition = _metadata_object(definition, "Element definition")
+        if definition.get("operator") not in METADATA_OPERATORS:
+            raise ValueError("Unknown reusable element operator")
+        definition["parameters"] = _metadata_object(definition.get("parameters"), "Element parameters")
+        elements[path] = definition
+    if contract["ROOT_PATH"] not in elements:
+        raise ValueError("Registry root has no metadata-defined operator")
+    mappings = [_compile_metadata_mapping(row, contract, elements) for row in context["mapping_rows"]]
+    counts = {}
+    for row in mappings:
+        if row.get("RULE_ID"):
+            counts[row["RULE_ID"]] = counts.get(row["RULE_ID"], 0) + 1
+    if any(counts.get(rule_id) != 1 for rule_id in contract.get("REQUIRED_RULE_IDS", ())):
+        raise ValueError("Required reviewed mapping row is missing or duplicated")
+    reference_groups = []
+    for group in contract.get("REFERENCE_GROUPS", []):
+        required = {group[k] for k in ("roles_path", "parties_path", "assignments_path")}
+        if required.issubset(elements):
+            reference_groups.append(copy.deepcopy(group))
+        elif required & mapped_paths:
+            raise ValueError("Mapped reference family requires every governed registry path")
+    return {"version": 1, "elements": elements, "mappings": mappings,
+            "reference_groups": reference_groups,
+            "options": copy.deepcopy(contract.get("RUNTIME_OPTIONS", {})),
+            "report": copy.deepcopy(contract.get("REPORT", {})),
+            "default_element": copy.deepcopy(default) if default else None}
 
 
 def _meta_row(original):
@@ -200,6 +361,11 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     classification = "EXCLUDED_ROWS"
                 elif contract.get("SELECTED_FIELDS") and field not in contract["SELECTED_FIELDS"]:
                     classification = "EXCLUDED_ROWS"
+                elif field in contract.get("EXCLUDED_FIELDS", ()):
+                    classification, reason = "DEFERRED_ROWS", "DEFERRED_RELEASE_FIELD"
+                elif contract.get("POLICY") == "metadata-v1" and not _metadata_rule_candidates(row, contract) and not row.get("APPROVAL_STATUS"):
+                    classification = "DEFERRED_ROWS" if contract.get("UNREVIEWED_ROWS") == "DEFER" else "BLOCKED_ROWS"
+                    reason = "MISSING_APPROVED_METADATA"
                 elif not path:
                     classification, reason = "DEFERRED_ROWS", "MISSING_TARGET_PATH"
                 elif path_model != model:
@@ -253,10 +419,25 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
             else:
                 for key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
                     cfg.pop(key, None)
-            contexts.append({"source_key": profile["SOURCE_KEY"], "config": cfg,
+            context = {"source_key": profile["SOURCE_KEY"], "config": cfg,
                              "mapping_rows": selected, "mappings_by_path": grouped,
                              "model_contract": contract, "registry_rows": model_registry,
-                             "routing_report": report})
+                             "routing_report": report}
+            if contract.get("POLICY") == "metadata-v1" and report["STATUS"] == "READY":
+                try:
+                    context["compiled_plan"] = compile_metadata_plan(context)
+                    context["mapping_rows"] = context["compiled_plan"]["mappings"]
+                    context["mappings_by_path"] = {}
+                    for row in context["mapping_rows"]:
+                        context["mappings_by_path"].setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
+                except ValueError as error:
+                    report["STATUS"] = "BLOCKED"
+                    report["CONTRACT_ERROR"] = str(error)
+                    report["BLOCKED_ROWS"] += report["SELECTED_ROWS"]
+                    report["SELECTED_ROWS"] = 0
+                    context["mapping_rows"] = []
+                    context["mappings_by_path"] = {}
+            contexts.append(context)
     return contexts
 
 

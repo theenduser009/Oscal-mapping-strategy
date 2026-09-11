@@ -1,6 +1,6 @@
 # Mapper V2 — individual cells
 
-Seven separate, copy-ready Python files for the published shared mapper. This V2 folder is a packaging change: each cell is byte-for-byte identical to the corresponding published file in `notebooks/cells/` at creation. It does not add new mapping behavior or establish live acceptance.
+Seven separate, copy-ready Python files for the published shared mapper. Each cell mirrors `notebooks/cells/`. The current revision executes reviewed mapping metadata through the shared engine; publication does not establish live acceptance.
 
 ## Open each cell
 
@@ -19,8 +19,7 @@ In Cell One, edit only `SELECTED_MODELS`. Use `"SSP"` for SSP only,
 for both. Internal model keys and legacy configuration are derived automatically.
 Unknown models are rejected; AR does not borrow SSP destination tables.
 
-This selector cleanup does not complete the remaining field-rule migration into
-metadata. Accepted mapping scope, deferred rows and write safeguards are unchanged.
+Upload [mapper_contract.v1.json](../metadata/mapper_contract.v1.json) to notebook Files alongside the approved mapping CSV. Cell One loads model/source contracts and executable field rules from that reviewed artifact. See the [metadata contract](../metadata/README.md). Accepted scope, deferred rows and write safeguards are unchanged.
 
 ## Usage and current scope
 

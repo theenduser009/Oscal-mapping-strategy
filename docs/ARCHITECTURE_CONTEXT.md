@@ -6,37 +6,17 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 
 ## Approved consolidation - September 11
 
-### Cleaner design reaffirmed - September 11
+### Metadata-driven execution implemented - September 11
 
-The owner reaffirmed one model selector, Excel-driven field mappings,
-registry-driven hierarchy/identity and reusable transformations. The shared
-seven-cell engine remains; do not create a new mapper for each model.
+The owner made metadata-driven behavior non-negotiable and authorized the required changes. Cell One now loads the reviewed [deployment catalog](../notebooks/metadata/mapper_contract.v1.json); it exposes one model selector. Source fields, source bindings, model roots, approved transform choices, property names, reference types, controlled values and storage contracts are metadata, not active field/model branches.
 
-Cell One now exposes only `SELECTED_MODELS` for model selection. Internal
-`MODEL_KEYS` and compatibility `CONFIG["OSCAL_MODEL"]` are derived from it.
-Destinations belong to each model's storage contract, not a second global
-selector. AR-only selection must not retain SSP destination columns.
+Cell Three preserves the original Excel/CSV row and compiles a reviewed executable plan against the live registry. Existing accepted rules are migrated into the catalog without editing the owner's CSV. New rows can carry explicit approved transform/representation metadata; partial, ambiguous, contradictory and unknown contracts fail closed. See [metadata contract](../notebooks/metadata/README.md).
 
-This selector cleanup is **not full metadata-driven rule migration**. Existing
-field-specific SSP dispatch and the AR17 release gates remain. Next, consolidate
-the already-approved rules into one versioned mapping contract, with explicit
-transform identifiers/parameters and approval status, then migrate shared
-dispatch under output-parity checks. Do not infer approval from blank or
-"In Progress" statuses, and do not enable rejected/deferred AR rows by deleting
-allowlists. Moving constants to another file alone is not a generic mapper.
+Cell Four executes reusable operators and transforms from that plan. Cell Five still performs one registry traversal; Cell Six remains the shared guarded writer; Cell Seven orchestrates every source/model context. Historical compatibility helpers remain for earlier diagnostics, but active `metadata-v1` routes never enter their field/model dispatcher. This is more than moving constants: tests poison the legacy classifier and prove a new field and third synthetic model execute using metadata only.
 
-Keep the seven-cell interface. Sources have explicit table/mapping bindings;
-models have explicit policy and storage contracts. One source may feed several
-models; do not union sources or deduplicate their record IDs across tables.
-Cells Five and Six contain shared graph/write mechanics, not separate SSP and
-AR execution pipelines. Cell Four holds reviewed specialized behaviors.
-Metadata cannot invent an unknown transform or unspecified collection identity.
+All 520 local tests pass. Independent tests preserve the exact SSP fixture fingerprint and accepted AR17 business/field-report output. This does not establish a new live Snowflake acceptance or full OSCAL schema completeness. Unsupported new transformations or collection identity patterns require a reusable engine enhancement, not guessed semantics.
 
-Source One SSP and accepted AR17 are the configured parity baseline.
-Other sources/models and blocked AR rows are not implicitly supported.
-A targetless model can produce a clearly labelled logical preview, never a
-write to another model's tables. Global CONFIG stays unchanged by per-route runs.
-See [shared workflow scope and run instructions](SHARED_SEVEN_CELL_MAPPER.md).
+Only Source One SSP and accepted AR17 are configured. Rejected/candidate/deferred mappings remain excluded or blocked; other sources/models require approved metadata. Source identities stay isolated. Storage remains separately verified per source/model, and AR cannot borrow SSP targets. No database changes or reload accompany this refactor.
 
 ## Pinned conformance target
 
@@ -162,3 +142,4 @@ Coverage must be measurable at field level:
 - Populated record count and population percentage
 
 Approved status values should distinguish completed work, in-progress work, more information required, no source data, and not applicable.
+
