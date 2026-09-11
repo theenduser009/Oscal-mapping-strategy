@@ -6,8 +6,9 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 accepted runs, unresolved gaps and the next daily-loading step are recorded here.
 [Project startup instructions](AGENTS.md) require this context to be read before work.
 
-**Current direction:** the full SSP DEV reload is accepted. Complete the existing
-daily SSP loading path in Cells 6-7; do not rerun the separate full reload.
+**Current direction:** the full SSP DEV reload is accepted. The updated existing
+[Cells 6-7 daily SSP loading path](docs/SSP_DAILY_LOADING.md) passes local tests
+and is ready for live PREVIEW; do not rerun the separate full reload.
 AR's 17 accepted in-memory mappings remain preserved, with database loading pending.
 
 ## Authoritative files
@@ -36,8 +37,9 @@ The committed notebook always starts with:
 ```
 
 Cell 6 already defines graph validation and insert/update MERGE loading; Cell 7
-orchestrates the normal notebook. Its daily-write branch remains disabled and
-not end-to-end accepted. Clean in-memory keys alone are not permission to enable it.
+orchestrates the normal notebook. The updated daily writer defaults to PREVIEW,
+uses an explicit Cell 7 mode for approved SSP DEV commits, and is not yet
+live-accepted. Clean in-memory keys alone are not permission to enable it.
 The separate DEV persistence cells have their own explicitly scoped modes.
 
 ## Latest verified checkpoint

@@ -78,8 +78,17 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 ## Loading and validation
 
 - `EXECUTE_WRITES` is declared once in Cell 1.
-- Cell 6 consumes the flag and never redefines it.
-- Cell 7 is the only orchestrator and execution point.
+- Cell 6 consumes its supplied run configuration and never changes global CONFIG.
+- Cell 7 is the normal notebook's orchestrator and execution point. The daily
+  revision uses an explicit PREVIEW/COMMIT choice and a per-run configuration
+  copy; global EXECUTE_WRITES stays false for all other cells. A release check
+  prevents new Cell 7 from enabling an old Cell 6 still loaded in the session.
+- The daily SSP DEV upsert path does not delete or truncate. Obsolete keys within
+  selected source records block writes until a reconciliation rule is approved;
+  source records absent from the current input are preserved, not inferred deleted.
+- Daily idempotency compares mapped business values, preserving audit fields
+  on unchanged rows. DIM/FACT must share a transaction and saved values/links
+  must be verified. Local tests are not live daily-path acceptance.
 - A write requires unique and non-null node and edge keys, no dangling edges, unique and non-null target PKs, successful idempotent merges, and post-load count verification.
 - Source duplication must be resolved using an explicit technical selection rule. Blind `DISTINCT`, arbitrary `drop_duplicates`, and global-parent shortcuts are prohibited.
 

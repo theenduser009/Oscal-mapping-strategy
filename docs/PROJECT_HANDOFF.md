@@ -4,9 +4,9 @@ Last reconciled: **2026-09-11**. Purpose: durable context requested by the owner
 
 ## Resume here
 
-**The full SSP DEV reload is accepted. Do not rerun it.** The next engineering work is to complete and verify the **existing daily loading path in Cells 6-7**, reusing the physical-storage and transactional checks already proved by the separate persistence cells. This is not a request to build another mapper from scratch.
+**The full SSP DEV reload is accepted. Do not rerun it.** The owner chose to fix the **existing daily loading path in Cells 6-7**, without another standalone SSP cell. That revision is now implemented and locally verified: 407 repository tests passed, including 28 focused checks. **Next: replace/run updated Cells 6 then 7 in PREVIEW and share the aggregate load report.** Live daily-path acceptance remains pending. [Run instructions](SSP_DAILY_LOADING.md).
 
-This checkpoint update changes documentation/instructions only. No new notebook run, database write, scheduler or daily-loader implementation was performed by saving it.
+The current revision changes Cells 6 and 7 and synchronizes the combined notebook. It does not change mapping rules, Cells 1-5, registry, AR, source tables, or persisted SSP data. No live Snowflake run or scheduler was executed by the code update.
 
 The old-versus-new SSP row-count difference remains a separate unresolved audit. AR has 17 accepted in-memory mappings, but no accepted database load. Keep those distinctions when reporting progress.
 
@@ -20,8 +20,8 @@ The old-versus-new SSP row-count difference remains a separate unresolved audit.
 | Cell 3 | [Mapping contract](../notebooks/cells/03_canonical_mapping_contract.py) | Normalizes and routes the approved mappings and registry ownership. |
 | Cell 4 | [Helpers](../notebooks/cells/04_parsing_transform_payload_helpers.py) | Parses values, applies approved transforms, constructs payloads and deterministic identity. |
 | Cell 5 | [Graph builder](../notebooks/cells/05_registry_graph_builder.py) | Builds model-specific nodes and parent-child edges for selected source records using the registry. Does not invent populated collections. |
-| Cell 6 | [Validation and guarded loader](../notebooks/cells/06_validation_and_guarded_loader.py) | Already defines validate_and_load_oscal, MERGE generation, and verify_oscal_load. It can insert/update DIM and FACT when enabled; accepted normal runs used writes disabled. |
-| Cell 7 | [Orchestrator](../notebooks/cells/07_mapper_orchestrator.py) | Calls graph construction, validation/loader and mapping coverage; produces final_nodes_df, final_edges_df and run_result. |
+| Cell 6 | [Validation and guarded loader](../notebooks/cells/06_validation_and_guarded_loader.py) | Defines validate_and_load_oscal and verify_oscal_load. The updated writer performs physical projection, conditional insert/update, frozen preflight, atomic writes and exact readback. No deletion/truncation; live daily acceptance pending. |
+| Cell 7 | [Orchestrator](../notebooks/cells/07_mapper_orchestrator.py) | Checks source identities and matching Cell 6 release, builds the graph and coverage before loading, and exposes explicit PREVIEW/COMMIT mode through a per-run config copy. Produces final_nodes_df, final_edges_df and run_result. |
 | Owner's current Cell 8 | [Separate full DEV reload](../notebooks/persistence/RELOAD_ALL_SSP_DEV.py) | Replaces both entire SSP DEV target tables from the accepted graph. This was the accepted one-time full reload, not the finished daily loader. |
 
 The consolidated seven-cell source is [NB_ARCHER_OSCAL_MAPPER_V1.py](../notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py); keep it synchronized with split cells when code changes. Separate AR, assembly, diagnostic and persistence cells are identified by filename, not a fixed notebook number.
@@ -56,17 +56,20 @@ Next audit, when requested: compare old and new source-record/path coverage read
 
 The owner needs a repeatable daily process, not a fresh one-off cell for each run.
 
-**Already exists:** Cell 6 generates primary-key-based insert/update MERGEs; Cell 7 invokes it. The corrected explanation is not “nothing loads in Cells 1-7,” but “their normal write branch has not been accepted end to end against these physical targets.”
+**Implemented in this revision:**
 
-**Remaining before enabling daily writes:**
+- The existing Cell 6 public loader APIs remain. Proven binary/UUID/VARIANT projection and live schema checks are integrated.
+- Unique temporary staging is created before the shared DIM/FACT transaction. Staging is not dependent on an earlier pilot cell.
+- Same-key business changes update; new keys insert. The three audit columns do not trigger changes, and unchanged rows retain their existing stored fields.
+- Preflight checks obsolete keys, provenance, PK/FK/UUID links, graph hierarchy and selected source count. Obsolete in-scope rows block the whole write; absent input records are preserved.
+- Both MERGEs run twice inside one transaction; the second pass must report zero inserts and zero updates. Exact business values, updated audit fields, unchanged stored values and graph links are checked before commit and again afterward.
+- Rollback, unknown commit and failed post-commit readback have different reports. No automatic retry or false success.
+- Cell 7 checks for the updated Cell 6 function, rejects missing source IDs before stringification, computes coverage before writes, and clears stale run outputs.
+- Cell 1 stays unchanged with global EXECUTE_WRITES false. Cell 7's explicit SSP_LOAD_MODE defaults to PREVIEW and changes only a per-run configuration copy.
 
-- Reuse the proven physical conversions: existing 32-hex hashes to BINARY(16) without rehashing; canonical UUIDs to the physical 32-character representation; parsed VARIANT payloads. Normal Cell 6 currently passes logical values through.
-- Put DIM and FACT mutations in a shared explicit transaction with rollback handling. The current normal loader has no such transaction.
-- Compare actual saved payloads, PK/FK/UUID links and record-scoped hierarchy, not only matched key counts.
-- Define an unchanged-business-value policy; current MERGE updates matched non-PK columns, including audit fields.
-- Agree obsolete node/edge and deleted source-record handling. A missing row in a partial input is not authorization to delete target data.
-- Prove repeatability with independently rebuilt inputs, changed/new records and failure cases. Re-merging a frozen staging snapshot alone does not prove the whole daily pipeline.
-- Reconcile enablement with Cell 1's deliberate false-only baseline; do not merely tell the owner to flip its flag.
+**Still pending:** live Snowflake preview and approved commit/readback acceptance; automatic obsolete-node/source-deletion policy; operational daily scheduling and production review. Local tests include independently reconstructed logical inputs and audit-only reruns, but do not prove Snowflake compilation or actual daily-source behavior. An all-unchanged live run would not prove a changed-row write was exercised.
+
+No extra execution cell was added. See [the daily-loader guide](SSP_DAILY_LOADING.md). Keep concurrent target writers paused for an approved commit; snapshot comparisons do not establish an exclusive lock.
 
 Idempotent means the same source and mapping rules yield the same business data and deterministic keys without duplicates. Audit run IDs/timestamps may have a separate policy. A complete validated full refresh can also be idempotent; daily truncation is not required. The accepted DEV full-reload cell uses snapshot-specific acceptance checks and is not a ready-to-schedule daily job.
 

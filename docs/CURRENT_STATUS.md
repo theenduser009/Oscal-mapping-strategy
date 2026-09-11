@@ -2,47 +2,53 @@
 
 Last reconciled: 2026-09-11
 
-## Current action - full SSP DEV reload accepted; daily loading path next
+## Current action - updated Cells 6 and 7 ready for daily SSP preview
 
-**The full SSP DEV reload is committed and verified:** 2,813 source records,
-70,102 DIM elements and 67,289 FACT dependencies, with clean saved-value,
-PK/FK/UUID/hierarchy checks and zero second-pass inserts.
+The owner explicitly selected **fix Cells 6 and 7, without another standalone
+SSP cell**, on 2026-09-11. The revision is implemented and all 407 local tests
+pass (28 focused daily-loader checks). Live Snowflake acceptance is pending. No database write is
+being performed by this code update. [Daily-loader policy and run guide](SSP_DAILY_LOADING.md).
+
+The full SSP DEV reload remains **committed and verified** for 2,813 source
+records, 70,102 DIM elements and 67,289 FACT dependencies.
 [Accepted live report](SSP_FULL_DEV_RELOAD_2026-09-11.md).
-The earlier one-record and ten-record milestones are also complete.
-**Do not rerun the accepted reload or the old pilots.**
+Do not rerun that separate reload or the one-record/ten-record pilots.
 
-[Project handoff - cell roles, accepted work and remaining gaps](PROJECT_HANDOFF.md)
-is the durable startup context; [project instructions](../AGENTS.md) require it
-to be read before future work and run advice.
+Cell 6 already owned MERGE loading. This revision integrates the proven storage
+conversions, frozen staging, changed-business-value comparison, atomic DIM/FACT
+upserts and exact saved-key/value checks into that existing responsibility.
+Cell 7 owns the explicit PREVIEW/COMMIT choice and checks that the updated
+Cell 6 was initialized. The shared Cell 1 EXECUTE_WRITES flag stays false.
+Mapping rules and Cells 1-5 are unchanged; the consolidated notebook is kept in sync.
 
-**Next engineering action:** complete and verify the existing daily SSP writer
-in Cells 6-7. Cell 6 already defines insert/update MERGEs and load verification;
-Cell 7 calls it. Their normal runs had writes disabled. The missing work is
-integrating proven physical conversions, shared transactions, exact readback,
-unchanged-row behavior and an approved obsolete-data policy into that existing
-path, not inventing another mapper or claiming there was no loader.
-No notebook run is requested by this documentation update. Keep normal
-EXECUTE_WRITES false; the separate snapshot-specific DEV reload is not the
-finished daily job.
+No deletion policy is assumed. Extra old keys within a currently selected
+record block target writes. Source records outside the current input remain
+stored and are reported separately. No DELETE, TRUNCATE or permanent backup
+is part of the daily upsert path. It is not automatic deletion synchronization
+or a scheduled daily job.
 
-**Unresolved coverage question:** the old tables had 126,453 DIM / 122,939 FACT
-rows; the accepted replacement has 70,102 / 67,289. This is 56,351 fewer DIM
-and 55,650 fewer FACT rows. Saved data matching the new graph does not explain
-every removed old row. Do not label them duplicates/stale/superseded without
-a read-only old-versus-new record/path comparison. Temporary before-snapshots
-may help only if the reload session is still available; that is not confirmed.
-No permanent backup was retained. Full SSP mapping/schema completeness remains
-unestablished.
+**Next action:** replace only Cells 6 and 7 with the published revision, run
+Cell 6 then Cell 7 in PREVIEW, and share its complete OSCAL_LOAD_REPORT.
+Live acceptance remains pending. The report must show
+DAILY_SSP_PREVIEW_PASSED_NO_TARGET_DML before a later approved COMMIT.
+If Cells 1-5 inputs have expired, rebuild those unchanged cells first.
+Do not run legacy assembly/discovery/persistence cells after COMMIT as though
+it were a read-only run; their old write-disabled assumptions remain unchanged.
 
-AR retains 17 accepted in-memory mappings, not an accepted database load.
-The later 34-field candidate and deferred rows remain separate; see the handoff.
-Matillion's field-ID-to-CURATED_JSON conversion is upstream of the notebook,
-and its owner-accepted preview is not proof of pipeline UPDATE execution.
+**Separate unresolved audit:** 126,453 old DIM / 122,939 old FACT rows became
+70,102 / 67,289 in the accepted full reload: 56,351 fewer DIM / 55,650 fewer
+FACT rows. Equality with the accepted new graph does not explain every removed
+old row. Old-versus-new source-record/path coverage is still unverified.
+Temporary before-snapshots are useful only if the reload session still exists;
+its availability is unconfirmed. No durable before-copy was retained.
 
-The historical entries below preserve earlier incidents. Their old run requests,
-pending write statuses and active-model labels are superseded by this current
-action and newer linked evidence. Do not execute an old next-step instruction
-merely because it remains in the history.
+AR remains 17 accepted in-memory mappings, not an accepted database load.
+The blocked expanded candidate and deferred rows remain separate. Matillion's
+owner-accepted null-preserving preview is not proof of pipeline UPDATE execution.
+[Durable cell map and full handoff](PROJECT_HANDOFF.md).
+
+Historical entries below retain earlier incidents. Their superseded run
+requests and pending-state labels are not the current action.
 
 ## Active incident — Matillion raw-to-curated null field loss
 

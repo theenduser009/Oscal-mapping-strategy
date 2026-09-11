@@ -8,6 +8,21 @@ The files depend on state initialized by the preceding cells. Do not maintain a
 separate implementation here; future mapper corrections must update the
 complete notebook and the affected split cell together.
 
+## Current SSP daily-loader revision
+
+The full SSP DEV reload is accepted. **Do not rerun that separate Cell 8 or any
+old pilot.** Update the existing [Cell 6](06_validation_and_guarded_loader.py)
+and [Cell 7](07_mapper_orchestrator.py), not a new standalone cell.
+
+Cell 7 defaults to `SSP_LOAD_MODE = "PREVIEW"`; keep Cell 1's shared
+`CONFIG["EXECUTE_WRITES"] = False`. It refuses a stale Cell 6 implementation.
+The current revision needs live preview/commit acceptance; local tests do not
+prove live writes. [Exact daily policy and run steps](../../docs/SSP_DAILY_LOADING.md).
+
+For the active session, run updated Cell 6 then Cell 7 in PREVIEW. If inputs from
+Cells 1-5 are no longer available, rebuild those unchanged cells first.
+Do not execute the historical diagnostic sequence below as part of this revision.
+
 ## Run order
 
 1. [Initialization and configuration](01_initialization_and_configuration.py)
@@ -23,7 +38,7 @@ Before the metadata-completion release is run for the first time, use the
 to add only the missing `metadata.roles[]` and `metadata.parties[]` rows. Its
 registry-write flag is separate from the mapper and is `False` by default.
 
-## Read-only checkpoint after Cell 7
+## Historical read-only checkpoint sequence — not current run requests
 
 After Cell 7 completes with writes disabled, run the separate
 [SSP scope and coverage validation](../validation/RUN_AFTER_07_ssp_scope_validation.py).
