@@ -4,31 +4,30 @@ Last reconciled: 2026-09-11
 
 ## Current action — SSP physical persistence resumed
 
-### Latest runtime result — pilot blocked during live schema inspection
+### Latest checkpoint — uploaded physical schema reconciled; corrected pilot awaiting live run
 
-The owner ran the separate pilot in COMMIT mode and reported
-`UNSUPPORTED_LIVE_COLUMN_DATATYPE` from `_pilot_safe_type`, reached through
-`_pilot_column_plan` while describing the target tables. This call happens
-before staging and before either target MERGE; **this attempt performed no
-pilot target DML**. It is not a persisted/accepted write.
+The first COMMIT attempt stopped in schema inspection, **before staging or any
+target MERGE**. It did not persist a record. The owner then uploaded the
+[actual DIM/FACT definitions](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md).
+The earlier request to run schema capture is fulfilled; do not repeat it.
 
-The existing error does not identify the column or datatype. The repo contains
-no actual DIM/FACT DDL or saved DESC output for these targets; do not broaden the
-datatype allowlist or invent casts from synthetic tests.
+The exact mismatch is now resolved in the separate pilot's storage projection:
+four physical key columns are `BINARY(16)`, whereas graph keys are 32-character
+MD5 hex; three physical UUID columns are `VARCHAR(32)`, whereas graph UUIDs have
+36 characters including hyphens. The corrected pilot decodes existing hex keys
+and removes UUID hyphens **only in the physical columns**. It does not rehash,
+truncate, alter mapped JSON, modify registry rows, or change either table schema.
 
-Run the [read-only target-schema capture](../notebooks/persistence/READ_ONLY_SSP_PILOT_TARGET_SCHEMA.py)
-in one new Snowflake Python cell, with no edits, and post both printed schema
-blocks. It runs DESC TABLE for the two approved SSP development targets only
-and prints names, exact types, nullability and whether defaults exist, not data
-values or default contents. Do not rerun the write pilot unchanged. The next
-correction depends on this live schema evidence. SSP/AR mappings and the accepted
-upstream preview remain unchanged.
+Release `ssp-one-record-write-v2-binary16` passes 32 focused local tests, including
+the uploaded schema, malformed identities, binary-key collisions, readback,
+rollback and repeat writes. This is not live Snowflake persistence acceptance.
 
-
-On 2026-09-11 the owner returned from the upstream Matillion incident to resume
-OSCAL mapping and actual database persistence. The approved one-record SSP
-development pilot is **resumed, not yet executed**. Its earlier paused status
-below is historical and superseded by this action.
+**Next:** replace only the separate pilot cell with the
+[updated full file](../notebooks/persistence/PILOT_SSP_ONE_RECORD_WRITE.py),
+set `SSP_PILOT_MODE = "COMMIT"` near the top, and run it once in the accepted
+SSP session. Leave normal mapper writes disabled. No schema-capture, registry,
+AR or SSP mapper rerun is needed while those accepted outputs are still loaded.
+Post the pilot's printed report. See the [bounded correction checkpoint](checkpoints/2026-09-11_ssp_pilot_physical_storage_fix.md).
 
 Model **SSP**, tree root `system-security-plan`, using the accepted mapped graph
 of **70,102 nodes / 67,289 edges**. Accepted mappings are not being rewritten.

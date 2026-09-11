@@ -1,8 +1,29 @@
 # One-record SSP development write pilot
 
-Status: **prepared and locally tested; live Snowflake write/readback pending**.
+Status: **physical-schema correction locally verified; live write/readback pending**.
 The owner approved one SSP record in the configured development DIM/FACT tables.
 This is not approval for a bulk load, AR writes, registry changes, or deletes.
+
+## Corrected after the first live schema stop
+
+The owner-uploaded [physical schema](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
+is now covered by release `ssp-one-record-write-v2-binary16`. The failed earlier
+attempt stopped before target DML; **schema capture is complete, not another run
+step**. Replace the old pilot cell before the next attempt.
+
+- The four hash columns use `BINARY(16)`: validate the graph's 32 hexadecimal
+  characters, then decode with explicit `TO_BINARY(value, 'HEX')`. No rehashing.
+- The three UUID columns use `VARCHAR(32)`: validate the canonical dashed UUID,
+  then remove hyphens for physical storage only. UUIDs inside JSON stay canonical.
+- Invalid identity syntax, incorrect byte width, duplicate projected keys and
+  oversized other strings stop before any target MERGE. No silent truncation.
+- Scope, ownership, MERGE and readback compare the same projected physical
+  representations. Existing conflicting target keys still require review.
+
+These are lossless representation conversions, not new mappings or schema DDL.
+Snowflake documents explicit hexadecimal decoding in
+[TO_BINARY](https://docs.snowflake.com/en/sql-reference/functions/to_binary) and
+byte-size checking in [OCTET_LENGTH](https://docs.snowflake.com/en/sql-reference/functions/octet_length).
 
 ## Run this separate cell
 

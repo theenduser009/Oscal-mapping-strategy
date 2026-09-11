@@ -6,7 +6,7 @@ import re
 import uuid
 
 
-SSP_PILOT_RELEASE = "ssp-one-record-write-v1"
+SSP_PILOT_RELEASE = "ssp-one-record-write-v2-binary16"
 SSP_PILOT_MODE = "PREVIEW"  # Set to COMMIT only for the approved one-record DEV pilot.
 SSP_PILOT_DIM = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT"
 SSP_PILOT_FACT = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY"
@@ -140,6 +140,10 @@ _PILOT_FACT_SOURCES = {
     "FK_TARGET_ELEMENT_HASH": "FK_TARGET_ELEMENT_HASH", "DEPENDENCY_TYPE": "DEPENDENCY_TYPE",
     "SOURCE_OSCAL_UUID": "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID": "TARGET_OSCAL_UUID",
 }
+_PILOT_HASH_SOURCES = {"NODE_KEY", "EDGE_KEY", "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"}
+_PILOT_UUID_SOURCES = {"OSCAL_UUID", "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"}
+_PILOT_HEX_PATTERN = r"[0-9a-fA-F]{32}"
+_PILOT_UUID_PATTERN = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 
 def _pilot_table(name):
@@ -156,6 +160,8 @@ def _pilot_safe_type(value):
     match = re.fullmatch(r"(?:VARCHAR|STRING|TEXT)(?:\(\s*([1-9][0-9]*)\s*\))?", value)
     if match:
         return "VARCHAR" + ("(" + str(int(match[1])) + ")" if match[1] else "")
+    if re.fullmatch(r"BINARY\(\s*16\s*\)", value):
+        return "BINARY(16)"
     if value == "VARIANT" or re.fullmatch(r"TIMESTAMP_(?:NTZ|LTZ|TZ)(?:\([0-9]\))?", value):
         return value
     raise PilotError("UNSUPPORTED_LIVE_COLUMN_DATATYPE")
@@ -187,9 +193,23 @@ def _pilot_column_plan(description, kind):
             continue
         if column_kind != "COLUMN" or entry.get("expression") not in (None, ""):
             raise PilotError("MAPPED_COLUMN_NOT_WRITABLE_" + name)
-        dtype, source = _pilot_safe_type(entry["type"]), sources[name]
+        try:
+            dtype = _pilot_safe_type(entry["type"])
+        except PilotError as error:
+            # Only column metadata, never source values or full SQL, is reported.
+            raise PilotError(error.code, {"TABLE_KIND": kind, "COLUMN": name,
+                             "LIVE_TYPE": str(entry["type"])[:128]}) from None
+        source, encoding = sources[name], None
         expression = "s." + _pilot_ident(source)
-        if name == "METADATA_JSON":
+        if source in _PILOT_HASH_SOURCES and dtype == "BINARY(16)":
+            # Decode the existing MD5 hex identity; never hash again or truncate.
+            expression = "TO_BINARY(" + expression + ", 'HEX')"
+            encoding = "HEX_TO_BINARY16"
+        elif source in _PILOT_UUID_SOURCES and dtype == "VARCHAR(32)":
+            # Storage only. Canonical UUIDs inside the graph and JSON stay unchanged.
+            expression = "REPLACE(" + expression + ", '-', '')"
+            encoding = "UUID_TO_COMPACT32"
+        elif name == "METADATA_JSON":
             if dtype == "VARIANT":
                 expression = "PARSE_JSON(" + expression + ")"
             elif dtype.startswith("VARCHAR"):
@@ -205,7 +225,7 @@ def _pilot_column_plan(description, kind):
                 raise PilotError("IDENTIFIERS_AND_LABELS_REQUIRE_STRING_TYPE")
             expression = "CAST(" + expression + " AS VARCHAR)"
         plan.append({"name": name, "source": source, "expression": expression,
-                     "type": dtype, "nullable": nullable == "Y"})
+                     "type": dtype, "nullable": nullable == "Y", "encoding": encoding})
     required = set(sources)
     if kind == "DIM":
         # The existing loader projects these audit columns only when exposed.
@@ -321,10 +341,25 @@ def _pilot_freeze_graph(session, nodes, edges, names):
 
 
 def _pilot_stage(session, raw_stage, stage, plan):
+    # Validate identity syntax before evaluating conversions; NULL is not an identity.
+    for column in plan:
+        encoding = column.get("encoding")
+        if encoding:
+            source = _pilot_ident(column["source"])
+            pattern = _PILOT_HEX_PATTERN if encoding == "HEX_TO_BINARY16" else _PILOT_UUID_PATTERN
+            _pilot_zero(session, f"SELECT COUNT(*) AS N FROM {raw_stage} WHERE "
+                        f"{source} IS NULL OR NOT REGEXP_LIKE({source}, '{pattern}')",
+                        "INVALID_STORAGE_IDENTITY_" + column["name"])
     expressions = ", ".join(c["expression"] + " AS " + _pilot_ident(c["name"]) for c in plan)
     _pilot_query(session, f"CREATE TEMPORARY TABLE {stage} AS SELECT {expressions} FROM {raw_stage} s")
     for column in plan:
         name = _pilot_ident(column["name"])
+        if column["type"] == "BINARY(16)":
+            _pilot_zero(session, f"SELECT COUNT(*) AS N FROM {stage} WHERE "
+                        f"{name} IS NULL OR OCTET_LENGTH({name}) <> 16", "BINARY_KEY_WIDTH_INVALID")
+        if column["name"] in {SSP_PILOT_DIM_PK, SSP_PILOT_FACT_PK}:
+            # Different text casing can collapse to the same physical binary key.
+            _pilot_unique(session, stage, name)
         if not column["nullable"]:
             _pilot_zero(session, f"SELECT COUNT(*) AS N FROM {stage} WHERE {name} IS NULL",
                         "REQUIRED_TARGET_VALUE_IS_NULL")
@@ -394,15 +429,15 @@ def run_ssp_one_record_write_pilot(session, config, run_result, nodes, edges, mo
     if mode not in ("PREVIEW", "COMMIT"):
         raise PilotError("PILOT_MODE_MUST_BE_PREVIEW_OR_COMMIT")
     _pilot_no_transaction(session)
-    # Inspect real column contracts before staging, instead of guessing target defaults.
-    plans = [_pilot_column_plan(_pilot_query(session, "DESC TABLE " + target), kind)
-             for target, kind in ((SSP_PILOT_DIM, "DIM"), (SSP_PILOT_FACT, "FACT"))]
     prefix = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.TMP_SSP_PILOT_" + uuid.uuid4().hex.upper()
     names = {suffix: prefix + "_" + suffix for suffix in ("NV", "EV", "NR", "ER", "D", "F", "DB", "FB")}
     report = {"RELEASE": SSP_PILOT_RELEASE, "MODEL": "SSP", "MODE": mode,
               "STATUS": "PREPARING", "TARGET_DML_ATTEMPTED": False, "PERSISTED": False}
     phase = "SCHEMA_AND_STAGING"
     try:
+        # Include schema stops in the printed aggregate report, before any target DML.
+        plans = [_pilot_column_plan(_pilot_query(session, "DESC TABLE " + target), kind)
+                 for target, kind in ((SSP_PILOT_DIM, "DIM"), (SSP_PILOT_FACT, "FACT"))]
         report.update(_pilot_freeze_graph(session, nodes, edges, names))
         for raw, stage, plan in zip(("NR", "ER"), ("D", "F"), plans):
             _pilot_stage(session, names[raw], names[stage], plan)
