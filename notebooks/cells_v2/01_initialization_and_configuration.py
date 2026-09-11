@@ -19,11 +19,30 @@ import uuid
 
 session = get_active_session()
 
+# The only model selector. Use "SSP", "ASSESSMENT_RESULTS", or a tuple/list
+# of configured model keys. Model contracts below describe capabilities;
+# they are not a second run selector. Unknown models fail before source reads.
+SELECTED_MODELS = ("SSP", "ASSESSMENT_RESULTS")
+
+
+def _selected_model_keys(selection, model_contracts):
+    if isinstance(selection, str):
+        selection = (selection,)
+    if not isinstance(selection, (tuple, list)) or not selection:
+        raise ValueError("SELECTED_MODELS must name at least one configured model")
+    if any(not isinstance(model, str) or not model.strip() for model in selection):
+        raise ValueError("SELECTED_MODELS contains an invalid model key")
+    if len(selection) != len(set(selection)):
+        raise ValueError("SELECTED_MODELS contains duplicate models")
+    if any(model not in model_contracts for model in selection):
+        raise ValueError("SELECTED_MODELS contains an unconfigured model")
+    return tuple(selection)
+
+
 CONFIG = {
     "RUN_ID": datetime.datetime.now(datetime.timezone.utc).strftime(
         "%Y%m%dT%H%M%SZ"
     ),
-    "OSCAL_MODEL": "SSP",
     "OSCAL_VERSION": "1.2.3",
     "SSP_DOCUMENT_VERSION": "1.0",
     "EXECUTE_WRITES": False,
@@ -37,16 +56,6 @@ CONFIG = {
     "ARCHER_META_VALUE_TABLE": (
         "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE"
     ),
-    "TARGET_DIM": (
-        "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED."
-        "DIM_OSCAL_SSP_ELEMENT"
-    ),
-    "TARGET_FACT": (
-        "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED."
-        "FACT_OSCAL_SSP_DEPENDENCY"
-    ),
-    "DIM_PK_COLUMN": "PK_OSCAL_SSP_ELEMENT_HASH",
-    "FACT_PK_COLUMN": "PK_FACT_OSCAL_DEPENDENCY_HASH",
     "MAPPING_FILE": "archer_to_oscal_mapping (4).csv",
     "ELEMENT_REGISTRY_TABLE": (
         "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY"
@@ -70,15 +79,9 @@ if CONFIG["EXECUTE_WRITES"]:
         "Repository baseline must start with EXECUTE_WRITES = False."
     )
 
-print("Cell 1 initialized")
-print("OSCAL model:", CONFIG["OSCAL_MODEL"])
-print("OSCAL version:", CONFIG["OSCAL_VERSION"])
-print("Writes enabled:", CONFIG["EXECUTE_WRITES"])
-
-
-
-# Active workflow configuration. CONFIG above is the backward-compatible
-# Source One SSP baseline, not the selector used by the multi-model runner.
+# Governed capabilities and accepted release scope, not run selectors.
+# Field-level approvals still need migration into reviewed mapping metadata;
+# do not remove the AR acceptance boundary to enable deferred/candidate rows.
 # Additional sources require explicit profiles and reviewed mapping bindings;
 # do not invent names for the other six source tables.
 AR_ACCEPTED_FIELDS = (
@@ -101,10 +104,16 @@ _SSP_STORAGE_CONTRACT = {
     "SOURCE_SYSTEM_NAME": CONFIG["SOURCE_SYSTEM_NAME"],
     "SOURCE_TABLE_NAME": CONFIG["SOURCE_TABLE_NAME"],
     "RAW_TABLE": CONFIG["RAW_TABLE"],
-    "TARGET_DIM": CONFIG["TARGET_DIM"],
-    "TARGET_FACT": CONFIG["TARGET_FACT"],
-    "DIM_PK_COLUMN": CONFIG["DIM_PK_COLUMN"],
-    "FACT_PK_COLUMN": CONFIG["FACT_PK_COLUMN"],
+    "TARGET_DIM": (
+        "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED."
+        "DIM_OSCAL_SSP_ELEMENT"
+    ),
+    "TARGET_FACT": (
+        "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED."
+        "FACT_OSCAL_SSP_DEPENDENCY"
+    ),
+    "DIM_PK_COLUMN": "PK_OSCAL_SSP_ELEMENT_HASH",
+    "FACT_PK_COLUMN": "PK_FACT_OSCAL_DEPENDENCY_HASH",
     "IDENTITY_VERSION": CONFIG["IDENTITY_VERSION"],
 }
 MODEL_CONTRACTS = {
@@ -140,6 +149,16 @@ MODEL_CONTRACTS = {
         "STORAGE_CONTRACT": None,
     },
 }
+_enabled_models = _selected_model_keys(SELECTED_MODELS, MODEL_CONTRACTS)
+# Compatibility aliases are derived, never separately selected. An AR-only
+# selection must not retain SSP destinations in CONFIG or source BASE_CONFIG.
+CONFIG["OSCAL_MODEL"] = _enabled_models[0]
+CONFIG["ROOT_PATH"] = MODEL_CONTRACTS[_enabled_models[0]]["ROOT_PATH"]
+_default_storage = MODEL_CONTRACTS[_enabled_models[0]].get("STORAGE_CONTRACT")
+if _default_storage and _default_storage.get("VERIFIED") is True:
+    for _key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
+        CONFIG[_key] = _default_storage[_key]
+
 SOURCE_PROFILES = (
     {
         "SOURCE_KEY": "source-one",
@@ -149,7 +168,7 @@ SOURCE_PROFILES = (
         "CONTENT_ID_COLUMN": "CONTENT_ID", "CURATED_JSON_COLUMN": "CURATED_JSON",
         "MAPPING_FILE": CONFIG["MAPPING_FILE"],
         "MAPPING_SOURCE_COLUMN": None,
-        "MODEL_KEYS": ("SSP", "ASSESSMENT_RESULTS"),
+        "MODEL_KEYS": _enabled_models,
         "SOURCE_ORDER_CANDIDATES": tuple(CONFIG["SOURCE_ORDER_CANDIDATES"]),
         "LOOKUP_CONTRACTS": {
             "software": {
@@ -164,7 +183,10 @@ SOURCE_PROFILES = (
         "BASE_CONFIG": dict(CONFIG),
     },
 )
+print("Cell 1 initialized")
+print("Selected OSCAL models:", list(_enabled_models))
+print("OSCAL version:", CONFIG["OSCAL_VERSION"])
+print("Writes enabled:", CONFIG["EXECUTE_WRITES"])
 print("Enabled source/model routes:", [
     (profile["SOURCE_KEY"], list(profile["MODEL_KEYS"])) for profile in SOURCE_PROFILES
 ])
-

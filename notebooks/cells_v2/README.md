@@ -12,10 +12,20 @@ Seven separate, copy-ready Python files for the published shared mapper. This V2
 6. [Cell 6 — Validation and guarded persistence](06_validation_and_guarded_loader.py)
 7. [Cell 7 — Orchestration](07_mapper_orchestrator.py)
 
+## One model selector
+
+In Cell One, edit only `SELECTED_MODELS`. Use `"SSP"` for SSP only,
+`"ASSESSMENT_RESULTS"` for AR graph preview, or `("SSP", "ASSESSMENT_RESULTS")`
+for both. Internal model keys and legacy configuration are derived automatically.
+Unknown models are rejected; AR does not borrow SSP destination tables.
+
+This selector cleanup does not complete the remaining field-rule migration into
+metadata. Accepted mapping scope, deferred rows and write safeguards are unchanged.
+
 ## Usage and current scope
 
 Keep the seven-cell order in the same Snowflake notebook session; these are not seven standalone scripts. Keep normal `EXECUTE_WRITES` disabled and `OSCAL_LOAD_MODE` set to `PREVIEW`. Reorganizing the files does not itself require a new notebook run.
 
 The published shared implementation covers Source One SSP and the 17 accepted Assessment Results mappings. AR database persistence remains unverified and requires an explicit verified target contract. Do not treat this folder as approval to write or reload data.
 
-See [shared workflow, scope and preview instructions](../../docs/SHARED_SEVEN_CELL_MAPPER.md) and [current project status](../../docs/CURRENT_STATUS.md). The original [split cells](../cells/README.md) and [combined notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py) remain unchanged. Future code updates must keep these copies synchronized.
+See [shared workflow, scope and preview instructions](../../docs/SHARED_SEVEN_CELL_MAPPER.md) and [current project status](../../docs/CURRENT_STATUS.md). The original [split cells](../cells/README.md) and [combined notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py) are synchronized with these pages. Future code updates must keep these copies synchronized.

@@ -4,17 +4,29 @@ Last reconciled: **2026-09-11**. Purpose: durable context requested by the owner
 
 ## Resume here
 
+**Latest owner direction: simplify, not add another mapper.** The governing
+design is one model selector, Excel-driven mappings, registry-driven structure,
+and reusable transformations. Cell One now derives internal routes and legacy
+configuration from `SELECTED_MODELS`; V2 and the combined notebook must match.
+This is selection cleanup, not completion of all-model metadata-driven dispatch.
+Field-specific SSP rules and the AR17 acceptance gates are deliberately retained.
+Next implementation work is a reviewed mapping-contract/transform migration with
+parity, not implicit expansion to candidate or deferred rows. No database run or
+reload is required merely for this selector change. See the architecture context.
+
 **The full SSP DEV reload is accepted. Do not rerun it.** The owner approved
 restoring the shared multi-source/multi-model architecture within the existing
 seven cells, with writes disabled. Source One is configured for SSP and the
 17 accepted AR fields. Cell Five is a shared registry traversal; approved
 model rules live in Cell Four policies. Cell Six uses explicit storage contracts.
 
-**Next: use [the shared seven-cell guide](SHARED_SEVEN_CELL_MAPPER.md).**
-Replace all seven matching sections and run PREVIEW once after publication.
-This supersedes the earlier instruction to replace only Cells Six and Seven.
+**Next work: migrate reviewed mapping rules into metadata under parity checks.**
+The [shared seven-cell guide](SHARED_SEVEN_CELL_MAPPER.md) retains the preview
+procedure for a separately requested live check; no run is requested merely
+for the selector refinement. Do not mix old and new seven-cell revisions.
 Shared live runtime acceptance and AR persistence remain pending.
-All 473 local repository tests pass, including 65 focused multi-model checks.
+All 485 local repository tests pass, including 65 focused multi-model checks
+and 12 selector checks. This is local evidence, not a Snowflake run.
 
 AR target names/types are not verified; its preview validates only the graph
 and blocks COMMIT. The other six sources and other models are not enabled by

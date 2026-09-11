@@ -4,15 +4,27 @@ Last reconciled: 2026-09-11
 
 ## Current action - approved shared seven-cell consolidation
 
+**Latest refinement:** the owner reaffirmed one selector, Excel-driven mappings,
+registry-driven structure and reusable transformations. Cell One now uses
+`SELECTED_MODELS`; internal model routes and compatibility configuration are
+derived, and AR-only cannot inherit SSP targets. All seven original/V2 pages
+and the combined notebook must stay synchronized. This selection-only cleanup
+does not complete the migration of field-specific Python rules into governed
+metadata; AR17 approval gates and all accepted/deferred statuses remain intact.
+Next work is the governed mapping-contract/transform migration under parity.
+No Snowflake rerun is requested for this refinement; the shared live acceptance
+boundary below remains pending.
+
 The owner approved one source feeding multiple OSCAL models through the same
 seven cells, with database writes disabled. Source One now routes SSP and the
 17 accepted Assessment Results fields through one graph builder and one
 contract-driven writer. No separate execution cell was added.
 
-**Next action:** follow [the shared workflow guide](SHARED_SEVEN_CELL_MAPPER.md):
-replace all seven existing Python cells with the matching published sections
-and run once in PREVIEW. Do not mix this revision with old Cells 1-7. Local
-regression verification passed all 473 tests; no shared-workflow Snowflake result or
+**Next implementation action:** consolidate reviewed mapping contracts and
+reusable transform dispatch without changing accepted outputs. The
+[shared workflow guide](SHARED_SEVEN_CELL_MAPPER.md) retains the live PREVIEW
+procedure; this selector-only refinement does not request another run. Local
+regression verification passed all 485 tests; no shared-workflow Snowflake result or
 AR database load is accepted yet. Do not run COMMIT or the old DEV reload.
 
 SSP uses its verified physical destination contract. AR has no verified target

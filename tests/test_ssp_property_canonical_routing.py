@@ -90,14 +90,25 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
     def canonicalize(self, mappings, registry_frame=None):
         artifact = pd.DataFrame(mappings)
         original = artifact.copy(deep=True)
-        # Execute only configuration assignments; no Snowflake imports/session.
+        # Execute pure configuration, including derived selector state;
+        # exclude Snowflake imports/session acquisition, not its dependencies.
         config_ns = {"datetime": datetime}
         tree = ast.parse((CELLS / "01_initialization_and_configuration.py").read_text(encoding="utf-8"))
-        wanted = {"CONFIG", "AR_ACCEPTED_FIELDS", "_SSP_STORAGE_CONTRACT", "MODEL_CONTRACTS", "SOURCE_PROFILES"}
-        assignments = [node for node in tree.body if isinstance(node, ast.Assign)
-                       and any(isinstance(t, ast.Name) and t.id in wanted for t in node.targets)]
-        exec(compile(ast.Module(body=assignments, type_ignores=[]), "<test-config>", "exec"), config_ns)
-        profiles = [dict(config_ns["SOURCE_PROFILES"][0], MODEL_KEYS=("SSP",))]
+        configuration = []
+        for node in tree.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                continue
+            if isinstance(node, ast.Assign):
+                names = {target.id for target in node.targets if isinstance(target, ast.Name)}
+                if "session" in names:
+                    continue
+                if "SELECTED_MODELS" in names:
+                    node.value = ast.Constant(value="SSP")
+            configuration.append(node)
+        module = ast.fix_missing_locations(ast.Module(body=configuration, type_ignores=[]))
+        with contextlib.redirect_stdout(io.StringIO()):
+            exec(compile(module, "<test-config>", "exec"), config_ns)
+        profiles = config_ns["SOURCE_PROFILES"]
         with contextlib.redirect_stdout(io.StringIO()):
             result = runpy.run_path(str(CELLS / "03_canonical_mapping_contract.py"),
                 init_globals={

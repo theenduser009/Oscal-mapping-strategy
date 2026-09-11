@@ -1,10 +1,30 @@
 # Shared seven-cell mapper: Source One → SSP and Assessment Results
 
-Status: implemented; all 473 repository tests pass, including 65 focused multi-model checks. Split/combined notebook synchronization and whitespace checks pass. No shared-workflow Snowflake run or AR database load is accepted yet.
+Status: shared workflow and single-selector refinement implemented; all 485 repository tests pass, including 65 focused multi-model checks and 12 selector checks. Original/V2/combined notebook synchronization and whitespace checks pass. No shared-workflow Snowflake run or AR database load is accepted yet. Full field-rule migration into metadata remains pending.
 
 This is the owner-approved consolidation, not a new mapping batch. The seven existing cells now route Source One through a common graph builder and guarded persistence API. The accepted SSP mappings and 17 accepted AR fields are the parity baseline. The blocked 34-field AR candidate is not enabled.
 
 ## One run, two configured model routes
+
+### One model selector
+
+Cell One's `SELECTED_MODELS` is the only editable model selector:
+
+```python
+SELECTED_MODELS = "SSP"                         # SSP only
+# SELECTED_MODELS = "ASSESSMENT_RESULTS"       # AR graph preview only
+# SELECTED_MODELS = ("SSP", "ASSESSMENT_RESULTS")  # both (shipped default)
+```
+
+Use one assignment, not all three. `SOURCE_PROFILES` model keys and the legacy
+`CONFIG["OSCAL_MODEL"]` are derived automatically. Unknown, empty or duplicate
+model selections fail before source reads. The first selected model supplies
+compatibility outputs; AR-first selection does not borrow SSP target tables.
+The [V2 cell pages](../notebooks/cells_v2/README.md) mirror the same implementation.
+
+This simplifies selection only. Existing field-specific policies and accepted
+AR17 gates remain; fully metadata-driven rule dispatch is still pending. No
+new model, mapping approval or live persistence acceptance is implied.
 
 | Cell | Responsibility |
 | --- | --- |
@@ -22,7 +42,11 @@ A source profile can supply explicit `MODEL_STORAGE_CONTRACTS` overrides per mod
 
 Source snapshots use Snowpark [cache_result](https://docs.snowflake.com/en/developer-guide/snowpark/reference/python/1.35.0/snowpark/api/snowflake.snowpark.DataFrame.cache_result). These are temporary session tables, not writes to RAW data or OSCAL DIM/FACT. Keep the same session open; the input dictionaries retain the cache handles. Snapshots of different tables are captured separately, not as a cross-table transaction. Finish upstream ingestion before the notebook run.
 
-## Next authorized run: preview only
+## Live preview procedure - when requested
+
+No new Snowflake run is requested merely for the single-selector refinement.
+When validating the shared workflow, use this preview procedure; it is not
+authorization for COMMIT.
 
 1. Replace the existing seven Python cells with the corresponding seven sections of [the complete notebook](../notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py). This revision changes the interfaces across all seven, so do not mix old and new cells.
 2. Keep Cell 1 `CONFIG["EXECUTE_WRITES"] = False` and Cell 7 `OSCAL_LOAD_MODE = "PREVIEW"`.

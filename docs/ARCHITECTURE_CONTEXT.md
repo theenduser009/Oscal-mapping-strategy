@@ -6,6 +6,25 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 
 ## Approved consolidation - September 11
 
+### Cleaner design reaffirmed - September 11
+
+The owner reaffirmed one model selector, Excel-driven field mappings,
+registry-driven hierarchy/identity and reusable transformations. The shared
+seven-cell engine remains; do not create a new mapper for each model.
+
+Cell One now exposes only `SELECTED_MODELS` for model selection. Internal
+`MODEL_KEYS` and compatibility `CONFIG["OSCAL_MODEL"]` are derived from it.
+Destinations belong to each model's storage contract, not a second global
+selector. AR-only selection must not retain SSP destination columns.
+
+This selector cleanup is **not full metadata-driven rule migration**. Existing
+field-specific SSP dispatch and the AR17 release gates remain. Next, consolidate
+the already-approved rules into one versioned mapping contract, with explicit
+transform identifiers/parameters and approval status, then migrate shared
+dispatch under output-parity checks. Do not infer approval from blank or
+"In Progress" statuses, and do not enable rejected/deferred AR rows by deleting
+allowlists. Moving constants to another file alone is not a generic mapper.
+
 Keep the seven-cell interface. Sources have explicit table/mapping bindings;
 models have explicit policy and storage contracts. One source may feed several
 models; do not union sources or deduplicate their record IDs across tables.
@@ -143,4 +162,3 @@ Coverage must be measurable at field level:
 - Populated record count and population percentage
 
 Approved status values should distinguish completed work, in-progress work, more information required, no source data, and not applicable.
-
