@@ -4,6 +4,21 @@
 
 Build one generic, metadata-driven mapper that can be configured for SSP, POA&M, Assessment Results, Assessment Plan, and Component Definition. Do not create a separate growing notebook for each OSCAL model.
 
+## Approved consolidation - September 11
+
+Keep the seven-cell interface. Sources have explicit table/mapping bindings;
+models have explicit policy and storage contracts. One source may feed several
+models; do not union sources or deduplicate their record IDs across tables.
+Cells Five and Six contain shared graph/write mechanics, not separate SSP and
+AR execution pipelines. Cell Four holds reviewed specialized behaviors.
+Metadata cannot invent an unknown transform or unspecified collection identity.
+
+Source One SSP and accepted AR17 are the configured parity baseline.
+Other sources/models and blocked AR rows are not implicitly supported.
+A targetless model can produce a clearly labelled logical preview, never a
+write to another model's tables. Global CONFIG stays unchanged by per-route runs.
+See [shared workflow scope and run instructions](SHARED_SEVEN_CELL_MAPPER.md).
+
 ## Pinned conformance target
 
 - The repository target is NIST OSCAL SSP 1.2.3.
@@ -113,7 +128,7 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 
 ## Known limitation
 
-Nested collection-to-collection paths require explicit parent-instance context. The consolidated graph builder fails closed when multiple possible parent instances exist and no unique parent-instance key is available. This protects SSP data and makes the remaining POA&M and Assessment Results enhancement explicit.
+Nested collection-to-collection paths require explicit parent-instance context. The consolidated graph builder fails closed when multiple possible parent instances exist and no unique parent-instance key is available. This protects all model routes. The accepted AR results/observations hierarchy now supplies explicit parent-instance context; additional AR paths and POA&M remain unimplemented until their contracts are approved.
 
 ## Sprint completion evidence
 

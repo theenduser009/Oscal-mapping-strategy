@@ -21,6 +21,37 @@ METADATA_PATH = "system-security-plan.metadata"
 OTHER_PATH = "system-security-plan.system-characteristics"
 
 
+
+def _run_graph_cells(path, init_globals=None):
+    """Run dependent notebook cells in the same namespace, as Snowflake does."""
+    import datetime
+    import hashlib
+    import json
+    import re
+    import uuid
+
+    cell_4_path = Path(path).with_name("04_parsing_transform_payload_helpers.py")
+    namespace = {
+        "datetime": datetime, "hashlib": hashlib, "json": json,
+        "re": re, "uuid": uuid, "ARCHER_VALUE_LOOKUP": {},
+        "FIPS_199_VALUE_LOOKUP": {}, "MAPPINGS_BY_ELEMENT_PATH": {},
+    }
+    supplied = dict(init_globals or {})
+    namespace.update(supplied)
+    exec(compile(cell_4_path.read_text(encoding="utf-8"),
+                 str(cell_4_path), "exec"), namespace)
+    for name, value in supplied.items():
+        code = getattr(value, "__code__", None)
+        # Keep freshly defined production helpers attached to this namespace.
+        # Intentional test doubles still override their production counterparts.
+        if code is not None and Path(code.co_filename) == cell_4_path:
+            continue
+        namespace[name] = value
+    exec(compile(Path(path).read_text(encoding="utf-8"), str(path), "exec"),
+         namespace)
+    return namespace
+
+
 def _metadata_config(**overrides):
     config = {
         "OSCAL_VERSION": "1.2.3",
@@ -33,7 +64,7 @@ def _metadata_config(**overrides):
 def _load_helper(config):
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
-        namespace = runpy.run_path(
+        namespace = _run_graph_cells(
             str(CELL_5_PATH),
             init_globals={"CONFIG": config},
         )

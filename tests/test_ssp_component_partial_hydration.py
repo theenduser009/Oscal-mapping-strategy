@@ -122,6 +122,61 @@ def _literal_assignment(path, assignment_name):
     return ast.literal_eval(assignment.value)
 
 
+
+def _source_one_hydration_contract():
+    tree = ast.parse(CELL_1_PATH.read_text(encoding="utf-8"))
+    profiles = next(
+        node.value for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "SOURCE_PROFILES"
+                for target in node.targets)
+    )
+    for profile in profiles.elts:
+        fields = {ast.literal_eval(key): value
+                  for key, value in zip(profile.keys, profile.values)}
+        if ast.literal_eval(fields["SOURCE_KEY"]) == "source-one":
+            return ast.literal_eval(fields["LOOKUP_CONTRACTS"])
+    raise AssertionError("Source One hydration contract is missing")
+
+
+def _database_write_attributes(source):
+    """Do not confuse explicitly scoped report/config dict updates with DML."""
+    writes = {"delete", "insert_into", "merge", "save_as_table",
+              "truncate", "update", "write"}
+    memory_updates = {
+        ("_score_prepare", "report"),
+        ("_score_finish", "report"),
+        ("_ssp_finish", "context['graph_report']"),
+        ("_prepare_model_context", "config"),
+    }
+
+    class Calls(ast.NodeVisitor):
+        def __init__(self):
+            self.scope = None
+            self.found = set()
+
+        def visit_FunctionDef(self, node):
+            previous = self.scope
+            self.scope = node.name
+            self.generic_visit(node)
+            self.scope = previous
+
+        def visit_Call(self, node):
+            if isinstance(node.func, ast.Attribute):
+                attribute = node.func.attr.lower()
+                memory_update = (
+                    attribute == "update"
+                    and (self.scope, ast.unparse(node.func.value)) in memory_updates
+                )
+                if attribute in writes and not memory_update:
+                    self.found.add(attribute)
+            self.generic_visit(node)
+
+    calls = Calls()
+    calls.visit(ast.parse(source))
+    return calls.found
+
+
 def _component_mapping_row(source_field, component_type):
     return {
         "SOURCE_FIELD_NAME": source_field,
@@ -499,11 +554,17 @@ class ComponentPartialHydrationTests(unittest.TestCase):
 class ComponentPartialHydrationRepositoryTests(unittest.TestCase):
     def test_cell_2_and_cell_4_share_the_same_source_field_contract(self):
         self.assertEqual(
-            _literal_assignment(
-                CELL_2_PATH,
-                "COMPONENT_HYDRATION_SOURCE_CONTRACT",
-            ),
+            _source_one_hydration_contract(),
             EXPECTED_HYDRATION_CONTRACT,
+        )
+
+        self.assertEqual(
+            _literal_assignment(CELL_4_PATH, "COMPONENT_HYDRATION_CONTRACT"),
+            EXPECTED_HYDRATION_CONTRACT,
+        )
+        self.assertIn(
+            'SOURCE_PROFILES[0].get("LOOKUP_CONTRACTS", {})',
+            CELL_2_PATH.read_text(encoding="utf-8"),
         )
 
     def test_normalized_physical_column_ambiguity_fails_closed(self):
@@ -574,25 +635,25 @@ class ComponentPartialHydrationRepositoryTests(unittest.TestCase):
         for path in (CELL_1_PATH, CELL_2_PATH, CELL_4_PATH, CELL_5_PATH):
             with self.subTest(cell=path.name):
                 source = path.read_text(encoding="utf-8")
-                tree = ast.parse(source)
-                called_attributes = {
-                    node.func.attr.lower()
-                    for node in ast.walk(tree)
-                    if isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                }
-                self.assertFalse(
-                    called_attributes
-                    & {
-                        "delete",
-                        "insert_into",
-                        "merge",
-                        "save_as_table",
-                        "truncate",
-                        "update",
-                        "write",
-                    }
-                )
+                self.assertFalse(_database_write_attributes(source))
+
+    def test_write_detector_keeps_database_updates_blocked(self):
+        self.assertEqual(
+            _database_write_attributes("def write_rows(table):\n    table.update({})\n"),
+            {"update"},
+        )
+        self.assertEqual(
+            _database_write_attributes("def _score_finish(table):\n    table.update({})\n"),
+            {"update"},
+        )
+        self.assertEqual(
+            _database_write_attributes("def unrelated(report):\n    report.update({})\n"),
+            {"update"},
+        )
+        self.assertEqual(
+            _database_write_attributes("def _score_finish(report):\n    report.update({})\n"),
+            set(),
+        )
 
     def test_unapproved_alternate_fields_are_not_in_production_cells(self):
         production_source = "\n".join(
@@ -629,10 +690,17 @@ class ComponentPartialHydrationRepositoryTests(unittest.TestCase):
         self.assertIn("COMPONENT_HYDRATION_SOURCE_DFS", cell_2_source)
         self.assertIn("_build_component_hydration_lookups", cell_4_source)
 
-        hydration_source_block = cell_2_source.split(
-            "COMPONENT_HYDRATION_SOURCE_DFS = {}",
-            1,
-        )[1].split("mapping_artifact_pdf =", 1)[0]
+        loader = next(
+            node for node in ast.parse(cell_2_source).body
+            if isinstance(node, ast.FunctionDef) and node.name == "load_source_lookups"
+        )
+        hydration_loop = next(
+            node for node in ast.walk(loader)
+            if isinstance(node, ast.For)
+            and isinstance(node.target, ast.Tuple)
+            and [item.id for item in node.target.elts] == ["kind", "contract"]
+        )
+        hydration_source_block = ast.get_source_segment(cell_2_source, hydration_loop)
         self.assertNotIn(".collect(", hydration_source_block)
         self.assertNotIn(".count(", hydration_source_block)
 

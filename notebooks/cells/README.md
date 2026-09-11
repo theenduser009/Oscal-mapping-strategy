@@ -8,20 +8,19 @@ The files depend on state initialized by the preceding cells. Do not maintain a
 separate implementation here; future mapper corrections must update the
 complete notebook and the affected split cell together.
 
-## Current SSP daily-loader revision
+## Current shared-workflow revision
 
-The full SSP DEV reload is accepted. **Do not rerun that separate Cell 8 or any
-old pilot.** Update the existing [Cell 6](06_validation_and_guarded_loader.py)
-and [Cell 7](07_mapper_orchestrator.py), not a new standalone cell.
+Replace all seven matching sections for this revision; do not mix old and new
+interfaces. Cell Seven uses `OSCAL_LOAD_MODE = "PREVIEW"`. Global
+`CONFIG["EXECUTE_WRITES"]` remains false.
 
-Cell 7 defaults to `SSP_LOAD_MODE = "PREVIEW"`; keep Cell 1's shared
-`CONFIG["EXECUTE_WRITES"] = False`. It refuses a stale Cell 6 implementation.
-The current revision needs live preview/commit acceptance; local tests do not
-prove live writes. [Exact daily policy and run steps](../../docs/SSP_DAILY_LOADING.md).
+Source One routes to SSP and the accepted 17 AR fields. AR has no verified
+storage contract, so it receives graph-only validation and cannot be committed.
+[Exact scope, pending work and expected report](../../docs/SHARED_SEVEN_CELL_MAPPER.md).
 
-For the active session, run updated Cell 6 then Cell 7 in PREVIEW. If inputs from
-Cells 1-5 are no longer available, rebuild those unchanged cells first.
-Do not execute the historical diagnostic sequence below as part of this revision.
+No additional execution cell. Do not rerun the accepted full reload, old pilots,
+or expanded standalone AR candidate. Historical diagnostic instructions below
+are not part of this consolidated workflow.
 
 ## Run order
 

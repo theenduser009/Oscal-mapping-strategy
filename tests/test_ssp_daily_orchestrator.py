@@ -22,7 +22,7 @@ class DailyOrchestrator(unittest.TestCase):
         self.ns = functions()
         self.config = {"EXECUTE_WRITES": False, "OSCAL_MODEL": "SSP", "RUN_ID": "test-run",
                        "SOURCE_SYSTEM_NAME": "ARCHER", "SOURCE_TABLE_NAME": "SOURCE",
-                       "BUILD_COVERAGE_REPORT": True}
+                       "BUILD_COVERAGE_REPORT": True, "STORAGE_CONTRACT": {"VERIFIED": True}}
         self.events = []
         self.ns["CANONICAL_MAPPING_ROWS"] = []
         self.ns["build_oscal_graph"] = self.graph
@@ -43,7 +43,7 @@ class DailyOrchestrator(unittest.TestCase):
         self.used_config = kwargs["config"]
         return {"nodes": 4, "edges": 3, "writes_executed": kwargs["config"]["EXECUTE_WRITES"]}
 
-    loader._oscal_loader_release = "ssp-daily-upsert-v1"
+    loader._oscal_loader_release = "oscal-shared-daily-upsert-v2"
 
     def run_mapper(self, mode="PREVIEW"):
         with redirect_stdout(io.StringIO()):
@@ -77,6 +77,7 @@ class DailyOrchestrator(unittest.TestCase):
 
     def test_ar_commit_fails_before_graph(self):
         self.config["OSCAL_MODEL"] = "ASSESSMENT_RESULTS"
+        self.config["STORAGE_CONTRACT"] = None
         with self.assertRaises(ValueError):
             self.run_mapper("COMMIT")
         self.assertEqual(self.events, [])
@@ -94,7 +95,7 @@ class DailyOrchestrator(unittest.TestCase):
     def test_loader_failure_does_not_change_config(self):
         def fail(**kwargs):
             raise ValueError("failed write")
-        fail._oscal_loader_release = "ssp-daily-upsert-v1"
+        fail._oscal_loader_release = "oscal-shared-daily-upsert-v2"
         self.ns["validate_and_load_oscal"] = fail
         with self.assertRaises(ValueError):
             self.run_mapper("COMMIT")
@@ -117,11 +118,20 @@ class DailyOrchestrator(unittest.TestCase):
               "canonical_mapping_df": object(),
               "element_registry_df": object(), "run_result": {"writes_executed": True},
               "final_nodes_df": "old", "final_edges_df": "old", "mapping_coverage_df": "old"}
+        ns["SOURCE_INPUTS"] = {"source": {"source_df": ns["source_df"], "lookups": {}}}
+        ns["MAPPING_CONTEXTS"] = [{
+            "source_key": "source", "config": self.config,
+            "mapping_rows": [{"SOURCE_FIELD_NAME": "SYNTHETIC_FIELD"}],
+            "routing_report": {"STATUS": "READY"},
+        }]
+        ns["SOURCE_PROFILES"] = [{"SOURCE_KEY": "source"}]
         with redirect_stdout(io.StringIO()), self.assertRaises(ValueError):
             exec(compile(CELL.read_text(encoding="utf-8"), str(CELL), "exec"), ns)
         for key in ("run_result", "final_nodes_df", "final_edges_df", "mapping_coverage_df"):
             self.assertIsNone(ns[key])
-        self.assertEqual(ns["SSP_LOAD_MODE"], "PREVIEW")
+        self.assertEqual(ns["OSCAL_LOAD_MODE"], "PREVIEW")
+        self.assertIsNone(ns["MODEL_GRAPHS"])
+        self.assertEqual("PIPELINE_FAILED_NO_TARGET_DML", ns["PIPELINE_REPORT"]["status"])
         self.assertFalse(self.config["EXECUTE_WRITES"])
 
     def test_old_loader_cannot_be_enabled_by_new_runner(self):

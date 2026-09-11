@@ -4,24 +4,35 @@ Last reconciled: **2026-09-11**. Purpose: durable context requested by the owner
 
 ## Resume here
 
-**The full SSP DEV reload is accepted. Do not rerun it.** The owner chose to fix the **existing daily loading path in Cells 6-7**, without another standalone SSP cell. That revision is now implemented and locally verified: 407 repository tests passed, including 28 focused checks. **Next: replace/run updated Cells 6 then 7 in PREVIEW and share the aggregate load report.** Live daily-path acceptance remains pending. [Run instructions](SSP_DAILY_LOADING.md).
+**The full SSP DEV reload is accepted. Do not rerun it.** The owner approved
+restoring the shared multi-source/multi-model architecture within the existing
+seven cells, with writes disabled. Source One is configured for SSP and the
+17 accepted AR fields. Cell Five is a shared registry traversal; approved
+model rules live in Cell Four policies. Cell Six uses explicit storage contracts.
 
-The current revision changes Cells 6 and 7 and synchronizes the combined notebook. It does not change mapping rules, Cells 1-5, registry, AR, source tables, or persisted SSP data. No live Snowflake run or scheduler was executed by the code update.
+**Next: use [the shared seven-cell guide](SHARED_SEVEN_CELL_MAPPER.md).**
+Replace all seven matching sections and run PREVIEW once after publication.
+This supersedes the earlier instruction to replace only Cells Six and Seven.
+Shared live runtime acceptance and AR persistence remain pending.
+All 473 local repository tests pass, including 65 focused multi-model checks.
 
-The old-versus-new SSP row-count difference remains a separate unresolved audit. AR has 17 accepted in-memory mappings, but no accepted database load. Keep those distinctions when reporting progress.
+AR target names/types are not verified; its preview validates only the graph
+and blocks COMMIT. The other six sources and other models are not enabled by
+assumption. No database write, reload, registry change or Matillion execution
+is performed by this code update. The old SSP row reduction remains unresolved.
 
 ## The pipeline and every cell's responsibility
 
 | Step | Existing file / component | What it does |
 | --- | --- | --- |
 | Upstream Matillion | [Null-preserving UPDATE](../sql/matillion/CANDIDATE_raw_curated_preserve_null_keys.sql) | Converts raw field IDs to field names and writes CURATED_JSON on the Archer RAW table. Retains named nulls. Not part of notebook Cells 1-7. |
-| Cell 1 | [Configuration](../notebooks/cells/01_initialization_and_configuration.py) | Snowpark/configuration, source/registry/target settings, model and identity policy. Baseline EXECUTE_WRITES is false and initialization rejects true. |
-| Cell 2 | [Inputs](../notebooks/cells/02_source_mapping_registry_inputs.py) | Reads CONTENT_ID and existing CURATED_JSON from the configured source, mapping artifact, live registry and approved lookups. Resolves duplicate source IDs by the configured technical ordering, not arbitrary deduplication. |
-| Cell 3 | [Mapping contract](../notebooks/cells/03_canonical_mapping_contract.py) | Normalizes and routes the approved mappings and registry ownership. |
-| Cell 4 | [Helpers](../notebooks/cells/04_parsing_transform_payload_helpers.py) | Parses values, applies approved transforms, constructs payloads and deterministic identity. |
-| Cell 5 | [Graph builder](../notebooks/cells/05_registry_graph_builder.py) | Builds model-specific nodes and parent-child edges for selected source records using the registry. Does not invent populated collections. |
-| Cell 6 | [Validation and guarded loader](../notebooks/cells/06_validation_and_guarded_loader.py) | Defines validate_and_load_oscal and verify_oscal_load. The updated writer performs physical projection, conditional insert/update, frozen preflight, atomic writes and exact readback. No deletion/truncation; live daily acceptance pending. |
-| Cell 7 | [Orchestrator](../notebooks/cells/07_mapper_orchestrator.py) | Checks source identities and matching Cell 6 release, builds the graph and coverage before loading, and exposes explicit PREVIEW/COMMIT mode through a per-run config copy. Produces final_nodes_df, final_edges_df and run_result. |
+| Cell 1 | [Configuration](../notebooks/cells/01_initialization_and_configuration.py) | Explicit source profiles, enabled model routes, mapping bindings, policies and verified storage contracts. Baseline EXECUTE_WRITES is false and initialization rejects true. |
+| Cell 2 | [Inputs](../notebooks/cells/02_source_mapping_registry_inputs.py) | Reads source-local CONTENT_ID and CURATED_JSON snapshots, each bound mapping artifact, registry and approved lookups; model routes reuse the same source snapshot. Resolves duplicate source IDs by the configured technical ordering, not arbitrary deduplication. |
+| Cell 3 | [Mapping contract](../notebooks/cells/03_canonical_mapping_contract.py) | Compiles isolated source/model contexts, preserving paths/Notes and reporting selected, excluded, deferred and blocked rows. |
+| Cell 4 | [Helpers](../notebooks/cells/04_parsing_transform_payload_helpers.py) | Shared parsing, transformations, identity and approved model-specific payload/registry policies. |
+| Cell 5 | [Graph builder](../notebooks/cells/05_registry_graph_builder.py) | One generic graph loop builds nodes/edges for each explicit source/model context using the registry. Does not invent populated collections. |
+| Cell 6 | [Validation and guarded loader](../notebooks/cells/06_validation_and_guarded_loader.py) | Shared validate_and_load_oscal and verify_oscal_load use an immutable verified storage contract; targetless AR gets logical graph validation only. Conditional upserts, transaction/readback and obsolete-row blocking remain. |
+| Cell 7 | [Orchestrator](../notebooks/cells/07_mapper_orchestrator.py) | Preflights all source/model routes, builds each through the shared engine and emits OSCAL_PIPELINE_REPORT. MODEL_GRAPHS retains scoped graphs; compatibility outputs refer only to the configured default route. |
 | Owner's current Cell 8 | [Separate full DEV reload](../notebooks/persistence/RELOAD_ALL_SSP_DEV.py) | Replaces both entire SSP DEV target tables from the accepted graph. This was the accepted one-time full reload, not the finished daily loader. |
 
 The consolidated seven-cell source is [NB_ARCHER_OSCAL_MAPPER_V1.py](../notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py); keep it synchronized with split cells when code changes. Separate AR, assembly, diagnostic and persistence cells are identified by filename, not a fixed notebook number.
@@ -72,6 +83,78 @@ The owner needs a repeatable daily process, not a fresh one-off cell for each ru
 No extra execution cell was added. See [the daily-loader guide](SSP_DAILY_LOADING.md). Keep concurrent target writers paused for an approved commit; snapshot comparisons do not establish an exclusive lock.
 
 Idempotent means the same source and mapping rules yield the same business data and deterministic keys without duplicates. Audit run IDs/timestamps may have a separate policy. A complete validated full refresh can also be idempotent; daily truncation is not required. The accepted DEV full-reload cell uses snapshot-specific acceptance checks and is not a ready-to-schedule daily job.
+
+## SSP field mapping scope and parked work
+
+The register records **43 distinct Archer fields / 44 implemented source-to-target mappings**: 11 metadata, 27 system-characteristics, 6 component-reference routes. This is an implementation count, not 44 individually complete/schema-valid mappings or all workbook rows.
+
+- Metadata and all six approved component-reference routes have accepted mapped-scope evidence.
+- System-characteristics work is implemented with exceptions. PTA helper is still skipped despite Notes describing a custom property; its rule requires reconciliation. Do not confuse it with the package-type helper, which stays excluded as transient.
+- Package type's current property name differs from the Notes example; naming correction is parked.
+- Recommended security category has an “All Nulls” rule and no approved populated-value conversion. Other security-category row questions remain in the register.
+- Control Implementation is parked: its proposed property placement/rule has not been approved as a standard-conforming mapping. Do not invent a custom extension or redirect its path.
+- The six approved System Implementation rows stop at components[]. A separate component status mapping is not evidenced by those Excel rows.
+- Missing source descriptions, unproved hardware hydration and incomplete/absent CIA data remain explicit gaps. Generated support nodes do not add completed Excel rows.
+
+See [SSP done and next](SSP_DONE_AND_NEXT.md), [mapping register](MAPPING_PROGRESS.md) and [pinned conformance contract](OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md). SSP model conformance is pinned to 1.2.3; mapped-scope DEV persistence is not certification of a full schema-valid SSP.
+
+## AR and other models
+
+There are **45 AR row occurrences / 44 distinct Archer fields** in the posted transcription, not the complete original workbook:
+
+- 17 runtime-accepted in memory.
+- 15 additional implemented candidate-only rows.
+- 2 parked rejected fields: Risk Acceptance (one reference-shaped object), Risk Assessment Report (99 multi-number lists). Their meaning/conversion must not be guessed.
+- 7 workflow audit properties deferred by the owner.
+- 2 duplicate Average Security Compliance Score occurrences deferred.
+- 2 under review: Total Package Inherent Risk and Findings reference/UUID association.
+
+The accepted pattern is one observation per populated source field, with a named inline property. The required root/result/observation registry entries were checked; inline properties did not require extra registry nodes. The published expanded AR cell remains a blocked candidate, not a safe replacement for the accepted 17-field write scope.
+
+No AR database load is accepted. Before AR persistence, confirm actual AR target schemas and reuse the shared writer for accepted mappings only; never repoint an SSP full-reload cell to AR. POA&M and other models have not been completed by this work.
+
+## Fixed identities and targets
+
+- Source: RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
+- Registry: RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+- DIM: RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+- FACT: RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY
+- Source identity: Archer CONTENT_ID; model SSP; version v1_registry_path_instance.
+- Physical PK/FK hashes: BINARY(16). Physical UUID columns: VARCHAR(32). DIM METADATA_JSON: VARIANT. Load timestamps: TIMESTAMP_TZ(9).
+
+Use current schema evidence before changes; these facts do not grant permissions. The registry owns hierarchy/identity and Excel owns approved field mapping. Neither registry population nor graph integrity alone proves every Excel row is complete.
+
+## Past failures and current recovery boundary
+
+Schema-type rejection, temporary staging failure, extra existing rows with nonmatching keys, and no eligible unstored record blocked earlier pilots. A permanent-backup privilege failure then blocked reconciliation. These were not successful writes and are not instructions to retry old cells.
+
+The owner authorized a one-record DEV replacement without permanent backup, then ten records, then the full DEV reload. Those runs now have accepted reports above. Prior approvals are scoped history, not standing permission to truncate tomorrow or change production. The full reload has no durable before-copy from this workflow after commit.
+
+For future uncertain commit/readback failures: inspect first; never auto-rerun. For source conversion, the Matillion correction only selects SQL-null CURATED_JSON rows; already-curated rows need a separately authorized repair.
+
+## How this memory stays current
+
+Project startup guidance is in [AGENTS.md](../AGENTS.md). Update this handoff, CURRENT_STATUS and affected field statuses after verified milestones and decisions, preserving linked historical evidence. State whether evidence is code review, local test, owner-reported output or live readback.
+
+This is durable project documentation, not a promise of unlimited conversational memory or an active Snowflake session. Work in this repository should read it before giving the next run instruction. The root instructions use the project mechanism documented in [official OpenAI documentation](https://learn.chatgpt.com/docs/agent-configuration/agents-md).## Daily loading - shared implementation, live acceptance pending
+
+The normal path is the seven-cell workflow, not the one-time full DEV reload.
+See [shared workflow](SHARED_SEVEN_CELL_MAPPER.md) and [SSP daily policy](SSP_DAILY_LOADING.md).
+
+Cell Seven defaults to OSCAL_LOAD_MODE=PREVIEW and global EXECUTE_WRITES remains
+false. Every selected route must have a verified storage contract before COMMIT.
+The current AR route does not, so the shipped two-model selection is preview-only.
+
+The writer inserts new keys, updates changed business values and leaves
+unchanged rows/audit values alone. PK/FK, UUID, payload, source scope and hierarchy
+checks remain. Each source/model has its own DIM/FACT transaction. All graphs
+are preflighted first, but commits across models are not one transaction.
+A later failure records already committed groups and must not automatically retry.
+
+Obsolete in-scope keys block writes; absent source records are preserved.
+No DELETE, TRUNCATE, permanent backup or assumed deletion policy. Live shared
+preview/commit acceptance, daily scheduling and production review remain pending.
+An unchanged live run alone would not prove a changed-row write.
 
 ## SSP field mapping scope and parked work
 

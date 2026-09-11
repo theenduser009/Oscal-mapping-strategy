@@ -51,6 +51,37 @@ TBD_FIELDS = (
 )
 
 
+
+def _run_graph_cells(path, init_globals=None):
+    """Run dependent notebook cells in the same namespace, as Snowflake does."""
+    import datetime
+    import hashlib
+    import json
+    import re
+    import uuid
+
+    cell_4_path = Path(path).with_name("04_parsing_transform_payload_helpers.py")
+    namespace = {
+        "datetime": datetime, "hashlib": hashlib, "json": json,
+        "re": re, "uuid": uuid, "ARCHER_VALUE_LOOKUP": {},
+        "FIPS_199_VALUE_LOOKUP": {}, "MAPPINGS_BY_ELEMENT_PATH": {},
+    }
+    supplied = dict(init_globals or {})
+    namespace.update(supplied)
+    exec(compile(cell_4_path.read_text(encoding="utf-8"),
+                 str(cell_4_path), "exec"), namespace)
+    for name, value in supplied.items():
+        code = getattr(value, "__code__", None)
+        # Keep freshly defined production helpers attached to this namespace.
+        # Intentional test doubles still override their production counterparts.
+        if code is not None and Path(code.co_filename) == cell_4_path:
+            continue
+        namespace[name] = value
+    exec(compile(Path(path).read_text(encoding="utf-8"), str(path), "exec"),
+         namespace)
+    return namespace
+
+
 def _responsible_party_rows(include_duplicate=False):
     rows = [
         {
@@ -137,7 +168,7 @@ def _load_cell_5(mapping_rows=None, config=None):
         }
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
-        return runpy.run_path(
+        return _run_graph_cells(
             str(CELL_5_PATH),
             init_globals={
                 "CONFIG": config,
@@ -172,11 +203,12 @@ def _load_cell_5_for_graph(cell_4, mapping_rows=None, build_override=None):
     }
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
-        return runpy.run_path(
+        return _run_graph_cells(
             str(CELL_5_PATH),
             init_globals={
                 "CONFIG": {
                     "IDENTITY_VERSION": "unit-test-v1",
+                    "SOURCE_SYSTEM_NAME": "unit-test-source",
                     "OSCAL_VERSION": "1.2.3",
                     "SSP_DOCUMENT_VERSION": "1.0",
                     "RUN_ID": "unit-test-run",

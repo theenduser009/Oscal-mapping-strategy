@@ -1,6 +1,8 @@
 # %% Cell 4 - Generic parsing, transformation, and payload helpers
 
 import datetime
+import math
+from decimal import Decimal
 
 SKIP_VALUE = object()
 
@@ -171,6 +173,18 @@ STATUS_STATE_CROSSWALK = {
 }
 
 
+def _context_config(context=None):
+    return context["config"] if context is not None else globals().get("CONFIG", {})
+
+
+def _context_mappings(context=None):
+    return context["mappings_by_path"] if context is not None else globals().get("MAPPINGS_BY_ELEMENT_PATH", {})
+
+
+def _context_lookup(name, legacy_name, context=None):
+    return context.get("lookups", {}).get(name, {}) if context is not None else globals().get(legacy_name, {})
+
+
 def _to_python(value):
     if hasattr(value, "as_dict"):
         return value.as_dict(recursive=True)
@@ -282,7 +296,8 @@ def _contains_archer_select_id_container(value):
     return False
 
 
-def resolve_archer_select_value(value):
+def resolve_archer_select_value(value, context=None):
+    value_lookup = _context_lookup("archer_values", "ARCHER_VALUE_LOOKUP", context)
     strict_select_ids = _contains_archer_select_id_container(value)
     extracted = _extract_reference_ids(value)
 
@@ -296,12 +311,12 @@ def resolve_archer_select_value(value):
             return item
         key = str(item).strip()
         if strict_select_ids:
-            if key not in ARCHER_VALUE_LOOKUP or not _has_value(
-                ARCHER_VALUE_LOOKUP[key]
+            if key not in value_lookup or not _has_value(
+                value_lookup[key]
             ):
                 raise ValueError("Archer select-value ID is unresolved")
-            return ARCHER_VALUE_LOOKUP[key]
-        return ARCHER_VALUE_LOOKUP.get(key, item)
+            return value_lookup[key]
+        return value_lookup.get(key, item)
 
     if isinstance(extracted, list):
         resolved = [resolve_one(item) for item in extracted]
@@ -501,8 +516,9 @@ def _build_component_hydration_lookups(
     source_dataframe,
     mapping_rows,
     hydration_source_dfs,
+    context=None,
 ):
-    if CONFIG.get("EXECUTE_WRITES", False):
+    if _context_config(context).get("EXECUTE_WRITES", False):
         raise RuntimeError(
             "Component hydration must be built before guarded writes"
         )
@@ -510,7 +526,10 @@ def _build_component_hydration_lookups(
         raise RuntimeError("Component hydration sources are unavailable")
     if set(hydration_source_dfs) != set(COMPONENT_HYDRATION_CONTRACT):
         raise RuntimeError("Component hydration source contract is incomplete")
-    source_contract = globals().get("COMPONENT_HYDRATION_SOURCE_CONTRACT")
+    source_contract = (
+        context.get("lookups", {}).get("component_contract")
+        if context is not None else globals().get("COMPONENT_HYDRATION_SOURCE_CONTRACT")
+    )
     if source_contract != COMPONENT_HYDRATION_CONTRACT:
         raise RuntimeError("Component hydration source contract has drifted")
 
@@ -918,7 +937,7 @@ def _build_component_instances(
     return instances
 
 
-def transform_fips_199(value):
+def transform_fips_199(value, context=None):
     extracted = _extract_reference_ids(value)
     values = extracted if isinstance(extracted, list) else [extracted]
     normalized = []
@@ -926,9 +945,9 @@ def transform_fips_199(value):
         if item is None:
             continue
         key = str(item).strip()
-        label = FIPS_199_VALUE_LOOKUP.get(key)
+        label = _context_lookup("fips_values", "FIPS_199_VALUE_LOOKUP", context).get(key)
         if label is None:
-            candidate = str(ARCHER_VALUE_LOOKUP.get(key, item)).strip().lower()
+            candidate = str(_context_lookup("archer_values", "ARCHER_VALUE_LOOKUP", context).get(key, item)).strip().lower()
             if candidate in {"low", "moderate", "high"}:
                 label = candidate
         if label is not None:
@@ -938,7 +957,7 @@ def transform_fips_199(value):
     return normalized[0] if len(normalized) == 1 else normalized
 
 
-def _single_archer_label(value):
+def _single_archer_label(value, context=None):
     extracted = _extract_reference_ids(value)
     values = extracted if isinstance(extracted, list) else [extracted]
     values = [item for item in values if item is not None]
@@ -953,7 +972,7 @@ def _single_archer_label(value):
     if not key:
         return None
 
-    resolved = ARCHER_VALUE_LOOKUP.get(key)
+    resolved = _context_lookup("archer_values", "ARCHER_VALUE_LOOKUP", context).get(key)
     if resolved is not None:
         label = str(resolved).strip()
         return label or None
@@ -965,8 +984,8 @@ def _single_archer_label(value):
     return None
 
 
-def transform_security_objective(value):
-    normalized = transform_fips_199(value)
+def transform_security_objective(value, context=None):
+    normalized = transform_fips_199(value, context)
     if isinstance(normalized, list):
         if len(normalized) != 1:
             raise ValueError(
@@ -976,7 +995,7 @@ def transform_security_objective(value):
     if _has_value(normalized):
         return str(normalized)
 
-    label = _single_archer_label(value)
+    label = _single_archer_label(value, context)
     if label is None:
         raise ValueError(
             "Security objective contains an unresolved or multi-value label"
@@ -998,8 +1017,8 @@ def _is_complete_security_impact_payload(payload):
     )
 
 
-def transform_status_state(value):
-    label = _single_archer_label(value)
+def transform_status_state(value, context=None):
+    label = _single_archer_label(value, context)
     if label is None:
         raise ValueError("Status contains an unresolved or multi-value label")
 
@@ -1114,10 +1133,10 @@ def _is_executable_responsible_party_mapping(mapping_row):
     return True
 
 
-def _active_responsible_party_role_instances(source_obj, source_record_id):
+def _active_responsible_party_role_instances(source_obj, source_record_id, context=None):
     instances = []
     emitted_role_ids = set()
-    mapping_rows = MAPPINGS_BY_ELEMENT_PATH.get(
+    mapping_rows = _context_mappings(context).get(
         RESPONSIBLE_PARTIES_ELEMENT_PATH,
         [],
     )
@@ -1130,7 +1149,7 @@ def _active_responsible_party_role_instances(source_obj, source_record_id):
         source_value = resolve_json_path(source_obj, source_field)
         if not _has_value(source_value):
             continue
-        if not _party_uuid_values(source_record_id, source_value):
+        if not _party_uuid_values(source_record_id, source_value, context):
             continue
 
         role_id = definition["id"]
@@ -1171,16 +1190,27 @@ def _party_reference_identifier(item):
     return identifier
 
 
-def _party_uuid(source_record_id, identifier):
+def _party_uuid(source_record_id, identifier, context=None):
+    config = _context_config(context)
+    if context is not None and not (
+        config.get("SOURCE_SYSTEM_NAME") == "ARCHER"
+        and config.get("SOURCE_TABLE_NAME") == "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
+        and config.get("OSCAL_MODEL") == "SSP"
+    ):
+        return _deterministic_uuid(
+            config["IDENTITY_VERSION"], config["SOURCE_SYSTEM_NAME"],
+            config["SOURCE_TABLE_NAME"], source_record_id, config["OSCAL_MODEL"],
+            "party", identifier,
+        )
     return _deterministic_uuid(
-        CONFIG["SOURCE_SYSTEM_NAME"],
+        config["SOURCE_SYSTEM_NAME"],
         source_record_id,
         "party",
         identifier,
     )
 
 
-def _party_uuid_values(source_record_id, value):
+def _party_uuid_values(source_record_id, value, context=None):
     extracted = _extract_reference_ids(value)
     values = extracted if isinstance(extracted, list) else [extracted]
     party_uuids = []
@@ -1190,16 +1220,17 @@ def _party_uuid_values(source_record_id, value):
         party_uuid = _party_uuid(
             source_record_id,
             _party_reference_identifier(item),
+            context,
         )
         if party_uuid not in party_uuids:
             party_uuids.append(party_uuid)
     return party_uuids
 
 
-def _active_responsible_party_instances(source_obj, source_record_id):
+def _active_responsible_party_instances(source_obj, source_record_id, context=None):
     instances = []
     emitted_party_uuids = set()
-    mapping_rows = MAPPINGS_BY_ELEMENT_PATH.get(
+    mapping_rows = _context_mappings(context).get(
         RESPONSIBLE_PARTIES_ELEMENT_PATH,
         [],
     )
@@ -1212,7 +1243,7 @@ def _active_responsible_party_instances(source_obj, source_record_id):
         if not _has_value(source_value):
             continue
 
-        for party_uuid in _party_uuid_values(source_record_id, source_value):
+        for party_uuid in _party_uuid_values(source_record_id, source_value, context):
             if party_uuid in emitted_party_uuids:
                 continue
             emitted_party_uuids.add(party_uuid)
@@ -1232,9 +1263,10 @@ def _active_responsible_party_instances(source_obj, source_record_id):
 def _active_responsible_party_assignment_instances(
     source_obj,
     source_record_id,
+    context=None,
 ):
     assignments_by_role = {}
-    mapping_rows = MAPPINGS_BY_ELEMENT_PATH.get(
+    mapping_rows = _context_mappings(context).get(
         RESPONSIBLE_PARTIES_ELEMENT_PATH,
         [],
     )
@@ -1247,7 +1279,7 @@ def _active_responsible_party_assignment_instances(
         if not _has_value(source_value):
             continue
 
-        party_uuids = _party_uuid_values(source_record_id, source_value)
+        party_uuids = _party_uuid_values(source_record_id, source_value, context)
         if not party_uuids:
             continue
 
@@ -1272,11 +1304,11 @@ def _active_responsible_party_assignment_instances(
     return list(assignments_by_role.values())
 
 
-def transform_responsible_party(source_record_id, source_field, value):
+def transform_responsible_party(source_record_id, source_field, value, context=None):
     role_id = RESPONSIBLE_PARTY_ROLE_IDS.get(source_field)
     if role_id is None:
         return SKIP_VALUE
-    party_uuids = _party_uuid_values(source_record_id, value)
+    party_uuids = _party_uuid_values(source_record_id, value, context)
     if not party_uuids:
         return SKIP_VALUE
     return {"role-id": role_id, "party-uuids": party_uuids}
@@ -1526,7 +1558,7 @@ def _mapping_handler_for_row(mapping_row):
     return handler
 
 
-def apply_mapping_transform(mapping_row, value, source_record_id):
+def apply_mapping_transform(mapping_row, value, source_record_id, context=None):
     # A configured row with no source value emits nothing. Keep this omission
     # ahead of strict row classification so known no-source mappings do not
     # make an otherwise valid run fail.
@@ -1542,12 +1574,12 @@ def apply_mapping_transform(mapping_row, value, source_record_id):
         return transform_approved_text(value)
     if handler == "responsible-party":
         return transform_responsible_party(
-            source_record_id, source_field, value
+            source_record_id, source_field, value, context
         )
     if handler == "security-objective":
-        return transform_security_objective(value)
+        return transform_security_objective(value, context)
     if handler == "status-state":
-        return transform_status_state(value)
+        return transform_status_state(value, context)
     if handler == "authorization-date":
         return transform_authorization_date(value)
     if handler == "published":
@@ -1557,7 +1589,7 @@ def apply_mapping_transform(mapping_row, value, source_record_id):
     if handler == "document-identifier":
         return transform_document_identifier(value)
     if handler == "governed-property":
-        transformed = resolve_archer_select_value(value)
+        transformed = resolve_archer_select_value(value, context)
         return transformed if _has_value(transformed) else SKIP_VALUE
     if handler in {"component-reference", "direct"}:
         return _to_python(value)
@@ -1570,6 +1602,7 @@ def build_element_instances(
     element_path,
     mapping_rows,
     component_hydration_lookups=None,
+    context=None,
 ):
     is_collection = "[]" in element_path
     instances = []
@@ -1580,18 +1613,21 @@ def build_element_instances(
         return _active_responsible_party_instances(
             source_obj,
             source_record_id,
+            context,
         )
 
     if element_path == METADATA_ROLES_ELEMENT_PATH:
         return _active_responsible_party_role_instances(
             source_obj,
             source_record_id,
+            context,
         )
 
     if element_path == RESPONSIBLE_PARTIES_ELEMENT_PATH:
         return _active_responsible_party_assignment_instances(
             source_obj,
             source_record_id,
+            context,
         )
 
     if element_path == COMPONENTS_ELEMENT_PATH:
@@ -1631,7 +1667,7 @@ def build_element_instances(
             continue
         source_value = resolve_json_path(source_obj, source_field)
         transformed = apply_mapping_transform(
-            mapping_row, source_value, source_record_id
+            mapping_row, source_value, source_record_id, context
         )
         if transformed is SKIP_VALUE:
             continue
@@ -1788,3 +1824,874 @@ def build_mapping_coverage(source_dataframe, mapping_rows):
 
 
 print("Cell 4 helpers initialized")
+
+# Model-specific registry and payload policies, initialized with Cell 4.
+
+import uuid
+
+METADATA_ELEMENT_PATH = "system-security-plan.metadata"
+METADATA_ROLES_ELEMENT_PATH = "system-security-plan.metadata.roles[]"
+METADATA_PARTIES_ELEMENT_PATH = "system-security-plan.metadata.parties[]"
+RESPONSIBLE_PARTIES_ELEMENT_PATH = (
+    "system-security-plan.metadata.responsible-parties[]"
+)
+COMPONENTS_ELEMENT_PATH = (
+    "system-security-plan.system-implementation.components[]"
+)
+APPROVED_RESPONSIBLE_PARTY_TYPE = "person"
+OPTIONAL_SINGLETON_ELEMENT_PATHS = {
+    "system-security-plan.system-characteristics.security-impact-level",
+}
+GOVERNED_COLLECTION_CONTRACTS = {
+    "system-security-plan.system-characteristics.props[]": {
+        "parent_path": "system-security-plan.system-characteristics",
+        "instance_key_rule": "SOURCE_FIELD_NAME+VALUE",
+        "item_path": "$",
+    },
+    "system-security-plan.system-characteristics.system-ids[]": {
+        "parent_path": "system-security-plan.system-characteristics",
+        "instance_key_rule": "VALUE",
+        "item_path": "$",
+    },
+    "system-security-plan.system-implementation.components[]": {
+        "parent_path": "system-security-plan.system-implementation",
+        "instance_key_rule": "CONTENT_ID",
+        "item_path": "$",
+    },
+}
+
+def _registry_value(row, *names):
+    row_dict = row.as_dict(recursive=True) if hasattr(row, "as_dict") else dict(row)
+    normalized = {str(key).upper(): value for key, value in row_dict.items()}
+    for name in names:
+        if name.upper() in normalized and normalized[name.upper()] is not None:
+            return normalized[name.upper()]
+    return None
+
+
+def _derive_parent_path(element_path):
+    parts = element_path.split(".")
+    return ".".join(parts[:-1]) if len(parts) > 1 else None
+
+
+def _element_type(element_path):
+    return element_path.split(".")[-1].replace("[]", "")
+
+
+def _registry_true(value):
+    return str(value).strip().upper() in {"TRUE", "T", "YES", "Y", "1"}
+
+
+def _should_materialize_structural_singleton(element_path, root_path):
+    return (
+        (element_path == root_path or "[]" not in element_path)
+        and element_path not in OPTIONAL_SINGLETON_ELEMENT_PATHS
+    )
+
+
+def _inject_controlled_metadata_fields(element_path, instances, context=None):
+    if element_path != METADATA_ELEMENT_PATH:
+        return instances
+
+    if len(instances) != 1 or instances[0].get("instance_key") != "singleton":
+        raise ValueError("Expected exactly one singleton metadata instance")
+
+    configured_version = str(_context_config(context).get("OSCAL_VERSION") or "").strip()
+    if not configured_version:
+        raise ValueError("OSCAL_VERSION must be configured for metadata")
+
+    document_version = _context_config(context).get("SSP_DOCUMENT_VERSION")
+    if (
+        not isinstance(document_version, str)
+        or not document_version.strip()
+        or document_version != document_version.strip()
+    ):
+        raise ValueError(
+            "SSP_DOCUMENT_VERSION must be a nonblank canonical string"
+        )
+
+    payload = instances[0].get("payload")
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise ValueError("Metadata payload must be an object")
+
+    existing_version = payload.get("oscal-version")
+    if (
+        existing_version is not None
+        and str(existing_version).strip()
+        and str(existing_version).strip() != configured_version
+    ):
+        raise ValueError("Metadata oscal-version conflicts with configuration")
+
+    existing_document_version = payload.get("version")
+    if (
+        existing_document_version not in (None, "")
+        and existing_document_version != document_version
+    ):
+        raise ValueError(
+            "Metadata document version conflicts with configuration"
+        )
+
+    updated_payload = dict(payload)
+    updated_payload["oscal-version"] = configured_version
+    updated_payload["version"] = document_version
+    updated_instance = dict(instances[0])
+    updated_instance["payload"] = updated_payload
+    return [updated_instance]
+
+
+def _canonical_uuid(value, label):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a canonical UUID")
+    try:
+        canonical = str(uuid.UUID(value))
+    except (ValueError, AttributeError, TypeError):
+        raise ValueError(f"{label} must be a canonical UUID") from None
+    if value != canonical:
+        raise ValueError(f"{label} must be a canonical UUID")
+    return canonical
+
+
+def _instance_oscal_uuid(
+    element_path,
+    instance,
+    source_system,
+    source_table,
+    source_record_id,
+    model_key,
+    context=None,
+):
+    instance_key = instance["instance_key"]
+    if element_path == METADATA_PARTIES_ELEMENT_PATH:
+        payload = instance.get("payload")
+        if not isinstance(payload, dict):
+            raise ValueError("Metadata party payload must be an object")
+        instance_uuid = _canonical_uuid(
+            instance_key,
+            "Metadata party instance key",
+        )
+        payload_uuid = _canonical_uuid(
+            payload.get("uuid"),
+            "Metadata party payload uuid",
+        )
+        if instance_uuid != payload_uuid:
+            raise ValueError("Metadata party UUID fields do not match")
+        return payload_uuid
+
+    return _deterministic_uuid(
+        _context_config(context)["IDENTITY_VERSION"],
+        source_system,
+        source_table,
+        source_record_id,
+        model_key,
+        element_path,
+        instance_key,
+    )
+
+
+def _payload_with_instance_uuid(element_path, payload, oscal_uuid):
+    if element_path != COMPONENTS_ELEMENT_PATH:
+        return payload
+    if not isinstance(payload, dict):
+        raise ValueError("Component payload must be an object")
+    existing_uuid = payload.get("uuid")
+    if existing_uuid not in (None, "") and existing_uuid != oscal_uuid:
+        raise ValueError("Component payload uuid conflicts with node uuid")
+    if "status" in payload:
+        raise ValueError("Component status hydration is not approved")
+    for field_name in ("title", "description"):
+        if field_name not in payload:
+            continue
+        field_value = payload[field_name]
+        if not isinstance(field_value, str) or not field_value.strip():
+            raise ValueError(
+                f"Component payload {field_name} must be nonblank text"
+            )
+    updated_payload = dict(payload)
+    updated_payload["uuid"] = oscal_uuid
+    return updated_payload
+
+
+def _canonical_registry_rows(element_registry_dataframe, model_key, context=None):
+    rows = []
+    supplied_rows = context.get("registry_rows") if context is not None else None
+    for row in (supplied_rows if supplied_rows is not None else element_registry_dataframe.collect()):
+        model = _registry_value(
+            row,
+            "OSCAL_MODEL_KEY",
+            "OSCAL_MODEL",
+            "MODEL_NAME",
+            "MODEL",
+        )
+        if model and str(model).strip().upper() != model_key.upper():
+            continue
+
+        is_active = _registry_value(row, "IS_ACTIVE", "ACTIVE")
+        if is_active is not None and str(is_active).strip().upper() in {
+            "FALSE",
+            "F",
+            "NO",
+            "N",
+            "0",
+        }:
+            continue
+
+        path = _registry_value(
+            row,
+            "NODE_PATH",
+            "OSCAL_ELEMENT_PATH",
+            "ELEMENT_PATH",
+            "JSON_PATH",
+        )
+        if not path:
+            continue
+        path = str(path).strip()
+        selected_paths = context["model_contract"].get("ELEMENT_PATHS") if context is not None else None
+        if selected_paths is not None and path not in selected_paths:
+            continue
+        parent = _registry_value(
+            row,
+            "PARENT_NODE_PATH",
+            "PARENT_ELEMENT_PATH",
+            "PARENT_PATH",
+        )
+        level = _registry_value(
+            row,
+            "HIERARCHY_LEVEL",
+            "ELEMENT_LEVEL",
+            "LEVEL_NUMBER",
+        )
+        process_order = _registry_value(row, "PROCESS_ORDER")
+        is_collection = _registry_value(row, "IS_COLLECTION")
+        instance_key_rule = _registry_value(row, "INSTANCE_KEY_RULE")
+        item_path = _registry_value(row, "ITEM_PATH")
+        derived_level = path.count(".") + 1
+        rows.append(
+            {
+                "element_path": path,
+                "element_type": _registry_value(row, "ELEMENT_TYPE"),
+                "raw": row,
+                "parent_path": str(parent).strip() if parent else _derive_parent_path(path),
+                "level": int(level) if level is not None else derived_level,
+                "process_order": (
+                    int(process_order)
+                    if process_order is not None
+                    else derived_level * 1000000
+                ),
+                "is_collection": _registry_true(is_collection),
+                "instance_key_rule": (
+                    str(instance_key_rule).strip().upper()
+                    if instance_key_rule is not None
+                    else None
+                ),
+                "item_path": (
+                    str(item_path).strip()
+                    if item_path is not None
+                    else None
+                ),
+            }
+        )
+
+    if context is None:
+        _ssp_registry_policy(rows, None)
+    else:
+        context["policy"]["registry"](rows, context)
+    if len({row["element_path"] for row in rows}) != len(rows):
+        raise ValueError("Duplicate registry paths for configured OSCAL model")
+    rows.sort(
+        key=lambda item: (
+            item["process_order"],
+            item["level"],
+            item["element_path"],
+        )
+    )
+    if not rows:
+        raise ValueError("No registry paths found for configured OSCAL model")
+    return rows
+
+
+def _metadata_reference_payload(node, label):
+    raw_payload = node.get("METADATA_JSON")
+    if isinstance(raw_payload, str):
+        try:
+            payload = json.loads(raw_payload)
+        except (TypeError, ValueError):
+            raise ValueError(f"{label} payload is not valid JSON") from None
+    else:
+        payload = raw_payload
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} payload must be an object")
+    return payload
+
+
+def _validate_metadata_reference_closure(nodes_by_path):
+    role_nodes = nodes_by_path.get(METADATA_ROLES_ELEMENT_PATH, [])
+    party_nodes = nodes_by_path.get(METADATA_PARTIES_ELEMENT_PATH, [])
+    assignment_nodes = nodes_by_path.get(
+        RESPONSIBLE_PARTIES_ELEMENT_PATH,
+        [],
+    )
+
+    role_counts = {}
+    for node in role_nodes:
+        payload = _metadata_reference_payload(node, "Metadata role")
+        role_id = payload.get("id")
+        if not isinstance(role_id, str) or not role_id.strip():
+            raise ValueError("Metadata role id must be a nonblank string")
+        if node.get("INSTANCE_KEY") != role_id:
+            raise ValueError("Metadata role id and instance key do not match")
+        role_counts[role_id] = role_counts.get(role_id, 0) + 1
+        if role_counts[role_id] != 1:
+            raise ValueError("Metadata role id is not unique")
+
+    party_counts = {}
+    for node in party_nodes:
+        payload = _metadata_reference_payload(node, "Metadata party")
+        node_uuid = _canonical_uuid(
+            node.get("OSCAL_UUID"),
+            "Metadata party node uuid",
+        )
+        payload_uuid = _canonical_uuid(
+            payload.get("uuid"),
+            "Metadata party payload uuid",
+        )
+        if node_uuid != payload_uuid or node.get("INSTANCE_KEY") != node_uuid:
+            raise ValueError("Metadata party UUID fields do not match")
+        if payload.get("type") != APPROVED_RESPONSIBLE_PARTY_TYPE:
+            raise ValueError("Metadata party type violates approved contract")
+        party_counts[node_uuid] = party_counts.get(node_uuid, 0) + 1
+        if party_counts[node_uuid] != 1:
+            raise ValueError("Metadata party uuid is not unique")
+
+    referenced_roles = set()
+    referenced_parties = set()
+    assignment_role_counts = {}
+    for node in assignment_nodes:
+        payload = _metadata_reference_payload(
+            node,
+            "Metadata responsible-party",
+        )
+        role_id = payload.get("role-id")
+        if not isinstance(role_id, str) or not role_id.strip():
+            raise ValueError(
+                "Metadata responsible-party role-id must be nonblank"
+            )
+        assignment_role_counts[role_id] = (
+            assignment_role_counts.get(role_id, 0) + 1
+        )
+        if assignment_role_counts[role_id] != 1:
+            raise ValueError(
+                "Metadata responsible-party role-id is not unique"
+            )
+        if role_counts.get(role_id) != 1:
+            raise ValueError(
+                "Metadata responsible-party role reference is unresolved"
+            )
+        referenced_roles.add(role_id)
+
+        party_uuids = payload.get("party-uuids")
+        if not isinstance(party_uuids, list) or not party_uuids:
+            raise ValueError(
+                "Metadata responsible-party must reference a party"
+            )
+        local_party_uuids = set()
+        for party_uuid in party_uuids:
+            canonical_uuid = _canonical_uuid(
+                party_uuid,
+                "Metadata responsible-party reference uuid",
+            )
+            if canonical_uuid in local_party_uuids:
+                raise ValueError(
+                    "Metadata responsible-party contains duplicate party "
+                    "references"
+                )
+            local_party_uuids.add(canonical_uuid)
+            if party_counts.get(canonical_uuid) != 1:
+                raise ValueError(
+                    "Metadata responsible-party reference is unresolved"
+                )
+            referenced_parties.add(canonical_uuid)
+
+    if set(role_counts) != referenced_roles:
+        raise ValueError("Metadata contains an unreferenced role")
+    if set(party_counts) != referenced_parties:
+        raise ValueError("Metadata contains an unreferenced party")
+
+
+
+def _ssp_registry_policy(rows, context=None):
+    existing_paths = {row["element_path"] for row in rows}
+    responsible_party_row = next(
+        (
+            row
+            for row in rows
+            if row["element_path"] == RESPONSIBLE_PARTIES_ELEMENT_PATH
+        ),
+        None,
+    )
+    approved_party_mapping_exists = False
+    for mapping_row in _context_mappings(context).get(
+        RESPONSIBLE_PARTIES_ELEMENT_PATH,
+        [],
+    ):
+        source_field = str(
+            mapping_row.get("SOURCE_FIELD_NAME") or ""
+        ).strip()
+        mapping_type = str(
+            mapping_row.get("MAPPING_TYPE") or "Direct"
+        ).strip().lower()
+        status = str(mapping_row.get("STATUS") or "").strip().lower()
+        if (
+            source_field in RESPONSIBLE_PARTY_ROLE_IDS
+            and "tbd" not in mapping_type
+            and "more information" not in status
+        ):
+            approved_party_mapping_exists = True
+            break
+
+    role_row = next(
+        (
+            row
+            for row in rows
+            if row["element_path"] == METADATA_ROLES_ELEMENT_PATH
+        ),
+        None,
+    )
+    party_row = next(
+        (
+            row
+            for row in rows
+            if row["element_path"] == METADATA_PARTIES_ELEMENT_PATH
+        ),
+        None,
+    )
+
+    if approved_party_mapping_exists:
+        if responsible_party_row is None:
+            raise ValueError(
+                "Registry is missing metadata.responsible-parties[] required "
+                "by approved responsible-party mappings"
+            )
+        if METADATA_ROLES_ELEMENT_PATH not in existing_paths:
+            raise ValueError(
+                "Registry is missing metadata.roles[] required by approved "
+                "responsible-party mappings"
+            )
+        if METADATA_PARTIES_ELEMENT_PATH not in existing_paths:
+            raise ValueError(
+                "Registry is missing metadata.parties[] required by approved "
+                "responsible-party mappings"
+            )
+
+    if role_row is not None and role_row["parent_path"] != METADATA_ELEMENT_PATH:
+        raise ValueError("Registry metadata.roles[] parent path is invalid")
+    if party_row is not None and party_row["parent_path"] != METADATA_ELEMENT_PATH:
+        raise ValueError("Registry metadata.parties[] parent path is invalid")
+    if (
+        responsible_party_row is not None
+        and responsible_party_row["parent_path"] != METADATA_ELEMENT_PATH
+    ):
+        raise ValueError(
+            "Registry metadata.responsible-parties[] parent path is invalid"
+        )
+
+    for path, contract in GOVERNED_COLLECTION_CONTRACTS.items():
+        registry_row = next(
+            (row for row in rows if row["element_path"] == path),
+            None,
+        )
+        if registry_row is None:
+            continue
+        if not registry_row["is_collection"]:
+            raise ValueError(
+                "Governed registry collection flag is invalid"
+            )
+        if registry_row["parent_path"] != contract["parent_path"]:
+            raise ValueError("Governed registry parent path is invalid")
+        if (
+            registry_row["instance_key_rule"]
+            != contract["instance_key_rule"]
+        ):
+            raise ValueError("Governed registry instance rule is invalid")
+        if registry_row["item_path"] != contract["item_path"]:
+            raise ValueError("Governed registry item path is invalid")
+
+    return rows
+
+
+# AR v2 is the accepted seventeen-field scope. The later v3 candidate is not
+# silently promoted by the shared engine.
+_SCORE_ACCEPTED_FIELDS = (
+    "VULNERABILITY_SCORE", "ANTIVIRUS_SCORE", "PATCH_SCORE",
+    "SECURITY_COMPLIANCE_SCORE",
+    "STANDARD_OPERATING_ENVIRONMENT_SCORE", "COMPUTER_PASSWORD_AGE_SCORE",
+    "VULNERABILITY_REPORTING_SCORE", "SECURITY_COMPLIANCE_REPORTING_SCORE",
+    "TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE", "AVG_AUTHORIZATION_PACKAGE_RISK_SCORE",
+    "RISK_SCORE_GRADE", "AVG_VULNERABILITY_SCORE", "AVG_PATCH_SCORE",
+    "AVG_ANTIVIRUS_SCORE", "AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE",
+    "AVG_COMPUTER_PASSWORD_AGE_SCORE", "AVG_VULNERABILITY_REPORTING_SCORE",
+)
+
+_SCORE_ROOT_PATH = "assessment-results"
+_SCORE_RESULT_PATH = "assessment-results.results[]"
+_SCORE_OBSERVATION_PATH = "assessment-results.results[].observations[]"
+_SCORE_NOTES = "archer specific risk scoring map as observation"
+
+def _score_words(value):
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+
+def _score_row_dict(row):
+    if hasattr(row, "as_dict"):
+        row = row.as_dict(recursive=True)
+    if not isinstance(row, dict):
+        raise ValueError("Expected a mapping or registry row object")
+    result = {}
+    for key, value in row.items():
+        name = str(key).strip().upper()
+        if name in result:
+            raise ValueError("Duplicate normalized metadata column")
+        result[name] = value
+    return result
+
+
+
+def _score_mapping_contract(mapping_rows):
+    aliases = {
+        "ARCHER_FIELD_NAME": "SOURCE_FIELD_NAME", "SOURCE_FIELD": "SOURCE_FIELD_NAME",
+        "MODEL": "OSCAL_MODEL", "OSCAL_PATH": "OSCAL_ELEMENT_PATH",
+        "ELEMENT_PATH": "OSCAL_ELEMENT_PATH", "TARGET_FIELD_NAME": "OSCAL_FIELD_NAME",
+        "OSCAL_TARGET_FIELD": "OSCAL_FIELD_NAME", "TRANSFORM_LOGIC": "TRANSFORMATION_LOGIC",
+        "MAPPING_STATUS": "STATUS",
+    }
+    found = {field: [] for field in _SCORE_ACCEPTED_FIELDS}
+    other_rows = 0
+    for original in mapping_rows:
+        normalized = _score_row_dict(original)
+        row = {}
+        for key, value in normalized.items():
+            canonical = aliases.get(key, key)
+            if canonical in row:
+                raise ValueError("Ambiguous mapping column aliases")
+            if value is None or (isinstance(value, float) and math.isnan(value)):
+                value = ""
+            row[canonical] = value
+        field = row.get("SOURCE_FIELD_NAME", "")
+        path = str(row.get("OSCAL_ELEMENT_PATH", "")).strip()
+        model = _score_words(row.get("OSCAL_MODEL")).replace(" ", "")
+        in_ar = model == "assessmentresults" or path.startswith(_SCORE_ROOT_PATH + ".")
+        if not in_ar:
+            continue
+        if field in found:
+            found[field].append(row)
+        else:
+            other_rows += 1
+    errors = []
+    for field, rows in found.items():
+        if len(rows) != 1:
+            errors.append({"field": field, "issue": "expected_one_mapping_row", "rows": len(rows)})
+            continue
+        row = rows[0]
+        expected_path = _SCORE_OBSERVATION_PATH
+        expected_notes = _SCORE_NOTES
+        checks = {
+            "model": _score_words(row.get("OSCAL_MODEL")).replace(" ", "") == "assessmentresults",
+            "target": str(row.get("OSCAL_ELEMENT_PATH", "")).strip() == expected_path,
+            "mapping_type": _score_words(row.get("MAPPING_TYPE")) == "extension property",
+            "notes": _score_words(row.get("NOTES")) == expected_notes,
+            "target_member": not str(row.get("OSCAL_FIELD_NAME", "")).strip(),
+            "extra_transform": not str(row.get("TRANSFORMATION_LOGIC", "")).strip(),
+            "extra_notes": not str(row.get("MAPPING_NOTES", "")).strip(),
+            "status": _score_words(row.get("STATUS")) not in {
+                "tbd", "deferred", "blocked", "more information needed", "not mapped",
+            },
+        }
+        errors.extend({"field": field, "issue": "contract_" + key}
+                      for key, valid in checks.items() if not valid)
+    return errors, other_rows
+
+
+
+def _score_registry_contract(registry_rows):
+    expected = {
+        _SCORE_ROOT_PATH: (None, False, None),
+        _SCORE_RESULT_PATH: (_SCORE_ROOT_PATH, True, "SOURCE_RECORD_ID"),
+        _SCORE_OBSERVATION_PATH: (_SCORE_RESULT_PATH, True, "SOURCE_FIELD_NAME"),
+    }
+    found = {path: [] for path in expected}
+    for original in registry_rows:
+        row = _score_row_dict(original)
+        if str(row.get("OSCAL_MODEL_KEY", "")).strip().upper() != "ASSESSMENT_RESULTS":
+            continue
+        path = str(row.get("NODE_PATH", "")).strip()
+        if path in found:
+            found[path].append(row)
+    errors, selected = [], {}
+    for path, matches in found.items():
+        if len(matches) != 1:
+            errors.append({"path": path, "issue": "expected_one_registry_row", "rows": len(matches)})
+            continue
+        row = matches[0]
+        parent, collection, rule = expected[path]
+        active = str(row.get("IS_ACTIVE", "")).strip().upper()
+        flag = str(row.get("IS_COLLECTION", "")).strip().upper()
+        actual_parent = row.get("PARENT_NODE_PATH")
+        actual_parent = str(actual_parent).strip() if actual_parent else None
+        checks = {
+            "active": active in {"TRUE", "T", "YES", "Y", "1"},
+            "parent": actual_parent == parent,
+            "collection": flag in ({"TRUE", "T", "YES", "Y", "1"} if collection
+                                   else {"FALSE", "F", "NO", "N", "0"}),
+            "element_type": isinstance(row.get("ELEMENT_TYPE"), str) and bool(row["ELEMENT_TYPE"].strip()),
+        }
+        if rule:
+            checks["instance_rule"] = str(row.get("INSTANCE_KEY_RULE", "")).strip() == rule
+            checks["element_type"] = row.get("ELEMENT_TYPE") == path.rsplit(".", 1)[-1].replace("[]", "")
+            # The saved AR collection contract uses no nested extraction path.
+            checks["item_path"] = row.get("ITEM_PATH") in (None, "")
+        errors.extend({"path": path, "issue": "registry_" + key}
+                      for key, valid in checks.items() if not valid)
+        selected[path] = row
+    return errors, selected
+
+
+
+def _score_value(value, context=None):
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("Score must be finite")
+    if isinstance(value, Decimal) and not value.is_finite():
+        raise ValueError("Score must be finite")
+    if not _has_value(value):
+        return None
+    # Bare scores must never go through the lookup's scalar-ID fallback.
+    if _contains_archer_select_id_container(value):
+        value = resolve_archer_select_value(value, context)
+    values = value if isinstance(value, list) else [value]
+    if len(values) != 1:
+        raise ValueError("One scalar score is required per observation")
+    item = values[0]
+    if not isinstance(item, (str, int, float, bool, Decimal)):
+        raise ValueError("Score must resolve to a scalar")
+    if isinstance(item, float) and not math.isfinite(item):
+        raise ValueError("Score must be finite")
+    if isinstance(item, Decimal) and not item.is_finite():
+        raise ValueError("Score must be finite")
+    normalized = _oscal_property_values(value)
+    if len(normalized) != 1 or normalized[0].lower() in {"infinity", "+infinity", "-infinity"}:
+        raise ValueError("One finite scalar score is required")
+    return normalized[0]
+
+
+
+def _score_registry_policy(rows, context):
+    errors, selected = _score_registry_contract([row["raw"] for row in rows])
+    if errors:
+        raise ValueError("Assessment Results registry contract failed: " + json.dumps(errors, sort_keys=True))
+    return rows
+
+
+def _score_prepare(source_df, context):
+    del source_df
+    fields = tuple(context["model_contract"].get("SELECTED_FIELDS", ()))
+    if fields != _SCORE_ACCEPTED_FIELDS:
+        raise ValueError("Assessment Results policy requires the accepted seventeen-field contract")
+    errors, other_rows = _score_mapping_contract(context["mapping_rows"])
+    report = context["graph_report"]
+    report.update(
+        MODEL="ASSESSMENT_RESULTS", TARGET_PATH=_SCORE_OBSERVATION_PATH,
+        MAPPING_RELEASE="ar-observation-scores-v2-17-fields",
+        REPRESENTATION="one-named-property-per-observation",
+        SELECTED_FIELDS=list(fields),
+        OTHER_AR_MAPPING_ROWS_NOT_PROCESSED=other_rows,
+        MAPPING_CONTRACT_ERRORS=errors, REGISTRY_CONTRACT_ERRORS=[],
+        FIELDS={field: {"emitted": 0, "missing": 0, "invalid": 0} for field in fields},
+        WRITES_EXECUTED=False, FULL_MODEL_COMPLETE=False, SCHEMA_VALIDATED=False,
+    )
+    if errors:
+        raise ValueError("Assessment Results mapping contract failed: " + json.dumps(errors, sort_keys=True))
+
+
+def _score_parse(record, context):
+    del context
+    raw = _to_python(record["CURATED_JSON"])
+    value = json.loads(raw, parse_float=Decimal) if isinstance(raw, str) else raw
+    if not isinstance(value, dict):
+        raise ValueError("Source JSON must be an object")
+    return value
+
+
+def _score_instances(source_obj, source_record_id, registry_row, context):
+    path = registry_row["element_path"]
+    if path == _SCORE_ROOT_PATH:
+        return [{"instance_key": "singleton", "payload": {}, "parent_instance_key": None}]
+    if path == _SCORE_RESULT_PATH:
+        return [{"instance_key": source_record_id, "payload": {}, "parent_instance_key": "singleton"}]
+    if path != _SCORE_OBSERVATION_PATH:
+        raise ValueError("Unapproved Assessment Results registry path")
+    instances = []
+    for field in context["model_contract"]["SELECTED_FIELDS"]:
+        counts = context["graph_report"]["FIELDS"][field]
+        try:
+            value = _score_value(resolve_json_path(source_obj, field), context)
+        except (TypeError, ValueError, ArithmeticError):
+            counts["invalid"] += 1
+            continue
+        if value is None:
+            counts["missing"] += 1
+            continue
+        instances.append({
+            "instance_key": field, "parent_instance_key": source_record_id,
+            "payload": {"props": [{"name": _stable_property_name(field), "value": value}]},
+        })
+        counts["emitted"] += 1
+    return instances
+
+
+def _score_uuid(path, instance, source_system, source_table, source_id, model_key, context):
+    return _deterministic_uuid(
+        context["config"]["IDENTITY_VERSION"], source_system, source_table,
+        source_id, model_key, path, instance["instance_key"],
+    )
+
+
+def _score_payload(path, payload, node_uuid, context):
+    del path, context
+    if not isinstance(payload, dict):
+        raise ValueError("Assessment Results payload must be an object")
+    return {"uuid": node_uuid, **payload}
+
+
+def _score_record_complete(nodes_by_path, context):
+    del nodes_by_path, context
+
+
+def _score_finish(nodes, edges, context):
+    report = context["graph_report"]
+    invalid = report["INVALID_SOURCE_RECORDS"] + report["DUPLICATE_SOURCE_RECORDS"]
+    invalid += sum(row["invalid"] for row in report["FIELDS"].values())
+    report.update(CANDIDATE_NODES=len(nodes), CANDIDATE_EDGES=len(edges),
+                  COUNTS_ARE_CANDIDATES=True)
+    if invalid or not report["SOURCE_RECORDS"]:
+        report.update(STATUS="BLOCKED", OUTPUTS_PUBLISHED=False)
+        # No values or source identifiers appear in the aggregate report.
+        raise ValueError("Assessment Results values rejected: " + json.dumps(report, sort_keys=True))
+    report.update(
+        STATUS="MAPPED_SCOPE_BUILT", OUTPUTS_PUBLISHED=True,
+        NODES=len(nodes), EDGES=len(edges), DOCUMENTS=report["SOURCE_RECORDS"],
+        COUNTS_ARE_CANDIDATES=False,
+        FIELDS_WITH_POPULATED_EVIDENCE=sum(row["emitted"] > 0 for row in report["FIELDS"].values()),
+    )
+
+
+def _ssp_prepare(source_df, context):
+    hydration_sources = context["lookups"].get("component_sources")
+    if hydration_sources is None:
+        raise RuntimeError("Run the updated Cell 2 before building the SSP graph")
+    context["component_hydration_lookups"] = _build_component_hydration_lookups(
+        source_df, context["mappings_by_path"].get(COMPONENTS_ELEMENT_PATH, []),
+        hydration_sources,
+        *(() if context.get("_legacy_context") else (context,)),
+    )
+
+
+def _ssp_parse(record, context):
+    del context
+    return _parse_source_json(record)
+
+
+def _ssp_instances(source_obj, source_record_id, registry_row, context):
+    path = registry_row["element_path"]
+    instances = build_element_instances(
+        source_obj, source_record_id, path, context["mappings_by_path"].get(path, []),
+        context.get("component_hydration_lookups"),
+        *(() if context.get("_legacy_context") else (context,)),
+    )
+    if not instances and _should_materialize_structural_singleton(path, context["model_contract"]["ROOT_PATH"]):
+        instances = [{"instance_key": "singleton", "payload": {}, "parent_instance_key": None}]
+    return _inject_controlled_metadata_fields(path, instances, context)
+
+
+def _ssp_uuid(path, instance, source_system, source_table, source_id, model_key, context):
+    return _instance_oscal_uuid(path, instance, source_system, source_table, source_id, model_key, context)
+
+
+def _ssp_payload(path, payload, node_uuid, context):
+    del context
+    return _payload_with_instance_uuid(path, payload, node_uuid)
+
+
+def _ssp_record_complete(nodes_by_path, context):
+    del context
+    _validate_metadata_reference_closure(nodes_by_path)
+
+
+def _ssp_finish(nodes, edges, context):
+    context["graph_report"].update(
+        STATUS="MAPPED_SCOPE_BUILT", OUTPUTS_PUBLISHED=True,
+        NODES=len(nodes), EDGES=len(edges), WRITES_EXECUTED=False,
+    )
+
+
+MODEL_GRAPH_POLICIES = {
+    "ssp-approved-v1": {
+        "model": "SSP", "root": "system-security-plan",
+        "registry": _ssp_registry_policy, "prepare": _ssp_prepare,
+        "parse": _ssp_parse, "instances": _ssp_instances,
+        "uuid": _ssp_uuid, "payload": _ssp_payload,
+        "record_complete": _ssp_record_complete, "finish": _ssp_finish,
+        "aggregate_invalid": False, "allow_nan": True,
+    },
+    "observation-scores-v2": {
+        "model": "ASSESSMENT_RESULTS", "root": _SCORE_ROOT_PATH,
+        "registry": _score_registry_policy, "prepare": _score_prepare,
+        "parse": _score_parse, "instances": _score_instances,
+        "uuid": _score_uuid, "payload": _score_payload,
+        "record_complete": _score_record_complete, "finish": _score_finish,
+        "aggregate_invalid": True, "allow_nan": False,
+    },
+}
+
+
+def _prepare_model_context(context, model_key, source_system, source_table):
+    legacy_context = context is None
+    if context is None:
+        config = dict(globals().get("CONFIG", {}))
+        config.update(OSCAL_MODEL=model_key, SOURCE_SYSTEM_NAME=source_system,
+                      SOURCE_TABLE_NAME=source_table)
+        model_contract = globals().get("MODEL_CONTRACTS", {}).get(model_key)
+        if model_contract is None:
+            matches = [(key, value) for key, value in MODEL_GRAPH_POLICIES.items() if value["model"] == model_key]
+            if len(matches) != 1:
+                raise ValueError("An explicit model contract is required")
+            policy_name, policy = matches[0]
+            model_contract = {"MODEL_KEY": model_key, "ROOT_PATH": policy["root"], "POLICY": policy_name}
+        mappings = globals().get("MAPPINGS_BY_ELEMENT_PATH", {})
+        context = {
+            "config": config, "model_contract": model_contract,
+            "mapping_rows": globals().get("CANONICAL_MAPPING_ROWS", [row for rows in mappings.values() for row in rows]),
+            "mappings_by_path": mappings,
+            "lookups": {
+                "archer_values": globals().get("ARCHER_VALUE_LOOKUP", {}),
+                "fips_values": globals().get("FIPS_199_VALUE_LOOKUP", {}),
+                "component_sources": globals().get("COMPONENT_HYDRATION_SOURCE_DFS"),
+                "component_contract": globals().get("COMPONENT_HYDRATION_SOURCE_CONTRACT"),
+            },
+        }
+    config, contract = context["config"], context["model_contract"]
+    if any(config.get(name) != value for name, value in (
+        ("OSCAL_MODEL", model_key), ("SOURCE_SYSTEM_NAME", source_system), ("SOURCE_TABLE_NAME", source_table),
+    )):
+        raise ValueError("Graph arguments conflict with explicit source/model context")
+    policy = MODEL_GRAPH_POLICIES.get(contract.get("POLICY"))
+    if policy is None or contract.get("MODEL_KEY") != model_key or policy["model"] != model_key or contract.get("ROOT_PATH") != policy["root"]:
+        raise ValueError("Unsupported model policy or root contract")
+    if not isinstance(config.get("IDENTITY_VERSION"), str) or not config["IDENTITY_VERSION"].strip():
+        raise ValueError("A nonblank identity version is required")
+    context["_legacy_context"] = legacy_context
+    context["policy"] = policy
+    context["graph_report"] = {
+        "SOURCE_RECORDS": 0, "INVALID_SOURCE_RECORDS": 0, "DUPLICATE_SOURCE_RECORDS": 0,
+        "STATUS": "NOT_RUN", "OUTPUTS_PUBLISHED": False,
+    }
+    return context

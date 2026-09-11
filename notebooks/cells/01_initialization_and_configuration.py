@@ -75,3 +75,96 @@ print("OSCAL model:", CONFIG["OSCAL_MODEL"])
 print("OSCAL version:", CONFIG["OSCAL_VERSION"])
 print("Writes enabled:", CONFIG["EXECUTE_WRITES"])
 
+
+
+# Active workflow configuration. CONFIG above is the backward-compatible
+# Source One SSP baseline, not the selector used by the multi-model runner.
+# Additional sources require explicit profiles and reviewed mapping bindings;
+# do not invent names for the other six source tables.
+AR_ACCEPTED_FIELDS = (
+    "VULNERABILITY_SCORE", "ANTIVIRUS_SCORE", "PATCH_SCORE",
+    "SECURITY_COMPLIANCE_SCORE", "STANDARD_OPERATING_ENVIRONMENT_SCORE",
+    "COMPUTER_PASSWORD_AGE_SCORE", "VULNERABILITY_REPORTING_SCORE",
+    "SECURITY_COMPLIANCE_REPORTING_SCORE", "TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE",
+    "AVG_AUTHORIZATION_PACKAGE_RISK_SCORE", "RISK_SCORE_GRADE",
+    "AVG_VULNERABILITY_SCORE", "AVG_PATCH_SCORE", "AVG_ANTIVIRUS_SCORE",
+    "AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE", "AVG_COMPUTER_PASSWORD_AGE_SCORE",
+    "AVG_VULNERABILITY_REPORTING_SCORE",
+)
+
+_SSP_STORAGE_CONTRACT = {
+    "VERIFIED": True,
+    "PHYSICAL_PROFILE": "BINARY16_UUID32",
+    "MODEL_KEY": "SSP",
+    "ROOT_PATH": "system-security-plan",
+    "ROOT_ELEMENT_TYPE": "system-security-plan",
+    "SOURCE_SYSTEM_NAME": CONFIG["SOURCE_SYSTEM_NAME"],
+    "SOURCE_TABLE_NAME": CONFIG["SOURCE_TABLE_NAME"],
+    "RAW_TABLE": CONFIG["RAW_TABLE"],
+    "TARGET_DIM": CONFIG["TARGET_DIM"],
+    "TARGET_FACT": CONFIG["TARGET_FACT"],
+    "DIM_PK_COLUMN": CONFIG["DIM_PK_COLUMN"],
+    "FACT_PK_COLUMN": CONFIG["FACT_PK_COLUMN"],
+    "IDENTITY_VERSION": CONFIG["IDENTITY_VERSION"],
+}
+MODEL_CONTRACTS = {
+    "SSP": {
+        "MODEL_KEY": "SSP", "ROOT_PATH": "system-security-plan",
+        "POLICY": "ssp-approved-v1",
+        "LOOKUP_GROUPS": ("components",),
+        "PATH_RULES": ({
+            "SOURCE_FIELDS": ("INFORMATION_SYSTEM_TYPE", "FISMA_REPORTABLE",
+                              "FINANCIAL_SYSTEM", "MISSION_CRITICAL",
+                              "CRITICAL_INFRASTRUCTURE", "PACKAGE_TYPE",
+                              "PIA_REQUIRED", "INFORMATION_CLASSIFICATION"),
+            "MAPPING_TYPE": "Extension Property",
+            "PARENT_PATH": "system-security-plan.system-characteristics",
+            "COLLECTION_PATH": "system-security-plan.system-characteristics.props[]",
+        },),
+        "MODEL_ALIASES": ("SSP", "System Security Plan", "SSP - Metadata",
+                          "SSP - System Characteristics", "SSP - System Implementation",
+                          "SSP - Control Implementation"),
+        "STORAGE_CONTRACT": _SSP_STORAGE_CONTRACT,
+    },
+    "ASSESSMENT_RESULTS": {
+        "MODEL_KEY": "ASSESSMENT_RESULTS", "ROOT_PATH": "assessment-results",
+        "POLICY": "observation-scores-v2",
+        "LOOKUP_GROUPS": (),
+        "MODEL_ALIASES": ("ASSESSMENT_RESULTS", "Assessment Results", "AR"),
+        "SELECTED_FIELDS": AR_ACCEPTED_FIELDS,
+        "ELEMENT_PATHS": ("assessment-results",
+                          "assessment-results.results[]",
+                          "assessment-results.results[].observations[]"),
+        # Actual AR destination names/physical columns have not been verified.
+        # This permits graph preview only; COMMIT must refuse this contract.
+        "STORAGE_CONTRACT": None,
+    },
+}
+SOURCE_PROFILES = (
+    {
+        "SOURCE_KEY": "source-one",
+        "SOURCE_SYSTEM_NAME": CONFIG["SOURCE_SYSTEM_NAME"],
+        "SOURCE_TABLE_NAME": CONFIG["SOURCE_TABLE_NAME"],
+        "RAW_TABLE": CONFIG["RAW_TABLE"],
+        "CONTENT_ID_COLUMN": "CONTENT_ID", "CURATED_JSON_COLUMN": "CURATED_JSON",
+        "MAPPING_FILE": CONFIG["MAPPING_FILE"],
+        "MAPPING_SOURCE_COLUMN": None,
+        "MODEL_KEYS": ("SSP", "ASSESSMENT_RESULTS"),
+        "SOURCE_ORDER_CANDIDATES": tuple(CONFIG["SOURCE_ORDER_CANDIDATES"]),
+        "LOOKUP_CONTRACTS": {
+            "software": {
+                "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_SOFTWARE_RAW",
+                "title_field": "SOFTWARE_NAME", "description_field": "DESCRIPTION",
+            },
+            "interconnection": {
+                "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_INTERCONNECTIONS_RAW",
+                "title_field": "INTERCONNECTION_NAME", "description_field": "DESCRIPTION",
+            },
+        },
+        "BASE_CONFIG": dict(CONFIG),
+    },
+)
+print("Enabled source/model routes:", [
+    (profile["SOURCE_KEY"], list(profile["MODEL_KEYS"])) for profile in SOURCE_PROFILES
+])
+

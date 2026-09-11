@@ -6,10 +6,11 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 accepted runs, unresolved gaps and the next daily-loading step are recorded here.
 [Project startup instructions](AGENTS.md) require this context to be read before work.
 
-**Current direction:** the full SSP DEV reload is accepted. The updated existing
-[Cells 6-7 daily SSP loading path](docs/SSP_DAILY_LOADING.md) passes local tests
-and is ready for live PREVIEW; do not rerun the separate full reload.
-AR's 17 accepted in-memory mappings remain preserved, with database loading pending.
+**Current direction:** one shared seven-cell workflow for Source One → SSP and
+the 17 accepted AR mappings. [Scope and preview instructions](docs/SHARED_SEVEN_CELL_MAPPER.md).
+No standalone mapper was added. Shared live acceptance and AR persistence are
+pending; writes remain disabled. The full SSP DEV reload stays accepted and
+must not be rerun for this consolidation.
 
 ## Authoritative files
 

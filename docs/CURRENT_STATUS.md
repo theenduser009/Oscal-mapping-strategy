@@ -2,53 +2,39 @@
 
 Last reconciled: 2026-09-11
 
-## Current action - updated Cells 6 and 7 ready for daily SSP preview
+## Current action - approved shared seven-cell consolidation
 
-The owner explicitly selected **fix Cells 6 and 7, without another standalone
-SSP cell**, on 2026-09-11. The revision is implemented and all 407 local tests
-pass (28 focused daily-loader checks). Live Snowflake acceptance is pending. No database write is
-being performed by this code update. [Daily-loader policy and run guide](SSP_DAILY_LOADING.md).
+The owner approved one source feeding multiple OSCAL models through the same
+seven cells, with database writes disabled. Source One now routes SSP and the
+17 accepted Assessment Results fields through one graph builder and one
+contract-driven writer. No separate execution cell was added.
 
-The full SSP DEV reload remains **committed and verified** for 2,813 source
-records, 70,102 DIM elements and 67,289 FACT dependencies.
+**Next action:** follow [the shared workflow guide](SHARED_SEVEN_CELL_MAPPER.md):
+replace all seven existing Python cells with the matching published sections
+and run once in PREVIEW. Do not mix this revision with old Cells 1-7. Local
+regression verification passed all 473 tests; no shared-workflow Snowflake result or
+AR database load is accepted yet. Do not run COMMIT or the old DEV reload.
+
+SSP uses its verified physical destination contract. AR has no verified target
+schema and intentionally performs graph-only preview. Missing AR storage does
+not reuse SSP targets. Unknown/contradictory routing blocks; deferred mappings
+and the 34-field AR candidate do not become accepted by consolidation.
+Other source tables/models require explicit reviewed configuration.
+
+The prior full SSP DEV reload remains committed/read-back verified:
+2,813 source records, 70,102 DIM elements, 67,289 FACT dependencies.
 [Accepted live report](SSP_FULL_DEV_RELOAD_2026-09-11.md).
-Do not rerun that separate reload or the one-record/ten-record pilots.
+The reduction from 126,453 old DIM / 122,939 old FACT remains unexplained:
+56,351 fewer DIM and 55,650 fewer FACT rows. No durable before-copy was retained;
+do not label the removed rows duplicates or stale without evidence.
 
-Cell 6 already owned MERGE loading. This revision integrates the proven storage
-conversions, frozen staging, changed-business-value comparison, atomic DIM/FACT
-upserts and exact saved-key/value checks into that existing responsibility.
-Cell 7 owns the explicit PREVIEW/COMMIT choice and checks that the updated
-Cell 6 was initialized. The shared Cell 1 EXECUTE_WRITES flag stays false.
-Mapping rules and Cells 1-5 are unchanged; the consolidated notebook is kept in sync.
-
-No deletion policy is assumed. Extra old keys within a currently selected
-record block target writes. Source records outside the current input remain
-stored and are reported separately. No DELETE, TRUNCATE or permanent backup
-is part of the daily upsert path. It is not automatic deletion synchronization
-or a scheduled daily job.
-
-**Next action:** replace only Cells 6 and 7 with the published revision, run
-Cell 6 then Cell 7 in PREVIEW, and share its complete OSCAL_LOAD_REPORT.
-Live acceptance remains pending. The report must show
-DAILY_SSP_PREVIEW_PASSED_NO_TARGET_DML before a later approved COMMIT.
-If Cells 1-5 inputs have expired, rebuild those unchanged cells first.
-Do not run legacy assembly/discovery/persistence cells after COMMIT as though
-it were a read-only run; their old write-disabled assumptions remain unchanged.
-
-**Separate unresolved audit:** 126,453 old DIM / 122,939 old FACT rows became
-70,102 / 67,289 in the accepted full reload: 56,351 fewer DIM / 55,650 fewer
-FACT rows. Equality with the accepted new graph does not explain every removed
-old row. Old-versus-new source-record/path coverage is still unverified.
-Temporary before-snapshots are useful only if the reload session still exists;
-its availability is unconfirmed. No durable before-copy was retained.
-
-AR remains 17 accepted in-memory mappings, not an accepted database load.
-The blocked expanded candidate and deferred rows remain separate. Matillion's
-owner-accepted null-preserving preview is not proof of pipeline UPDATE execution.
-[Durable cell map and full handoff](PROJECT_HANDOFF.md).
+This code change does not alter the persisted SSP graph, registry, Matillion
+conversion or field acceptance counts. AR remains 17 accepted in memory, with
+candidate/rejected/deferred work separate. Daily deployment and live writer
+acceptance remain pending. [Durable handoff](PROJECT_HANDOFF.md).
 
 Historical entries below retain earlier incidents. Their superseded run
-requests and pending-state labels are not the current action.
+requests are not the current action.
 
 ## Active incident — Matillion raw-to-curated null field loss
 

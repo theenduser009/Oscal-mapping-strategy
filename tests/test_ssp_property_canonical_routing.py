@@ -4,6 +4,7 @@ Run with the bundled Python runtime (pandas installed). Snowflake transport and
 unrelated component lookup I/O are fakes; mapping and graph logic are real.
 """
 import contextlib
+import ast
 import datetime
 import hashlib
 import io
@@ -89,10 +90,21 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
     def canonicalize(self, mappings, registry_frame=None):
         artifact = pd.DataFrame(mappings)
         original = artifact.copy(deep=True)
+        # Execute only configuration assignments; no Snowflake imports/session.
+        config_ns = {"datetime": datetime}
+        tree = ast.parse((CELLS / "01_initialization_and_configuration.py").read_text(encoding="utf-8"))
+        wanted = {"CONFIG", "AR_ACCEPTED_FIELDS", "_SSP_STORAGE_CONTRACT", "MODEL_CONTRACTS", "SOURCE_PROFILES"}
+        assignments = [node for node in tree.body if isinstance(node, ast.Assign)
+                       and any(isinstance(t, ast.Name) and t.id in wanted for t in node.targets)]
+        exec(compile(ast.Module(body=assignments, type_ignores=[]), "<test-config>", "exec"), config_ns)
+        profiles = [dict(config_ns["SOURCE_PROFILES"][0], MODEL_KEYS=("SSP",))]
         with contextlib.redirect_stdout(io.StringIO()):
             result = runpy.run_path(str(CELLS / "03_canonical_mapping_contract.py"),
                 init_globals={
-                    "CONFIG": {"OSCAL_MODEL": "SSP"}, "re": re,
+                    "CONFIG": config_ns["CONFIG"], "re": re, "pd": pd,
+                    "SOURCE_PROFILES": profiles, "MODEL_CONTRACTS": config_ns["MODEL_CONTRACTS"],
+                    "MAPPING_INPUTS": {"source-one": artifact.to_dict(orient="records")},
+                    "REGISTRY_INPUT_ROWS": list((registry_frame or registry()).rows),
                     "session": Session(), "mapping_artifact_pdf": artifact,
                     "element_registry_df": registry_frame or registry(),
                 })
@@ -140,7 +152,6 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
             mapping("UNAPPROVED_FIELD"),
             mapping(MAPPING_TYPE="Transform"),
             mapping(path=SC + ".nested.unapproved"),
-            mapping(path=SSP + ".metadata.props[]"),
         ]
         helpers = self.helpers()
         for original in rows:
@@ -149,6 +160,10 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
                 self.assertEqual(row["CANONICAL_ELEMENT_PATH"], original["OSCAL_ELEMENT_PATH"])
                 with self.assertRaises(ValueError):
                     helpers["_mapping_handler_for_row"](row)
+        # An unknown collection is now rejected during routing, before dispatch.
+        blocked = self.canonicalize([mapping(path=SSP + ".metadata.props[]")])
+        self.assertEqual(blocked["MAPPING_CONTEXTS"][0]["routing_report"]["STATUS"], "BLOCKED")
+        self.assertEqual(blocked["CANONICAL_MAPPING_ROWS"], [])
 
     def test_registered_status_remarks_remain_unchanged(self):
         frame = registry()
@@ -188,7 +203,10 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
             "_build_component_hydration_lookups": lambda *args: {},
         })
         with contextlib.redirect_stdout(io.StringIO()):
-            graph = runpy.run_path(str(CELLS / "05_registry_graph_builder.py"), init_globals=helpers)
+            graph = helpers["_context_config"].__globals__
+            graph.update(helpers)
+            exec(compile((CELLS / "05_registry_graph_builder.py").read_text(encoding="utf-8"),
+                         str(CELLS / "05_registry_graph_builder.py"), "exec"), graph)
         source = Frame([{"SOURCE_RECORD_ID": record, "CURATED_JSON": {
             "ACRONYM": "Example", "INFORMATION_SYSTEM_TYPE": {"ValuesListIds": ["101", "101"]},
             "ATOIATO_DATE": "2026-09-10T23:50:00-12:00",
