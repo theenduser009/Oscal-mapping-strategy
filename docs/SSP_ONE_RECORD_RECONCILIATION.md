@@ -159,3 +159,45 @@ failed replacement. Do not retry COMMIT under `PUBLIC`, do not bypass the durabl
 backup, and do not enable the general notebook write flag. The next execution
 requires an approved role that can create and verify the two scoped permanent
 backup tables in `RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED`.
+
+
+## Live transaction-only reconciliation result — 2026-09-11
+
+A subsequent development-only run bypassed permanent backup creation and completed
+the one-record replacement. The notebook reported:
+
+```text
+RELEASE: ssp-one-record-reconcile-v2-dev-no-backup
+MODE: COMMIT
+MODEL: SSP
+STATUS: ONE_RECORD_RECONCILED_AND_VERIFIED
+PERSISTED: true
+TARGET_DML_ATTEMPTED: true
+BACKUP_POLICY: TRANSACTION_ONLY_DEV
+BACKUPS_VERIFIED: false
+BACKUP_TABLES: {}
+RECOVERY_LIMITATION: NO_DURABLE_COPY_AFTER_COMMIT
+WRITE_POLICY: REPLACE_ONE_REVIEWED_DEV_RECORD_WITHOUT_DURABLE_BACKUP
+SELECTION: PREVIOUSLY_REVIEWED_LOWEST_ROOT
+SOURCE_RECORDS: 1
+NODES: 19
+EDGES: 18
+```
+
+The frozen reviewed scope remained 21 old DIM rows / 20 old FACT rows and 19 new
+DIM rows / 18 new FACT rows. The rehearsal deleted 21/20 and inserted 19/18,
+passed saved-value and graph-integrity verification twice, then reported
+`STATUS: ROLLED_BACK` and `ROLLBACK_RESTORED_BASELINE: true`. The commit repeated
+the same counts, reported `STATUS: COMMITTED`, and its second idempotency pass
+inserted zero DIM and zero FACT rows.
+
+Commit and final readback showed 19 DIM and 18 FACT rows in key scope, zero missing
+or mismatched keys, zero null or duplicate keys, zero dangling endpoints, one
+root, zero UUID-link mismatches, zero wrong-parent counts, and zero wrong
+relationship types.
+
+This is positive evidence that the selected development SSP record was replaced
+and verified. It is also explicitly a no-durable-backup execution:
+`BACKUPS_VERIFIED=false` and `RECOVERY_LIMITATION=NO_DURABLE_COPY_AFTER_COMMIT`.
+Do not describe it as backup-protected, do not rerun the one-record reconciliation,
+and do not extrapolate this one-record result to a bulk load.
