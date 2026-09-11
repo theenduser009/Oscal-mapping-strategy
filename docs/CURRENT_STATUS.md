@@ -2,7 +2,23 @@
 
 Last reconciled: 2026-09-11
 
-## Current action — approved one-record SSP DEV write pilot
+## Active incident — Matillion raw-to-curated null field loss
+
+**SSP write pilot paused by owner; it has not run.** The current priority is the
+reported production field-ID/name loss in the upstream Matillion conversion.
+The [incident diagnosis and bounded candidate](RAW_CURATED_NULL_FIELD_FIX.md)
+identify one confirmed mechanism in the uploaded SQL: SQL-null typed values are
+omitted by the final JSON aggregation. A candidate retains named nulls while
+preserving the original content-ID input and both pending-row update filters.
+
+Status: **candidate prepared; not live-verified or deployed**. Read-only regression
+and collision preflight are provided. Missing metadata, nested extraction and
+key collisions are separate unresolved cases, not silently changed. Existing
+non-null curated rows are not repaired by this candidate; no bulk reset/backfill
+is authorized. An affected table/record and before-after evidence are needed for
+a bounded repair. Accepted SSP/AR work and all deferred mappings are unchanged.
+
+## Paused action — approved one-record SSP DEV write pilot
 
 The owner approved testing persistence now, rather than postponing every write
 until all mappings are complete. The [separate one-record pilot](SSP_WRITE_PILOT.md)
