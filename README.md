@@ -12,6 +12,8 @@ No standalone mapper was added. Shared live acceptance and AR persistence are
 pending; writes remain disabled. The full SSP DEV reload stays accepted and
 must not be rerun for this consolidation.
 
+**V2 individual cell pages:** [Open Cells 1–7](notebooks/cells_v2/README.md).
+
 ## Authoritative files
 
 - [`notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`](notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py) — the complete seven-cell Snowflake/Snowpark notebook source.
