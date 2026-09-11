@@ -2,42 +2,48 @@
 
 Last reconciled: 2026-09-11
 
-## Current action - SSP new-record, insert-only write pilot
+## Current action — SSP one-record reconciliation with PK/FK verification
 
-The [posted comparison](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
-passed. The original candidate has **19 nodes / 18 edges**; its existing target
-scope has **21 DIM rows / 20 FACT rows**, with **zero key overlap** and no duplicate
-key groups. Existing edges use `parent_of`; the candidate uses `CONTAINS`.
-This is an existing-identity mismatch, not just two surplus rows. Nothing was
-written by the comparison or the preceding PREVIEW pilot.
+The owner reran SSP Cells 1–7 and the v4 insert-only pilot in the same session.
+The reported outcome is still NO_UNSTORED_SSP_RECORD_AVAILABLE in staging,
+with TARGET_DML_ATTEMPTED false and PERSISTED false. Session reconstruction did
+not clear the restriction. Do not repeat the v4 pilot or the prior diagnostics.
 
-The owner approved selecting a source record **not already stored**, preserving
-all existing rows. The updated
-[one-record SSP pilot](../notebooks/persistence/PILOT_SSP_ONE_RECORD_WRITE.py)
-selects the lowest eligible source-record ID, excluding existing source ownership,
-DIM key collisions, incident FACT edges, and FACT key collisions. It freezes
-that choice once and stops if no eligible record exists. It never retries another
-record after a conflict and never updates or deletes pre-existing rows.
+The owner then explicitly authorized replacing **only the previously compared
+development record**, with a recoverable backup, rollback rehearsal and readback,
+leaving every other record untouched. The owner also required primary-key and
+foreign-key integrity checks.
 
-Next: replace only the separate pilot Python cell with the complete updated file,
-set `SSP_PILOT_MODE = "COMMIT"` near the top, keep
-`CONFIG["EXECUTE_WRITES"] = False`, and run it once in the accepted SSP session
-with other writers paused. Post its printed report. No comparison, schema,
-error-history, registry, or mapper rerun is needed in the still-active session.
+The separate [one-record reconciliation cell](../notebooks/persistence/RECONCILE_SSP_ONE_RECORD_WRITE.py)
+is implemented. It reuses the accepted SSP graph and physical-schema handling,
+selects the same lowest root used by the comparison, and requires the reviewed
+old 21 DIM / 20 FACT versus new 19 nodes / 18 edges, with zero old/new key overlap.
+It refuses a changed scope, external relationships, invalid keys or collisions.
 
-The release retains lossless binary/UUID storage, temporary-table materialization,
-full-tree validation, rollback rehearsal, and post-commit readback. Before the
-first insert inside **both** transactions, the complete target scope must still
-be empty. Insert counts must equal the frozen batch on pass one and zero on
-pass two. All 316 local tests pass, including 15 new selection/transaction
-regressions; static schema review found no blocking defect. Local tests are not
-live persistence acceptance; that remains pending
-until the pilot reports `ONE_RECORD_COMMITTED_AND_VERIFIED` with `PERSISTED: true`.
+**Next action:** copy the complete reconciliation file into one new Python cell,
+set SSP_RECONCILE_MODE = "COMMIT" at line 10, keep CONFIG["EXECUTE_WRITES"] = False
+and other writers paused, and run only that cell in the active accepted session.
+Post its report including BACKUP_TABLES. No new mapper, registry, schema,
+comparison, error-history or old-pilot run is needed in the active session.
 
-The existing 21/20 graph is left untouched; its identity migration remains a
-separate, unresolved task. This is not bulk-load or AR-write approval. Accepted
-SSP/AR mappings and the accepted Matillion preview are unchanged.
-See the [pilot run guide](SSP_WRITE_PILOT.md) for safety stops and scope.
+Before target DML, it creates permanent, non-replacing backups of the selected
+old rows and verifies every backed-up column. Both transactions recheck unchanged
+baseline, delete only frozen old FACT/DIM keys, enforce exact deleted/inserted
+counts, and verify saved values, unique/non-null PKs, both FK endpoints, UUID
+links and the hierarchy. Rehearsal rolls back and restores the full old baseline;
+the second transaction commits and reads back again. Old keys remain in the
+verification scope to catch leftover legacy edges after replacement.
+
+All **332 local tests pass**, including 16 reconciliation regressions; static
+review found no blocking defect. **Live replacement and persistence acceptance
+remain pending**, not completed by local tests. Success must explicitly report
+ONE_RECORD_RECONCILED_AND_VERIFIED and PERSISTED true. Backups remain available;
+uncertain outcomes require recovery, never blind retries or automatic restoration.
+
+This is a one-record physical persistence test, not bulk SSP/AR loading, full SSP
+schema conformance, or completion of the remaining mappings. Accepted SSP/AR
+mapping work and the accepted Matillion preview are preserved.
+[Run scope, key checks and recovery guide](SSP_ONE_RECORD_RECONCILIATION.md).
 
 ## Active incident — Matillion raw-to-curated null field loss
 

@@ -1,5 +1,14 @@
 # One-record SSP development write pilot
 
+**Superseded for the current run:** the owner reported no eligible unstored
+record even after rebuilding Cells 1–7. Do not rerun this insert-only pilot.
+The owner has now authorized replacing the one previously compared existing
+record with a recoverable backup and PK/FK verification. Use the
+[one-record reconciliation guide](SSP_ONE_RECORD_RECONCILIATION.md) and its
+[new standalone cell](../notebooks/persistence/RECONCILE_SSP_ONE_RECORD_WRITE.py).
+
+The earlier insert-only release and instructions below are retained as history.
+
 Status: **new-record insert-only release prepared; live persistence acceptance pending**.
 
 The [posted read-only comparison](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
