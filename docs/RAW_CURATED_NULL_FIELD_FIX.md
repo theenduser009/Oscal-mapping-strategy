@@ -17,6 +17,31 @@ the assembled JSON. This behavior is documented by Snowflake
 This is one confirmed loss mechanism, not proof that every missing field ID has
 the same cause. Source/data evidence for specific affected records is still needed.
 
+## Copy, paste, run — all records, no inputs
+
+[Open the all-record null-field-name SQL](../sql/matillion/READ_ONLY_authorization_package_all_null_field_names.sql).
+
+Copy the entire file into **one Snowflake SQL cell** and run it. No placeholders,
+record ID, previous result, Python cell or Matillion variable are required.
+It reads the explicitly configured
+`RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW` table.
+
+The result lists each **FIELD_NAME** with a null **MAPPED_VALUE** and counts of
+affected records/occurrences across the table. It includes already-curated rows
+for inspection. Duplicate-key and missing/fallback-style-name signals are marked
+for review, not silently treated as a valid JSON assembly.
+
+**Published without a test run at the owner's request; not verified in Snowflake.**
+This is SELECT only and does not update anything, but a full-table scan uses
+warehouse compute. Existing type conversions, row-selection precedence, nested
+extraction and first-array-item handling remain. A selected null can come from a
+raw null, an empty string or a failed conversion. This inventory is not a complete
+raw-field coverage proof, deployment approval or historical repair. Zero results
+only means no null rows reached this query's final conversion stage.
+
+The earlier one-record previews below remain available but are **not required**
+for this no-input query.
+
 ## Just show the null-valued field names — one query
 
 Use [the one-step authorization-package null-field list](../sql/matillion/READ_ONLY_authorization_package_null_field_names.sql).

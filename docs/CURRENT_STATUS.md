@@ -31,6 +31,14 @@ The authorization-package RAW table is filled in from Cell 1; set only the raw
 requested-object ID. Output is field name plus null value, with explicit blocked
 or no-null status. No previous-result query or data write is needed.
 
+Latest owner request: provide a **copy/paste/run, no-input query across the table**
+and publish without testing. The
+[all-record null-field-name SQL](../sql/matillion/READ_ONLY_authorization_package_all_null_field_names.sql)
+is provided with the configured authorization-package RAW table hard-coded. It
+returns field names and affected-record counts, SELECT only. No test run was
+performed for this new file, and Snowflake runtime acceptance remains pending.
+The earlier single-record inputs and result-scan step are not needed for this file.
+
 ## Paused action — approved one-record SSP DEV write pilot
 
 The owner approved testing persistence now, rather than postponing every write
