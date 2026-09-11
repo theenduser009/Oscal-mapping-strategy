@@ -9,8 +9,13 @@ seventeen alternative-path rows. Their implementation is **pending live
 acceptance**, with 34 cumulative selected fields and 11 other row occurrences
 not enabled. This is not full-model completeness or schema validity.
 
-**Next run:** replace only the separate AR mapping cell with the linked version
-below and run it once with writes disabled. No SSP or registry setup rerun.
+**Latest v3 run: BLOCKED.** The [new report](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) contains
+1 rejected value for `RISK_ACCEPTANCE_RBDS` and 99 for
+`RISK_ASSESSMENT_REPORT`. Mapping/registry checks and candidate graph keys passed,
+but no outputs or database writes were published. Inspect those two fields'
+actual source types/container shapes before choosing a correction. The report
+does not establish their shape or exact conversion failure. No registry setup
+is needed, and **do not rerun the unchanged mapper**.
 
 ## Four groups in the posted CSV
 
@@ -158,7 +163,8 @@ the existing lowercase/hyphen convention. Zero is retained and decimal precision
 is preserved. Missing/null/empty values are omitted and counted; populated
 object, attachment/reference or multi-value shapes that do not resolve through
 the already-supported select wrapper block publication and are reported in
-aggregate. Source shapes and coverage for these new fields are not yet live-verified.
+aggregate. The blocked run now establishes per-field candidate coverage, but the rejected
+values' precise source shapes remain unknown.
 
 **Registry:** the same root, results and observations rows are checked. Properties
 remain inline, so this batch adds no graph path and requires no registry insert.
@@ -172,6 +178,10 @@ reference. The inherent-risk Notes conflict remains unresolved.
 
 ### Run the expanded AR cell once
 
+**This run was completed and blocked. The instructions below are retained as
+release history, not a request to repeat it.** Current next action is the bounded
+source-shape inspection described at the top of this page.
+
 1. Refresh [Assessment Results mapping cell](../notebooks/assessment_results/01_map_observation_scores.py).
 2. Replace the entire separate AR cell and run it once in the active notebook
    session with `EXECUTE_WRITES = False`.
@@ -181,7 +191,8 @@ reference. The inherent-risk Notes conflict remains unresolved.
 4. Post only the printed `AR_SCORE_RUN_REPORT`. Check release
    `ar-observation-scores-v3-34-fields`, 34 selected fields and, for the same
    45 mapping rows, 11 other rows not processed. New field coverage is unknown
-   until that report is posted. A blocked result is not a successful partial run.
+   at release time; the posted blocked report now records candidate per-field
+   counts in the progress register. A blocked result is not a successful partial run.
 
 The report keeps the two input mapping groups visible and names the common
 inline-property representation. No additional validation cell is required.

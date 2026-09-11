@@ -2,6 +2,36 @@
 
 Last reconciled: 2026-09-11
 
+## Latest AR run — v3 blocked; no repeat run yet
+
+The [posted thirty-four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) confirms the new release ran.
+Mapping and registry contracts passed; all 2,813 source records were valid and
+unique. Two source fields were rejected by the existing scalar-value conversion:
+`RISK_ACCEPTANCE_RBDS` has 1 invalid value and `RISK_ASSESSMENT_REPORT` has 99.
+This establishes handler rejection, not that the underlying Archer data is bad
+or that either field contains a particular object/reference shape.
+
+All 34 per-field totals reconcile to 2,813 records. Candidate observations total
+67,782, producing 73,408 candidate nodes and 70,595 candidate edges with zero
+duplicate keys or dangling edges. `OUTPUTS_PUBLISHED = false` and
+`WRITES_EXECUTED = false`: these are not accepted/published outputs.
+The previous seventeen-field acceptance remains the baseline; its per-field
+coverage matches this attempt. None of the seventeen additions is promoted to
+runtime accepted from this blocked batch.
+
+**Next:** inspect only the rejected values' types/container shapes in those two
+fields before changing their conversion. The aggregate report does not expose
+that shape or the precise rejection reason. Do not guess a conversion, serialize
+arbitrary objects, silently skip rejected values or weaken the scalar guard.
+No registry insertion is required. **Do not rerun the unchanged AR cell.**
+
+Three added fields have no populated evidence in this source:
+`PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD`,
+`PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` and `INITIAL_RISK_ASSESSMENT`.
+They are source-coverage gaps, not the cause of the blocked status; their upstream
+cause is not established. The two underscore-prefixed threshold fields each have
+one populated value. See [field-by-field candidate evidence](MAPPING_PROGRESS.md#approved-alternative-path-additions--pending-live).
+
 **Short current summary: [SSP — done and next](SSP_DONE_AND_NEXT.md).**
 **Current direction:** SSP leftovers are parked while other Excel models are
 reviewed. The [model/path progress and clarification queue](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue)
@@ -23,8 +53,8 @@ the values were missing in Archer or during upstream curation. See the
 
 **The accepted v2 release needs no repeat run.** The separate AR mapper now
 implements the approved seventeen alternative-path additions as cumulative v3.
-Replace only that AR cell and run the expanded release once with writes disabled;
-[exact field list and run steps](ASSESSMENT_RESULTS_START_HERE.md#run-the-expanded-ar-cell-once).
+That expanded run is now blocked on the two value-conversion cases above;
+[exact field list and current blocker](ASSESSMENT_RESULTS_START_HERE.md).
 SSP code and its accepted graph/assembly are unchanged. Required registry paths were present in the actual Snowflake table
 when the accepted runs passed; no outstanding registry insertion is identified
 for those accepted scopes. This is recorded-run evidence, not a fresh full-registry
@@ -34,7 +64,8 @@ audit or proof that every future path exists. Keep `EXECUTE_WRITES = False`.
 inline property for the seventeen rows whose original path says observations
 or props. The v3 release checks those exact original field/path/Notes contracts,
 retains the accepted seventeen mappings, and uses the same three registry paths.
-There is no new registry insertion. The expanded runtime report is still pending.
+There is no new registry insertion. The expanded runtime report is recorded as
+blocked; source-shape evidence is needed before a correction.
 
 **Remaining work:** 11 AR row occurrences are not enabled (duplicate and
 conflicting Notes rows, conditional workflow properties and finding references). A shared cross-model engine with one entry
@@ -757,7 +788,8 @@ changes payload content without changing node or edge identity.
 The owner chose to pause remaining SSP work and continue matching Assessment
 Results score mappings. The cumulative seventeen-field release is live accepted.
 The newly approved seventeen alternative-path additions are implemented in the
-34-field v3 release and require one expanded AR-cell run. The
+34-field v3 release. That run has now completed in blocked state; do not repeat
+it unchanged. Resolve the two rejected-value source shapes first. The
 [progress register](MAPPING_PROGRESS.md) separates seventeen accepted fields,
 seventeen additions pending live, eleven excluded rows and recorded source gaps.
 Shared-engine consolidation remains a proposal, not completed work.

@@ -10,6 +10,16 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
+## Latest attempted run — blocked, not accepted
+
+The [v3 thirty-four-field checkpoint](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) passed mapping/registry contracts
+and candidate key integrity, but has 100 rejected field values: 1 in
+`RISK_ACCEPTANCE_RBDS` and 99 in `RISK_ASSESSMENT_REPORT`. No outputs or database
+writes were published. The seventeen earlier accepted mappings remain accepted;
+the seventeen additions are still pending live acceptance. The next work is
+bounded source-shape inspection for those two fields, not a registry insert or
+a repeat of the unchanged mapper. Rejection does not prove defective source data.
+
 ## Current position
 
 - [September 10 end-of-day report](daily/2026-09-10.md): accepted SSP hydration,
@@ -130,7 +140,7 @@ security-impact path above. Their exact source-field grouping is retained below.
 | Assessment Results | `assessment-results.results[].observations[]` | `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE`, `SECURITY_COMPLIANCE_SCORE` | Live accepted | Each emitted for 2,813 records with zero missing/invalid values. Contracts and graph keys passed; no writes [E17]. | None for batch-one runtime acceptance. It is not a full-model/schema-valid claim. |
 | Assessment Results | `assessment-results.results[].observations[]` | Thirteen additions listed in the AR register below | Live accepted; seven fields have source gaps | Expanded run passed for all 17 selected fields with zero invalid values; missing counts recorded below [E18]. | No rerun. Source owner can investigate absent values; no score defaults or recalculation. |
 | Assessment Results | `assessment-results.results[].observations[]` | `AVG_SECURITY_COMPLIANCE_SCORE` (two occurrences), `TOTAL_PACKAGE_INHERENT_RISK` | Not enabled; clarification needed | Duplicate field identity and conflicting inherent-risk Notes remain unresolved [E15, E16]. | Reconcile the duplicate against the original sheet and confirm the inherent-risk Notes/target. No inferred rename or destination. |
-| Assessment Results | `assessment-results.results[].observations[] or props[]` (original Excel choice) | 17 risk rows listed below | Implemented; pending live | Owner approved one observation per field with a named inline property on September 11 [E19]. Original path/Notes checked exactly; emitted node path ends at observations[]. | Run the cumulative 34-field AR cell once; source shapes/coverage not yet live-verified. No registry insertion or score recalculation. |
+| Assessment Results | `assessment-results.results[].observations[] or props[]` (original Excel choice) | 17 risk rows listed below | Implemented; pending live | Owner approved one observation per field with a named inline property on September 11 [E19]. Original path/Notes checked exactly; emitted node path ends at observations[]. | Expanded run blocked by 100 rejected values in two fields. Inspect their shapes before changing conversion; do not rerun unchanged. No registry insertion or score recalculation. |
 | Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Grouped; conditional scope | Notes say to include if needed for audit trail [E15]. | Confirm audit-trail inclusion and property name/value rules; keep result-level properties separate from observation properties. |
 | Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
 | Profile | `profile.imports[]` | `BASELINE_RECOMMENDATION` | Review pending | Conditional import example in Notes does not supply an approved import reference. | Baseline-to-URI mapping, intended import structure and selection rule; reconcile Extension Property label with target. |
@@ -199,23 +209,23 @@ named property on September 11 [E19]. Emitted node path:
 
 | Archer field | Status | Evidence / remaining work |
 | --- | --- | --- |
-| `RISK_ACCEPTANCE_RBDS` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `TOTAL_PACKAGE_RESIDUAL_RISK` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `ADJUSTED_TOTAL_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `ADJUSTED_AVERAGE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `CURRENT_HIGHEST_DEVICE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `CURRENT_AVERAGE_DEVICE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `CURRENT_CONTROL_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `BASELINE_HIGHEST_DEVICE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `BASELINE_AVERAGE_DEVICE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `BASELINE_CONTROL_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `RISK_ASSESSMENT` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `INITIAL_RISK_ASSESSMENT` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
-| `RISK_ASSESSMENT_REPORT` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `RISK_ACCEPTANCE_RBDS` | Blocked: scalar conversion rejected values | 0 candidate emissions; 2,812 missing; 1 invalid [E20]. Inspect actual source shape; no inferred conversion. |
+| `TOTAL_PACKAGE_RESIDUAL_RISK` | Implemented; candidate evidence only | 2,811 candidate emissions; 2 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `ADJUSTED_TOTAL_RISK_SCORE` | Implemented; candidate evidence only | 2,813 candidate emissions; 0 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `ADJUSTED_AVERAGE_RISK_SCORE` | Implemented; candidate evidence only | 2,813 candidate emissions; 0 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `CURRENT_HIGHEST_DEVICE_RISK_SCORE` | Implemented; candidate evidence only | 2,812 candidate emissions; 1 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `CURRENT_AVERAGE_DEVICE_RISK_SCORE` | Implemented; candidate evidence only | 2,813 candidate emissions; 0 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `CURRENT_CONTROL_RISK_SCORE` | Implemented; candidate evidence only | 2,743 candidate emissions; 70 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | Implemented; no populated evidence | 0 candidate emissions; 2,813 missing; 0 invalid [E20]. Missing-source cause not established. |
+| `PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | Implemented; no populated evidence | 0 candidate emissions; 2,813 missing; 0 invalid [E20]. Missing-source cause not established. |
+| `BASELINE_HIGHEST_DEVICE_RISK_SCORE` | Implemented; candidate evidence only | 1,094 candidate emissions; 1,719 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `BASELINE_AVERAGE_DEVICE_RISK_SCORE` | Implemented; candidate evidence only | 1,093 candidate emissions; 1,720 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `BASELINE_CONTROL_RISK_SCORE` | Implemented; candidate evidence only | 1,096 candidate emissions; 1,717 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `RISK_ASSESSMENT` | Implemented; candidate evidence only | 515 candidate emissions; 2,298 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | Implemented; candidate evidence only | 1 candidate emissions; 2,812 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | Implemented; candidate evidence only | 1 candidate emissions; 2,812 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
+| `INITIAL_RISK_ASSESSMENT` | Implemented; no populated evidence | 0 candidate emissions; 2,813 missing; 0 invalid [E20]. Missing-source cause not established. |
+| `RISK_ASSESSMENT_REPORT` | Blocked: scalar conversion rejected values | 217 candidate emissions; 2,497 missing; 99 invalid [E20]. Inspect actual source shape; no inferred conversion. |
 
 The expanded cell remains read-only and cumulative, retaining all seventeen
 accepted fields. Eleven row occurrences remain outside its allowlist: three
@@ -414,6 +424,8 @@ addressing the already evidenced corrections.
 - [E18: Uploaded seventeen-field AR run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11) — 2,813 records; 52,586 nodes; 49,773 edges; 17 fields with populated evidence, seven with source gaps; zero contract/key errors or writes.
 
 - [E19: Approved seventeen alternative-path additions](ASSESSMENT_RESULTS_START_HERE.md#approved-alternative-path-batch--seventeen-more-fields-pending-live) — owner approved the existing inline-property-per-observation representation on September 11; release `ar-observation-scores-v3-34-fields` is implemented but pending live. Original Excel/CSV unchanged; no registry or DIM/FACT writes.
+
+- [E20: Blocked v3 thirty-four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) — mapping/registry checks pass; 73,408 candidate nodes and 70,595 candidate edges with zero duplicate/dangling keys; two fields have 100 rejected values; outputs and writes false. Field totals reconcile; precise source shapes/reasons still unknown.
 
 ### Shared-engine design status
 
