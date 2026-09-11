@@ -1,13 +1,17 @@
 # Full SSP development truncate-and-reload
 
-Status: **prepared; full-table Snowflake execution is not yet accepted**.
-The one-record and [ten-record batch](SSP_TEN_RECORD_DEV_BATCH_2026-09-11.md)
-already passed live persistence checks: eleven source records in total.
+Status: **committed and verified in Snowflake on 2026-09-11**.
+[Accepted full-reload report](SSP_FULL_DEV_RELOAD_2026-09-11.md): 2,813 source
+records, 70,102 DIM / 67,289 FACT rows; PERSISTED true and clean readback.
+The earlier eleven records were included in this full replacement.
+**Do not rerun this accepted load.** The steps below document the completed
+procedure, not a new run request or a ready-to-schedule daily loader.
+[Current daily-loader work and unresolved row-count audit](PROJECT_HANDOFF.md).
 
 The owner explicitly requested a full reload instead of incremental batches,
 including those eleven records, and waived permanent backups for these DEV tables.
 
-## Run this cell
+## Historical execution procedure — requires fresh approval before reuse
 
 [Open the complete full-reload Python cell](../notebooks/persistence/RELOAD_ALL_SSP_DEV.py).
 

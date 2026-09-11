@@ -2,11 +2,13 @@
 
 This repository is the durable checkpoint for the metadata-driven Archer-to-OSCAL mapper.
 
-**Start here: [SSP — done and next](docs/SSP_DONE_AND_NEXT.md).** A short summary
-of accepted work, the two System Characteristics corrections, and parked work.
+**Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Cell responsibilities,
+accepted runs, unresolved gaps and the next daily-loading step are recorded here.
+[Project startup instructions](AGENTS.md) require this context to be read before work.
 
-**Active model: [Assessment Results — start here](docs/ASSESSMENT_RESULTS_START_HERE.md).**
-Grouped Excel mappings, confirmed Notes, and the one read-only input needed next.
+**Current direction:** the full SSP DEV reload is accepted. Complete the existing
+daily SSP loading path in Cells 6-7; do not rerun the separate full reload.
+AR's 17 accepted in-memory mappings remain preserved, with database loading pending.
 
 ## Authoritative files
 
@@ -33,9 +35,23 @@ The committed notebook always starts with:
 "EXECUTE_WRITES": False
 ```
 
-Cell 6 validates the graph and target load frames before any merge. Cell 7 is the only execution cell. Do not enable writes until the read-only run has zero duplicate keys, zero null primary keys, and zero dangling edges.
+Cell 6 already defines graph validation and insert/update MERGE loading; Cell 7
+orchestrates the normal notebook. Its daily-write branch remains disabled and
+not end-to-end accepted. Clean in-memory keys alone are not permission to enable it.
+The separate DEV persistence cells have their own explicitly scoped modes.
 
 ## Latest verified checkpoint
+
+The [full SSP DEV reload](docs/SSP_FULL_DEV_RELOAD_2026-09-11.md) committed and
+verified **2,813 records, 70,102 DIM elements and 67,289 FACT dependencies**.
+No reload rerun is needed. The old-row reduction remains unreconciled; full SSP
+completeness and the normal daily writer are not established by this milestone.
+See [current status](docs/CURRENT_STATUS.md) for the active action.
+
+## Historical checkpoints — not current run instructions
+
+The following entries retain earlier evidence. Their old next-step requests and
+"latest" labels do not override the dated project handoff.
 
 The latest accepted read-only Snowflake run passed graph and pre-write
 validation with 67,671 nodes, 64,858 edges, zero duplicate or dangling keys,

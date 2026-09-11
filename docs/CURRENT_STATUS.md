@@ -2,41 +2,47 @@
 
 Last reconciled: 2026-09-11
 
-## Current action — eleven SSP writes accepted; full DEV reload next
+## Current action - full SSP DEV reload accepted; daily loading path next
 
-**Eleven SSP source records are persisted and verified:** the earlier
-[one-record reconciliation](SSP_ONE_RECORD_RECONCILIATION.md#live-transaction-only-reconciliation-result--2026-09-11)
-plus the [accepted ten-record batch](SSP_TEN_RECORD_DEV_BATCH_2026-09-11.md).
-The ten-record report confirms COMMIT, PERSISTED true, 289 DIM / 279 FACT saved
-rows, zero second-pass inserts, clean values/PK/FK/UUID/hierarchy, and the first
-record unchanged. These milestones are complete; do not rerun the old pilots.
+**The full SSP DEV reload is committed and verified:** 2,813 source records,
+70,102 DIM elements and 67,289 FACT dependencies, with clean saved-value,
+PK/FK/UUID/hierarchy checks and zero second-pass inserts.
+[Accepted live report](SSP_FULL_DEV_RELOAD_2026-09-11.md).
+The earlier one-record and ten-record milestones are also complete.
+**Do not rerun the accepted reload or the old pilots.**
 
-The owner now explicitly requests **truncate and reload both complete SSP DEV
-tables**, rather than a resumable or capped incremental loader, without permanent
-backups. This replaces all existing target rows, including the verified eleven,
-with the full accepted graph: **2,813 records, 70,102 nodes / 67,289 edges**.
-Other models, the registry and upstream Matillion work remain unchanged.
+[Project handoff - cell roles, accepted work and remaining gaps](PROJECT_HANDOFF.md)
+is the durable startup context; [project instructions](../AGENTS.md) require it
+to be read before future work and run advice.
 
-**Next action:** open the complete
-[full-reload Python cell](../notebooks/persistence/RELOAD_ALL_SSP_DEV.py), paste it
-into one new cell in the same accepted session, set line 10
-`SSP_RELOAD_MODE = "COMMIT"`, and run only that cell once. Keep normal
-`CONFIG["EXECUTE_WRITES"] = False` and other writers to these targets paused.
-[Exact targets, run steps and recovery limitations](SSP_FULL_DEV_RELOAD.md).
+**Next engineering action:** complete and verify the existing daily SSP writer
+in Cells 6-7. Cell 6 already defines insert/update MERGEs and load verification;
+Cell 7 calls it. Their normal runs had writes disabled. The missing work is
+integrating proven physical conversions, shared transactions, exact readback,
+unchanged-row behavior and an approved obsolete-data policy into that existing
+path, not inventing another mapper or claiming there was no loader.
+No notebook run is requested by this documentation update. Keep normal
+EXECUTE_WRITES false; the separate snapshot-specific DEV reload is not the
+finished daily job.
 
-The cell stages/checks all records before truncation. A single explicit
-transaction truncates FACT then DIM, loads DIM then FACT, verifies all saved
-values and keys, checks zero-insert repeat merges, and commits. Final readback
-must pass. Failures before commit trigger rollback and table-row comparison.
-There is no separate rehearsal run and no permanent backup. TRUNCATE needs its
-own table privilege and clears file-load metadata; prior pilot permissions do
-not prove that privilege. No grants or roles are changed.
+**Unresolved coverage question:** the old tables had 126,453 DIM / 122,939 FACT
+rows; the accepted replacement has 70,102 / 67,289. This is 56,351 fewer DIM
+and 55,650 fewer FACT rows. Saved data matching the new graph does not explain
+every removed old row. Do not label them duplicates/stale/superseded without
+a read-only old-versus-new record/path comparison. Temporary before-snapshots
+may help only if the reload session is still available; that is not confirmed.
+No permanent backup was retained. Full SSP mapping/schema completeness remains
+unestablished.
 
-**Full reload is prepared, not live-accepted.** Success requires the full report
-to say `FULL_SSP_RELOAD_COMMITTED_AND_VERIFIED` with `PERSISTED: true`.
-An uncertain commit or failed final readback must be reviewed, not rerun blindly.
-The historical entries below preserve earlier incidents and are superseded by
-this current action where they describe older SSP write milestones as pending.
+AR retains 17 accepted in-memory mappings, not an accepted database load.
+The later 34-field candidate and deferred rows remain separate; see the handoff.
+Matillion's field-ID-to-CURATED_JSON conversion is upstream of the notebook,
+and its owner-accepted preview is not proof of pipeline UPDATE execution.
+
+The historical entries below preserve earlier incidents. Their old run requests,
+pending write statuses and active-model labels are superseded by this current
+action and newer linked evidence. Do not execute an old next-step instruction
+merely because it remains in the history.
 
 ## Active incident — Matillion raw-to-curated null field loss
 
