@@ -2,41 +2,41 @@
 
 Last reconciled: 2026-09-11
 
-## Current action — first SSP write accepted; capped ten-record write next
+## Current action — eleven SSP writes accepted; full DEV reload next
 
-**One SSP development record is persisted and verified.** The owner-posted
-[successful reconciliation report](SSP_ONE_RECORD_RECONCILIATION.md#live-transaction-only-reconciliation-result--2026-09-11)
-confirms the replacement of 21/20 old rows with 19 DIM / 18 FACT rows, rollback
-rehearsal and restored baseline, zero second-pass inserts, and clean final
-saved-value, PK/FK, UUID and hierarchy checks. No permanent backup was created,
-as approved. Do not rerun the successful one-record reconciliation.
+**Eleven SSP source records are persisted and verified:** the earlier
+[one-record reconciliation](SSP_ONE_RECORD_RECONCILIATION.md#live-transaction-only-reconciliation-result--2026-09-11)
+plus the [accepted ten-record batch](SSP_TEN_RECORD_DEV_BATCH_2026-09-11.md).
+The ten-record report confirms COMMIT, PERSISTED true, 289 DIM / 279 FACT saved
+rows, zero second-pass inserts, clean values/PK/FK/UUID/hierarchy, and the first
+record unchanged. These milestones are complete; do not rerun the old pilots.
 
-After asking to continue writing, the owner requested a safer bounded approach
-and then explicitly asked to proceed with the write instead of another separate
-rollback-only test. The next cell caps the operation at **ten additional SSP
-development records**, excluding and protecting the first accepted record.
-It uses an internal rollback rehearsal followed by COMMIT and final verification;
-no separate diagnostic or rehearsal-cell run is requested.
+The owner now explicitly requests **truncate and reload both complete SSP DEV
+tables**, rather than a resumable or capped incremental loader, without permanent
+backups. This replaces all existing target rows, including the verified eleven,
+with the full accepted graph: **2,813 records, 70,102 nodes / 67,289 edges**.
+Other models, the registry and upstream Matillion work remain unchanged.
 
-**Next action:** copy the complete
-[ten-record batch cell](../notebooks/persistence/PILOT_SSP_TEN_RECORD_BATCH_WRITE.py)
-into one new Python cell in the same accepted session. At line 10 set
-SSP_BATCH_MODE = "COMMIT"; keep CONFIG["EXECUTE_WRITES"] = False and other SSP
-writers paused. Run only that new cell once and post the full report.
-Leave the successful one-record cell unchanged.
+**Next action:** open the complete
+[full-reload Python cell](../notebooks/persistence/RELOAD_ALL_SSP_DEV.py), paste it
+into one new cell in the same accepted session, set line 10
+`SSP_RELOAD_MODE = "COMMIT"`, and run only that cell once. Keep normal
+`CONFIG["EXECUTE_WRITES"] = False` and other writers to these targets paused.
+[Exact targets, run steps and recovery limitations](SSP_FULL_DEV_RELOAD.md).
 
-Actual old/new counts are frozen per batch. Each record must independently pass
-tree, PK/FK and UUID checks; cross-record edges and overlapping-key ownership
-changes are rejected before deletion. Exact frozen-key deletion is followed by
-saved-payload verification and zero-insert repeat merges. Rollback must restore
-the selected records and protected first record before commit can proceed.
-There is no permanent backup; post-commit recovery is not provided by rollback.
+The cell stages/checks all records before truncation. A single explicit
+transaction truncates FACT then DIM, loads DIM then FACT, verifies all saved
+values and keys, checks zero-insert repeat merges, and commits. Final readback
+must pass. Failures before commit trigger rollback and table-row comparison.
+There is no separate rehearsal run and no permanent backup. TRUNCATE needs its
+own table privilege and clears file-load metadata; prior pilot permissions do
+not prove that privilege. No grants or roles are changed.
 
-All **358 local tests pass**, including 19 batch checks, and scope review is clear.
-**Live ten-record batch persistence remains pending.** Only the first record is
-runtime-accepted; no all-record or AR load is accepted. This cell always selects
-the same next ten IDs, not an advancing cursor. Do not rerun after success.
-[Batch instructions, limits and acceptance criteria](SSP_TEN_RECORD_BATCH_WRITE.md).
+**Full reload is prepared, not live-accepted.** Success requires the full report
+to say `FULL_SSP_RELOAD_COMMITTED_AND_VERIFIED` with `PERSISTED: true`.
+An uncertain commit or failed final readback must be reviewed, not rerun blindly.
+The historical entries below preserve earlier incidents and are superseded by
+this current action where they describe older SSP write milestones as pending.
 
 ## Active incident — Matillion raw-to-curated null field loss
 
