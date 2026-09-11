@@ -285,3 +285,78 @@ OUTPUTS_PUBLISHED: false
 ### Immediate next objective
 
 Keep writes disabled. Resolve the two invalid-value blockers first (`RISK_ACCEPTANCE_RBDS` and `RISK_ASSESSMENT_REPORT`), then review the zero/near-zero evidence fields to determine whether they are legitimate source sparsity, mis-mapped fields, or fields that should be represented differently. After that, process the remaining 11 mapping rows and rerun the same graph integrity gates before any full-model/schema-valid claim.
+
+## Assessment Results rejected-value shape diagnostic — 2026-09-11
+
+Source: follow-up read-only shape-evidence screenshots from `NB_ARCHER_OSCAL_MAPPER_V2`.
+
+Run-level evidence:
+
+```text
+STATUS: SHAPE_EVIDENCE_ONLY
+WRITES_EXECUTED: false
+SOURCE_RECORDS: 2813
+SOURCE_PARSE_ERRORS: 0
+MATCHES_BLOCKED_RUN: true
+```
+
+### RISK_ACCEPTANCE_RBDS
+
+```text
+EXPECTED_REJECTED: 1
+OBSERVED_REJECTED: 1
+reason: resolved_value_is_not_scalar
+stage: scalar_conversion
+count: 1
+source type: array
+array length: 1
+array member type: object
+recognized object keys:
+  ContentId: number
+  LevelId: number
+```
+
+Interpretation: the one rejected `RISK_ACCEPTANCE_RBDS` source value is not a malformed scalar. It is a one-element reference array containing an object with governed-reference style keys (`ContentId`, `LevelId`). The current observation-score mapping expects scalar conversion, so this field requires reference-aware handling or a deliberate extraction rule rather than scalar coercion.
+
+### RISK_ASSESSMENT_REPORT
+
+```text
+EXPECTED_REJECTED: 99
+OBSERVED_REJECTED: 99
+reason: multiple_resolved_values
+stage: scalar_conversion
+source type: array
+array member type: number
+```
+
+Observed array-length distribution across all 99 rejected records:
+
+```text
+length=2    count=32
+length=3    count=23
+length=4    count=11
+length=5    count=12
+length=6    count=3
+length=7    count=6
+length=8    count=3
+length=9    count=1
+length=10   count=2
+length=11   count=1
+length=12   count=1
+length=16   count=1
+length=17   count=1
+length=19   count=1
+length=100  count=1
+TOTAL              99
+```
+
+Interpretation: all 99 rejected `RISK_ASSESSMENT_REPORT` values are multi-value numeric arrays, not scalar values. The rejected-count evidence exactly matches the blocked run. This field should not be repaired by arbitrary first-value coercion; the mapping contract needs an explicit multi-value representation or deterministic aggregation rule approved for this Archer field.
+
+### Diagnostic conclusion
+
+The shape diagnostic explains both blocked fields without changing any data or database objects:
+
+- `RISK_ACCEPTANCE_RBDS` is reference-shaped (`[{ContentId, LevelId}]`) and needs reference-aware mapping.
+- `RISK_ASSESSMENT_REPORT` is genuinely multi-valued numeric data and needs an approved multi-value/aggregation treatment.
+- `MATCHES_BLOCKED_RUN=true` confirms the diagnostic reconciles exactly to the prior blocked run's `1 + 99` invalid values.
+- Keep `WRITES_EXECUTED=false` until the mapping behavior for both fields is explicitly resolved.
