@@ -9,30 +9,48 @@ seventeen alternative-path rows. Their implementation is **pending live
 acceptance**, with 34 cumulative selected fields and 11 other row occurrences
 not enabled. This is not full-model completeness or schema validity.
 
-**Latest v3 run: BLOCKED.** The [new report](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) contains
-1 rejected value for `RISK_ACCEPTANCE_RBDS` and 99 for
-`RISK_ASSESSMENT_REPORT`. Mapping/registry checks and candidate graph keys passed,
-but no outputs or database writes were published. Inspect those two fields'
-actual source types/container shapes before choosing a correction. The report
-does not establish their shape or exact conversion failure. No registry setup
-is needed, and **do not rerun the unchanged mapper**.
+## Current direction — two fields parked; continue the remaining eleven
 
-## Run now — two-field diagnostic only
+On September 11, the owner directed us to park `RISK_ACCEPTANCE_RBDS` and
+`RISK_ASSESSMENT_REPORT` and continue the eleven other AR-target row occurrences.
+Parking is not completion, a conversion change, or acceptance of the blocked batch.
+The existing v3 code remains unchanged and must not be rerun unchanged.
 
-1. Open [the rejected-value shape diagnostic](../notebooks/validation/READ_ONCE_ar_rejected_value_shapes.py).
-2. Copy the whole file into **one new Snowflake Python cell** in the same session
-   that contains the blocked 34-field AR run. Keep `EXECUTE_WRITES = False`.
-3. Run only that diagnostic and post its printed report to GitHub.
+The [shape diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11)
+is complete: 2,813 records, zero parse errors, zero writes, and
+`MATCHES_BLOCKED_RUN = true`. One rejected Risk Acceptance value is a
+one-element array containing an object with numeric ContentId and LevelId keys.
+The 99 rejected Risk Assessment Report values are numeric arrays of length 2–100.
+Their meanings and required reference/multi-value conversions are not established.
+**No further diagnostic run is requested.**
 
-Do not rerun AR, SSP or registry setup. The diagnostic reads the existing source
-and conversion helpers, reports only fixed structural labels/types and aggregate
-counts, and preserves the blocked report and existing graph variables. It never
-prints source values, record IDs, filenames, arbitrary JSON keys or raw errors.
-It must reproduce the 1 and 99 rejected-value counts and show
-`MATCHES_BLOCKED_RUN = true` before its shapes can explain this run. A mismatch
-means the evidence differs; it is not a reason to change data or guess a transform.
-This diagnostic does not fix or accept the mappings. We will use the shapes to
-choose the smallest correction consistent with the approved Excel Notes.
+Inventory remains **45 row occurrences: 17 accepted + 15 implemented candidate-only
++ 2 implemented but parked after rejection + 11 not enabled**. No additional
+mapping is marked accepted by this direction change.
+
+**Next candidate batch:** the seven workflow audit fields at
+`assessment-results.results[].props[]` (result-level properties, not observations).
+The CSV model label is `Extension Properties`; its target path is in Assessment Results.
+
+- `WORKFLOW_CURRENT_NODE`
+- `WORKFLOW_PROCESS_VERSION`
+- `WORKFLOW_JOB_STATUS`
+- `WORKFLOW_STATUS`
+- `DUE_DATE`
+- `WORKFLOW_CURRENT_NODE_HRTN`
+- `WORKFLOW_STATUS_CHANGED`
+
+Their shared Notes make inclusion conditional on audit-trail need. The next
+decision is whether to include all seven as audit-trail properties. Proposed
+representation uses the existing lowercase-hyphen property names and preserves
+source-provided values without date/timezone changes or calculated replacements.
+Actual source shapes and any non-scalar conversion are not yet established.
+No workflow code or registry insert is claimed complete.
+
+The other four row occurrences remain separate: `AVG_SECURITY_COMPLIANCE_SCORE`
+appears twice; `TOTAL_PACKAGE_INHERENT_RISK` has conflicting Notes evidence;
+`FINDINGS` needs the referenced finding identity/source and parent association.
+The original CSV and accepted SSP/AR work are preserved.
 
 ## Four groups in the posted CSV
 
@@ -180,8 +198,8 @@ the existing lowercase/hyphen convention. Zero is retained and decimal precision
 is preserved. Missing/null/empty values are omitted and counted; populated
 object, attachment/reference or multi-value shapes that do not resolve through
 the already-supported select wrapper block publication and are reported in
-aggregate. The blocked run now establishes per-field candidate coverage, but the rejected
-values' precise source shapes remain unknown.
+aggregate. The blocked run establishes per-field candidate coverage; the completed
+shape diagnostic above explains the two rejected shapes, which are now parked.
 
 **Registry:** the same root, results and observations rows are checked. Properties
 remain inline, so this batch adds no graph path and requires no registry insert.
@@ -196,8 +214,8 @@ reference. The inherent-risk Notes conflict remains unresolved.
 ### Run the expanded AR cell once
 
 **This run was completed and blocked. The instructions below are retained as
-release history, not a request to repeat it.** Current next action is the bounded
-source-shape inspection described at the top of this page.
+release history, not a request to repeat it.** The shape diagnostic is also complete.
+Current direction is the remaining-eleven review described at the top of this page.
 
 1. Refresh [Assessment Results mapping cell](../notebooks/assessment_results/01_map_observation_scores.py).
 2. Replace the entire separate AR cell and run it once in the active notebook

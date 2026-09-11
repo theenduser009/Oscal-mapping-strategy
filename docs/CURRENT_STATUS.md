@@ -2,22 +2,48 @@
 
 Last reconciled: 2026-09-11
 
-## Run now — two-field diagnostic only
+## Current direction — two fields parked; continue the remaining eleven
 
-1. Open [the rejected-value shape diagnostic](../notebooks/validation/READ_ONCE_ar_rejected_value_shapes.py).
-2. Copy the whole file into **one new Snowflake Python cell** in the same session
-   that contains the blocked 34-field AR run. Keep `EXECUTE_WRITES = False`.
-3. Run only that diagnostic and post its printed report to GitHub.
+On September 11, the owner directed us to park `RISK_ACCEPTANCE_RBDS` and
+`RISK_ASSESSMENT_REPORT` and continue the eleven other AR-target row occurrences.
+Parking is not completion, a conversion change, or acceptance of the blocked batch.
+The existing v3 code remains unchanged and must not be rerun unchanged.
 
-Do not rerun AR, SSP or registry setup. The diagnostic reads the existing source
-and conversion helpers, reports only fixed structural labels/types and aggregate
-counts, and preserves the blocked report and existing graph variables. It never
-prints source values, record IDs, filenames, arbitrary JSON keys or raw errors.
-It must reproduce the 1 and 99 rejected-value counts and show
-`MATCHES_BLOCKED_RUN = true` before its shapes can explain this run. A mismatch
-means the evidence differs; it is not a reason to change data or guess a transform.
-This diagnostic does not fix or accept the mappings. We will use the shapes to
-choose the smallest correction consistent with the approved Excel Notes.
+The [shape diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11)
+is complete: 2,813 records, zero parse errors, zero writes, and
+`MATCHES_BLOCKED_RUN = true`. One rejected Risk Acceptance value is a
+one-element array containing an object with numeric ContentId and LevelId keys.
+The 99 rejected Risk Assessment Report values are numeric arrays of length 2–100.
+Their meanings and required reference/multi-value conversions are not established.
+**No further diagnostic run is requested.**
+
+Inventory remains **45 row occurrences: 17 accepted + 15 implemented candidate-only
++ 2 implemented but parked after rejection + 11 not enabled**. No additional
+mapping is marked accepted by this direction change.
+
+**Next candidate batch:** the seven workflow audit fields at
+`assessment-results.results[].props[]` (result-level properties, not observations).
+The CSV model label is `Extension Properties`; its target path is in Assessment Results.
+
+- `WORKFLOW_CURRENT_NODE`
+- `WORKFLOW_PROCESS_VERSION`
+- `WORKFLOW_JOB_STATUS`
+- `WORKFLOW_STATUS`
+- `DUE_DATE`
+- `WORKFLOW_CURRENT_NODE_HRTN`
+- `WORKFLOW_STATUS_CHANGED`
+
+Their shared Notes make inclusion conditional on audit-trail need. The next
+decision is whether to include all seven as audit-trail properties. Proposed
+representation uses the existing lowercase-hyphen property names and preserves
+source-provided values without date/timezone changes or calculated replacements.
+Actual source shapes and any non-scalar conversion are not yet established.
+No workflow code or registry insert is claimed complete.
+
+The other four row occurrences remain separate: `AVG_SECURITY_COMPLIANCE_SCORE`
+appears twice; `TOTAL_PACKAGE_INHERENT_RISK` has conflicting Notes evidence;
+`FINDINGS` needs the referenced finding identity/source and parent association.
+The original CSV and accepted SSP/AR work are preserved.
 
 ## Latest AR run — v3 blocked; no repeat run yet
 
@@ -36,11 +62,10 @@ The previous seventeen-field acceptance remains the baseline; its per-field
 coverage matches this attempt. None of the seventeen additions is promoted to
 runtime accepted from this blocked batch.
 
-**Next:** inspect only the rejected values' types/container shapes in those two
-fields before changing their conversion. The aggregate report does not expose
-that shape or the precise rejection reason. Do not guess a conversion, serialize
-arbitrary objects, silently skip rejected values or weaken the scalar guard.
-No registry insertion is required. **Do not rerun the unchanged AR cell.**
+**Follow-up complete:** the shape diagnostic above explains both rejections.
+The owner parked their conversion decisions and moved to the remaining eleven.
+No registry insertion is needed for the parked observation fields.
+**Do not rerun the unchanged AR cell.**
 
 Three added fields have no populated evidence in this source:
 `PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD`,

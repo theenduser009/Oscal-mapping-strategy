@@ -10,15 +10,59 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
+## Current direction — two fields parked; continue the remaining eleven
+
+On September 11, the owner directed us to park `RISK_ACCEPTANCE_RBDS` and
+`RISK_ASSESSMENT_REPORT` and continue the eleven other AR-target row occurrences.
+Parking is not completion, a conversion change, or acceptance of the blocked batch.
+The existing v3 code remains unchanged and must not be rerun unchanged.
+
+The [shape diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11)
+is complete: 2,813 records, zero parse errors, zero writes, and
+`MATCHES_BLOCKED_RUN = true`. One rejected Risk Acceptance value is a
+one-element array containing an object with numeric ContentId and LevelId keys.
+The 99 rejected Risk Assessment Report values are numeric arrays of length 2–100.
+Their meanings and required reference/multi-value conversions are not established.
+**No further diagnostic run is requested.**
+
+Inventory remains **45 row occurrences: 17 accepted + 15 implemented candidate-only
++ 2 implemented but parked after rejection + 11 not enabled**. No additional
+mapping is marked accepted by this direction change.
+
+**Next candidate batch:** the seven workflow audit fields at
+`assessment-results.results[].props[]` (result-level properties, not observations).
+The CSV model label is `Extension Properties`; its target path is in Assessment Results.
+
+- `WORKFLOW_CURRENT_NODE`
+- `WORKFLOW_PROCESS_VERSION`
+- `WORKFLOW_JOB_STATUS`
+- `WORKFLOW_STATUS`
+- `DUE_DATE`
+- `WORKFLOW_CURRENT_NODE_HRTN`
+- `WORKFLOW_STATUS_CHANGED`
+
+Their shared Notes make inclusion conditional on audit-trail need. The next
+decision is whether to include all seven as audit-trail properties. Proposed
+representation uses the existing lowercase-hyphen property names and preserves
+source-provided values without date/timezone changes or calculated replacements.
+Actual source shapes and any non-scalar conversion are not yet established.
+No workflow code or registry insert is claimed complete.
+
+The other four row occurrences remain separate: `AVG_SECURITY_COMPLIANCE_SCORE`
+appears twice; `TOTAL_PACKAGE_INHERENT_RISK` has conflicting Notes evidence;
+`FINDINGS` needs the referenced finding identity/source and parent association.
+The original CSV and accepted SSP/AR work are preserved.
+
 ## Latest attempted run — blocked, not accepted
 
 The [v3 thirty-four-field checkpoint](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) passed mapping/registry contracts
 and candidate key integrity, but has 100 rejected field values: 1 in
 `RISK_ACCEPTANCE_RBDS` and 99 in `RISK_ASSESSMENT_REPORT`. No outputs or database
 writes were published. The seventeen earlier accepted mappings remain accepted;
-the seventeen additions are still pending live acceptance. The next work is
-bounded source-shape inspection for those two fields, not a registry insert or
-a repeat of the unchanged mapper. Rejection does not prove defective source data.
+the seventeen additions are still pending live acceptance. The shape diagnostic
+is complete and matched both rejected counts. The owner parked those two fields
+and directed work to the remaining eleven, as detailed above.
+Rejection does not prove defective source data.
 
 ## Current position
 
