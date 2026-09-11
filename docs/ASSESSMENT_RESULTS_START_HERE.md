@@ -9,48 +9,35 @@ seventeen alternative-path rows. Their implementation is **pending live
 acceptance**, with 34 cumulative selected fields and 11 other row occurrences
 not enabled. This is not full-model completeness or schema validity.
 
-## Current direction — two fields parked; continue the remaining eleven
+## Current direction — workflow fields deferred; four rows under review
 
-On September 11, the owner directed us to park `RISK_ACCEPTANCE_RBDS` and
-`RISK_ASSESSMENT_REPORT` and continue the eleven other AR-target row occurrences.
-Parking is not completion, a conversion change, or acceptance of the blocked batch.
-The existing v3 code remains unchanged and must not be rerun unchanged.
+On September 11, the owner confirmed **skip the seven workflow audit fields for
+now** and continue the other four row occurrences. These workflow fields target
+`assessment-results.results[].props[]`; they are deferred, not implemented or
+complete. This is separate from the two parked value-conversion blockers,
+`RISK_ACCEPTANCE_RBDS` and `RISK_ASSESSMENT_REPORT`.
 
-The [shape diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11)
-is complete: 2,813 records, zero parse errors, zero writes, and
-`MATCHES_BLOCKED_RUN = true`. One rejected Risk Acceptance value is a
-one-element array containing an object with numeric ContentId and LevelId keys.
-The 99 rejected Risk Assessment Report values are numeric arrays of length 2–100.
-Their meanings and required reference/multi-value conversions are not established.
-**No further diagnostic run is requested.**
+| Remaining Archer field | Row occurrences | Exact Excel target | Current issue |
+| --- | ---: | --- | --- |
+| `AVG_SECURITY_COMPLIANCE_SCORE` | 2 | `assessment-results.results[].observations[]` | Both transcribed rows have the same field, path, type and Notes. Confirm whether this is one duplicated mapping or whether one source-field name is wrong. Do not infer a rename or count two outputs. |
+| `TOTAL_PACKAGE_INHERENT_RISK` | 1 | `assessment-results.results[].observations[]` | CSV says observation; earlier owner Notes evidence differs. Confirm the governing original row before selecting its contract. |
+| `FINDINGS` | 1 | `assessment-results.results[].findings[]` | Notes require linking finding UUIDs; referenced finding identity/source and parent association are not established. |
 
-Inventory remains **45 row occurrences: 17 accepted + 15 implemented candidate-only
-+ 2 implemented but parked after rejection + 11 not enabled**. No additional
-mapping is marked accepted by this direction change.
+**Next candidate:** Average Security Compliance Score, using the existing
+one-observation-per-field pattern only after the duplicate-field meaning is
+resolved. The existing mapper requires one approved row for a selected field.
+This review does not change that guard or implement any of these four rows.
 
-**Next candidate batch:** the seven workflow audit fields at
-`assessment-results.results[].props[]` (result-level properties, not observations).
-The CSV model label is `Extension Properties`; its target path is in Assessment Results.
+Inventory is **45 row occurrences = 17 accepted + 15 implemented candidate-only
++ 2 parked after rejection + 7 workflow rows deferred + 4 remaining rows under review**.
+The four remaining rows represent three distinct field names in the transcription.
 
-- `WORKFLOW_CURRENT_NODE`
-- `WORKFLOW_PROCESS_VERSION`
-- `WORKFLOW_JOB_STATUS`
-- `WORKFLOW_STATUS`
-- `DUE_DATE`
-- `WORKFLOW_CURRENT_NODE_HRTN`
-- `WORKFLOW_STATUS_CHANGED`
-
-Their shared Notes make inclusion conditional on audit-trail need. The next
-decision is whether to include all seven as audit-trail properties. Proposed
-representation uses the existing lowercase-hyphen property names and preserves
-source-provided values without date/timezone changes or calculated replacements.
-Actual source shapes and any non-scalar conversion are not yet established.
-No workflow code or registry insert is claimed complete.
-
-The other four row occurrences remain separate: `AVG_SECURITY_COMPLIANCE_SCORE`
-appears twice; `TOTAL_PACKAGE_INHERENT_RISK` has conflicting Notes evidence;
-`FINDINGS` needs the referenced finding identity/source and parent association.
-The original CSV and accepted SSP/AR work are preserved.
+The [two-field diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11)
+is complete and matched the blocked run: 2,813 records, zero parse failures,
+1 reference-shaped rejection and 99 multi-number-array rejections, zero writes.
+The field meanings and output rules remain parked. No rerun is requested.
+The blocked 34-field batch is not accepted. SSP, mapper code, registry and the
+original CSV remain unchanged.
 
 ## Four groups in the posted CSV
 
@@ -64,7 +51,7 @@ Counts include that duplicate and do not count multiline Notes as rows.
 | --- | --- | --- | ---: | --- |
 | Observation scores | `assessment-results.results[].observations[]` | Extension Property | 20 | 17 fields live accepted; seven have source gaps. Three occurrences / two distinct fields remain excluded for duplicate/Notes questions. |
 | Observation or property | `assessment-results.results[].observations[] or props[]` | Extension Property | 17 | Owner approved observation items with inline named properties on September 11. All 17 implemented; pending live. Original alternative path/Notes preserved and checked exactly. |
-| Workflow audit properties | `assessment-results.results[].props[]` | Extension Property | 7 | Notes make inclusion conditional on audit-trail need. Confirm inclusion and property name/value rules. Model label is `Extension Properties`, but the path targets Assessment Results. |
+| Workflow audit properties | `assessment-results.results[].props[]` | Extension Property | 7 | Deferred by owner on September 11. Do not implement or request a run now. Model label is `Extension Properties`, but the path targets Assessment Results. |
 | Finding references | `assessment-results.results[].findings[]` | Reference | 1 | Establish reference shape, finding identity and result-parent association. Keep separate from scores. |
 
 Group by **exact target, mapping type, target member and Notes/transformation**.
