@@ -2,6 +2,25 @@
 
 Last reconciled: 2026-09-11
 
+## Current action — approved one-record SSP DEV write pilot
+
+The owner approved testing persistence now, rather than postponing every write
+until all mappings are complete. The [separate one-record pilot](SSP_WRITE_PILOT.md)
+is prepared and locally tested; **live write, rollback and readback acceptance
+are still pending**. Use its separate COMMIT mode for the approved pilot while
+keeping the normal mapper's `EXECUTE_WRITES = False`.
+
+Scope is one complete record from the accepted SSP graph (70,102 nodes / 67,289
+edges overall), written only to the configured SSP DEV DIM/FACT tables. The cell
+checks live table schemas, rehearses and verifies rollback, then commits and
+reads back the same frozen record. It does not alter accepted mapping code,
+write AR or registry rows, delete existing rows, or authorize a bulk load.
+
+AR remains **17 accepted + 15 candidate-only + 2 parked rejections + 7 workflow
+deferred + 2 duplicate-score deferred + 2 remaining review = 45 rows**.
+The parked/deferred history below remains in force; no unchanged AR rerun is
+requested. Persistence is a distinct pending milestone, not a new mapped field.
+
 ## Current direction — workflow fields and duplicate score deferred
 
 On September 11, the owner confirmed **skip the seven workflow audit fields for
