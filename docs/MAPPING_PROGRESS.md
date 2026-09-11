@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-11, after seventeen-field AR acceptance and approval/implementation of the next seventeen. Owner: Source One mapping implementation team.
+Last updated: 2026-09-11, end-of-day reconciliation after the accepted full SSP DEV reload and publication of the updated Cells 6-7 daily path. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -10,7 +10,53 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
-## Current action — approved one-record SSP DEV write pilot
+## Current action — daily SSP preview in existing Cells 6 and 7
+
+**Today's report:** [September 11 manager summary](daily/2026-09-11.md).
+Latest status below supersedes the historical pilot instructions and earlier
+model-selection notes. Preserve the field-level evidence and parked decisions.
+
+- **SSP persisted/read-back verified:** all 2,813 records in the accepted mapped
+  graph were loaded to DEV: 70,102 DIM elements and 67,289 FACT dependencies.
+  Saved values, PK/FK links, ownership and hierarchy checks passed [E22].
+  This is a persistence milestone, not additional mapped fields or full SSP conformance.
+- **SSP mapping inventory unchanged:** 43 distinct Archer fields / 44 implemented
+  source-to-target entries (metadata 11, system characteristics 27, components 6).
+  No additional SSP field mapping is established today. Existing payload-proof
+  limits, missing-source cases and parked corrections remain below.
+- **Daily Cells 6-7 implemented; live pending:** conditional insert/update,
+  unchanged-row preservation, physical storage conversion, transaction and
+  readback checks are integrated into the existing cells [E23]. All 407 local
+  tests passed, including 28 focused checks. These are not new mapping rows or
+  live daily-loader acceptance.
+- **AR accepted in memory:** 17 fields, up from four in yesterday's accepted
+  batch: 13 additions gained runtime acceptance today [E17, E18]. No AR
+  persistence is accepted. The 34-field candidate remains blocked [E20, E21].
+- **Unresolved SSP reduction:** 126,453 old DIM / 122,939 old FACT rows became
+  70,102 / 67,289. The 56,351 / 55,650 reduction has not been explained by
+  source-record/path reconciliation. Exact equality to the new graph does not
+  prove the removed rows were duplicates or stale. No durable before-copy
+  was retained [E22; see the project handoff](PROJECT_HANDOFF.md#row-count-reduction--still-unexplained).
+- **Next action, not a new mapping:** replace only Cells 6 and 7, keep Cell 7
+  in PREVIEW and shared EXECUTE_WRITES false, run 6 then 7, and share the complete
+  aggregate report. Rebuild unchanged Cells 1-5 only if session inputs expired.
+  Do not rerun Cell 8/full reload or the historical pilots [E23].
+
+The daily writer does not delete or truncate: obsolete keys within a selected
+record block the write; records absent from current input are preserved.
+A later COMMIT requires a clean preview, approved scope and verified readback.
+Automatic deletion policy, scheduling and production readiness remain pending.
+
+AR inventory stays **45 rows = 17 accepted in memory + 15 candidate-only +
+2 parked rejections + 7 deferred workflow + 2 deferred duplicate-score +
+2 remaining review**. Seven accepted fields have missing source values.
+The three entirely empty candidate fields do not count as populated-input proof.
+
+## Historical one-record SSP DEV pilot — superseded
+
+The following was the earlier pilot handoff. It is retained as history, not a
+current run instruction. One-record and ten-record persistence subsequently
+passed; the full accepted reload now covers that scope [E22].
 
 The owner approved testing persistence now, rather than postponing every write
 until all mappings are complete. The [separate one-record pilot](SSP_WRITE_PILOT.md)
@@ -61,7 +107,7 @@ The field meanings and output rules remain parked. No rerun is requested.
 The blocked 34-field batch is not accepted. SSP, mapper code, registry and the
 original CSV remain unchanged.
 
-## Latest attempted run — blocked, not accepted
+## Latest attempted AR run — blocked, not accepted
 
 The [v3 thirty-four-field checkpoint](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) passed mapping/registry contracts
 and candidate key integrity, but has 100 rejected field values: 1 in
@@ -87,14 +133,15 @@ Rejection does not prove defective source data.
   is live accepted [E18]. All 2,813 records were processed, producing 46,960
   observations, 52,586 nodes and 49,773 edges with zero contract/key/invalid-value
   errors and no writes. Ten fields cover every record; seven have source gaps.
-  Current AR inventory: **45 rows = 17 live accepted + 17 implemented/pending live
-  + 11 not enabled**. SSP counts above
+  Current AR inventory: **45 rows = 17 accepted + 15 candidate-only + 2 parked
+  rejections + 7 workflow deferred + 2 duplicate-score deferred + 2 review**. SSP counts above
   are unchanged. This is not full model completion or independent proof of every
   source-to-payload value.
 
-- **Owner direction:** park the remaining SSP corrections and review other
-  Excel-defined models. Preserve accepted work. Assessment Results is now the
-  selected model; [start here](ASSESSMENT_RESULTS_START_HERE.md). The owner
+- **Earlier mapping direction:** park the remaining SSP corrections and review
+  other Excel-defined models. Preserve accepted work. Assessment Results was
+  selected for that mapping increment; the current active task is SSP daily
+  persistence in existing Cells 6-7, not a new AR batch. [AR scope](ASSESSMENT_RESULTS_START_HERE.md). The owner
   requested grouping by matching path/type/Notes. The new CSV has four AR-target
   groups: 45 row occurrences, 44 distinct field names, not completed mappings.
   Observation-only and observation-or-property targets are separate. The first
@@ -108,8 +155,10 @@ Rejection does not prove defective source data.
   should map to SC `props[]` but is skipped. `PACKAGE_TYPE` has a property-name
   discrepancy. Neither correction has been coded; Control Implementation is parked.
 
-- Last accepted live baseline: 70,102 nodes, 67,289 edges, zero duplicate keys,
-  zero dangling edges; pre-write validation passed and no DIM/FACT writes [E13].
+- Earlier accepted in-memory baseline: 70,102 nodes, 67,289 edges, zero duplicate
+  keys/dangling edges and no writes [E13]. The same accepted graph is now
+  persisted/read-back verified in SSP DEV [E22]; daily-path live acceptance is
+  still pending [E23].
 - Mapped-scope JSON assembly is now live accepted: 2,813 documents and roots,
   consuming that exact graph with no writes. Full SSP/schema-valid claims
   remain false; this is an assembly milestone, not new mapping rows [E14].
@@ -193,8 +242,8 @@ security-impact path above. Their exact source-field grouping is retained below.
 | Assessment Results | `assessment-results.results[].observations[]` | Thirteen additions listed in the AR register below | Live accepted; seven fields have source gaps | Expanded run passed for all 17 selected fields with zero invalid values; missing counts recorded below [E18]. | No rerun. Source owner can investigate absent values; no score defaults or recalculation. |
 | Assessment Results | `assessment-results.results[].observations[]` | `AVG_SECURITY_COMPLIANCE_SCORE` (two occurrences) | **Deferred by owner, 2026-09-11; not implemented** | Duplicate field meaning unresolved [E15, E16]. Both rows remain recorded and neither is counted complete. | Reopen only after the original sheet clarifies duplicate versus mistaken source-field name. No inferred rename or deduplication. |
 | Assessment Results | `assessment-results.results[].observations[]` | `TOTAL_PACKAGE_INHERENT_RISK` | Not enabled; clarification needed | Earlier owner Notes and CSV evidence conflict [E15, E16]. | Confirm the governing original row and Notes. No inferred destination. |
-| Assessment Results | `assessment-results.results[].observations[] or props[]` (original Excel choice) | 17 risk rows listed below | Implemented; pending live | Owner approved one observation per field with a named inline property on September 11 [E19]. Original path/Notes checked exactly; emitted node path ends at observations[]. | Expanded run blocked by 100 rejected values in two fields. Inspect their shapes before changing conversion; do not rerun unchanged. No registry insertion or score recalculation. |
-| Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Grouped; conditional scope | Notes say to include if needed for audit trail [E15]. | Confirm audit-trail inclusion and property name/value rules; keep result-level properties separate from observation properties. |
+| Assessment Results | `assessment-results.results[].observations[] or props[]` (original Excel choice) | 17 risk rows listed below | 15 candidate-only; 2 rejections parked | Owner approved one observation per field with a named inline property on September 11 [E19]. Original path/Notes checked exactly; emitted node path ends at observations[]. | Expanded run blocked by 100 rejected values in two fields; shapes are diagnosed and meaning/conversion remains parked [E21]. Do not rerun unchanged. No registry insertion or score recalculation. |
+| Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Deferred by owner, 2026-09-11; not implemented | Notes make audit-trail inclusion conditional [E15]; the owner chose to skip these for now. | Reopen only on an explicit audit-trail inclusion decision; retain separate property name/value rules. |
 | Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
 | Profile | `profile.imports[]` | `BASELINE_RECOMMENDATION` | Review pending | Conditional import example in Notes does not supply an approved import reference. | Baseline-to-URI mapping, intended import structure and selection rule; reconcile Extension Property label with target. |
 | POA&M | `plan-of-action-and-milestones.poam-items[]` | `POAMS` | Review pending | New CSV confirms Reference target and linking Notes [E15]; no handler accepted. | Reference shape, identity and parent relationship. |
@@ -262,7 +311,7 @@ named property on September 11 [E19]. Emitted node path:
 
 | Archer field | Status | Evidence / remaining work |
 | --- | --- | --- |
-| `RISK_ACCEPTANCE_RBDS` | Blocked: scalar conversion rejected values | 0 candidate emissions; 2,812 missing; 1 invalid [E20]. Inspect actual source shape; no inferred conversion. |
+| `RISK_ACCEPTANCE_RBDS` | Parked after scalar rejection | 0 candidate emissions; 2,812 missing; 1 rejected reference-shaped object [E20, E21]. Intended reference/output rule is not approved; no inferred conversion. |
 | `TOTAL_PACKAGE_RESIDUAL_RISK` | Implemented; candidate evidence only | 2,811 candidate emissions; 2 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
 | `ADJUSTED_TOTAL_RISK_SCORE` | Implemented; candidate evidence only | 2,813 candidate emissions; 0 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
 | `ADJUSTED_AVERAGE_RISK_SCORE` | Implemented; candidate evidence only | 2,813 candidate emissions; 0 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
@@ -278,12 +327,12 @@ named property on September 11 [E19]. Emitted node path:
 | `_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | Implemented; candidate evidence only | 1 candidate emissions; 2,812 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
 | `_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | Implemented; candidate evidence only | 1 candidate emissions; 2,812 missing; 0 invalid [E20]. Whole batch blocked; not runtime accepted. |
 | `INITIAL_RISK_ASSESSMENT` | Implemented; no populated evidence | 0 candidate emissions; 2,813 missing; 0 invalid [E20]. Missing-source cause not established. |
-| `RISK_ASSESSMENT_REPORT` | Blocked: scalar conversion rejected values | 217 candidate emissions; 2,497 missing; 99 invalid [E20]. Inspect actual source shape; no inferred conversion. |
+| `RISK_ASSESSMENT_REPORT` | Parked after scalar rejection | 217 candidate emissions; 2,497 missing; 99 rejected multi-number lists [E20, E21]. Intended list/output meaning is unresolved; no inferred conversion. |
 
 The expanded cell remains read-only and cumulative, retaining all seventeen
-accepted fields. Eleven row occurrences remain outside its allowlist: three
-observation-only occurrences requiring clarification, seven conditional workflow
-rows and one finding-reference row. Properties remain inline, so no registry
+accepted fields. Eleven row occurrences remain outside its allowlist: two deferred duplicate
+score occurrences, seven deferred workflow rows, and two review rows (inherent
+risk and finding-reference). Properties remain inline, so no registry
 insertion is needed. A missing source value is reported separately from a contract
 error and is not evidence that a populated mapping was exercised.
 
@@ -428,8 +477,8 @@ Every subsequent mapping handoff names the model, full OSCAL path, source field
 and transformation rule.
 
 The earlier request for **ten additional SSP mapping rows** is retained as
-history; the current priority is Source One across Excel-defined models, starting
-with Assessment Results. The two System Characteristics corrections are parked
+history; the broader priority remains Source One across Excel-defined models. The current
+active task is daily SSP persistence in Cells 6-7, not another mapping batch. The two System Characteristics corrections are parked
 by owner direction. Clearer screenshots invalidate the earlier blanket
 claim that every concrete evidenced row already has a handler. They do not yet
 establish ten new executable contracts or a full-workbook completion percentage.
@@ -476,16 +525,20 @@ addressing the already evidenced corrections.
 
 - [E18: Uploaded seventeen-field AR run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11) — 2,813 records; 52,586 nodes; 49,773 edges; 17 fields with populated evidence, seven with source gaps; zero contract/key errors or writes.
 
-- [E19: Approved seventeen alternative-path additions](ASSESSMENT_RESULTS_START_HERE.md#approved-alternative-path-batch--seventeen-more-fields-pending-live) — owner approved the existing inline-property-per-observation representation on September 11; release `ar-observation-scores-v3-34-fields` is implemented but pending live. Original Excel/CSV unchanged; no registry or DIM/FACT writes.
+- [E19: Approved seventeen alternative-path additions](ASSESSMENT_RESULTS_START_HERE.md#approved-alternative-path-batch--seventeen-more-fields-pending-live) — owner approved the existing inline-property-per-observation representation on September 11; release `ar-observation-scores-v3-34-fields` is implemented but its live attempt was blocked [E20, E21]. Original Excel/CSV unchanged; no registry or DIM/FACT writes.
 
-- [E20: Blocked v3 thirty-four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) — mapping/registry checks pass; 73,408 candidate nodes and 70,595 candidate edges with zero duplicate/dangling keys; two fields have 100 rejected values; outputs and writes false. Field totals reconcile; precise source shapes/reasons still unknown.
+- [E20: Blocked v3 thirty-four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) — mapping/registry checks pass; 73,408 candidate nodes and 70,595 candidate edges with zero duplicate/dangling keys; two fields have 100 rejected values; outputs and writes false. Field totals reconcile; the later two-field diagnostic established shapes [E21], not approved conversion semantics.
+
+- [E21: Two-field AR shape diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11) — one reference-shaped rejection and 99 multi-number-list rejections; no writes. Field meanings remain parked.
+- [E22: Accepted full SSP DEV reload](SSP_FULL_DEV_RELOAD_2026-09-11.md) — 2,813 records, 70,102 DIM / 67,289 FACT, committed and verified; old-row reduction remains unexplained.
+- [E23: Existing Cells 6-7 daily-loading release](SSP_DAILY_LOADING.md) — 407 local tests passed, including 28 focused checks; PREVIEW/COMMIT integration implemented, live acceptance pending.
 
 ### Shared-engine design status
 
 One shared mapping entry point, reusable mechanics and model-specific contracts
-were discussed. This consolidation is **not implemented**. The accepted SSP
-seven-cell pipeline and separate AR mapper remain unchanged; any future refactor
-must preserve their accepted behavior. The registry paths required by those
+were discussed. This consolidation is **not implemented**. SSP and AR mapping contracts remain unchanged. SSP daily persistence in Cells
+6-7 was updated separately [E23]; this is not a completed cross-model shared
+mapper or AR loader. Any future refactor must preserve accepted mapping behavior. The registry paths required by those
 accepted runs were present in Snowflake at execution. No pending insertion is
 identified for accepted scopes; this is not blanket readiness for future models.
 
