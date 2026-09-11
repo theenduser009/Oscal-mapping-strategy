@@ -130,3 +130,76 @@ Summary counts reported by the notebook:
 Interpretation for Codex: the comparison is now complete and confirms that the currently accepted target graph contains 21 DIM rows and 20 FACT rows relevant to this comparison, while the one-record candidate contains 19 nodes and 18 edges. There are no duplicate DIM or FACT key groups. This is read-only evidence only; no target DML was attempted. The baseline is explicitly the current accepted graph, not an original frozen snapshot, so do not treat this comparison as proof of equivalence to the original pre-existing target state.
 
 This checkpoint records the actual physical Snowflake table contract and visible notebook evidence. No database changes were made by this documentation update.
+
+## SSP one-record reconciliation — durable-backup failure — 2026-09-11
+
+Source: the subsequently supplied screenshot from `NB_ARCHER_OSCAL_MAPPER_V2`. The following is a transcription of the displayed report, not a Snowflake execution performed by this documentation update. Earlier checkpoints above are retained as historical evidence.
+
+### Displayed report
+
+```json
+{
+  "BACKUP_TABLES": {
+    "DIM": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.BACKUP_SSP_RECONCILE_F53AB9083B324F0C950E13B0D0248CF4_DIM",
+    "FACT": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.BACKUP_SSP_RECONCILE_F53AB9083B324F0C950E13B0D0248CF4_FACT"
+  },
+  "EDGES": 18,
+  "ERROR_DETAILS": {
+    "CAUSE": "SQL_OR_CLIENT_ERROR",
+    "QUERY_ID": "01c70132-0000-f4df-0002-490cc3694983",
+    "SQL_ERROR_CODE": "3001"
+  },
+  "MODE": "COMMIT",
+  "MODEL": "SSP",
+  "NODES": 19,
+  "PERSISTED": false,
+  "PHASE": "DURABLE_BACKUP",
+  "RELEASE": "ssp-one-record-reconcile-v1",
+  "REVIEWED_SCOPE": {
+    "NEW_DIM_ROWS": 19,
+    "NEW_FACT_ROWS": 18,
+    "OLD_DIM_ROWS": 21,
+    "OLD_FACT_ROWS": 20,
+    "OLD_KEY_INTEGRITY": {
+      "DANGLING_SOURCE_KEYS": 0,
+      "DANGLING_TARGET_KEYS": 0,
+      "DIM_DUPLICATE_KEY_GROUPS": 0,
+      "DIM_NULL_KEYS": 0,
+      "FACT_DUPLICATE_KEY_GROUPS": 0,
+      "FACT_NULL_KEYS": 0,
+      "NULL_FOREIGN_KEYS": 0,
+      "ROOTS": 1,
+      "UUID_LINK_MISMATCHES": 0,
+      "WRONG_PARENT_COUNTS": 0,
+      "WRONG_RELATIONSHIP_TYPE": 0
+    }
+  },
+  "SELECTION": "PREVIOUSLY_REVIEWED_LOWEST_ROOT",
+  "SOURCE_RECORDS": 1,
+  "STATUS": "RECONCILIATION_OPERATION_FAILED",
+  "TARGET_DML_ATTEMPTED": false,
+  "WRITE_POLICY": "BACKUP_AND_REPLACE_ONE_REVIEWED_RECORD"
+}
+```
+
+### Visible exception and traceback
+
+```text
+PilotError: RECONCILIATION_OPERATION_FAILED
+
+File "Cell [cell8]", line 643, in <module>
+    ssp_reconciliation_report = run_ssp_one_record_reconciliation(
+File "Cell [cell8]", line 635, in run_ssp_one_record_reconciliation
+```
+
+The screenshot ends before the remainder of the traceback. No hidden traceback text or full SQL error message has been reconstructed.
+
+### Scope and safety interpretation for Codex
+
+- This report is from `MODE=COMMIT`, unlike the earlier preview. It nevertheless reports failure at `PHASE=DURABLE_BACKUP`, `PERSISTED=false`, and `TARGET_DML_ATTEMPTED=false`. Do not describe the target replacement as completed.
+- The reviewed old scope contains 21 DIM rows and 20 FACT rows; the proposed new scope contains 19 DIM rows and 18 FACT rows. The old graph reports one root and zero for every listed key/relationship-integrity error counter. These checks do not establish semantic equivalence between old and new graphs.
+- `BACKUP_TABLES` lists the names reported by the operation. This alone does not prove that both backup tables were created, populated, or verified. `TARGET_DML_ATTEMPTED=false` is not evidence that no backup DDL or other preparatory operation occurred.
+- The latest reported SQL error code is `3001`. It is distinct from the earlier `2003` query-history checkpoint. The screenshot provides no full SQL error message; do not infer its precise cause from the code alone or carry forward the earlier missing-object diagnosis as a confirmed cause.
+- The next diagnostic should be read-only: inspect the query-history entry for `01c70132-0000-f4df-0002-490cc3694983` to obtain the failed statement and full error, and verify the reported backup state before considering a retry. This documentation does not authorize rerunning COMMIT mode, changing permissions, or deleting/replacing any target or backup data.
+
+Only this Markdown documentation was updated in GitHub. No notebook code, registry configuration, or Snowflake data was changed by this posting.
