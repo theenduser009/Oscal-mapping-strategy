@@ -1,40 +1,70 @@
 # Current Status
 
-Last reconciled: 2026-09-10
+Last reconciled: 2026-09-11
 
 **Short current summary: [SSP — done and next](SSP_DONE_AND_NEXT.md).**
 **Current direction:** SSP leftovers are parked while other Excel models are
 reviewed. The [model/path progress and clarification queue](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue)
 separates status, evidence/reason, and information needed for each scope.
-**Assessment Results batch 1 is live accepted; thirteen more fields are implemented,
-pending live.** The [uploaded AR checkpoint](ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10)
-records `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE` and
-`SECURITY_COMPLIANCE_SCORE` each emitted for 2,813 records, with zero missing or
-invalid values. The run produced 16,878 nodes, 14,065 edges and 2,813 partial
-documents, with no contract errors, duplicate keys, dangling edges or writes.
+**Assessment Results: seventeen mappings are live accepted; twenty-eight rows
+remain outside this release.** The [September 11 uploaded run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11)
+confirms `ar-observation-scores-v2-17-fields` at
+`assessment-results.results[].observations[]`: 2,813 source records,
+46,960 emitted observations, 52,586 nodes, 49,773 edges and 2,813 partial
+documents. Mapping/registry errors, invalid source records, duplicate keys and
+dangling edges are zero. No database writes occurred.
 
-The [same separate mapping cell](../notebooks/assessment_results/01_map_observation_scores.py)
-now adds thirteen matching fields at `assessment-results.results[].observations[]`.
-The representation remains one named score property inside one observation per
-field. No score formula, registry write or SSP change is introduced. Current AR
-inventory: **45 rows = 4 accepted + 13 implemented/pending live + 28 not enabled**.
-This is not full Assessment Results completeness or OSCAL schema validation.
+All seventeen selected fields have populated evidence. Ten fields cover every
+record; seven have missing source values, including 267 missing risk grades and
+541 missing average operating-environment scores. These are omitted field values,
+not dropped records or invented defaults. The report does not establish whether
+the values were missing in Archer or during upstream curation. See the
+[per-field register](MAPPING_PROGRESS.md#assessment-results-field-register).
 
-**Next run:** refresh the linked mapper and replace only the separate AR cell
-you just ran, then run it once with writes disabled. It needs the existing
-inputs from Cell 2 and helpers from Cell 4. Do not replace SSP cells, change
-CONFIG's model, rerun Cell 7, or run the grouping report/SSP assembler.
-If the session closed, initialize unchanged Cells 1, 2 and 4 first.
-Post its printed report, identified by `ar-observation-scores-v2-17-fields`.
-See the [thirteen-field list, exclusions and full run instructions](ASSESSMENT_RESULTS_START_HERE.md).
-All 236 local tests pass. The CSV-backed local check used synthetic source
-values, not live Snowflake data; the thirteen new fields still need their run.
+**No rerun is needed for the accepted release.** The separate AR mapper remains
+the working seventeen-field version. SSP code and its accepted graph/assembly are
+unchanged. Required registry paths were present in the actual Snowflake table
+when the accepted runs passed; no outstanding registry insertion is identified
+for those accepted scopes. This is recorded-run evidence, not a fresh full-registry
+audit or proof that every future path exists. Keep `EXECUTE_WRITES = False`.
+
+**Next work remains distinct:** 28 AR row occurrences are not enabled (duplicate
+and conflicting Notes rows, alternative destinations, conditional workflow
+properties and finding references). A shared cross-model engine with one entry
+point has been discussed, but the consolidation is **not implemented**. Do not
+represent that design discussion as a completed refactor or silently change the
+accepted pipelines. Full-model completeness and OSCAL schema validation are also
+pending. [Current AR scope and remaining decisions](ASSESSMENT_RESULTS_START_HERE.md).
+
 The clearer Excel review identifies a skipped `HELPER_PTA_CALC` property and
 a `PACKAGE_TYPE` property-name mismatch. Both are pending corrections under
 System Characteristics; Control Implementation is parked. Those SSP corrections
 remain uncoded and no SSP rerun is required for the separate AR release.
 Historical checkpoints below retain
 their original scope and do not establish completeness against the new evidence.
+
+## Resume checkpoint — preserve passed, failed and pending work
+
+Use this page, [Mapping Progress](MAPPING_PROGRESS.md), and the linked live
+checkpoints before choosing new work. Compare the code release and source scope
+with the recorded accepted release. Do not request a repeat run simply because
+the conversation or notebook session restarted; rerun only when changed code,
+inputs or the next task actually requires rebuilding in-memory outputs.
+
+- **Passed:** accepted SSP mapped-scope graph/assembly, plus the seventeen-field
+  AR release. These are not full-model/schema-valid claims.
+- **Failed attempts:** the earlier SSP registry-schema, reference-container and
+  mapping-dispatch failures remain documented below and in dated checkpoints.
+  Later accepted runs supersede those failures for their corrected releases;
+  do not treat old failed-run instructions as today's next action.
+- **Not completed:** twenty-eight AR row occurrences, the parked SSP corrections
+  and source gaps, full-model conformance, persistence, and the proposed
+  shared-engine consolidation remain distinct unfinished work.
+
+Original evidence is preserved in Git history. The initial AR result is pinned
+to [its original snapshot](https://github.com/theenduser009/Oscal-mapping-strategy/blob/683b0de290334cdc82675cda302f4244b10c9e0e/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10); the expanded result is pinned to
+[its accepted snapshot](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11), so replacing an uploaded status file cannot
+erase the earlier proof.
 
 ## Verified notebook
 
@@ -717,10 +747,10 @@ changes payload content without changing node or edge identity.
 ### Active implementation — Assessment Results; SSP corrections parked
 
 The owner chose to pause remaining SSP work and continue matching Assessment
-Results score mappings. Batch one is accepted; the cumulative seventeen-field
-mapper adds thirteen fields pending live acceptance. Follow the single AR-cell
-run instruction at the top of this page. The [progress register](MAPPING_PROGRESS.md)
-separates accepted fields, newly implemented fields and unresolved rows.
+Results score mappings. The cumulative seventeen-field mapper is now live
+accepted; no repeated run is required. The [progress register](MAPPING_PROGRESS.md)
+separates seventeen accepted fields from twenty-eight unprocessed rows and records
+the source gaps. Shared-engine consolidation remains a proposal, not completed work.
 No SSP mapper configuration, registry, DIM or FACT changes are part of this release.
 
 ### Parked Excel review — two System Characteristics corrections, not coded

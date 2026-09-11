@@ -1,10 +1,11 @@
 # Assessment Results — score mapping
 
 Active source: Source One, Archer Authorization Package `CURATED_JSON`.
-SSP is parked and preserved. The first four observation-score mappings are
-live accepted. The same separate read-only cell now implements thirteen more
-matching fields: seventeen selected fields in total. This expanded release is
-pending a live run; it does not complete all 45 AR mapping rows.
+SSP is parked and preserved. All seventeen selected observation-score mappings
+are now live accepted, including the thirteen-field extension. The [September 11
+run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11) passed with no writes.
+Twenty-eight other AR mapping rows remain outside this release. No rerun is
+required; this is not full Assessment Results completeness or schema validity.
 
 ## Four groups in the posted CSV
 
@@ -16,7 +17,7 @@ Counts include that duplicate and do not count multiline Notes as rows.
 
 | Group | Literal target in CSV | Type | Row occurrences | Next work |
 | --- | --- | --- | ---: | --- |
-| Observation scores | `assessment-results.results[].observations[]` | Extension Property | 20 | 17 fields implemented: 4 live accepted, 13 pending live. Three occurrences / two distinct fields remain excluded for duplicate/Notes questions. |
+| Observation scores | `assessment-results.results[].observations[]` | Extension Property | 20 | 17 fields live accepted; seven have source gaps. Three occurrences / two distinct fields remain excluded for duplicate/Notes questions. |
 | Observation or property | `assessment-results.results[].observations[] or props[]` | Extension Property | 17 | Select one exact destination and value representation. The literal `or` is an alternative, not a nested property path. |
 | Workflow audit properties | `assessment-results.results[].props[]` | Extension Property | 7 | Notes make inclusion conditional on audit-trail need. Confirm inclusion and property name/value rules. Model label is `Extension Properties`, but the path targets Assessment Results. |
 | Finding references | `assessment-results.results[].findings[]` | Reference | 1 | Establish reference shape, finding identity and result-parent association. Keep separate from scores. |
@@ -56,14 +57,16 @@ identity functions; every containment edge references its actual parent.
 The current registry must confirm these three existing paths and their rules.
 The cell neither inserts registry rows nor uses the SSP DIM/FACT loader.
 
-The [uploaded run](ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10)
+The [original four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/683b0de290334cdc82675cda302f4244b10c9e0e/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10)
 records 2,813 emitted observations for **each** of these four fields, zero missing
 or invalid values, 16,878 nodes, 14,065 edges and 2,813 partial documents. Mapping
 and registry errors, duplicate keys and dangling edges are all zero. No database
 writes occurred. This establishes live acceptance for those four fields, not
 full-model completeness or independent source-to-payload equality for every value.
 
-## Expanded batch — thirteen additional fields, pending live
+<a id="expanded-batch--thirteen-additional-fields-pending-live"></a>
+
+## Expanded batch — thirteen additional fields, live accepted
 
 The owner requested continuing the matching score group. All fields below use
 the same exact Excel path `assessment-results.results[].observations[]`,
@@ -95,11 +98,24 @@ owner-provided Notes differ from the CSV. Neither uncertainty blocks these
 thirteen matching fields. Findings, result-level workflow properties and the
 literal `observations[] or props[]` group remain outside this release.
 
-Against the posted 45-row inventory: **4 accepted + 13 implemented/pending live
-+ 28 not enabled = 45**. Do not count the thirteen as live accepted until the
-expanded report is posted. Missing values are source gaps, not exercised mappings.
+Against the posted 45-row inventory: **17 live accepted + 28 not enabled = 45**.
+The expanded report confirms 2,813 source records, 46,960 emitted observations,
+52,586 nodes, 49,773 edges and 2,813 partial documents. Contract errors, duplicate
+keys, dangling edges, invalid source records and invalid field values are zero.
+All seventeen fields have populated evidence; no database writes occurred.
 
-### Replace and run only the Assessment Results mapping cell
+Ten fields cover all records. Seven have missing source values: risk grade 267,
+average vulnerability 13, average patch 1, average antivirus 13, average operating
+environment 541, average password age 13 and average vulnerability reporting 13.
+These are field-specific counts, not distinct missing-record totals. Missing
+values were omitted. Their upstream cause has not been established.
+See the [exact per-field register](MAPPING_PROGRESS.md#assessment-results-field-register).
+
+### Completed run instructions — reference only; do not repeat
+
+**The following run has already passed.** Keep these instructions only for a
+future explicitly needed rerun or a restarted session where new work requires
+the AR outputs. There is no pending execution task for the accepted release.
 
 Refresh [Assessment Results score mapper](../notebooks/assessment_results/01_map_observation_scores.py),
 copy the complete file, and **replace the separate AR cell you just ran**. Run
@@ -167,7 +183,7 @@ The expanded release passes 24 score-mapper tests; the full repository suite
 passes **236 local tests**. A separate local check using the posted CSV and
 synthetic source values confirms 17 selected fields and 28 excluded row
 occurrences. Verification covers payloads, exact contracts, parent/child keys,
-exclusions and first-four compatibility. Local tests do not establish live
-acceptance of the thirteen new fields. The accepted
+exclusions and first-four compatibility. Local tests alone do not establish
+live acceptance; the separately posted September 11 checkpoint now does. The accepted
 SSP cells, registry, DIM and FACT remain unchanged. Track decisions in
 [Mapping Progress](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue).
