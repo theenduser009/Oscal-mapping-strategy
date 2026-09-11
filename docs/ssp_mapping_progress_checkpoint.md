@@ -29,6 +29,8 @@ OSCAL schema-valid claim: False
 
 ## Assessment Results mapped-scope checkpoint — 2026-09-11
 
+Source: notebook screenshots from `NB_ARCHER_OSCAL_MAPPER_V2`; this evidence set was re-confirmed from the later screenshot sequence on 2026-09-11.
+
 Mapping release:
 
 ```text
