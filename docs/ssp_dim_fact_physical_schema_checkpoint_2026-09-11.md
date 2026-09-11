@@ -42,4 +42,20 @@ Observed columns:
 
 The DIM is the SSP graph-node table. The FACT is the factless graph-edge/dependency table. Source and target hashes in FACT reference SSP element hashes in DIM; source/target OSCAL UUIDs are also persisted on the dependency rows.
 
-This checkpoint records the actual physical Snowflake table contract shown in the notebook screenshots. No database changes were made by creating this documentation.
+## Snowflake query-history error checkpoint — 2026-09-11
+
+A read-only query-history check was run with `INFORMATION_SCHEMA.QUERY_HISTORY_BY_USER` for approximately the previous two hours and filtered to `ERROR_CODE = 2003`.
+
+Observed recent failures included:
+
+- `CREATE_VIEW` attempts under role `PUBLIC`, database `USERSC95077009`, schema `PUBLIC`.
+- Error code `2003` (`SQL compilation error`).
+- The visible error message shows a missing/not-authorized transient Snowpark object in curated schema, approximately:
+  `RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.SNOWPARK_TEMP_TABLE_DFATXMI5EU`
+  with message: `does not exist or not authorized`.
+- Additional recent `SELECT` failures under role `RTX_ES_ESC_GRC_RAW_DEV_FULL`, database `RTX_RAW_DEV`, schema `ES_ESC_GRC` also show error code `2003` for Archer source objects that were not found or not authorized.
+- One visible source-object error references `ARCHER_AUTHORIZATION_PACKAGE_DATA_RAW` as not existing or not authorized.
+
+Interpretation for Codex: the notebook is encountering object-resolution / authorization failures rather than a DIM/FACT schema-definition problem. Snowpark temporary-object lifetime or session scope is a likely contributor for the `SNOWPARK_TEMP_TABLE_*` failures; source-table naming/authorization should be checked separately for the Archer raw-object failures.
+
+This checkpoint records the actual physical Snowflake table contract and the visible query-history evidence from the notebook screenshots. No database changes were made by creating this documentation.
