@@ -27,7 +27,13 @@ OSCAL schema-valid claim: False
 - This is **not** yet evidence that the full SSP is complete.
 - This is **not** yet evidence that the assembled documents are OSCAL schema-valid.
 
-## Assessment Results mapped-scope checkpoint — 2026-09-10
+## Assessment Results mapped-scope checkpoint — 2026-09-11
+
+Mapping release:
+
+```text
+ar-observation-scores-v2-17-fields
+```
 
 Target OSCAL path:
 
@@ -41,19 +47,32 @@ Status:
 MAPPED_SCOPE_BUILT
 ```
 
-Selected source fields:
+Selected fields (17):
 
 ```text
 VULNERABILITY_SCORE
 ANTIVIRUS_SCORE
 PATCH_SCORE
 SECURITY_COMPLIANCE_SCORE
+STANDARD_OPERATING_ENVIRONMENT_SCORE
+COMPUTER_PASSWORD_AGE_SCORE
+VULNERABILITY_REPORTING_SCORE
+SECURITY_COMPLIANCE_REPORTING_SCORE
+TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE
+AVG_AUTHORIZATION_PACKAGE_RISK_SCORE
+RISK_SCORE_GRADE
+AVG_VULNERABILITY_SCORE
+AVG_PATCH_SCORE
+AVG_ANTIVIRUS_SCORE
+AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE
+AVG_COMPUTER_PASSWORD_AGE_SCORE
+AVG_VULNERABILITY_REPORTING_SCORE
 ```
 
-Run evidence captured from the notebook:
+Run evidence:
 
 ```text
-OTHER_AR_MAPPING_ROWS_NOT_PROCESSED: 41
+OTHER_AR_MAPPING_ROWS_NOT_PROCESSED: 28
 MAPPING_CONTRACT_ERRORS: []
 REGISTRY_CONTRACT_ERRORS: []
 SOURCE_RECORDS: 2813
@@ -61,28 +80,26 @@ INVALID_SOURCE_RECORDS: 0
 DUPLICATE_SOURCE_RECORDS: 0
 ```
 
-Per-field output evidence:
+Per-field evidence visible in the screenshots:
 
 ```text
-VULNERABILITY_SCORE
-  emitted: 2813
-  missing: 0
-  invalid: 0
-
-ANTIVIRUS_SCORE
-  emitted: 2813
-  missing: 0
-  invalid: 0
-
-PATCH_SCORE
-  emitted: 2813
-  missing: 0
-  invalid: 0
-
-SECURITY_COMPLIANCE_SCORE
-  emitted: 2813
-  missing: 0
-  invalid: 0
+VULNERABILITY_SCORE                         emitted=2813 missing=0   invalid=0
+ANTIVIRUS_SCORE                             emitted=2813 missing=0   invalid=0
+PATCH_SCORE                                 emitted=2813 missing=0   invalid=0
+SECURITY_COMPLIANCE_SCORE                   emitted=2813 missing=0   invalid=0
+STANDARD_OPERATING_ENVIRONMENT_SCORE        emitted=2813 missing=0   invalid=0
+COMPUTER_PASSWORD_AGE_SCORE                 emitted=2813 missing=0   invalid=0
+VULNERABILITY_REPORTING_SCORE               emitted=2813 missing=0   invalid=0
+SECURITY_COMPLIANCE_REPORTING_SCORE         emitted=2813 missing=0   invalid=0
+TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE      emitted=2813 missing=0   invalid=0
+AVG_AUTHORIZATION_PACKAGE_RISK_SCORE        emitted=2813 missing=0   invalid=0
+RISK_SCORE_GRADE                            emitted=2546 missing=267 invalid=0
+AVG_VULNERABILITY_SCORE                     emitted=2800 missing=13  invalid=0
+AVG_PATCH_SCORE                             emitted=2812 missing=1   invalid=0
+AVG_ANTIVIRUS_SCORE                         emitted=2800 missing=13  invalid=0
+AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE    emitted=2272 missing=541 invalid=0
+AVG_COMPUTER_PASSWORD_AGE_SCORE             emitted=2800 missing=13  invalid=0
+AVG_VULNERABILITY_REPORTING_SCORE           emitted=2800 missing=13  invalid=0
 ```
 
 Graph/output evidence:
@@ -91,29 +108,30 @@ Graph/output evidence:
 WRITES_EXECUTED: false
 FULL_MODEL_COMPLETE: false
 SCHEMA_VALIDATED: false
-CANDIDATE_NODES: 16878
-CANDIDATE_EDGES: 14065
+CANDIDATE_NODES: 52586
+CANDIDATE_EDGES: 49773
 COUNTS_ARE_CANDIDATES: false
 DUPLICATE_NODE_KEYS: 0
 DUPLICATE_EDGE_KEYS: 0
 DANGLING_EDGES: 0
 OUTPUTS_PUBLISHED: true
-NODES: 16878
-EDGES: 14065
+NODES: 52586
+EDGES: 49773
 DOCUMENTS: 2813
-FIELDS_WITH_POPULATED_EVIDENCE: 4
+FIELDS_WITH_POPULATED_EVIDENCE: 17
 ```
 
 ### Assessment Results interpretation
 
-- All 2,813 source records produced mapped evidence for the four selected Assessment Results scoring fields.
-- No invalid or duplicate source records were reported.
+- The Assessment Results observation-score slice has expanded from 4 to 17 selected fields.
+- All 2,813 source records were accepted; no invalid or duplicate source records were reported.
 - No mapping-contract or registry-contract errors were reported for this slice.
-- The generated slice contains 16,878 nodes and 14,065 edges with zero duplicate node keys, zero duplicate edge keys, and zero dangling edges.
-- `OUTPUTS_PUBLISHED=true` refers to the notebook's in-memory/published result state; `WRITES_EXECUTED=false` means no database writes were performed by this run.
-- This checkpoint covers only the selected mapped Assessment Results slice. It does **not** establish full Assessment Results completion or OSCAL schema validity.
-- 41 other Assessment Results mapping rows were not processed in this specific run.
+- The current generated slice contains 52,586 nodes and 49,773 edges with zero duplicate node keys, zero duplicate edge keys, and zero dangling edges.
+- Missing values are source-data evidence, not invalid values: all 17 visible fields report `invalid=0`.
+- `OUTPUTS_PUBLISHED=true` refers to notebook result publication; `WRITES_EXECUTED=false` means no DIM/FACT database writes were performed.
+- `FULL_MODEL_COMPLETE=false` and `SCHEMA_VALIDATED=false`: do not claim full Assessment Results completion or OSCAL conformance yet.
+- 28 other Assessment Results mapping rows remain outside this run.
 
 ### Immediate next objective
 
-Keep writes disabled. Continue processing the remaining Assessment Results mapping rows, then perform full-model OSCAL schema and constraint validation before claiming Assessment Results completion or enabling DIM/FACT writes.
+Keep writes disabled. Continue processing the remaining 28 Assessment Results mapping rows, preserving the same mapping/registry/graph integrity gates, then run full-model OSCAL schema and constraint validation before claiming completion or enabling DIM/FACT writes.
