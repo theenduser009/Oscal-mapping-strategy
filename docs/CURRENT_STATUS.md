@@ -2,43 +2,41 @@
 
 Last reconciled: 2026-09-11
 
-## Current action — one reviewed SSP DEV record, no permanent backup
+## Current action — first SSP write accepted; capped ten-record write next
 
-The latest v1 reconciliation reached the reviewed old-key checks, then stopped
-before target DML during permanent-backup creation. Posted query history confirms
-the execution role PUBLIC lacks CREATE TABLE on the curated DEV schema.
-No replacement was persisted by that attempt.
-[Exact failure evidence](SSP_ONE_RECORD_RECONCILIATION.md#exact-backup-failure-retrieved-from-query-history).
+**One SSP development record is persisted and verified.** The owner-posted
+[successful reconciliation report](SSP_ONE_RECORD_RECONCILIATION.md#live-transaction-only-reconciliation-result--2026-09-11)
+confirms the replacement of 21/20 old rows with 19 DIM / 18 FACT rows, rollback
+rehearsal and restored baseline, zero second-pass inserts, and clean final
+saved-value, PK/FK, UUID and hierarchy checks. No permanent backup was created,
+as approved. Do not rerun the successful one-record reconciliation.
 
-The owner subsequently approved **skipping the permanent backup for this one
-reviewed development record**. The updated
-[reconciliation cell](../notebooks/persistence/RECONCILE_SSP_ONE_RECORD_WRITE.py)
-sets SSP_RECONCILE_BACKUP_POLICY = "TRANSACTION_ONLY_DEV". No privilege grants,
-backup-location assumptions or bulk-write authorization are introduced.
-After commit, there will be no separate durable copy of the old graph.
+After asking to continue writing, the owner requested a safer bounded approach
+and then explicitly asked to proceed with the write instead of another separate
+rollback-only test. The next cell caps the operation at **ten additional SSP
+development records**, excluding and protecting the first accepted record.
+It uses an internal rollback rehearsal followed by COMMIT and final verification;
+no separate diagnostic or rehearsal-cell run is requested.
 
-The approved scope stays old 21 DIM / 20 FACT to new 19 DIM / 18 FACT, using the
-same lowest-root record and zero old/new key overlap. Temporary snapshots,
-unchanged-baseline checks, exact frozen-key deletion/counts, rollback rehearsal,
-repeated insert-only merges, PK/FK/UUID/hierarchy checks and post-commit readback
-are retained. Every unrelated record, accepted mapping and registry is unchanged.
+**Next action:** copy the complete
+[ten-record batch cell](../notebooks/persistence/PILOT_SSP_TEN_RECORD_BATCH_WRITE.py)
+into one new Python cell in the same accepted session. At line 10 set
+SSP_BATCH_MODE = "COMMIT"; keep CONFIG["EXECUTE_WRITES"] = False and other SSP
+writers paused. Run only that new cell once and post the full report.
+Leave the successful one-record cell unchanged.
 
-**Next action:** replace only the separate reconciliation Python cell with the
-complete updated file; set SSP_RECONCILE_MODE = "COMMIT" at line 10; keep
-CONFIG["EXECUTE_WRITES"] = False and other SSP writers paused. Run only that cell
-once in the same accepted session, then post the full report. No repeat mapper,
-registry, old pilot or diagnostic run is needed while the accepted session is active.
+Actual old/new counts are frozen per batch. Each record must independently pass
+tree, PK/FK and UUID checks; cross-record edges and overlapping-key ownership
+changes are rejected before deletion. Exact frozen-key deletion is followed by
+saved-payload verification and zero-insert repeat merges. Rollback must restore
+the selected records and protected first record before commit can proceed.
+There is no permanent backup; post-commit recovery is not provided by rollback.
 
-All **339 local tests pass**, including seven new no-backup policy regressions.
-**Live replacement is still pending.** Skipping permanent CTAS removes the
-confirmed backup-create blocker; target INSERT/DELETE privileges are not yet
-proven. Success must report ONE_RECORD_RECONCILED_AND_VERIFIED, PERSISTED true,
-a restored rehearsal baseline and clean final readback. Under this explicit
-policy BACKUP_TABLES is empty and BACKUPS_VERIFIED is false by design.
-Unknown transaction outcomes require inspection, not automatic reruns.
-
-This remains a one-record development persistence test, not bulk SSP/AR loading
-or full OSCAL completeness. [Run instructions and recovery limits](SSP_ONE_RECORD_RECONCILIATION.md).
+All **358 local tests pass**, including 19 batch checks, and scope review is clear.
+**Live ten-record batch persistence remains pending.** Only the first record is
+runtime-accepted; no all-record or AR load is accepted. This cell always selects
+the same next ten IDs, not an advancing cursor. Do not rerun after success.
+[Batch instructions, limits and acceptance criteria](SSP_TEN_RECORD_BATCH_WRITE.md).
 
 ## Active incident — Matillion raw-to-curated null field loss
 
