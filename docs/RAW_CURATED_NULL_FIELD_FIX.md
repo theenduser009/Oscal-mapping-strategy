@@ -17,6 +17,40 @@ the assembled JSON. This behavior is documented by Snowflake
 This is one confirmed loss mechanism, not proof that every missing field ID has
 the same cause. Source/data evidence for specific affected records is still needed.
 
+## See the actual values without writing
+
+Open the [one-record SELECT-only values preview](../sql/matillion/READ_ONLY_raw_curated_values_preview.sql).
+
+1. Copy it into a **Snowflake SQL worksheet/cell**, not a Python cell.
+2. Replace `${jv_raw_table_name}` with the actual fully qualified raw table
+   (or retain it when Matillion resolves that existing variable).
+3. Replace `REPLACE_WITH_REQUESTED_OBJECT_ID` with one affected raw
+   `RequestedObject.Id`, keeping the quotes. This is not necessarily the stored
+   `CONTENT_ID`.
+4. Run only this SELECT. It displays `RAW_FIELD_CONTENTS`,
+   `CURRENT_CURATED_JSON`, `PROPOSED_CURATED_JSON`, current/proposed content IDs,
+   key counts and status. Open the JSON cells to inspect field names and values.
+
+This preview deliberately includes an already-curated record for **inspection**.
+It does not remove the production UPDATE's pending-only filters or repair that
+record. There is no UPDATE, MERGE, DDL or transaction in this preview.
+
+Exactly one physical raw row must match. Duplicate rows or combined field names
+block the proposed JSON instead of choosing a winner. No match, no extracted
+fields, or an input placeholder is not a pass. Existing strict casts and recursive
+extraction remain unchanged: if those fail, report the error rather than deploying
+the candidate. Local checks verify the SELECT-only boundary and preserved
+conversion text; **this SQL has not yet run in Snowflake**.
+
+A content-ID mismatch needs review; a previously unprocessed row can legitimately
+have no stored ID yet. More proposed keys alone is not proof every field mapped:
+compare the particular missing field and any non-null values too. The preview
+does not show every intermediate metadata-lookup decision.
+
+The result contains real source values. Inspect them in Snowflake; share only
+sanitized counts/errors or approved redacted evidence, not sensitive payloads
+or unredacted identifiers in GitHub.
+
 ## Bounded candidate correction
 
 [Full Matillion SQL candidate](../sql/matillion/CANDIDATE_raw_curated_preserve_null_keys.sql)

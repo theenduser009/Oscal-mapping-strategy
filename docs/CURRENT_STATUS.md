@@ -18,6 +18,13 @@ non-null curated rows are not repaired by this candidate; no bulk reset/backfill
 is authorized. An affected table/record and before-after evidence are needed for
 a bounded repair. Accepted SSP/AR work and all deferred mappings are unchanged.
 
+A [one-record values preview](../sql/matillion/READ_ONLY_raw_curated_values_preview.sql)
+now shows raw fields, stored/proposed curated JSON, content IDs and key counts
+using SELECT only. Set the actual table and requested-object ID before running.
+It can inspect existing curated rows without changing them; duplicate rows/keys
+block the proposal. Preview runtime acceptance is pending; no production write
+or deployment has occurred. Keep sensitive result values inside Snowflake.
+
 ## Paused action — approved one-record SSP DEV write pilot
 
 The owner approved testing persistence now, rather than postponing every write
