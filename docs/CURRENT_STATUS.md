@@ -4,6 +4,24 @@ Last reconciled: 2026-09-11
 
 ## Active incident — Matillion raw-to-curated null field loss
 
+### Latest checkpoint — owner confirms full preview passed
+
+On 2026-09-11 the owner explicitly confirmed the full read-only preview ran
+successfully and mapped the fields as expected. This is **owner-reported preview
+acceptance**, not independently observed execution of the Matillion UPDATE.
+No preview rerun is requested.
+
+Next action: replace the existing Matillion raw-to-curated component SQL with
+the [complete corrected UPDATE](../sql/matillion/CANDIDATE_raw_curated_preserve_null_keys.sql),
+retaining its existing `${jv_raw_table_name}` job variable, then run the pipeline.
+The UPDATE retains named nulls and preserves content-ID selection. It still
+selects only rows with SQL-null CURATED_JSON; already-curated records are skipped
+and need a separately scoped repair if required. Matillion pipeline execution
+and persisted readback remain pending. No SQL logic changes or new test run
+were made for this handoff. Earlier requests to rerun the preview below are
+superseded by this confirmation.
+
+
 **Immediate requested action: view the complete corrected JSON, not another null-only report.**
 [Run the full conversion preview SELECT](../sql/matillion/READ_ONLY_authorization_package_full_conversion_preview.sql)
 with no edits or inputs. The configured authorization-package raw table is filled
