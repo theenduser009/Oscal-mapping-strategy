@@ -4,6 +4,27 @@ Last reconciled: 2026-09-11
 
 ## Current action — SSP physical persistence resumed
 
+### Latest runtime result — pilot blocked during live schema inspection
+
+The owner ran the separate pilot in COMMIT mode and reported
+`UNSUPPORTED_LIVE_COLUMN_DATATYPE` from `_pilot_safe_type`, reached through
+`_pilot_column_plan` while describing the target tables. This call happens
+before staging and before either target MERGE; **this attempt performed no
+pilot target DML**. It is not a persisted/accepted write.
+
+The existing error does not identify the column or datatype. The repo contains
+no actual DIM/FACT DDL or saved DESC output for these targets; do not broaden the
+datatype allowlist or invent casts from synthetic tests.
+
+Run the [read-only target-schema capture](../notebooks/persistence/READ_ONLY_SSP_PILOT_TARGET_SCHEMA.py)
+in one new Snowflake Python cell, with no edits, and post both printed schema
+blocks. It runs DESC TABLE for the two approved SSP development targets only
+and prints names, exact types, nullability and whether defaults exist, not data
+values or default contents. Do not rerun the write pilot unchanged. The next
+correction depends on this live schema evidence. SSP/AR mappings and the accepted
+upstream preview remain unchanged.
+
+
 On 2026-09-11 the owner returned from the upstream Matillion incident to resume
 OSCAL mapping and actual database persistence. The approved one-record SSP
 development pilot is **resumed, not yet executed**. Its earlier paused status
