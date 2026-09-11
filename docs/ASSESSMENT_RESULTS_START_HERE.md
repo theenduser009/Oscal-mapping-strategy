@@ -9,28 +9,30 @@ seventeen alternative-path rows. Their implementation is **pending live
 acceptance**, with 34 cumulative selected fields and 11 other row occurrences
 not enabled. This is not full-model completeness or schema validity.
 
-## Current direction — workflow fields deferred; four rows under review
+## Current direction — workflow fields and duplicate score deferred
 
 On September 11, the owner confirmed **skip the seven workflow audit fields for
-now** and continue the other four row occurrences. These workflow fields target
+now**, then also directed us to **defer both Average Security Compliance Score
+row occurrences** because their duplicate-field meaning is unresolved.
+Neither duplicate is counted as complete. These workflow fields target
 `assessment-results.results[].props[]`; they are deferred, not implemented or
 complete. This is separate from the two parked value-conversion blockers,
 `RISK_ACCEPTANCE_RBDS` and `RISK_ASSESSMENT_REPORT`.
 
 | Remaining Archer field | Row occurrences | Exact Excel target | Current issue |
 | --- | ---: | --- | --- |
-| `AVG_SECURITY_COMPLIANCE_SCORE` | 2 | `assessment-results.results[].observations[]` | Both transcribed rows have the same field, path, type and Notes. Confirm whether this is one duplicated mapping or whether one source-field name is wrong. Do not infer a rename or count two outputs. |
+| `AVG_SECURITY_COMPLIANCE_SCORE` | 2 | `assessment-results.results[].observations[]` | **Deferred by owner, 2026-09-11.** Duplicate meaning unresolved. Both original rows are preserved; no rename, deduplication or output is inferred. Reopen only after source-field identity is clarified. |
 | `TOTAL_PACKAGE_INHERENT_RISK` | 1 | `assessment-results.results[].observations[]` | CSV says observation; earlier owner Notes evidence differs. Confirm the governing original row before selecting its contract. |
 | `FINDINGS` | 1 | `assessment-results.results[].findings[]` | Notes require linking finding UUIDs; referenced finding identity/source and parent association are not established. |
 
-**Next candidate:** Average Security Compliance Score, using the existing
-one-observation-per-field pattern only after the duplicate-field meaning is
-resolved. The existing mapper requires one approved row for a selected field.
-This review does not change that guard or implement any of these four rows.
+**No action or notebook run is requested for the deferred score.**
+The two remaining non-deferred rows are Total Package Inherent Risk and Findings,
+with the unresolved contracts shown above. No code is changed by this status update.
 
 Inventory is **45 row occurrences = 17 accepted + 15 implemented candidate-only
-+ 2 parked after rejection + 7 workflow rows deferred + 4 remaining rows under review**.
-The four remaining rows represent three distinct field names in the transcription.
++ 2 parked after rejection + 7 workflow rows deferred + 2 duplicate score rows deferred
++ 2 remaining rows under review**.
+Deferred rows remain in the inventory and are not completed mappings.
 
 The [two-field diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11)
 is complete and matched the blocked run: 2,813 records, zero parse failures,

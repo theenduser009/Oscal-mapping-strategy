@@ -10,28 +10,30 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
-## Current direction — workflow fields deferred; four rows under review
+## Current direction — workflow fields and duplicate score deferred
 
 On September 11, the owner confirmed **skip the seven workflow audit fields for
-now** and continue the other four row occurrences. These workflow fields target
+now**, then also directed us to **defer both Average Security Compliance Score
+row occurrences** because their duplicate-field meaning is unresolved.
+Neither duplicate is counted as complete. These workflow fields target
 `assessment-results.results[].props[]`; they are deferred, not implemented or
 complete. This is separate from the two parked value-conversion blockers,
 `RISK_ACCEPTANCE_RBDS` and `RISK_ASSESSMENT_REPORT`.
 
 | Remaining Archer field | Row occurrences | Exact Excel target | Current issue |
 | --- | ---: | --- | --- |
-| `AVG_SECURITY_COMPLIANCE_SCORE` | 2 | `assessment-results.results[].observations[]` | Both transcribed rows have the same field, path, type and Notes. Confirm whether this is one duplicated mapping or whether one source-field name is wrong. Do not infer a rename or count two outputs. |
+| `AVG_SECURITY_COMPLIANCE_SCORE` | 2 | `assessment-results.results[].observations[]` | **Deferred by owner, 2026-09-11.** Duplicate meaning unresolved. Both original rows are preserved; no rename, deduplication or output is inferred. Reopen only after source-field identity is clarified. |
 | `TOTAL_PACKAGE_INHERENT_RISK` | 1 | `assessment-results.results[].observations[]` | CSV says observation; earlier owner Notes evidence differs. Confirm the governing original row before selecting its contract. |
 | `FINDINGS` | 1 | `assessment-results.results[].findings[]` | Notes require linking finding UUIDs; referenced finding identity/source and parent association are not established. |
 
-**Next candidate:** Average Security Compliance Score, using the existing
-one-observation-per-field pattern only after the duplicate-field meaning is
-resolved. The existing mapper requires one approved row for a selected field.
-This review does not change that guard or implement any of these four rows.
+**No action or notebook run is requested for the deferred score.**
+The two remaining non-deferred rows are Total Package Inherent Risk and Findings,
+with the unresolved contracts shown above. No code is changed by this status update.
 
 Inventory is **45 row occurrences = 17 accepted + 15 implemented candidate-only
-+ 2 parked after rejection + 7 workflow rows deferred + 4 remaining rows under review**.
-The four remaining rows represent three distinct field names in the transcription.
++ 2 parked after rejection + 7 workflow rows deferred + 2 duplicate score rows deferred
++ 2 remaining rows under review**.
+Deferred rows remain in the inventory and are not completed mappings.
 
 The [two-field diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11)
 is complete and matched the blocked run: 2,813 records, zero parse failures,
@@ -170,7 +172,8 @@ security-impact path above. Their exact source-field grouping is retained below.
 | --- | --- | --- | --- | --- | --- |
 | Assessment Results | `assessment-results.results[].observations[]` | `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE`, `SECURITY_COMPLIANCE_SCORE` | Live accepted | Each emitted for 2,813 records with zero missing/invalid values. Contracts and graph keys passed; no writes [E17]. | None for batch-one runtime acceptance. It is not a full-model/schema-valid claim. |
 | Assessment Results | `assessment-results.results[].observations[]` | Thirteen additions listed in the AR register below | Live accepted; seven fields have source gaps | Expanded run passed for all 17 selected fields with zero invalid values; missing counts recorded below [E18]. | No rerun. Source owner can investigate absent values; no score defaults or recalculation. |
-| Assessment Results | `assessment-results.results[].observations[]` | `AVG_SECURITY_COMPLIANCE_SCORE` (two occurrences), `TOTAL_PACKAGE_INHERENT_RISK` | Not enabled; clarification needed | Duplicate field identity and conflicting inherent-risk Notes remain unresolved [E15, E16]. | Reconcile the duplicate against the original sheet and confirm the inherent-risk Notes/target. No inferred rename or destination. |
+| Assessment Results | `assessment-results.results[].observations[]` | `AVG_SECURITY_COMPLIANCE_SCORE` (two occurrences) | **Deferred by owner, 2026-09-11; not implemented** | Duplicate field meaning unresolved [E15, E16]. Both rows remain recorded and neither is counted complete. | Reopen only after the original sheet clarifies duplicate versus mistaken source-field name. No inferred rename or deduplication. |
+| Assessment Results | `assessment-results.results[].observations[]` | `TOTAL_PACKAGE_INHERENT_RISK` | Not enabled; clarification needed | Earlier owner Notes and CSV evidence conflict [E15, E16]. | Confirm the governing original row and Notes. No inferred destination. |
 | Assessment Results | `assessment-results.results[].observations[] or props[]` (original Excel choice) | 17 risk rows listed below | Implemented; pending live | Owner approved one observation per field with a named inline property on September 11 [E19]. Original path/Notes checked exactly; emitted node path ends at observations[]. | Expanded run blocked by 100 rejected values in two fields. Inspect their shapes before changing conversion; do not rerun unchanged. No registry insertion or score recalculation. |
 | Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Grouped; conditional scope | Notes say to include if needed for audit trail [E15]. | Confirm audit-trail inclusion and property name/value rules; keep result-level properties separate from observation properties. |
 | Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
