@@ -1,4 +1,4 @@
-# Assessment Results release 2: cumulative mapping of 17 approved score fields.
+# Assessment Results release 3: cumulative mapping of 34 approved source fields.
 # Run in the existing notebook session after Cells 2 and 4 have initialized.
 # Does not change CONFIG, SSP outputs, registry, DIM or FACT. No database writes.
 import datetime
@@ -8,8 +8,8 @@ import re
 from decimal import Decimal
 
 
-AR_SCORE_RELEASE = "ar-observation-scores-v2-17-fields"
-AR_SCORE_FIELDS = (
+AR_SCORE_RELEASE = "ar-observation-scores-v3-34-fields"
+AR_ACCEPTED_SCORE_FIELDS = (
     "VULNERABILITY_SCORE", "ANTIVIRUS_SCORE", "PATCH_SCORE",
     "SECURITY_COMPLIANCE_SCORE",
     "STANDARD_OPERATING_ENVIRONMENT_SCORE", "COMPUTER_PASSWORD_AGE_SCORE",
@@ -19,10 +19,27 @@ AR_SCORE_FIELDS = (
     "AVG_ANTIVIRUS_SCORE", "AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE",
     "AVG_COMPUTER_PASSWORD_AGE_SCORE", "AVG_VULNERABILITY_REPORTING_SCORE",
 )
+# Owner-approved on 2026-09-11: choose observation items with inline props for
+# these exact alternative-path rows. Preserve the original sheet text below;
+# this decision does not approve arbitrary alternatives or result-level props.
+AR_ALTERNATIVE_SCORE_FIELDS = (
+    "RISK_ACCEPTANCE_RBDS", "TOTAL_PACKAGE_RESIDUAL_RISK",
+    "ADJUSTED_TOTAL_RISK_SCORE", "ADJUSTED_AVERAGE_RISK_SCORE",
+    "CURRENT_HIGHEST_DEVICE_RISK_SCORE", "CURRENT_AVERAGE_DEVICE_RISK_SCORE",
+    "CURRENT_CONTROL_RISK_SCORE", "PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD",
+    "PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD",
+    "BASELINE_HIGHEST_DEVICE_RISK_SCORE", "BASELINE_AVERAGE_DEVICE_RISK_SCORE",
+    "BASELINE_CONTROL_RISK_SCORE", "RISK_ASSESSMENT",
+    "_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD", "_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD",
+    "INITIAL_RISK_ASSESSMENT", "RISK_ASSESSMENT_REPORT",
+)
+AR_SCORE_FIELDS = AR_ACCEPTED_SCORE_FIELDS + AR_ALTERNATIVE_SCORE_FIELDS
 AR_ROOT_PATH = "assessment-results"
 AR_RESULT_PATH = "assessment-results.results[]"
 AR_OBSERVATION_PATH = "assessment-results.results[].observations[]"
 AR_SCORE_NOTES = "archer specific risk scoring map as observation"
+AR_ALTERNATIVE_PATH = AR_OBSERVATION_PATH + " or props[]"
+AR_ALTERNATIVE_NOTES = "archer specific risk scoring map as observation or property"
 AR_SOURCE_TABLE = "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
 AR_RAW_TABLE = "RTX_RAW_DEV.ES_ESC_GRC." + AR_SOURCE_TABLE
 AR_HELPERS = (
@@ -87,11 +104,14 @@ def _ar_mapping_contract(mapping_rows):
             errors.append({"field": field, "issue": "expected_one_mapping_row", "rows": len(rows)})
             continue
         row = rows[0]
+        alternative = field in AR_ALTERNATIVE_SCORE_FIELDS
+        expected_path = AR_ALTERNATIVE_PATH if alternative else AR_OBSERVATION_PATH
+        expected_notes = AR_ALTERNATIVE_NOTES if alternative else AR_SCORE_NOTES
         checks = {
             "model": _ar_words(row.get("OSCAL_MODEL")).replace(" ", "") == "assessmentresults",
-            "target": str(row.get("OSCAL_ELEMENT_PATH", "")).strip() == AR_OBSERVATION_PATH,
+            "target": str(row.get("OSCAL_ELEMENT_PATH", "")).strip() == expected_path,
             "mapping_type": _ar_words(row.get("MAPPING_TYPE")) == "extension property",
-            "notes": _ar_words(row.get("NOTES")) == AR_SCORE_NOTES,
+            "notes": _ar_words(row.get("NOTES")) == expected_notes,
             "target_member": not str(row.get("OSCAL_FIELD_NAME", "")).strip(),
             "extra_transform": not str(row.get("TRANSFORMATION_LOGIC", "")).strip(),
             "extra_notes": not str(row.get("MAPPING_NOTES", "")).strip(),
@@ -188,6 +208,13 @@ def build_ar_score_batch(source_records, mapping_rows, registry_rows, config, he
     report = {
         "MODEL": "ASSESSMENT_RESULTS", "TARGET_PATH": AR_OBSERVATION_PATH,
         "MAPPING_RELEASE": AR_SCORE_RELEASE,
+        "REPRESENTATION": "one-named-property-per-observation",
+        "INPUT_MAPPING_GROUPS": [
+            {"source_path": AR_OBSERVATION_PATH, "notes": AR_SCORE_NOTES,
+             "fields": list(AR_ACCEPTED_SCORE_FIELDS)},
+            {"source_path": AR_ALTERNATIVE_PATH, "notes": AR_ALTERNATIVE_NOTES,
+             "fields": list(AR_ALTERNATIVE_SCORE_FIELDS)},
+        ],
         "STATUS": "BLOCKED", "SELECTED_FIELDS": list(AR_SCORE_FIELDS),
         "OTHER_AR_MAPPING_ROWS_NOT_PROCESSED": outside_batch,
         "MAPPING_CONTRACT_ERRORS": mapping_errors, "REGISTRY_CONTRACT_ERRORS": registry_errors,

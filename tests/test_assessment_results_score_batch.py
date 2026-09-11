@@ -21,10 +21,23 @@ NEW_FIELDS = (
     "AVG_ANTIVIRUS_SCORE", "AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE",
     "AVG_COMPUTER_PASSWORD_AGE_SCORE", "AVG_VULNERABILITY_REPORTING_SCORE",
 )
-ALL_FIELDS = FIELDS + NEW_FIELDS
+ACCEPTED_FIELDS = FIELDS + NEW_FIELDS
+ALTERNATIVE_FIELDS = (
+    "RISK_ACCEPTANCE_RBDS", "TOTAL_PACKAGE_RESIDUAL_RISK",
+    "ADJUSTED_TOTAL_RISK_SCORE", "ADJUSTED_AVERAGE_RISK_SCORE",
+    "CURRENT_HIGHEST_DEVICE_RISK_SCORE", "CURRENT_AVERAGE_DEVICE_RISK_SCORE",
+    "CURRENT_CONTROL_RISK_SCORE", "PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD",
+    "PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD",
+    "BASELINE_HIGHEST_DEVICE_RISK_SCORE", "BASELINE_AVERAGE_DEVICE_RISK_SCORE",
+    "BASELINE_CONTROL_RISK_SCORE", "RISK_ASSESSMENT",
+    "_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD", "_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD",
+    "INITIAL_RISK_ASSESSMENT", "RISK_ASSESSMENT_REPORT",
+)
+ALL_FIELDS = ACCEPTED_FIELDS + ALTERNATIVE_FIELDS
 ROOT = "assessment-results"
 RESULT = ROOT + ".results[]"
 OBSERVATION = RESULT + ".observations[]"
+ALTERNATIVE = OBSERVATION + " or props[]"
 
 
 def mappings():
@@ -34,7 +47,13 @@ def mappings():
         "OSCAL_Element_Path": OBSERVATION,
         "Mapping_Type": "Extension Property",
         "Notes": "Archer-specific risk scoring - map as observation",
-    } for field in ALL_FIELDS]
+    } for field in ACCEPTED_FIELDS] + [{
+        "Archer_Field_Name": field,
+        "OSCAL_Model": "Assessment Results",
+        "OSCAL_Element_Path": ALTERNATIVE,
+        "Mapping_Type": "Extension Property",
+        "Notes": "Archer-specific risk scoring - map as observation or property",
+    } for field in ALTERNATIVE_FIELDS]
 
 
 def registry():
@@ -329,18 +348,20 @@ class AssessmentResultsScoreBatchTests(unittest.TestCase):
         self.assertFalse(batch["report"]["FULL_MODEL_COMPLETE"])
         self.assertFalse(batch["report"]["SCHEMA_VALIDATED"])
 
-    def test_expanded_release_emits_exactly_seventeen_observations_under_one_result(self):
+    def test_expanded_release_emits_exactly_thirty_four_observations_under_one_result(self):
         self.assertEqual(CODE["AR_SCORE_FIELDS"], ALL_FIELDS)
+        self.assertEqual(CODE["AR_ACCEPTED_SCORE_FIELDS"], ACCEPTED_FIELDS)
+        self.assertEqual(CODE["AR_ALTERNATIVE_SCORE_FIELDS"], ALTERNATIVE_FIELDS)
         values = {field: index for index, field in enumerate(ALL_FIELDS)}
         values["RISK_SCORE_GRADE"] = "A"
         batch = self.build([source(values=values)])
-        self.assertEqual(batch["report"]["MAPPING_RELEASE"], "ar-observation-scores-v2-17-fields")
+        self.assertEqual(batch["report"]["MAPPING_RELEASE"], "ar-observation-scores-v3-34-fields")
         self.assertEqual(batch["report"]["SELECTED_FIELDS"], list(ALL_FIELDS))
-        self.assertEqual(batch["report"]["FIELDS_WITH_POPULATED_EVIDENCE"], 17)
-        self.assertEqual((len(batch["nodes"]), len(batch["edges"])), (19, 18))
+        self.assertEqual(batch["report"]["FIELDS_WITH_POPULATED_EVIDENCE"], 34)
+        self.assertEqual((len(batch["nodes"]), len(batch["edges"])), (36, 35))
         nodes = {node["NODE_KEY"]: node for node in batch["nodes"]}
-        self.assertEqual(len(nodes), 19)
-        self.assertEqual(len({edge["EDGE_KEY"] for edge in batch["edges"]}), 18)
+        self.assertEqual(len(nodes), 36)
+        self.assertEqual(len({edge["EDGE_KEY"] for edge in batch["edges"]}), 35)
         root = next(node for node in nodes.values() if node["ELEMENT_PATH"] == ROOT)
         result = next(node for node in nodes.values() if node["ELEMENT_PATH"] == RESULT)
         self.assertEqual((root["INSTANCE_KEY"], root["PARENT_INSTANCE_KEY"]), ("singleton", None))
@@ -353,7 +374,7 @@ class AssessmentResultsScoreBatchTests(unittest.TestCase):
             payload = json.loads(node["METADATA_JSON"])
             self.assertEqual(payload, {
                 "uuid": node["OSCAL_UUID"],
-                "props": [{"name": field.lower().replace("_", "-"), "value": str(values[field])}],
+                "props": [{"name": field.lower().replace("_", "-").strip("-"), "value": str(values[field])}],
             })
             self.assertEqual(batch["report"]["FIELDS"][field], {"emitted": 1, "missing": 0, "invalid": 0})
         self.assertEqual({(edge["FK_SOURCE_ELEMENT_HASH"], edge["FK_TARGET_ELEMENT_HASH"])
@@ -448,6 +469,165 @@ class AssessmentResultsScoreBatchTests(unittest.TestCase):
                 "props": [{"name": property_name, "value": value}], "uuid": node_uuid,
             }, sort_keys=True))
             self.assertEqual(node["PARENT_INSTANCE_KEY"], "record-a")
+
+
+
+    def test_accepted_seventeen_match_v2_identity_payload_and_edge_snapshot(self):
+        # Captured from the accepted v2 implementation before this extension.
+        # These expected keys/UUIDs are not recomputed from the new mapper.
+        expected = (
+            ("VULNERABILITY_SCORE", "e80965082cf002741e05eba6949db545", "7fe2c052-75a4-5a85-9a50-d36394c21642"),
+            ("ANTIVIRUS_SCORE", "17f4ef456ba76562cf409152a442848c", "14acb459-c830-59f4-b0dc-625800f23391"),
+            ("PATCH_SCORE", "6e1ef8db22afd7f2994746dcafb36379", "f8a60a78-fbea-5069-b04a-bd1909158351"),
+            ("SECURITY_COMPLIANCE_SCORE", "7a300afa6a012a8eaef5e533a398718a", "34dbfa57-8d80-5caf-a563-38a865d1eefe"),
+            ("STANDARD_OPERATING_ENVIRONMENT_SCORE", "8f7d86c1608af00d0699c3425ad13a96", "18657d4b-c2ce-518d-bec7-7fad3f5c3d65"),
+            ("COMPUTER_PASSWORD_AGE_SCORE", "6bcfe7e607c65fdd94673c9befee7077", "54341110-6a43-56dd-8e5b-f6c6632dae1f"),
+            ("VULNERABILITY_REPORTING_SCORE", "49cc51163e71fa00bda32bb7f4d648fd", "446d935a-4394-58c1-b6bf-50905568ab58"),
+            ("SECURITY_COMPLIANCE_REPORTING_SCORE", "fa810511299c3d7d6b8c1601dd8d2ce5", "6e026ae1-8547-521c-b79f-36d84bc321b6"),
+            ("TOTAL_AUTHORIZATION_PACKAGE_RISK_SCORE", "afb36e2c36aa410a29194681f1f8089a", "b89d29e5-8fba-5c90-8544-fa5f422a527e"),
+            ("AVG_AUTHORIZATION_PACKAGE_RISK_SCORE", "2d9e94660753725d1cbc2ff885215b4f", "0e671421-bff6-57d0-a9ba-a77c09e2143b"),
+            ("RISK_SCORE_GRADE", "6a370c1f0e5a8f1594223b2e76aa1ac8", "69918152-b376-5138-9324-448ebbadc72a"),
+            ("AVG_VULNERABILITY_SCORE", "b1b4ec6d5596492ef231702d2c6e808d", "9ee1962a-a496-5034-be01-701f70c14c1b"),
+            ("AVG_PATCH_SCORE", "dbb852bc6826fe236a474e483244c8e1", "1fdb96fa-2b37-5a62-aa6a-bd32cb635dec"),
+            ("AVG_ANTIVIRUS_SCORE", "6fefc569d6b5e4cd9d002a29a0b569e4", "8bcc3562-340d-52fa-8fe1-14181842cba9"),
+            ("AVG_STANDARD_OPERATING_ENVIRONMENT_SCORE", "1273f46a56e9ff22ccd1fa558deeb413", "721f21ff-11ad-5c6b-b1bb-2cdcb75f4eea"),
+            ("AVG_COMPUTER_PASSWORD_AGE_SCORE", "cc2bce326526380c360b4c8edbdb5837", "54fedc8c-6507-53b4-aeac-5165598c4ff3"),
+            ("AVG_VULNERABILITY_REPORTING_SCORE", "e9f1d4595667e52561f4e7b26424c341", "1afcb6ad-afbd-53cd-a04a-f206c74c51f1"),
+        )
+        expected_edges = {
+            "35a137e7653ea50430e69750cf5ee341",
+            "ed97e834bb1ed434e46a41d73ae5a8aa",
+            "7263438606729034dcfcf15fd0478825",
+            "aa14faa6a5283e6eaa59d194c45ae00a",
+            "91de41344396cf1ce74b8b60fe139a4c",
+            "4f7d044a4fb662c5d1d89909e77b8b1d",
+            "b6043b2ba21db3730be7950ed25389da",
+            "defa461ab19b9980e8be73c04085583e",
+            "2dd5b241043d1c076d55d2cef70e5680",
+            "7fb95e67bb84b079ece651fe14375b95",
+            "739cadcc51c85fd88ad08f1857a6efa2",
+            "03b9154cf9ebcc04d82233891902d454",
+            "7f0157dcb46c39e4a4918bb14369c5d8",
+            "54c612da6930a584e20cffe5ed2ff51c",
+            "971d5f71045fb6e2187a1e04e5254ac6",
+            "c17951116bde5b6e38624f6b8f91b747",
+            "b4c4f8896c27ab43fc6f4f64976a02aa",
+            "ffe8522c7a62978651a2b6828d08165f",
+        }
+        values = {field: index for index, field in enumerate(ACCEPTED_FIELDS)}
+        values["RISK_SCORE_GRADE"] = "A"
+        batch = self.build([source(values=values)])
+        observations = self.observations(batch)
+        self.assertEqual(len(observations), 17)
+        for node, (field, key, uuid) in zip(observations, expected):
+            self.assertEqual((node["INSTANCE_KEY"], node["NODE_KEY"], node["OSCAL_UUID"]),
+                             (field, key, uuid))
+            self.assertEqual(node["METADATA_JSON"], json.dumps({
+                "props": [{"name": field.lower().replace("_", "-"), "value": str(values[field])}],
+                "uuid": uuid,
+            }, sort_keys=True))
+            self.assertEqual(node["PARENT_INSTANCE_KEY"], "record-a")
+        self.assertEqual((len(batch["nodes"]), len(batch["edges"])), (19, 18))
+        self.assertEqual({edge["EDGE_KEY"] for edge in batch["edges"]}, expected_edges)
+
+    def test_alternative_group_keeps_exact_input_contract_and_canonical_output_path(self):
+        values = {field: index for index, field in enumerate(ALTERNATIVE_FIELDS)}
+        batch = self.build([source(values=values)])
+        self.assertEqual(batch["report"]["STATUS"], "MAPPED_SCOPE_BUILT")
+        self.assertEqual(batch["report"]["REPRESENTATION"], "one-named-property-per-observation")
+        self.assertEqual(batch["report"]["TARGET_PATH"], OBSERVATION)
+        self.assertEqual(batch["report"]["INPUT_MAPPING_GROUPS"], [
+            {"source_path": OBSERVATION, "notes": "archer specific risk scoring map as observation",
+             "fields": list(ACCEPTED_FIELDS)},
+            {"source_path": ALTERNATIVE, "notes": "archer specific risk scoring map as observation or property",
+             "fields": list(ALTERNATIVE_FIELDS)},
+        ])
+        self.assertEqual({node["ELEMENT_PATH"] for node in batch["nodes"]}, {ROOT, RESULT, OBSERVATION})
+        self.assertEqual({node["INSTANCE_KEY"] for node in self.observations(batch)}, set(ALTERNATIVE_FIELDS))
+        self.assertEqual(len(batch["documents"]["record-a"][ROOT]["results"]), 1)
+        self.assertNotIn("props", batch["documents"]["record-a"][ROOT]["results"][0])
+        self.assertFalse(batch["report"]["WRITES_EXECUTED"])
+
+    def test_each_alternative_field_requires_approved_path_notes_and_type_before_source_read(self):
+        mutations = (
+            ("OSCAL_Element_Path", OBSERVATION, "contract_target"),
+            ("OSCAL_Element_Path", OBSERVATION + ".props[]", "contract_target"),
+            ("OSCAL_Element_Path", RESULT + ".props[]", "contract_target"),
+            ("Notes", "Archer specific risk scoring map as observation", "contract_notes"),
+            ("Mapping_Type", "Reference", "contract_mapping_type"),
+            ("OSCAL_Model", "SSP", "contract_model"),
+            ("OSCAL_FIELD_NAME", "value", "contract_target_member"),
+            ("TRANSFORMATION_LOGIC", "calculate score", "contract_extra_transform"),
+            ("MAPPING_NOTES", "derive from risk records", "contract_extra_notes"),
+            ("STATUS", "blocked", "contract_status"),
+        )
+        for field in ALTERNATIVE_FIELDS:
+            for column, value, issue in mutations:
+                with self.subTest(field=field, column=column, value=value):
+                    rows = mappings()
+                    target = next(row for row in rows if row["Archer_Field_Name"] == field)
+                    target[column] = value
+                    batch = self.build(UnreadSource(), mapping_rows=rows)
+                    self.assert_blocked(batch)
+                    self.assertIn({"field": field, "issue": issue}, batch["report"]["MAPPING_CONTRACT_ERRORS"])
+            for duplicate in (False, True):
+                with self.subTest(field=field, duplicate=duplicate):
+                    rows = mappings()
+                    target = next(row for row in rows if row["Archer_Field_Name"] == field)
+                    if duplicate:
+                        rows.append(dict(target))
+                    else:
+                        rows.remove(target)
+                    batch = self.build(UnreadSource(), mapping_rows=rows)
+                    self.assert_blocked(batch)
+                    self.assertIn({"field": field, "issue": "expected_one_mapping_row",
+                                   "rows": 2 if duplicate else 0},
+                                  batch["report"]["MAPPING_CONTRACT_ERRORS"])
+
+    def test_alternative_fields_keep_zero_precision_text_and_missing_rules(self):
+        values = {field: 0 for field in ALTERNATIVE_FIELDS}
+        values.update({
+            "TOTAL_PACKAGE_RESIDUAL_RISK": Decimal("0.123456789012345678901"),
+            "RISK_ASSESSMENT": "  supplied assessment  ",
+            "INITIAL_RISK_ASSESSMENT": None, "RISK_ASSESSMENT_REPORT": "",
+        })
+        batch = self.build([source(values=values)])
+        payloads = {node["INSTANCE_KEY"]: json.loads(node["METADATA_JSON"])["props"][0]
+                    for node in self.observations(batch)}
+        self.assertEqual(payloads["RISK_ACCEPTANCE_RBDS"]["value"], "0")
+        self.assertEqual(payloads["TOTAL_PACKAGE_RESIDUAL_RISK"]["value"], "0.123456789012345678901")
+        self.assertEqual(payloads["RISK_ASSESSMENT"]["value"], "supplied assessment")
+        self.assertEqual(payloads["_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD"]["name"],
+                         "current-average-device-risk-threshold")
+        self.assertEqual(payloads["_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD"]["name"],
+                         "current-highest-device-risk-threshold")
+        for field in ("INITIAL_RISK_ASSESSMENT", "RISK_ASSESSMENT_REPORT"):
+            self.assertNotIn(field, payloads)
+            self.assertEqual(batch["report"]["FIELDS"][field], {"emitted": 0, "missing": 1, "invalid": 0})
+        self.assertEqual(batch["report"]["FIELDS_WITH_POPULATED_EVIDENCE"], 15)
+
+    def test_invalid_alternative_values_never_publish_partial_accepted_outputs(self):
+        for field in ALTERNATIVE_FIELDS:
+            for value in ({"ContentId": 123}, {"score": 5}, [1, 2], Decimal("NaN")):
+                with self.subTest(field=field, value=repr(value)):
+                    batch = self.build([source(values={FIELDS[0]: 7, field: value})])
+                    self.assert_blocked(batch)
+                    self.assertEqual(batch["report"]["FIELDS"][field]["invalid"], 1)
+                    self.assertFalse(batch["report"]["OUTPUTS_PUBLISHED"])
+
+    def test_new_field_identity_uses_original_archer_key_and_survives_value_changes(self):
+        field = "_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD"
+        first = self.build([source("a", {field: 0}), source("b", {field: 101})])
+        changed = self.build([source("b", {field: 5}), source("a", {field: 8})],
+                             mapping_rows=list(reversed(mappings())))
+        key = lambda batch: {(node["NODE_KEY"], node["OSCAL_UUID"], node["INSTANCE_KEY"])
+                             for node in self.observations(batch)}
+        self.assertEqual(key(first), key(changed))
+        self.assertEqual(len(key(first)), 2)
+        self.assertTrue(all(node["INSTANCE_KEY"] == field for node in self.observations(first)))
+        original_values = {node["SOURCE_RECORD_ID"]: json.loads(node["METADATA_JSON"])["props"][0]["value"]
+                           for node in self.observations(first)}
+        self.assertEqual(original_values, {"a": "0", "b": "101"})
 
 
 if __name__ == "__main__":

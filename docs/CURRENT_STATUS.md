@@ -6,8 +6,8 @@ Last reconciled: 2026-09-11
 **Current direction:** SSP leftovers are parked while other Excel models are
 reviewed. The [model/path progress and clarification queue](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue)
 separates status, evidence/reason, and information needed for each scope.
-**Assessment Results: seventeen mappings are live accepted; twenty-eight rows
-remain outside this release.** The [September 11 uploaded run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11)
+**Assessment Results: seventeen mappings are live accepted; seventeen more are
+implemented and pending live; eleven row occurrences remain not enabled.** The [September 11 uploaded run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11)
 confirms `ar-observation-scores-v2-17-fields` at
 `assessment-results.results[].observations[]`: 2,813 source records,
 46,960 emitted observations, 52,586 nodes, 49,773 edges and 2,813 partial
@@ -21,16 +21,23 @@ not dropped records or invented defaults. The report does not establish whether
 the values were missing in Archer or during upstream curation. See the
 [per-field register](MAPPING_PROGRESS.md#assessment-results-field-register).
 
-**No rerun is needed for the accepted release.** The separate AR mapper remains
-the working seventeen-field version. SSP code and its accepted graph/assembly are
-unchanged. Required registry paths were present in the actual Snowflake table
+**The accepted v2 release needs no repeat run.** The separate AR mapper now
+implements the approved seventeen alternative-path additions as cumulative v3.
+Replace only that AR cell and run the expanded release once with writes disabled;
+[exact field list and run steps](ASSESSMENT_RESULTS_START_HERE.md#run-the-expanded-ar-cell-once).
+SSP code and its accepted graph/assembly are unchanged. Required registry paths were present in the actual Snowflake table
 when the accepted runs passed; no outstanding registry insertion is identified
 for those accepted scopes. This is recorded-run evidence, not a fresh full-registry
 audit or proof that every future path exists. Keep `EXECUTE_WRITES = False`.
 
-**Next work remains distinct:** 28 AR row occurrences are not enabled (duplicate
-and conflicting Notes rows, alternative destinations, conditional workflow
-properties and finding references). A shared cross-model engine with one entry
+**Current build:** the owner approved one observation per field with a named
+inline property for the seventeen rows whose original path says observations
+or props. The v3 release checks those exact original field/path/Notes contracts,
+retains the accepted seventeen mappings, and uses the same three registry paths.
+There is no new registry insertion. The expanded runtime report is still pending.
+
+**Remaining work:** 11 AR row occurrences are not enabled (duplicate and
+conflicting Notes rows, conditional workflow properties and finding references). A shared cross-model engine with one entry
 point has been discussed, but the consolidation is **not implemented**. Do not
 represent that design discussion as a completed refactor or silently change the
 accepted pipelines. Full-model completeness and OSCAL schema validation are also
@@ -57,7 +64,8 @@ inputs or the next task actually requires rebuilding in-memory outputs.
   mapping-dispatch failures remain documented below and in dated checkpoints.
   Later accepted runs supersede those failures for their corrected releases;
   do not treat old failed-run instructions as today's next action.
-- **Not completed:** twenty-eight AR row occurrences, the parked SSP corrections
+- **Not completed:** seventeen AR additions pending live plus eleven excluded AR
+  row occurrences, the parked SSP corrections
   and source gaps, full-model conformance, persistence, and the proposed
   shared-engine consolidation remain distinct unfinished work.
 
@@ -747,10 +755,12 @@ changes payload content without changing node or edge identity.
 ### Active implementation — Assessment Results; SSP corrections parked
 
 The owner chose to pause remaining SSP work and continue matching Assessment
-Results score mappings. The cumulative seventeen-field mapper is now live
-accepted; no repeated run is required. The [progress register](MAPPING_PROGRESS.md)
-separates seventeen accepted fields from twenty-eight unprocessed rows and records
-the source gaps. Shared-engine consolidation remains a proposal, not completed work.
+Results score mappings. The cumulative seventeen-field release is live accepted.
+The newly approved seventeen alternative-path additions are implemented in the
+34-field v3 release and require one expanded AR-cell run. The
+[progress register](MAPPING_PROGRESS.md) separates seventeen accepted fields,
+seventeen additions pending live, eleven excluded rows and recorded source gaps.
+Shared-engine consolidation remains a proposal, not completed work.
 No SSP mapper configuration, registry, DIM or FACT changes are part of this release.
 
 ### Parked Excel review — two System Characteristics corrections, not coded

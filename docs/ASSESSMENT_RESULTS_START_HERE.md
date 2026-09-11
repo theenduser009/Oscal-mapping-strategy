@@ -4,8 +4,13 @@ Active source: Source One, Archer Authorization Package `CURATED_JSON`.
 SSP is parked and preserved. All seventeen selected observation-score mappings
 are now live accepted, including the thirteen-field extension. The [September 11
 run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11) passed with no writes.
-Twenty-eight other AR mapping rows remain outside this release. No rerun is
-required; this is not full Assessment Results completeness or schema validity.
+That accepted release needs no repeat run. The owner has now approved the next
+seventeen alternative-path rows. Their implementation is **pending live
+acceptance**, with 34 cumulative selected fields and 11 other row occurrences
+not enabled. This is not full-model completeness or schema validity.
+
+**Next run:** replace only the separate AR mapping cell with the linked version
+below and run it once with writes disabled. No SSP or registry setup rerun.
 
 ## Four groups in the posted CSV
 
@@ -18,7 +23,7 @@ Counts include that duplicate and do not count multiline Notes as rows.
 | Group | Literal target in CSV | Type | Row occurrences | Next work |
 | --- | --- | --- | ---: | --- |
 | Observation scores | `assessment-results.results[].observations[]` | Extension Property | 20 | 17 fields live accepted; seven have source gaps. Three occurrences / two distinct fields remain excluded for duplicate/Notes questions. |
-| Observation or property | `assessment-results.results[].observations[] or props[]` | Extension Property | 17 | Select one exact destination and value representation. The literal `or` is an alternative, not a nested property path. |
+| Observation or property | `assessment-results.results[].observations[] or props[]` | Extension Property | 17 | Owner approved observation items with inline named properties on September 11. All 17 implemented; pending live. Original alternative path/Notes preserved and checked exactly. |
 | Workflow audit properties | `assessment-results.results[].props[]` | Extension Property | 7 | Notes make inclusion conditional on audit-trail need. Confirm inclusion and property name/value rules. Model label is `Extension Properties`, but the path targets Assessment Results. |
 | Finding references | `assessment-results.results[].findings[]` | Reference | 1 | Establish reference shape, finding identity and result-parent association. Keep separate from scores. |
 
@@ -111,11 +116,80 @@ These are field-specific counts, not distinct missing-record totals. Missing
 values were omitted. Their upstream cause has not been established.
 See the [exact per-field register](MAPPING_PROGRESS.md#assessment-results-field-register).
 
-### Completed run instructions — reference only; do not repeat
+## Approved alternative-path batch — seventeen more fields, pending live
 
-**The following run has already passed.** Keep these instructions only for a
-future explicitly needed rerun or a restarted session where new work requires
-the AR outputs. There is no pending execution task for the accepted release.
+On September 11 the owner approved using the accepted pattern for the seventeen
+rows whose original Excel path is
+`assessment-results.results[].observations[] or props[]` and Notes are
+`Archer-specific risk scoring - map as observation or property`.
+
+The explicit decision is **one observation per source field, containing one
+named inline property**. The emitted node path is
+`assessment-results.results[].observations[]`; the value lives in that item's
+`props[]`. The CSV is not rewritten. The mapper checks each field's original
+path and Notes against its own approved group, so the choice is not generalized
+to other rows or to the result-level workflow-property group.
+
+| Newly selected Archer field | Property name inside its observation |
+| --- | --- |
+| `RISK_ACCEPTANCE_RBDS` | `risk-acceptance-rbds` |
+| `TOTAL_PACKAGE_RESIDUAL_RISK` | `total-package-residual-risk` |
+| `ADJUSTED_TOTAL_RISK_SCORE` | `adjusted-total-risk-score` |
+| `ADJUSTED_AVERAGE_RISK_SCORE` | `adjusted-average-risk-score` |
+| `CURRENT_HIGHEST_DEVICE_RISK_SCORE` | `current-highest-device-risk-score` |
+| `CURRENT_AVERAGE_DEVICE_RISK_SCORE` | `current-average-device-risk-score` |
+| `CURRENT_CONTROL_RISK_SCORE` | `current-control-risk-score` |
+| `PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | `pct-current-highest-device-risk-threshold` |
+| `PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | `pct-current-average-device-risk-threshold` |
+| `BASELINE_HIGHEST_DEVICE_RISK_SCORE` | `baseline-highest-device-risk-score` |
+| `BASELINE_AVERAGE_DEVICE_RISK_SCORE` | `baseline-average-device-risk-score` |
+| `BASELINE_CONTROL_RISK_SCORE` | `baseline-control-risk-score` |
+| `RISK_ASSESSMENT` | `risk-assessment` |
+| `_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | `current-average-device-risk-threshold` |
+| `_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | `current-highest-device-risk-threshold` |
+| `INITIAL_RISK_ASSESSMENT` | `initial-risk-assessment` |
+| `RISK_ASSESSMENT_REPORT` | `risk-assessment-report` |
+
+All seventeen reuse the existing source-scalar conversion. No scores, thresholds,
+percentages, averages, risk bands, assessment objects or finding references are
+calculated or inferred from field names. Leading underscores remain part of the
+source lookup and observation identity; only the displayed property name follows
+the existing lowercase/hyphen convention. Zero is retained and decimal precision
+is preserved. Missing/null/empty values are omitted and counted; populated
+object, attachment/reference or multi-value shapes that do not resolve through
+the already-supported select wrapper block publication and are reported in
+aggregate. Source shapes and coverage for these new fields are not yet live-verified.
+
+**Registry:** the same root, results and observations rows are checked. Properties
+remain inline, so this batch adds no graph path and requires no registry insert.
+It changes neither the accepted registry identity rules nor any database data.
+
+The existing seventeen mappings keep their payloads, UUIDs and node/edge keys.
+Current inventory: **45 rows = 17 live accepted + 17 implemented/pending live
++ 11 not enabled**. The eleven are three observation-only occurrences with
+duplicate/Notes questions, seven conditional workflow fields and one finding
+reference. The inherent-risk Notes conflict remains unresolved.
+
+### Run the expanded AR cell once
+
+1. Refresh [Assessment Results mapping cell](../notebooks/assessment_results/01_map_observation_scores.py).
+2. Replace the entire separate AR cell and run it once in the active notebook
+   session with `EXECUTE_WRITES = False`.
+3. Do not replace SSP cells, change CONFIG's model, rerun Cell 7, run the grouping
+   report, or run registry setup. If the session expired, first run the unchanged
+   Cells 1, 2 and 4 to initialize inputs and shared helpers, then this AR cell.
+4. Post only the printed `AR_SCORE_RUN_REPORT`. Check release
+   `ar-observation-scores-v3-34-fields`, 34 selected fields and, for the same
+   45 mapping rows, 11 other rows not processed. New field coverage is unknown
+   until that report is posted. A blocked result is not a successful partial run.
+
+The report keeps the two input mapping groups visible and names the common
+inline-property representation. No additional validation cell is required.
+
+### Prior seventeen-field run instructions — historical reference only
+
+**The following instructions describe the already accepted v2 run.** They are
+retained as history, not today's run request. Use the expanded v3 instructions above.
 
 Refresh [Assessment Results score mapper](../notebooks/assessment_results/01_map_observation_scores.py),
 copy the complete file, and **replace the separate AR cell you just ran**. Run
@@ -146,12 +220,14 @@ before running this mapping cell.
 - This CSV supersedes the earlier summary that placed all scores directly at
   `assessment-results.results[].observations[].props[]`. No AR emission code was
   released under that interpretation. The later owner-approved inline score
-  property representation applies to the selected matching score fields, not
-  the unresolved alternatives or workflow/finding groups.
+  property representation first applied to the matching observation-only scores.
+  September 11 approval extends it to the seventeen specifically listed alternative
+  rows, not arbitrary alternatives or workflow/finding groups.
 - The owner verbally confirmed “Archer specific risk scoring, map as observation
   or property” for Excel rows 74, 75, 98, 99, 134, 135, 136, 141, 143, 156, 157,
   158, 460, 571, 573, 599 and 604. Row 460 is `RISK_ASSESSMENT`. That wording
-  does not resolve the alternative destination. The CSV puts
+  did not itself resolve the alternative destination. The later September 11
+  approval above resolves the seventeen listed alternative-path rows. The CSV puts
   `TOTAL_PACKAGE_INHERENT_RISK` in the observation-only group, unlike the earlier
   row-74 Notes discussion; reconcile against the original loaded artifact.
 - Keep both `AVG_SECURITY_COMPLIANCE_SCORE` occurrences visible until the
@@ -179,11 +255,12 @@ The historical registry has result and observation identity conventions, but
 does not prove the current nested-property contract. Registry writes require a
 separately approved setup after the schema and collection rules are known.
 
-The expanded release passes 24 score-mapper tests; the full repository suite
-passes **236 local tests**. A separate local check using the posted CSV and
-synthetic source values confirms 17 selected fields and 28 excluded row
-occurrences. Verification covers payloads, exact contracts, parent/child keys,
-exclusions and first-four compatibility. Local tests alone do not establish
-live acceptance; the separately posted September 11 checkpoint now does. The accepted
-SSP cells, registry, DIM and FACT remain unchanged. Track decisions in
+The v2 release passed 236 local tests before its separately posted live acceptance.
+The current v3 release passes **242 local tests**, including 30 focused AR tests.
+A check using the unchanged posted CSV and synthetic source values confirms
+34 selected fields, 11 excluded rows and zero duplicate/dangling keys.
+Local verification covers both exact input contracts,
+all accepted seventeen identities/payloads, parent-child integrity, source value
+boundaries and eleven exclusions. Local checks do not establish live acceptance
+of the seventeen additions. SSP cells, registry, DIM and FACT remain unchanged. Track decisions in
 [Mapping Progress](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue).

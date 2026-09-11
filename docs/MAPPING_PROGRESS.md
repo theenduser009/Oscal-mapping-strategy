@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-11, after acceptance of the seventeen-field AR run. Owner: Source One mapping implementation team.
+Last updated: 2026-09-11, after seventeen-field AR acceptance and approval/implementation of the next seventeen. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -21,11 +21,12 @@ by a dispatcher or a target node exists.
   security category, controlled versions and deferred fields. That 5 PM snapshot
   preceded the AR implementation below. No full-workbook percentage is established.
 
-- **September 11 accepted run:** the [seventeen-field AR mapper](../notebooks/assessment_results/01_map_observation_scores.py)
+- **September 11 accepted v2 run:** the seventeen-field AR mapper
   is live accepted [E18]. All 2,813 records were processed, producing 46,960
   observations, 52,586 nodes and 49,773 edges with zero contract/key/invalid-value
   errors and no writes. Ten fields cover every record; seven have source gaps.
-  AR inventory: **45 rows = 17 live accepted + 28 not enabled**. SSP counts above
+  Current AR inventory: **45 rows = 17 live accepted + 17 implemented/pending live
+  + 11 not enabled**. SSP counts above
   are unchanged. This is not full model completion or independent proof of every
   source-to-payload value.
 
@@ -36,7 +37,9 @@ by a dispatcher or a target node exists.
   groups: 45 row occurrences, 44 distinct field names, not completed mappings.
   Observation-only and observation-or-property targets are separate. The first
   seventeen score fields are now accepted under that representation [E18].
-  Ambiguous and conditional groups remain separate [E15, E16].
+  The next seventeen alternative-path rows now have owner approval for the same
+  inline-property representation and are implemented, pending live [E19].
+  Conditional workflow and finding-reference groups remain separate [E15, E16].
 
 - Start with [SSP — done and next](SSP_DONE_AND_NEXT.md) for the short summary.
   Clearer Excel Notes supersede the old helper classification: `HELPER_PTA_CALC`
@@ -127,7 +130,7 @@ security-impact path above. Their exact source-field grouping is retained below.
 | Assessment Results | `assessment-results.results[].observations[]` | `VULNERABILITY_SCORE`, `ANTIVIRUS_SCORE`, `PATCH_SCORE`, `SECURITY_COMPLIANCE_SCORE` | Live accepted | Each emitted for 2,813 records with zero missing/invalid values. Contracts and graph keys passed; no writes [E17]. | None for batch-one runtime acceptance. It is not a full-model/schema-valid claim. |
 | Assessment Results | `assessment-results.results[].observations[]` | Thirteen additions listed in the AR register below | Live accepted; seven fields have source gaps | Expanded run passed for all 17 selected fields with zero invalid values; missing counts recorded below [E18]. | No rerun. Source owner can investigate absent values; no score defaults or recalculation. |
 | Assessment Results | `assessment-results.results[].observations[]` | `AVG_SECURITY_COMPLIANCE_SCORE` (two occurrences), `TOTAL_PACKAGE_INHERENT_RISK` | Not enabled; clarification needed | Duplicate field identity and conflicting inherent-risk Notes remain unresolved [E15, E16]. | Reconcile the duplicate against the original sheet and confirm the inherent-risk Notes/target. No inferred rename or destination. |
-| Assessment Results | `assessment-results.results[].observations[] or props[]` (literal unresolved choice) | 17 risk rows, including `RISK_ASSESSMENT` | Deferred destination choice | Path and Notes both retain alternatives [E15]; this is not `observations[].props[]`. | One approved full path, value placement and name/conversion rule; no score recalculation assumed. |
+| Assessment Results | `assessment-results.results[].observations[] or props[]` (original Excel choice) | 17 risk rows listed below | Implemented; pending live | Owner approved one observation per field with a named inline property on September 11 [E19]. Original path/Notes checked exactly; emitted node path ends at observations[]. | Run the cumulative 34-field AR cell once; source shapes/coverage not yet live-verified. No registry insertion or score recalculation. |
 | Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Grouped; conditional scope | Notes say to include if needed for audit trail [E15]. | Confirm audit-trail inclusion and property name/value rules; keep result-level properties separate from observation properties. |
 | Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
 | Profile | `profile.imports[]` | `BASELINE_RECOMMENDATION` | Review pending | Conditional import example in Notes does not supply an approved import reference. | Baseline-to-URI mapping, intended import structure and selection rule; reconcile Extension Property label with target. |
@@ -142,8 +145,9 @@ conflict between earlier verbal Notes and the inherent-risk transcription.
 The former blanket nested-observation-property target in this queue is superseded;
 no AR mapper was implemented under that interpretation. The subsequent approved
 inline-property representation is implemented for the seventeen selected score
-fields and creates no extra property registry nodes [E16]. All seventeen are live
-accepted [E18]. The
+fields and creates no extra property registry nodes [E16]. Those seventeen are live
+accepted [E18]. Seventeen alternative-path additions now use the explicitly
+approved same representation but remain pending live [E19]. The
 [historical registry snapshot](checkpoints/2026-09-09-oscal-element-registry-collection-snapshot.md)
 shows Assessment Results collections for results, result properties and
 observations; it does not establish observation properties. This is not a fresh
@@ -184,12 +188,41 @@ names do not authorize calculating scores, averages, totals or grades.
 | `AVG_COMPUTER_PASSWORD_AGE_SCORE` | Live accepted; source gap | 2,800 emitted; 13 missing; 0 invalid [E18]. |
 | `AVG_VULNERABILITY_REPORTING_SCORE` | Live accepted; source gap | 2,800 emitted; 13 missing; 0 invalid [E18]. |
 
-The expanded cell remains read-only and cumulative, retaining the accepted four
-fields. With the same input mappings, 28 row occurrences remain outside its
-allowlist: three observation-only occurrences requiring clarification, seventeen
-alternative-path rows, seven conditional workflow rows and one finding-reference
-row. A missing source value is reported separately from a contract error and is
-not evidence that a populated mapping was exercised.
+### Approved alternative-path additions — pending live
+
+Model **Assessment Results**. Original input path:
+`assessment-results.results[].observations[] or props[]`. Original Notes:
+`Archer-specific risk scoring - map as observation or property`. The owner
+approved one observation per field with its source scalar inside an inline
+named property on September 11 [E19]. Emitted node path:
+`assessment-results.results[].observations[]`. No new score or formula is derived.
+
+| Archer field | Status | Evidence / remaining work |
+| --- | --- | --- |
+| `RISK_ACCEPTANCE_RBDS` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `TOTAL_PACKAGE_RESIDUAL_RISK` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `ADJUSTED_TOTAL_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `ADJUSTED_AVERAGE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `CURRENT_HIGHEST_DEVICE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `CURRENT_AVERAGE_DEVICE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `CURRENT_CONTROL_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `BASELINE_HIGHEST_DEVICE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `BASELINE_AVERAGE_DEVICE_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `BASELINE_CONTROL_RISK_SCORE` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `RISK_ASSESSMENT` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `INITIAL_RISK_ASSESSMENT` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+| `RISK_ASSESSMENT_REPORT` | Implemented; pending live | Approved destination/representation; source shape and coverage await the expanded report [E19]. |
+
+The expanded cell remains read-only and cumulative, retaining all seventeen
+accepted fields. Eleven row occurrences remain outside its allowlist: three
+observation-only occurrences requiring clarification, seven conditional workflow
+rows and one finding-reference row. Properties remain inline, so no registry
+insertion is needed. A missing source value is reported separately from a contract
+error and is not evidence that a populated mapping was exercised.
 
 ## Metadata register
 
@@ -379,6 +412,8 @@ addressing the already evidenced corrections.
 - [E17: Uploaded Assessment Results batch-one run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/683b0de290334cdc82675cda302f4244b10c9e0e/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10) — all four fields emitted for 2,813 records; 16,878 nodes, 14,065 edges, zero contract/key errors and no writes. Snapshot at source commit `683b0de290334cdc82675cda302f4244b10c9e0e`.
 
 - [E18: Uploaded seventeen-field AR run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11) — 2,813 records; 52,586 nodes; 49,773 edges; 17 fields with populated evidence, seven with source gaps; zero contract/key errors or writes.
+
+- [E19: Approved seventeen alternative-path additions](ASSESSMENT_RESULTS_START_HERE.md#approved-alternative-path-batch--seventeen-more-fields-pending-live) — owner approved the existing inline-property-per-observation representation on September 11; release `ar-observation-scores-v3-34-fields` is implemented but pending live. Original Excel/CSV unchanged; no registry or DIM/FACT writes.
 
 ### Shared-engine design status
 
