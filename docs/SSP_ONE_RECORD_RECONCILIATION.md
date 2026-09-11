@@ -147,3 +147,27 @@ failure is currently evidence of a backup/SQL-client operation problem, not a
 failed DIM/FACT replacement. Do not rerun COMMIT blindly. First inspect the exact
 Snowflake query/error associated with the reported query ID and determine which
 backup statement failed and whether either listed backup table actually exists.
+
+
+### Exact backup failure retrieved from query history
+
+The read-only query-history lookup returned the failing statement:
+
+```text
+QUERY_ID: 01c70132-0000-f4df-0002-490cc3694983
+START_TIME: 2026-09-11 14:26:01 -0400
+QUERY_TYPE: CREATE_TABLE_AS_SELECT
+ROLE_NAME: PUBLIC
+DATABASE_NAME: USERSC95077009
+SCHEMA_NAME: PUBLIC
+ERROR_CODE: 3001
+ERROR_MESSAGE: SQL access control error: Insufficient privileges to operate on schema 'ES_ESC_GRC_CURATED'. Your primary role PUBLIC must have CREATE TABLE granted on schema RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.
+```
+
+This confirms that the reconciliation stopped because its permanent backup CTAS
+ran with primary role `PUBLIC`, which lacks `CREATE TABLE` on the curated DEV
+schema. The failure occurred before target DIM/FACT DML; it is not evidence of a
+failed replacement. Do not retry COMMIT under `PUBLIC`, do not bypass the durable
+backup, and do not enable the general notebook write flag. The next execution
+requires an approved role that can create and verify the two scoped permanent
+backup tables in `RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED`.
