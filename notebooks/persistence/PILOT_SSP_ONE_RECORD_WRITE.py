@@ -6,7 +6,7 @@ import re
 import uuid
 
 
-SSP_PILOT_RELEASE = "ssp-one-record-write-v2-binary16"
+SSP_PILOT_RELEASE = "ssp-one-record-write-v3-temp-materialization"
 SSP_PILOT_MODE = "PREVIEW"  # Set to COMMIT only for the approved one-record DEV pilot.
 SSP_PILOT_DIM = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT"
 SSP_PILOT_FACT = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY"
@@ -34,7 +34,8 @@ def _pilot_error_details(error):
     if isinstance(error, PilotError):
         details.update(error.details)
     for attr, label, pattern in (("sql_error_code", "SQL_ERROR_CODE", r"[0-9]{1,10}"),
-                                 ("sqlstate", "SQLSTATE", r"[A-Z0-9]{5}")):
+                                 ("sqlstate", "SQLSTATE", r"[A-Z0-9]{5}"),
+                                 ("sfqid", "QUERY_ID", r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")):
         value = str(getattr(error, attr, ""))
         if re.fullmatch(pattern, value):
             details[label] = value
@@ -288,8 +289,16 @@ def _pilot_unique(session, table, key):
 
 def _pilot_freeze_graph(session, nodes, edges, names):
     """All Snowpark materialization and temporary DDL precedes any transaction."""
-    nodes.create_or_replace_temp_view(names["NV"])
-    edges.create_or_replace_temp_view(names["EV"])
+    # A cross-schema view rebinds unqualified Snowpark backing-table references
+    # in the view's schema. Materialize each frame in its existing session instead.
+    # Random pilot names + errorifexists avoid replacing any existing object.
+    for frame, suffix, step in ((nodes, "NV", "MATERIALIZE_GRAPH_NODES"),
+                                 (edges, "EV", "MATERIALIZE_GRAPH_EDGES")):
+        try:
+            frame.write.save_as_table(names[suffix], mode="errorifexists", table_type="temporary")
+        except BaseException as error:
+            raise PilotError("GRAPH_TEMP_MATERIALIZATION_FAILED",
+                             dict(_pilot_error_details(error), STEP=step)) from None
     nv, ev, nr, er = (names[k] for k in ("NV", "EV", "NR", "ER"))
     if (_pilot_count(session, f"SELECT COUNT(*) AS N FROM {nv}"),
             _pilot_count(session, f"SELECT COUNT(*) AS N FROM {ev}")) != SSP_PILOT_ACCEPTED_COUNTS:

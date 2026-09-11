@@ -1,10 +1,29 @@
 # One-record SSP development write pilot
 
-Status: **physical-schema correction locally verified; live write/readback pending**.
+Status: **temporary-view staging correction locally verified; live write/readback pending**.
 The owner approved one SSP record in the configured development DIM/FACT tables.
 This is not approval for a bulk load, AR writes, registry changes, or deletes.
 
-## Corrected after the first live schema stop
+## Latest correction: temporary graph snapshots
+
+The posted [error-history checkpoint](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
+shows CREATE_VIEW failures for a Snowpark temporary backing object. Release
+`ssp-one-record-write-v3-temp-materialization` replaces those two views with
+session-temporary table snapshots of the existing accepted DataFrames. It does
+not alter mappings, privileges, database/schema context, or persistent targets.
+
+This removes view-schema dependency resolution from graph staging; it cannot
+restore an expired source object or grant missing access. Keep the accepted
+DataFrames and pilot in the same active session. The code materializes both
+frames before any transaction, uses unique temporary names, and refuses to
+replace existing objects. If source materialization fails, the report identifies
+the node/edge step and available failed-query ID without emitting source SQL.
+
+The existing approved COMMIT instruction below still includes all preflight
+checks and rollback rehearsal. No separate schema/history rerun is needed.
+See the [bounded correction and test evidence](checkpoints/2026-09-11_ssp_pilot_temp_materialization_fix.md).
+
+## Earlier correction after the first live schema stop
 
 The owner-uploaded [physical schema](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
 is now covered by release `ssp-one-record-write-v2-binary16`. The failed earlier

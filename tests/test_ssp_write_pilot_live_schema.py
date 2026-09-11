@@ -8,6 +8,7 @@ import runpy
 import sqlite3
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 import uuid
 
 P = runpy.run_path(str(Path(__file__).resolve().parents[1] /
@@ -86,6 +87,62 @@ class LiveSchema(unittest.TestCase):
         self.assertEqual(P["SSP_PILOT_DIM_PK"], report["ERROR_DETAILS"]["COLUMN"])
         self.assertEqual("BINARY(17)", report["ERROR_DETAILS"]["LIVE_TYPE"])
         self.assertTrue(all(s.startswith("DESC TABLE ") for s in calls))
+
+
+class GraphMaterialization(unittest.TestCase):
+    def test_freeze_materializes_both_frames_before_scoped_queries_without_views(self):
+        fn = P["_pilot_freeze_graph"]
+        events = []
+        class Writer:
+            def save_as_table(self, name, *, mode, table_type):
+                events.append(("SAVE", name, mode, table_type))
+        frames = [SimpleNamespace(write=Writer()), SimpleNamespace(write=Writer())]
+        names = {k: "DEV.CURATED.TMP_TEST_" + k for k in ("NV", "EV", "NR", "ER")}
+        counts = iter([70102, 67289, 3, 2, 1, 3])
+        with patch.dict(fn.__globals__, {
+                "_pilot_count": lambda *a: next(counts),
+                "_pilot_query": lambda s, sql: events.append(("SQL", sql)),
+                "_pilot_zero": lambda *a: None, "_pilot_unique": lambda *a: None}):
+            result = fn(None, *frames, names)
+        self.assertEqual({"SOURCE_RECORDS": 1, "NODES": 3, "EDGES": 2}, result)
+        self.assertEqual([("SAVE", names[k], "errorifexists", "temporary") for k in ("NV", "EV")], events[:2])
+        self.assertTrue(all(e[0] == "SQL" and e[1].startswith("CREATE TEMPORARY TABLE") for e in events[2:]))
+
+    def test_materialization_failure_reports_step_without_target_dml_or_source_values(self):
+        fn = P["run_ssp_one_record_write_pilot"]
+        qid = "01234567-89ab-cdef-0123-456789abcdef"
+        for failed_frame in ("NODES", "EDGES"):
+            events, out = [], io.StringIO()
+            class Writer:
+                def __init__(self, label):
+                    self.label = label
+                def save_as_table(self, name, *, mode, table_type):
+                    events.append(self.label)
+                    if self.label == failed_frame:
+                        error = RuntimeError("private source value and generated SQL")
+                        error.sql_error_code, error.sqlstate, error.sfqid = 2003, "42S02", qid
+                        raise error
+            frames = [SimpleNamespace(write=Writer(label)) for label in ("NODES", "EDGES")]
+            def query(session, sql):
+                self.assertTrue(sql.startswith("DESC TABLE "))
+                return live_description("DIM" if sql.endswith("DIM_OSCAL_SSP_ELEMENT") else "FACT")
+            with patch.dict(fn.__globals__, {
+                    "_pilot_contract": lambda *a: None, "_pilot_no_transaction": lambda *a: None,
+                    "_pilot_query": query}), redirect_stdout(out):
+                with self.assertRaisesRegex(P["PilotError"], "GRAPH_TEMP_MATERIALIZATION_FAILED"):
+                    fn(None, {}, {}, *frames, mode="PREVIEW")
+            report = json.loads(out.getvalue())
+            self.assertFalse(report["TARGET_DML_ATTEMPTED"])
+            self.assertFalse(report["PERSISTED"])
+            self.assertEqual("MATERIALIZE_GRAPH_" + failed_frame, report["ERROR_DETAILS"]["STEP"])
+            self.assertEqual(qid, report["ERROR_DETAILS"]["QUERY_ID"])
+            self.assertEqual("2003", report["ERROR_DETAILS"]["SQL_ERROR_CODE"])
+            self.assertNotIn("private source", out.getvalue())
+
+    def test_only_valid_query_identifier_is_preserved(self):
+        error = RuntimeError("private")
+        error.sfqid = "private; SELECT source"
+        self.assertNotIn("QUERY_ID", P["_pilot_error_details"](error))
 
 
 class StorageEmulation(unittest.TestCase):

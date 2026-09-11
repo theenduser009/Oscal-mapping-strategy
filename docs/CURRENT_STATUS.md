@@ -2,54 +2,57 @@
 
 Last reconciled: 2026-09-11
 
-## Current action — SSP physical persistence resumed
+## Current action — SSP one-record persistence: temporary-view failure addressed
 
-### Latest checkpoint — uploaded physical schema reconciled; corrected pilot awaiting live run
+### Latest runtime evidence and bounded correction
 
-The first COMMIT attempt stopped in schema inspection, **before staging or any
-target MERGE**. It did not persist a record. The owner then uploaded the
-[actual DIM/FACT definitions](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md).
-The earlier request to run schema capture is fulfilled; do not repeat it.
+The owner posted [query-history evidence](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
+after the corrected physical-schema pilot failed in **PREVIEW** with error 2003.
+Nothing was persisted and no pilot target DML ran.
 
-The exact mismatch is now resolved in the separate pilot's storage projection:
-four physical key columns are `BINARY(16)`, whereas graph keys are 32-character
-MD5 hex; three physical UUID columns are `VARCHAR(32)`, whereas graph UUIDs have
-36 characters including hyphens. The corrected pilot decodes existing hex keys
-and removes UUID hyphens **only in the physical columns**. It does not rehash,
-truncate, alter mapped JSON, modify registry rows, or change either table schema.
+The relevant history contains CREATE_VIEW failures against a Snowpark temporary
+backing object resolved under the curated schema, with the recorded session
+context in a different database/schema. This identifies the failing boundary.
+Snowflake resolves unqualified dependencies in a view's own schema; that is
+consistent with the observed error. The uploaded summary does not conclusively
+rule out a missing backing object or insufficient access. The role name alone
+does not establish privileges. Separate Archer raw-table SELECT errors in that
+history are not treated as the cause of this pilot failure.
 
-Release `ssp-one-record-write-v2-binary16` passes 32 focused local tests, including
-the uploaded schema, malformed identities, binary-key collisions, readback,
-rollback and repeat writes. This is not live Snowflake persistence acceptance.
+The separate pilot now uses synchronous temporary-table materialization of both
+accepted graph frames instead of cross-schema views. It does not switch roles,
+change session context, guess new source tables, alter registry/table schemas,
+or recalculate mappings. All physical-key/UUID conversions and transaction
+safeguards from the earlier release remain in place. See
+[the staging correction](checkpoints/2026-09-11_ssp_pilot_temp_materialization_fix.md).
 
-**Next:** replace only the separate pilot cell with the
-[updated full file](../notebooks/persistence/PILOT_SSP_ONE_RECORD_WRITE.py),
-set `SSP_PILOT_MODE = "COMMIT"` near the top, and run it once in the accepted
-SSP session. Leave normal mapper writes disabled. No schema-capture, registry,
-AR or SSP mapper rerun is needed while those accepted outputs are still loaded.
-Post the pilot's printed report. See the [bounded correction checkpoint](checkpoints/2026-09-11_ssp_pilot_physical_storage_fix.md).
+Release: `ssp-one-record-write-v3-temp-materialization`.
+**35 focused pilot tests and 298 repository tests pass; live acceptance pending.**
+A staging failure now reports the node/edge materialization step and a query ID
+when Snowflake supplies one, without printing source values or generated SQL.
 
-Model **SSP**, tree root `system-security-plan`, using the accepted mapped graph
-of **70,102 nodes / 67,289 edges**. Accepted mappings are not being rewritten.
-Run the [existing separate pilot cell](../notebooks/persistence/PILOT_SSP_ONE_RECORD_WRITE.py)
-with `SSP_PILOT_MODE = "COMMIT"`; retain normal `CONFIG["EXECUTE_WRITES"] = False`.
-Use the accepted Cell 7 session outputs; only if they are absent, rebuild with
-the unchanged SSP Cells 1–7. Pause other writers to the two approved DEV tables
-and run no concurrent cells in the pilot session. No AR or registry run is needed.
+**Next action:** replace only the separate Python pilot cell with the
+[complete updated pilot](../notebooks/persistence/PILOT_SSP_ONE_RECORD_WRITE.py).
+In the same accepted SSP session, set `SSP_PILOT_MODE = "COMMIT"` for the
+already approved one-record DEV exercise. Keep normal
+`CONFIG["EXECUTE_WRITES"] = False`, pause other target writers, and run no
+concurrent SQL in that session. Run the pilot once and post its report.
 
-The pilot includes rollback rehearsal, baseline restoration, a one-record
-commit, repeated MERGE checks and post-commit readback of values and keys.
+COMMIT includes source materialization, physical-schema checks and complete-tree
+validation before any target MERGE, followed by rollback rehearsal, restore
+proof, a one-record commit, repeated-MERGE checks and saved-data readback.
+If staging still cannot access its source, the pilot stops before target DML.
+Do not rerun registry setup, the history query, or accepted SSP/AR mapping cells
+while the accepted session outputs remain available. A restarted/invalid source
+session must be rebuilt explicitly, not repaired by guessing roles.
+
 Acceptance requires `ONE_RECORD_COMMITTED_AND_VERIFIED` and `PERSISTED: true`.
-A blocked or uncertain result must be reviewed, not retried unchanged.
-Bulk SSP writes and AR persistence are not yet accepted. The next expansion
-depends on this actual saved-data result; no new fields are counted as mapped
-by introducing persistence.
+Neither is recorded for the corrected release yet. Bulk SSP loading and AR
+persistence remain separate and unaccepted. The accepted SSP graph remains
+70,102 nodes / 67,289 edges. No new Excel mappings are counted by this change.
 
-Matillion full-preview success remains owner-reported and recorded. Its UPDATE
-was handed off, but actual pipeline execution/persisted readback has not been
-reported. That is kept separate from this resumed SSP pilot; no repeat upstream
-preview is requested.
-
+Upstream Matillion preview acceptance remains recorded; no repeat preview is
+requested. Its pipeline execution/readback is still separate from SSP persistence.
 
 ## Active incident — Matillion raw-to-curated null field loss
 
