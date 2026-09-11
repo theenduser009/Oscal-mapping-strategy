@@ -25,6 +25,12 @@ It can inspect existing curated rows without changing them; duplicate rows/keys
 block the proposal. Preview runtime acceptance is pending; no production write
 or deployment has occurred. Keep sensitive result values inside Snowflake.
 
+For the owner's requested flat list, use the
+[one-step null-field-name query](../sql/matillion/READ_ONLY_authorization_package_null_field_names.sql).
+The authorization-package RAW table is filled in from Cell 1; set only the raw
+requested-object ID. Output is field name plus null value, with explicit blocked
+or no-null status. No previous-result query or data write is needed.
+
 ## Paused action — approved one-record SSP DEV write pilot
 
 The owner approved testing persistence now, rather than postponing every write

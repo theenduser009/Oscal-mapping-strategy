@@ -17,6 +17,29 @@ the assembled JSON. This behavior is documented by Snowflake
 This is one confirmed loss mechanism, not proof that every missing field ID has
 the same cause. Source/data evidence for specific affected records is still needed.
 
+## Just show the null-valued field names — one query
+
+Use [the one-step authorization-package null-field list](../sql/matillion/READ_ONLY_authorization_package_null_field_names.sql).
+It returns **FIELD_NAME** beside **MAPPED_VALUE**, filtered to proposed JSON-null
+values. You do not need a previous query or RESULT_SCAN.
+
+The raw table is already filled in as
+`RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW`, exactly as
+configured in repository Cell 1. That is the recorded DEV location; it is not a
+claim that this is the live production table.
+
+Replace only `REPLACE_WITH_REQUESTED_OBJECT_ID` with the affected record's raw
+`RequestedObject.Id`, keep the quotes, and run the full file in one Snowflake SQL
+cell. It is SELECT only. No Matillion table variable or follow-up query remains.
+
+A status row distinguishes a blocked preview from a successful preview with no
+null-valued keys. A row whose status is `NULL_VALUED_FIELD` contains a real field
+name; a diagnostic row with an empty field-name column is not a mapped field.
+These are nulls **after the existing conversion**, which can originate from raw
+nulls, empty strings, or failed casts. Fields filtered out before assembly are
+not included; this is not a complete unmapped-field audit. Local checks passed;
+Snowflake runtime verification remains pending.
+
 ## See the actual values without writing
 
 Open the [one-record SELECT-only values preview](../sql/matillion/READ_ONLY_raw_curated_values_preview.sql).
