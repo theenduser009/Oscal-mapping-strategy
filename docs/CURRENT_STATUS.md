@@ -2,6 +2,35 @@
 
 Last reconciled: 2026-09-11
 
+## Current action — SSP physical persistence resumed
+
+On 2026-09-11 the owner returned from the upstream Matillion incident to resume
+OSCAL mapping and actual database persistence. The approved one-record SSP
+development pilot is **resumed, not yet executed**. Its earlier paused status
+below is historical and superseded by this action.
+
+Model **SSP**, tree root `system-security-plan`, using the accepted mapped graph
+of **70,102 nodes / 67,289 edges**. Accepted mappings are not being rewritten.
+Run the [existing separate pilot cell](../notebooks/persistence/PILOT_SSP_ONE_RECORD_WRITE.py)
+with `SSP_PILOT_MODE = "COMMIT"`; retain normal `CONFIG["EXECUTE_WRITES"] = False`.
+Use the accepted Cell 7 session outputs; only if they are absent, rebuild with
+the unchanged SSP Cells 1–7. Pause other writers to the two approved DEV tables
+and run no concurrent cells in the pilot session. No AR or registry run is needed.
+
+The pilot includes rollback rehearsal, baseline restoration, a one-record
+commit, repeated MERGE checks and post-commit readback of values and keys.
+Acceptance requires `ONE_RECORD_COMMITTED_AND_VERIFIED` and `PERSISTED: true`.
+A blocked or uncertain result must be reviewed, not retried unchanged.
+Bulk SSP writes and AR persistence are not yet accepted. The next expansion
+depends on this actual saved-data result; no new fields are counted as mapped
+by introducing persistence.
+
+Matillion full-preview success remains owner-reported and recorded. Its UPDATE
+was handed off, but actual pipeline execution/persisted readback has not been
+reported. That is kept separate from this resumed SSP pilot; no repeat upstream
+preview is requested.
+
+
 ## Active incident — Matillion raw-to-curated null field loss
 
 ### Latest checkpoint — owner confirms full preview passed
