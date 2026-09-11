@@ -313,8 +313,10 @@ class Orchestration(unittest.TestCase):
         for mode in ("PREVIEW", "COMMIT"):
             events = []
 
-            def transaction(session, merges, verify, commit=False):
+            def transaction(session, merges, verify, commit=False, before_write=None, expected_inserts=None):
                 events.append("COMMIT" if commit else "ROLLBACK")
+                self.assertEqual((2, 1), expected_inserts)
+                before_write()
                 verify(1)
                 verify(2)
                 return {"STATUS": events[-1], "VERIFIED_PASSES": 2}
@@ -323,11 +325,13 @@ class Orchestration(unittest.TestCase):
                 "_pilot_contract": lambda *args: None,
                 "_pilot_no_transaction": lambda *args: None,
                 "_pilot_column_plan": lambda *args: [],
+                "_pilot_selection_schema": lambda *args: None,
                 "_pilot_query": lambda session, sql: events.append(sql) or [],
                 "_pilot_freeze_graph": lambda *args: {"SOURCE_RECORDS": 1, "NODES": 2, "EDGES": 1},
                 "_pilot_stage": lambda *args: None,
                 "_pilot_scope_queries": lambda *args: ("SELECT D", "SELECT F"),
                 "_pilot_check_existing_scope": lambda *args: None,
+                "_pilot_require_empty_scope": lambda *args: events.append("EMPTY_SCOPE"),
                 "_pilot_baseline_equal": lambda *args: events.append("BASELINE"),
                 "_pilot_verify": lambda *args, **kwargs: {"MATCHED": True},
                 "_pilot_merge_sql": lambda *args: "MERGE",
@@ -344,6 +348,7 @@ class Orchestration(unittest.TestCase):
                 self.assertTrue(result["ROLLBACK_RESTORED_BASELINE"])
                 self.assertLess(events.index("ROLLBACK"), events.index("COMMIT"))
                 self.assertIn("BASELINE", events[events.index("ROLLBACK") + 1:events.index("COMMIT")])
+                self.assertEqual(3, events.count("EMPTY_SCOPE"))
                 self.assertFalse(any("CREATE " in x for x in events[events.index("ROLLBACK") + 1:]))
 
     def test_default_is_preview_and_legacy_writes_cannot_be_enabled(self):

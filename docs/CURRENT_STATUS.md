@@ -2,41 +2,42 @@
 
 Last reconciled: 2026-09-11
 
-## Current action — SSP extra existing rows: read-only comparison
+## Current action - SSP new-record, insert-only write pilot
 
-The [posted pilot report](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
-confirms **1 SSP record, 19 candidate nodes, 18 candidate edges**. The temporary
-materialization release reached the existing-target check and stopped with
-`EXTRA_TARGET_ROWS_REQUIRE_REVIEW` in `SCHEMA_AND_STAGING`.
-Mode was PREVIEW, `TARGET_DML_ATTEMPTED = false`, and `PERSISTED = false`.
-No persistent target changes were attempted. This is not write acceptance.
+The [posted comparison](ssp_dim_fact_physical_schema_checkpoint_2026-09-11.md)
+passed. The original candidate has **19 nodes / 18 edges**; its existing target
+scope has **21 DIM rows / 20 FACT rows**, with **zero key overlap** and no duplicate
+key groups. Existing edges use `parent_of`; the candidate uses `CONTAINS`.
+This is an existing-identity mismatch, not just two surplus rows. Nothing was
+written by the comparison or the preceding PREVIEW pilot.
 
-The next action is the
-[standalone read-only extra-row comparison](../notebooks/persistence/READ_ONLY_SSP_PILOT_EXTRA_TARGET_ROWS.py).
-Copy the entire file into **one new Python cell in the same accepted SSP/pilot
-session**, run it unchanged, and post its aggregate report. Do not run the pilot,
-switch to COMMIT, rerun registry setup, or repeat the earlier error-history SQL.
+The owner approved selecting a source record **not already stored**, preserving
+all existing rows. The updated
+[one-record SSP pilot](../notebooks/persistence/PILOT_SSP_ONE_RECORD_WRITE.py)
+selects the lowest eligible source-record ID, excluding existing source ownership,
+DIM key collisions, incident FACT edges, and FACT key collisions. It freezes
+that choice once and stops if no eligible record exists. It never retries another
+record after a conflict and never updates or deletes pre-existing rows.
 
-The comparison selects the same deterministic lowest SSP root from the current
-accepted graph and requires the reported 19/18 candidate shape, one root,
-unique decoded keys and closed edge endpoints. It reports DIM/FACT extra rows,
-distinct extra keys, duplicate-key groups, element types, and relationship
-types with endpoint-in-batch flags. FACT scope includes edges touching extra
-same-record DIM nodes, not just the expected 19 nodes. One target SELECT gives
-the classifications in a consistent statement snapshot. Source IDs and payloads
-are not printed; the source-record filter is parameter-bound.
+Next: replace only the separate pilot Python cell with the complete updated file,
+set `SSP_PILOT_MODE = "COMMIT"` near the top, keep
+`CONFIG["EXECUTE_WRITES"] = False`, and run it once in the accepted SSP session
+with other writers paused. Post its printed report. No comparison, schema,
+error-history, registry, or mapper rerun is needed in the still-active session.
 
-This is explicitly a comparison with the **current accepted graph**, not a
-claim to have recovered the failed pilot's original frozen stage. It contains
-no target DML, deletion, role change, or mapper rebuild. Existing extras are not
-assumed invalid; their disposition needs evidence and, if destructive, separate
-authorization. No guard is weakened and no different record is silently chosen.
+The release retains lossless binary/UUID storage, temporary-table materialization,
+full-tree validation, rollback rehearsal, and post-commit readback. Before the
+first insert inside **both** transactions, the complete target scope must still
+be empty. Insert counts must equal the frozen batch on pass one and zero on
+pass two. All 316 local tests pass, including 15 new selection/transaction
+regressions; static schema review found no blocking defect. Local tests are not
+live persistence acceptance; that remains pending
+until the pilot reports `ONE_RECORD_COMMITTED_AND_VERIFIED` with `PERSISTED: true`.
 
-Three local comparison tests pass (SQL shape, validated keys and relational
-scope/count emulation); live Snowflake comparison output is pending. The pilot
-itself is unchanged by this diagnostic. Its physical-schema and staging fixes,
-accepted SSP/AR mappings, and the accepted Matillion preview remain preserved.
-Bulk SSP and AR persistence are still unaccepted.
+The existing 21/20 graph is left untouched; its identity migration remains a
+separate, unresolved task. This is not bulk-load or AR-write approval. Accepted
+SSP/AR mappings and the accepted Matillion preview are unchanged.
+See the [pilot run guide](SSP_WRITE_PILOT.md) for safety stops and scope.
 
 ## Active incident — Matillion raw-to-curated null field loss
 

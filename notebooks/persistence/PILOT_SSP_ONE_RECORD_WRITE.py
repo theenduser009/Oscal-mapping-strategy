@@ -6,7 +6,7 @@ import re
 import uuid
 
 
-SSP_PILOT_RELEASE = "ssp-one-record-write-v3-temp-materialization"
+SSP_PILOT_RELEASE = "ssp-one-record-write-v4-new-record-insert-only"
 SSP_PILOT_MODE = "PREVIEW"  # Set to COMMIT only for the approved one-record DEV pilot.
 SSP_PILOT_DIM = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT"
 SSP_PILOT_FACT = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY"
@@ -51,24 +51,49 @@ def _pilot_no_transaction(session):
         raise PilotError("EXISTING_TRANSACTION_STOPPED_PILOT")
 
 
-def _pilot_transaction(session, merge_statements, verify_callback, commit=False):
+def _pilot_transaction(session, merge_statements, verify_callback, commit=False,
+                       before_write=None, expected_inserts=None):
     """DML/SELECT only. Staging and verification SQL must be prepared beforehand."""
     if type(commit) is not bool or len(merge_statements) != 2:
         raise PilotError("INVALID_TRANSACTION_ARGUMENTS")
     if any(not statement.lstrip().upper().startswith("MERGE INTO ")
            or ";" in statement for statement in merge_statements):
         raise PilotError("INVALID_TRANSACTION_STATEMENT")
+    if before_write is not None and not callable(before_write):
+        raise PilotError("INVALID_TRANSACTION_ARGUMENTS")
+    if expected_inserts is not None and (len(expected_inserts) != 2 or
+            any(type(n) is not int or n < 1 for n in expected_inserts)):
+        raise PilotError("INVALID_TRANSACTION_ARGUMENTS")
     _pilot_no_transaction(session)
     try:
         _pilot_query(session, "BEGIN TRANSACTION")
     except BaseException:
         raise PilotError("BEGIN_OUTCOME_UNKNOWN") from None
-    verified = []
+    verified, inserted = [], []
     step, pass_number = "BEFORE_MERGE", 0
     try:
+        if before_write is not None:
+            before_write()
         for pass_number in (1, 2):
-            for step, statement in zip(("DIM_MERGE", "FACT_MERGE"), merge_statements):
-                _pilot_query(session, statement)
+            pass_inserts = []
+            for index, (step, statement) in enumerate(zip(("DIM_MERGE", "FACT_MERGE"), merge_statements)):
+                result = _pilot_query(session, statement)
+                if expected_inserts is not None:
+                    if len(result) != 1:
+                        raise PilotError("MERGE_INSERT_COUNT_UNAVAILABLE")
+                    row = result[0].as_dict() if hasattr(result[0], "as_dict") else dict(result[0])
+                    counts = {str(k).lower(): v for k, v in row.items()}
+                    value = counts.get("number of rows inserted")
+                    if not re.fullmatch(r"[0-9]+", str(value)):
+                        raise PilotError("MERGE_INSERT_COUNT_UNAVAILABLE")
+                    actual = int(value)
+                    expected = expected_inserts[index] if pass_number == 1 else 0
+                    if actual != expected:
+                        raise PilotError("UNEXPECTED_MERGE_INSERT_COUNT",
+                                         {"EXPECTED_INSERTS": expected, "ACTUAL_INSERTS": actual})
+                    pass_inserts.append(actual)
+            if expected_inserts is not None:
+                inserted.append({"PASS": pass_number, "DIM": pass_inserts[0], "FACT": pass_inserts[1]})
             step = "READBACK"
             verified.append(verify_callback(pass_number))
     except BaseException as error:
@@ -90,7 +115,7 @@ def _pilot_transaction(session, merge_statements, verify_callback, commit=False)
         except BaseException:
             raise PilotError("ROLLBACK_OUTCOME_UNKNOWN") from None
     return {"STATUS": "COMMITTED" if commit else "ROLLED_BACK",
-            "VERIFIED_PASSES": len(verified), "CHECKS": verified}
+            "VERIFIED_PASSES": len(verified), "CHECKS": verified, "INSERT_COUNTS": inserted}
 
 
 def _pilot_contract(config, run_result):
@@ -120,11 +145,10 @@ def _pilot_merge_sql(table, stage, pk, columns):
     if table not in (SSP_PILOT_DIM, SSP_PILOT_FACT):
         raise PilotError("TARGET_OUTSIDE_APPROVED_DEV_TABLES")
     names = [column["name"] for column in columns]
-    others = [name for name in names if name != pk]
-    changed = " OR ".join(f"NOT EQUAL_NULL(t.{_pilot_ident(n)}, s.{_pilot_ident(n)})" for n in others)
-    assignments = ", ".join(f"t.{_pilot_ident(n)} = s.{_pilot_ident(n)}" for n in others)
+    if not names or len(names) != len(set(names)) or pk not in names:
+        raise PilotError("INVALID_INSERT_PROJECTION")
+    # New-record authorization only: no statement can update or delete an old row.
     return (f"MERGE INTO {table} t USING {stage} s ON t.{_pilot_ident(pk)} = s.{_pilot_ident(pk)} "
-            f"WHEN MATCHED AND ({changed}) THEN UPDATE SET {assignments} "
             f"WHEN NOT MATCHED THEN INSERT ({', '.join(_pilot_ident(n) for n in names)}) "
             f"VALUES ({', '.join('s.' + _pilot_ident(n) for n in names)})")
 
@@ -287,6 +311,49 @@ def _pilot_unique(session, table, key):
                 "NULL_OR_DUPLICATE_KEYS")
 
 
+def _pilot_selection_schema(plans):
+    """Selection compares identities using the posted physical BINARY(16) schema."""
+    required = ((SSP_PILOT_DIM_PK,),
+                (SSP_PILOT_FACT_PK, "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"))
+    for plan, keys in zip(plans, required):
+        types = {c["name"]: c["type"] for c in plan}
+        if any(types.get(key) != "BINARY(16)" for key in keys):
+            raise PilotError("NEW_RECORD_SELECTION_REQUIRES_CONFIRMED_BINARY16_KEYS")
+
+
+def _pilot_new_record_sql(nv, ev):
+    """Select once by source ownership AND physical-key absence, without returning IDs."""
+    nv, ev = _pilot_table(nv), _pilot_table(ev)
+    dim, fact = _pilot_table(SSP_PILOT_DIM), _pilot_table(SSP_PILOT_FACT)
+    dk, fk = SSP_PILOT_DIM_PK, SSP_PILOT_FACT_PK
+    # Flat CTEs avoid multi-level correlated subqueries in Snowflake. Any existing
+    # row for this source record excludes it, even when all legacy keys differ.
+    return f"""WITH candidates AS (
+    SELECT DISTINCT SOURCE_RECORD_ID FROM {nv}
+    WHERE ELEMENT_PATH='system-security-plan' AND SOURCE_RECORD_ID IS NOT NULL
+      AND SOURCE_SYSTEM_NAME='ARCHER' AND SOURCE_TABLE_NAME='{SSP_PILOT_SOURCE}'
+), occupied AS (
+    SELECT r.SOURCE_RECORD_ID FROM candidates r JOIN {dim} t
+      ON t.SOURCE_RECORD_ID=r.SOURCE_RECORD_ID
+      AND t.SOURCE_SYSTEM_NAME='ARCHER' AND t.SOURCE_TABLE_NAME='{SSP_PILOT_SOURCE}'
+    UNION
+    SELECT n.SOURCE_RECORD_ID FROM {nv} n JOIN {dim} t
+      ON t.{dk}=TO_BINARY(n.NODE_KEY, 'HEX')
+    UNION
+    SELECT n.SOURCE_RECORD_ID FROM {nv} n JOIN {fact} t
+      ON t.FK_SOURCE_ELEMENT_HASH=TO_BINARY(n.NODE_KEY, 'HEX')
+      OR t.FK_TARGET_ELEMENT_HASH=TO_BINARY(n.NODE_KEY, 'HEX')
+    UNION
+    SELECT n.SOURCE_RECORD_ID FROM {nv} n JOIN {ev} e
+      ON e.FK_SOURCE_ELEMENT_HASH=n.NODE_KEY OR e.FK_TARGET_ELEMENT_HASH=n.NODE_KEY
+      JOIN {fact} t ON t.{fk}=TO_BINARY(e.EDGE_KEY, 'HEX')
+), chosen AS (
+    SELECT MIN(r.SOURCE_RECORD_ID) AS SOURCE_RECORD_ID FROM candidates r
+    WHERE NOT EXISTS (SELECT 1 FROM occupied o WHERE o.SOURCE_RECORD_ID=r.SOURCE_RECORD_ID)
+)
+SELECT n.* FROM {nv} n JOIN chosen c ON n.SOURCE_RECORD_ID=c.SOURCE_RECORD_ID"""
+
+
 def _pilot_freeze_graph(session, nodes, edges, names):
     """All Snowpark materialization and temporary DDL precedes any transaction."""
     # A cross-schema view rebinds unqualified Snowpark backing-table references
@@ -303,14 +370,20 @@ def _pilot_freeze_graph(session, nodes, edges, names):
     if (_pilot_count(session, f"SELECT COUNT(*) AS N FROM {nv}"),
             _pilot_count(session, f"SELECT COUNT(*) AS N FROM {ev}")) != SSP_PILOT_ACCEPTED_COUNTS:
         raise PilotError("GRAPH_COUNTS_CHANGED_SINCE_ACCEPTED_RUN")
-    # Stable selection from source graph, not from target-table contents.
-    _pilot_query(session, f"CREATE TEMPORARY TABLE {nr} AS SELECT * FROM {nv} "
-                 f"WHERE SOURCE_RECORD_ID = (SELECT MIN(SOURCE_RECORD_ID) FROM {nv} "
-                 "WHERE ELEMENT_PATH = 'system-security-plan')")
+    # Validate snapshot identities before selection evaluates binary conversions.
+    for table, columns in ((nv, ("NODE_KEY",)),
+                           (ev, ("EDGE_KEY", "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"))):
+        invalid = " OR ".join(f"{c} IS NULL OR NOT REGEXP_LIKE({c}, '{_PILOT_HEX_PATTERN}')"
+                              for c in columns)
+        _pilot_zero(session, f"SELECT COUNT(*) AS N FROM {table} WHERE {invalid}",
+                    "INVALID_GRAPH_IDENTITY_BEFORE_SELECTION")
+    _pilot_query(session, f"CREATE TEMPORARY TABLE {nr} AS " + _pilot_new_record_sql(nv, ev))
+    n = _pilot_count(session, f"SELECT COUNT(*) AS N FROM {nr}")
+    if n == 0:
+        raise PilotError("NO_UNSTORED_SSP_RECORD_AVAILABLE")
     _pilot_query(session, f"CREATE TEMPORARY TABLE {er} AS SELECT * FROM {ev} "
                  f"WHERE FK_SOURCE_ELEMENT_HASH IN (SELECT NODE_KEY FROM {nr}) "
                  f"OR FK_TARGET_ELEMENT_HASH IN (SELECT NODE_KEY FROM {nr})")
-    n = _pilot_count(session, f"SELECT COUNT(*) AS N FROM {nr}")
     e = _pilot_count(session, f"SELECT COUNT(*) AS N FROM {er}")
     roots = _pilot_count(session, f"SELECT COUNT(*) AS N FROM {nr} "
                          "WHERE ELEMENT_PATH = 'system-security-plan'")
@@ -406,6 +479,14 @@ def _pilot_check_existing_scope(session, names, queries):
                     f"ON t.{pk}=s.{pk} WHERE {conditions}", "TARGET_KEY_OWNERSHIP_CONFLICT")
 
 
+def _pilot_require_empty_scope(session, queries):
+    # Called during preflight and again inside EACH transaction before pass 1.
+    # Never on pass 2: that pass must see this transaction's own inserts.
+    for query in queries:
+        _pilot_zero(session, f"SELECT COUNT(*) AS N FROM ({query})",
+                    "NEW_RECORD_TARGET_SCOPE_NOT_EMPTY")
+
+
 def _pilot_baseline_equal(session, names, queries):
     for baseline, query in zip((names["DB"], names["FB"]), queries):
         _pilot_zero(session, f"SELECT COUNT(*) AS N FROM (({query}) MINUS (SELECT * FROM {baseline}))",
@@ -441,16 +522,19 @@ def run_ssp_one_record_write_pilot(session, config, run_result, nodes, edges, mo
     prefix = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.TMP_SSP_PILOT_" + uuid.uuid4().hex.upper()
     names = {suffix: prefix + "_" + suffix for suffix in ("NV", "EV", "NR", "ER", "D", "F", "DB", "FB")}
     report = {"RELEASE": SSP_PILOT_RELEASE, "MODEL": "SSP", "MODE": mode,
+              "SELECTION": "LOWEST_UNSTORED_SOURCE_RECORD", "WRITE_POLICY": "INSERT_ONLY",
               "STATUS": "PREPARING", "TARGET_DML_ATTEMPTED": False, "PERSISTED": False}
     phase = "SCHEMA_AND_STAGING"
     try:
         # Include schema stops in the printed aggregate report, before any target DML.
         plans = [_pilot_column_plan(_pilot_query(session, "DESC TABLE " + target), kind)
                  for target, kind in ((SSP_PILOT_DIM, "DIM"), (SSP_PILOT_FACT, "FACT"))]
+        _pilot_selection_schema(plans)
         report.update(_pilot_freeze_graph(session, nodes, edges, names))
         for raw, stage, plan in zip(("NR", "ER"), ("D", "F"), plans):
             _pilot_stage(session, names[raw], names[stage], plan)
         queries = _pilot_scope_queries(names)
+        _pilot_require_empty_scope(session, queries)
         _pilot_check_existing_scope(session, names, queries)
         for baseline, query in zip((names["DB"], names["FB"]), queries):
             _pilot_query(session, f"CREATE TEMPORARY TABLE {baseline} AS {query}")
@@ -463,14 +547,19 @@ def run_ssp_one_record_write_pilot(session, config, run_result, nodes, edges, mo
                   for target, kind, pk, plan in zip((SSP_PILOT_DIM, SSP_PILOT_FACT), ("D", "F"),
                                                   (SSP_PILOT_DIM_PK, SSP_PILOT_FACT_PK), plans)]
         verify = lambda pass_number: _pilot_verify(session, names, queries, plans)
+        def empty_scope():
+            _pilot_require_empty_scope(session, queries)
+            report["TARGET_DML_ATTEMPTED"] = True
+        expected_inserts = (report["NODES"], report["EDGES"])
         phase = "ROLLBACK_REHEARSAL"
         _pilot_baseline_equal(session, names, queries)
-        report["TARGET_DML_ATTEMPTED"] = True
-        report["REHEARSAL"] = _pilot_transaction(session, merges, verify, commit=False)
+        report["REHEARSAL"] = _pilot_transaction(session, merges, verify, commit=False,
+                                               before_write=empty_scope, expected_inserts=expected_inserts)
         _pilot_baseline_equal(session, names, queries)
         report["ROLLBACK_RESTORED_BASELINE"] = True
         phase = "COMMIT"
-        report["COMMIT"] = _pilot_transaction(session, merges, verify, commit=True)
+        report["COMMIT"] = _pilot_transaction(session, merges, verify, commit=True,
+                                            before_write=empty_scope, expected_inserts=expected_inserts)
         report["PERSISTED"] = True
         phase = "POST_COMMIT_READBACK"
         report["READBACK"] = _pilot_verify(session, names, queries, plans)
