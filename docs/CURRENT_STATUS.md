@@ -2,6 +2,23 @@
 
 Last reconciled: 2026-09-11
 
+## Run now — two-field diagnostic only
+
+1. Open [the rejected-value shape diagnostic](../notebooks/validation/READ_ONCE_ar_rejected_value_shapes.py).
+2. Copy the whole file into **one new Snowflake Python cell** in the same session
+   that contains the blocked 34-field AR run. Keep `EXECUTE_WRITES = False`.
+3. Run only that diagnostic and post its printed report to GitHub.
+
+Do not rerun AR, SSP or registry setup. The diagnostic reads the existing source
+and conversion helpers, reports only fixed structural labels/types and aggregate
+counts, and preserves the blocked report and existing graph variables. It never
+prints source values, record IDs, filenames, arbitrary JSON keys or raw errors.
+It must reproduce the 1 and 99 rejected-value counts and show
+`MATCHES_BLOCKED_RUN = true` before its shapes can explain this run. A mismatch
+means the evidence differs; it is not a reason to change data or guess a transform.
+This diagnostic does not fix or accept the mappings. We will use the shapes to
+choose the smallest correction consistent with the approved Excel Notes.
+
 ## Latest AR run — v3 blocked; no repeat run yet
 
 The [posted thirty-four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) confirms the new release ran.

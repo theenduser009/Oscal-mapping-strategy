@@ -17,6 +17,23 @@ actual source types/container shapes before choosing a correction. The report
 does not establish their shape or exact conversion failure. No registry setup
 is needed, and **do not rerun the unchanged mapper**.
 
+## Run now — two-field diagnostic only
+
+1. Open [the rejected-value shape diagnostic](../notebooks/validation/READ_ONCE_ar_rejected_value_shapes.py).
+2. Copy the whole file into **one new Snowflake Python cell** in the same session
+   that contains the blocked 34-field AR run. Keep `EXECUTE_WRITES = False`.
+3. Run only that diagnostic and post its printed report to GitHub.
+
+Do not rerun AR, SSP or registry setup. The diagnostic reads the existing source
+and conversion helpers, reports only fixed structural labels/types and aggregate
+counts, and preserves the blocked report and existing graph variables. It never
+prints source values, record IDs, filenames, arbitrary JSON keys or raw errors.
+It must reproduce the 1 and 99 rejected-value counts and show
+`MATCHES_BLOCKED_RUN = true` before its shapes can explain this run. A mismatch
+means the evidence differs; it is not a reason to change data or guess a transform.
+This diagnostic does not fix or accept the mappings. We will use the shapes to
+choose the smallest correction consistent with the approved Excel Notes.
+
 ## Four groups in the posted CSV
 
 Source: [transcribed mapping rows](transcribed_mapping_rows.csv), added on
