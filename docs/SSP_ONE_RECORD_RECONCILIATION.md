@@ -102,3 +102,48 @@ ownership, retained old-edge scope, durable-backup ordering and PK/FK corruption
 Static code review found no blocking defect. These checks do not establish live
 Snowflake execution, all-record migration, or full OSCAL schema conformance.
 
+## Live Snowflake evidence — 2026-09-11
+
+Latest COMMIT attempt **did not persist the replacement**.
+
+Observed report:
+
+```text
+MODE: COMMIT
+MODEL: SSP
+NODES: 19
+EDGES: 18
+PERSISTED: false
+PHASE: DURABLE_BACKUP
+RELEASE: ssp-one-record-reconcile-v1
+SELECTION: PREVIOUSLY_REVIEWED_LOWEST_ROOT
+SOURCE_RECORDS: 1
+STATUS: RECONCILIATION_OPERATION_FAILED
+TARGET_DML_ATTEMPTED: false
+WRITE_POLICY: BACKUP_AND_REPLACE_ONE_REVIEWED_RECORD
+```
+
+The operation proposed/created uniquely named DIM and FACT backup tables under
+`RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED` and then stopped in the durable
+backup phase with `ERROR_DETAILS.CAUSE = SQL_OR_CLIENT_ERROR`,
+`SQL_ERROR_CODE = 3001` (query ID was also reported by Snowflake).
+
+The reviewed scope was still exactly the expected old/new shape:
+
+```text
+NEW_DIM_ROWS: 19
+NEW_FACT_ROWS: 18
+OLD_DIM_ROWS: 21
+OLD_FACT_ROWS: 20
+```
+
+The old-key integrity checks shown in the report were clean: dangling source/target
+keys 0, DIM duplicate/null key groups 0, FACT duplicate/null key groups 0, null
+foreign keys 0, roots 1, UUID link mismatches 0, wrong parent counts 0, and wrong
+relationship type 0.
+
+**Important:** `PERSISTED=false` and `TARGET_DML_ATTEMPTED=false`. Therefore this
+failure is currently evidence of a backup/SQL-client operation problem, not a
+failed DIM/FACT replacement. Do not rerun COMMIT blindly. First inspect the exact
+Snowflake query/error associated with the reported query ID and determine which
+backup statement failed and whether either listed backup table actually exists.
