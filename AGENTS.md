@@ -64,3 +64,14 @@
 After a material accepted run, failure, user decision or change of next action, update PROJECT_HANDOFF and the current-action section of CURRENT_STATUS; update the mapping register when field statuses change. Link the exact evidence and preserve historical reports. Record what changed, what is accepted, what is pending/deferred, why, and the single next action. Verify remote publication before saying a change is on GitHub.
 
 These files provide project continuity; they do not preserve a Snowflake session or guarantee memory in unrelated chats. No mapper/database change is authorized merely by reading them.
+
+
+## Lean mapper comparison context
+
+When the owner asks why the current seven-cell mapper is much larger than the
+earlier compact implementation, read
+[docs/CODEX_LEAN_MAPPER_CONTEXT.md](docs/CODEX_LEAN_MAPPER_CONTEXT.md). Treat the
+earlier mapper as a simplicity baseline, not as authority to remove required
+metadata dispatch, identity, validation or persistence contracts. Start with a
+read-only per-cell comparison; do not refactor or enable writes unless the owner
+separately authorizes that change.
