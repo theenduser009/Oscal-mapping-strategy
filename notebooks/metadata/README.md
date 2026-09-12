@@ -21,6 +21,16 @@ The catalog is **not automatically synchronized from Excel**. It still contains 
 
 ## Adding an approved mapping
 
+### Registry-first routing
+
+Model ownership comes from active registry paths, including paths for models not enabled for execution. Recognized labels cross-check that ownership; a conflicting known label blocks, while an unfamiliar display label does not override a registered path. Original sheet labels and paths remain unchanged in the artifact and traceability fields.
+
+The catalog's `ROUTING` section declares placeholder model labels and target paths. They are deferred, never treated as approved mappings. The currently evidenced labels are `TBD`, `N/A - Calculated`, and `Multiple - See Notes`; target placeholders also include `All Nulls`. A TBD row with a real SSP path remains deferred. Unreviewed rows follow the existing `UNREVIEWED_ROWS` policy, even if their model is not configured. Explicitly approved rows with unresolved ownership still block.
+
+No special Profile or Assessment Plan executor or field-name rule was added. If the registry identifies another model's path, it is outside the selected route. If no registry ownership exists and the row is unapproved, it stays deferred rather than being mapped by inference. Required accepted mapping identities and genuine label/path conflicts still fail closed. Routing-only recognition does not populate `SELECTED_MODELS` or approve storage.
+
+Reports identify `ROUTING_POLICY: registry-first-v1`, preserve exact disposition counts, and include original model labels/paths in bounded issue samples. This avoids requiring another label-extraction diagnostic for a future routing failure.
+
 For an existing supported model/operator, add the approved Excel/CSV row with these executable columns, or add its exact reviewed rule to `MAPPING_RULES` in the catalog:
 
 - `APPROVAL_STATUS`: `APPROVED`.

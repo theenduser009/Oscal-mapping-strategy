@@ -14,6 +14,12 @@ Seven separate, copy-ready Python files for the published shared mapper. Each ce
 
 ## One model selector
 
+### Current routing correction
+
+Replace the notebook Files copy of [mapper_contract.v1.json](../metadata/mapper_contract.v1.json) and replace only [Cell Three](03_canonical_mapping_contract.py). In the existing active session, run Cell One to reload that catalog, then Cell Three, then Cell Seven in PREVIEW. Keep the existing model selection and writes disabled. Cells Two/Four/Five/Six and their session inputs can stay as they are. If the session has ended, run the matching seven cells in order instead. No extra runtime cell or registry change.
+
+The registry now establishes model ownership before mapping; placeholder policy is metadata-driven. This correction does not approve deferred rows or enable other models. Local tests pass; post the new complete pipeline report for live acceptance.
+
 In Cell One, edit only `SELECTED_MODELS`. Use `"SSP"` for SSP only,
 `"ASSESSMENT_RESULTS"` for AR graph preview, or `("SSP", "ASSESSMENT_RESULTS")`
 for both. Internal model keys and legacy configuration are derived automatically.

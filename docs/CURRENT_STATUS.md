@@ -2,13 +2,17 @@
 
 Last reconciled: 2026-09-11
 
-## Current action - simplified declarative engine; live routing report pending
+## Current action - registry-first routing correction; live PREVIEW pending
 
 **Implemented and regression-verified:** the same seven-cell workflow now excludes the old SSP/AR engines from deployed Cell Four; their original code is frozen for tests only. One compiled metadata plan controls mapping decisions. Optional declarative constraints cover cardinality, required/absent-value policy, type, enum and numeric bounds. Cell Five, Six and Seven retain the shared graph, guarded writer and runner. Original split cells are the maintained source; a developer-only generator keeps V2/combined copies synchronized.
 
-All **549 local tests pass**, including exact accepted SSP fixture parity, AR17 standalone-output parity, metadata-only new field/third-model execution, mixed 608-row routing, and constraint failure checks. This is implementation evidence, not live Snowflake acceptance. No source, registry or target data was written.
+All **564 local tests pass**, including exact accepted SSP fixture parity, AR17 standalone-output parity, metadata-only new field/third-model execution, the complete posted 459-row failure pattern, mixed 608-row routing, and constraint failure checks. This is implementation evidence, not live Snowflake acceptance. No source, registry or target data was written.
 
-**Next action:** inspect the owner's existing full Cell Seven report. The reported 608 inputs / 459 blocked / 60 deferred / 46 excluded remain only partially described; the full report is not in the verified GitHub evidence. The reported missing-approved-metadata example is deferred, not an explanation of all blocked rows. A reproduced bug is corrected: clearly other-model rows are excluded before source-field validation. Unknown labels/roots and conflicting ownership still stop execution. Reports retain exact totals and at most 25 blocker-first samples. Do not claim this proves the live 459-row failure resolved, request an unchanged rerun, or use COMMIT. No new standalone cell or catalog change is needed.
+**Verified cause:** the [posted diagnostic](OSCAL_PIPELINE_ROUTING_FAILURE_2026-09-12.md#unknown-model-label-diagnostic) accounts for all 459 blocked rows: 454 placeholder model labels and five Profile/Security Assessment Plan rows. One of those five also has a placeholder path. The earlier label-first gate blocked these before proper classification. The 58 missing-approved-metadata rows are part of the 60 deferred rows, not additional blockers.
+
+**Correction:** Cell Three derives ownership from active registry paths for any model; known label/path conflicts still block. Catalog-declared placeholders stay deferred. Registered other-model paths are excluded from the selected route without enabling another model. If an unreviewed row has no registered owner, it remains deferred under the existing policy rather than being approved by inference. An executable approved row with unknown ownership still blocks. The real SSP path marked TBD remains unresolved. Issue samples now include original model labels and paths.
+
+**Next action:** replace the notebook Files copy of mapper_contract.v1.json and replace only Cell Three from V2. In the existing active session, run Cell One to reload the catalog, then Cell Three, then Cell Seven in PREVIEW; preserve the model selector and keep writes disabled. If the session has restarted, run the matching seven-cell set in order. Post the complete pipeline report. No additional diagnostic, standalone mapper, registry change or DEV reload is needed. Live acceptance remains pending.
 
 The catalog preserves the existing SSP rules and 17 accepted AR fields. New approved mappings using supported behavior can be added through metadata alone; new field-specific Python is not required. Missing approval, unknown transformations and contradictory contracts stop execution. Rejected/deferred AR rows do not become approved automatically.
 

@@ -701,26 +701,47 @@ def _summarize_routing_issues(report, sample_limit=25):
     )
 
 
-def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model_contracts):
+def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model_contracts,
+                             routing_metadata=None):
     """Pure source/model routing. No data reads, globals mutation or writes."""
     _validate_source_profiles(source_profiles, model_contracts, mapping_rows)
+    routing = _metadata_object(routing_metadata, "ROUTING")
+    if set(routing) - {"DEFERRED_MODEL_LABELS", "DEFERRED_TARGET_PATHS"}:
+        raise ValueError("Unknown routing metadata option")
+    for values in routing.values():
+        if not isinstance(values, list) or any(not isinstance(v, str) or not v.strip() for v in values):
+            raise ValueError("Routing placeholders must be lists of nonblank text")
+    deferred_labels = {_model_token(v) for v in routing.get("DEFERRED_MODEL_LABELS", ())}
+    if "" in deferred_labels:
+        raise ValueError("Deferred model labels must contain an alphanumeric token")
+    deferred_paths = {v.strip() for v in routing.get("DEFERRED_TARGET_PATHS", ())}
     aliases = _model_aliases(model_contracts)
     registry = [_meta_row(row) for row in registry_rows]
     active = [row for row in registry if _metadata_active(row)]
     root_models = {}
     for row in active:
         path, model = _registry_path(row), _registry_model(row)
-        parent = row.get("PARENT_NODE_PATH") or row.get("PARENT_ELEMENT_PATH") or row.get("PARENT_PATH")
-        if path and not parent and "." not in path and model:
-            if path in root_models and root_models[path] != model:
+        # Every active registry path identifies its model, not just root rows.
+        # Recognizing ownership does not configure or enable an executor.
+        if path and model:
+            root = path.split(".", 1)[0]
+            if root in root_models and root_models[root] != model:
                 raise ValueError("Registry root belongs to multiple models")
-            root_models[path] = model
-            aliases.setdefault(_model_token(model), model)
+            root_models[root] = model
+            for label in (model, root, row.get("OSCAL_MODEL"), row.get("MODEL_NAME")):
+                token = _model_token(label)
+                if not token:
+                    continue
+                if token in aliases and aliases[token] != model:
+                    raise ValueError("Registry label conflicts with configured model ownership")
+                aliases[token] = model
     for model, contract in model_contracts.items():
         root = contract["ROOT_PATH"]
         if root in root_models and root_models[root] != model:
             raise ValueError("Configured root conflicts with registry model")
         root_models[root] = model
+    if deferred_labels & set(aliases) or deferred_paths & {_registry_path(row) for row in active}:
+        raise ValueError("Deferred placeholder conflicts with a registered model or path")
     contexts = []
     for profile in source_profiles:
         rows = [_meta_row(row) for row in mapping_rows[profile["SOURCE_KEY"]]]
@@ -742,7 +763,7 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 paths = list(selected_paths)
             report = {"STATUS": "READY", "INPUT_ROWS": len(rows), "SELECTED_ROWS": 0,
                       "EXCLUDED_ROWS": 0, "DEFERRED_ROWS": 0, "BLOCKED_ROWS": 0,
-                      "ISSUES": []}
+                      "ROUTING_POLICY": "registry-first-v1", "ISSUES": []}
             selected = []
             for index, row in enumerate(rows):
                 field = row.get("SOURCE_FIELD_NAME")
@@ -752,37 +773,39 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 root = path.split(".", 1)[0]
                 path_model = root_models.get(root)
                 classification, reason = None, None
-                # Establish unambiguous model ownership before validating an
-                # executable field. An incomplete row owned by another model is
-                # out of scope here; unknown/conflicting ownership is not.
+                # Registered path ownership is authoritative; recognized labels
+                # cross-check it. Unknown display labels do not override a path.
+                # Ownership alone never approves an unfinished mapping.
                 if labelled and path_model and labelled != path_model:
                     classification, reason = "BLOCKED_ROWS", "MODEL_PATH_CONFLICT"
-                elif label and not labelled and label not in {"extensionproperty", "extensionproperties"}:
-                    classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_LABEL"
-                elif path and path_model is None:
-                    classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
+                elif label in deferred_labels or path in deferred_paths:
+                    classification, reason = "DEFERRED_ROWS", "PLACEHOLDER_MAPPING"
                 elif path_model and path_model != model or not path and labelled and labelled != model:
-                    classification = "EXCLUDED_ROWS"
-                elif not field:
-                    classification, reason = "BLOCKED_ROWS", "MISSING_SOURCE_FIELD"
-                elif contract.get("SELECTED_FIELDS") and field not in contract["SELECTED_FIELDS"]:
                     classification = "EXCLUDED_ROWS"
                 elif field in contract.get("EXCLUDED_FIELDS", ()):
                     classification, reason = "DEFERRED_ROWS", "DEFERRED_RELEASE_FIELD"
                 elif contract.get("POLICY") == "metadata-v1" and not _metadata_rule_candidates(row, contract) and not row.get("APPROVAL_STATUS"):
                     classification = "DEFERRED_ROWS" if contract.get("UNREVIEWED_ROWS") == "DEFER" else "BLOCKED_ROWS"
                     reason = "MISSING_APPROVED_METADATA"
+                elif _model_token(row.get("STATUS")) in {"deferred", "blocked", "tbd", "moreinformationneeded", "notmapped"} or _model_token(row.get("MAPPING_TYPE")) == "tbd":
+                    classification, reason = "DEFERRED_ROWS", "UNAPPROVED_MAPPING"
+                elif path and path_model is None:
+                    classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
+                elif not field:
+                    classification, reason = "BLOCKED_ROWS", "MISSING_SOURCE_FIELD"
+                elif contract.get("SELECTED_FIELDS") and field not in contract["SELECTED_FIELDS"]:
+                    classification = "EXCLUDED_ROWS"
                 elif not path:
                     classification, reason = "DEFERRED_ROWS", "MISSING_TARGET_PATH"
                 elif path_model != model:
                     classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
-                elif _model_token(row.get("STATUS")) in {"deferred", "blocked", "tbd", "moreinformationneeded", "notmapped"} or _model_token(row.get("MAPPING_TYPE")) == "tbd":
-                    classification, reason = "DEFERRED_ROWS", "UNAPPROVED_MAPPING"
                 if classification:
                     report[classification] += 1
                     if reason:
                         report["ISSUES"].append({"row": index, "field": field, "reason": reason,
-                                                 "severity": classification.removesuffix("_ROWS")})
+                                                 "severity": classification.removesuffix("_ROWS"),
+                                                 "model_label": row.get("OSCAL_MODEL"),
+                                                 "target_path": path, "resolved_model": path_model})
                     continue
                 canonical = dict(row)
                 canonical_path = _apply_mapping_path_rules(canonical, contract, paths)
@@ -856,7 +879,8 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
 
 
 MAPPING_CONTEXTS = compile_mapping_contexts(
-    MAPPING_INPUTS, REGISTRY_INPUT_ROWS, SOURCE_PROFILES, MODEL_CONTRACTS
+    MAPPING_INPUTS, REGISTRY_INPUT_ROWS, SOURCE_PROFILES, MODEL_CONTRACTS,
+    routing_metadata=MAPPER_CATALOG.get("ROUTING", {}),
 )
 # Legacy SSP aliases are observational only; the active runner uses contexts.
 _default_context = next((context for context in MAPPING_CONTEXTS

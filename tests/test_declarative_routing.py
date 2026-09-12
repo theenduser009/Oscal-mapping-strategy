@@ -121,15 +121,17 @@ class DeclarativeRouting(unittest.TestCase):
         self.assertEqual({"MISSING_SOURCE_FIELD": 1},
                          contexts["ASSESSMENT_RESULTS"]["routing_report"]["REASON_COUNTS"])
 
-    def test_unknown_alias_with_known_other_root_and_no_source_still_blocks(self):
+    def test_unrecognized_alias_with_registered_other_root_is_out_of_scope(self):
         for field in (None, "OTHER_FIELD"):
             with self.subTest(field=field):
                 row = mapping(field=field, model="POAM - Items", root=POAM)
                 for context in self.compile([mapping(), row]).values():
                     report = context["routing_report"]
-                    self.assertEqual("BLOCKED", report["STATUS"])
-                    self.assertEqual({"UNKNOWN_MODEL_LABEL": 1}, report["REASON_COUNTS"])
-                    self.assertEqual({"BLOCKED": 1}, report["SEVERITY_COUNTS"])
+                    self.assertEqual("READY", report["STATUS"])
+                    self.assertEqual(0, report["BLOCKED_ROWS"])
+                    self.assertGreaterEqual(report["EXCLUDED_ROWS"], 1)
+                    self.assertEqual({}, report["REASON_COUNTS"])
+                    self.assertEqual({}, report["SEVERITY_COUNTS"])
 
     def test_true_label_path_conflicts_are_not_hidden_by_missing_source(self):
         for field in (None, "CONFLICTING_FIELD"):
@@ -176,7 +178,8 @@ class DeclarativeRouting(unittest.TestCase):
             for key in ("APPROVAL_STATUS", "TRANSFORM_ID", "TRANSFORM_PARAMS", "REPRESENTATION_PARAMS"):
                 row.pop(key)
             rows.append(row)
-        rows.extend(mapping(field="BAD_LABEL_" + str(index), model="Unknown Model")
+        rows.extend(mapping(field="BAD_PATH_" + str(index), model="Unknown Model",
+                            root="unregistered-real-model")
                     for index in range(547))
         rows.append(mapping())
         context = self.compile(rows, selected=("SSP",))["SSP"]
@@ -184,7 +187,7 @@ class DeclarativeRouting(unittest.TestCase):
         self.assertEqual((1, 0, 60, 547),
                          tuple(report[key] for key in (
                              "SELECTED_ROWS", "EXCLUDED_ROWS", "DEFERRED_ROWS", "BLOCKED_ROWS")))
-        self.assertEqual({"MISSING_APPROVED_METADATA": 60, "UNKNOWN_MODEL_LABEL": 547},
+        self.assertEqual({"MISSING_APPROVED_METADATA": 60, "UNKNOWN_MODEL_OR_PATH": 547},
                          report["REASON_COUNTS"])
         self.assertEqual({"DEFERRED": 60, "BLOCKED": 547}, report["SEVERITY_COUNTS"])
         self.assertEqual(607, report["ISSUE_EVENTS_TOTAL"])

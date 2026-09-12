@@ -1,6 +1,6 @@
 # Shared metadata-driven seven-cell mapper
 
-Status: simplified metadata-driven execution implemented; all 549 repository tests pass, with exact SSP/AR17 parity and metadata-only new-field/third-model proof. Legacy SSP/AR engines are test-only; deployed Cell Four is roughly half its prior size. V2/combined notebooks are generated from the original split source. No shared-workflow Snowflake run or AR database load is accepted yet.
+Status: registry-first metadata-driven execution implemented; all 564 repository tests pass, with exact SSP/AR17 parity, the posted routing failure pattern and metadata-only new-field/third-model proof. Legacy SSP/AR engines are test-only; deployed Cell Four is roughly half its prior size. V2/combined notebooks are generated from the original split source. No shared-workflow Snowflake run or AR database load is accepted yet.
 
 This is the owner-approved consolidation, not a new mapping batch. The seven existing cells now route Source One through a common graph builder and guarded persistence API. The accepted SSP mappings and 17 accepted AR fields are the parity baseline. The blocked 34-field AR candidate is not enabled.
 
@@ -42,11 +42,11 @@ Source snapshots use Snowpark [cache_result](https://docs.snowflake.com/en/devel
 
 ## Live preview procedure - when requested
 
-The refactor has local acceptance only. The owner's existing routing failure report is still needed before prescribing another live run. A reproduced other-model field-validation bug is fixed, but that does not prove the reported 459 blockers are resolved. The procedure below is for a future agreed preview, not an instruction to rerun now and not authorization for COMMIT.
+The posted report now explains all 459 unknown-label blockers. Cell Three is corrected to derive ownership from active registry paths, defer catalog-declared placeholders and unreviewed rows, and exclude registered other-model paths without enabling their models. Genuine known-label/path contradictions still block. The local regression reproduces the failure pattern; a new live PREVIEW is needed before acceptance. This is not authorization for COMMIT.
 
-1. Use one matching revision of the [seven V2 pages](../notebooks/cells_v2/README.md) or [complete notebook](../notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py). For this simplification, runtime changes are in Cells Three/Four; Cells One/Two/Five/Six/Seven and the catalog are unchanged from the preceding metadata release. Do not combine the new Cell Four with an older Cell Three. No extra cell or fixture upload is needed.
+1. Replace the notebook Files copy of [mapper_contract.v1.json](../notebooks/metadata/mapper_contract.v1.json) and replace only [V2 Cell Three](../notebooks/cells_v2/03_canonical_mapping_contract.py). All other cell code is unchanged from the simplified metadata release. No extra cell or fixture upload is needed.
 2. Keep Cell 1 `CONFIG["EXECUTE_WRITES"] = False` and Cell 7 `OSCAL_LOAD_MODE = "PREVIEW"`.
-3. Run Cells 1–7 once, in order, using the existing approved mapping CSV. No additional standalone execution cell.
+3. In the same active session that produced the failure, run Cell One to reload the catalog, then Cell Three, then Cell Seven. Existing Cell Two snapshots and Cell Four/Five/Six definitions remain usable. If the session has ended, run the complete matching seven-cell set in order instead. The mapping CSV stays unchanged.
 4. Share only the printed `OSCAL_PIPELINE_REPORT`; keep raw values and source IDs in Snowflake.
 
 Expected successful preview: `PREVIEW_WITH_TARGET_CONTRACTS_PENDING`, with one Source One/SSP group and one Source One/Assessment Results group. SSP must pass its target-aware preview. AR must select exactly the accepted 17 fields and report `MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING`, `storage_verified=false`, and no writes. This validates AR graph structure, not saved AR data or full OSCAL schema conformance.

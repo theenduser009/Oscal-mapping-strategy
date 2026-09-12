@@ -118,6 +118,7 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
             result = runpy.run_path(str(CELLS / "03_canonical_mapping_contract.py"),
                 init_globals={
                     "CONFIG": config_ns["CONFIG"], "re": re, "pd": pd,
+                    "MAPPER_CATALOG": config_ns["MAPPER_CATALOG"],
                     "SOURCE_PROFILES": profiles, "MODEL_CONTRACTS": config_ns["MODEL_CONTRACTS"],
                     "MAPPING_INPUTS": {"source-one": artifact.to_dict(orient="records")},
                     "REGISTRY_INPUT_ROWS": list((registry_frame or registry()).rows),

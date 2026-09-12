@@ -17,6 +17,7 @@
 - Prove accepted SSP and AR17 output parity and metadata-only new-field/third-model execution before publishing changes. Historical compatibility engines live only in tests/fixtures/legacy_cell4_pre_declarative.py; never import that fixture into production or edit it to make parity pass.
 - The single compiled plan is generated from approved rows, registry and catalog supplements. The catalog is not automatically generated from Excel; do not claim it is. Prefer executable mapping columns for new rules, and reject conflicting duplicated metadata rather than silently choosing a winner.
 - Blank or ambiguous metadata is not approval. Keep rejected/deferred rows separate; never silently fall back from partial executable metadata to an older rule.
+- Resolve ownership from active registry paths before executing mappings. Known label/path contradictions block; unknown display labels do not override registered paths. Catalog-declared placeholders stay deferred, including TBD rows with real SSP paths. Recognition of another model never enables its execution or storage. Do not reinstate a global unknown-display-label gate over the full workbook.
 
 ## Keep these boundaries explicit
 

@@ -1,7 +1,11 @@
 {
   "CATALOG_VERSION": 1,
-  "RELEASE_ID": "source-one-reviewed-metadata-v1",
+  "RELEASE_ID": "source-one-registry-first-routing-v1",
   "PROVENANCE": "Existing accepted SSP and AR17 contracts; no new field approval. Original mapping CSV remains unchanged. Explicit metadata approval is required for new rows.",
+  "ROUTING": {
+    "DEFERRED_MODEL_LABELS": ["TBD", "N/A - Calculated", "Multiple - See Notes"],
+    "DEFERRED_TARGET_PATHS": ["TBD", "All Nulls", "Multiple - See Notes"]
+  },
   "CONFIG_DEFAULTS": {
     "OSCAL_VERSION": "1.2.3",
     "SSP_DOCUMENT_VERSION": "1.0",

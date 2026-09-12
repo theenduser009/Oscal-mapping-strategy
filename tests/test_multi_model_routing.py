@@ -241,13 +241,18 @@ class MultiModelRouting(unittest.TestCase):
             self.assertIn("MODEL_PATH_CONFLICT", {issue["reason"] for issue in report["ISSUES"]})
             self.assertEqual([], context["mapping_rows"])
 
-    def test_unknown_model_label_blocks_instead_of_using_path_as_authority(self):
+    def test_unrecognized_model_label_uses_registered_path_as_authority(self):
         row = mapping(model="Unrecognized Governance Model")
         for context in self.compile({"source-one": [row]}):
             self.conserved(context, 1)
-            self.assertEqual(1, context["routing_report"]["BLOCKED_ROWS"])
-            self.assertIn("UNKNOWN_MODEL_LABEL",
-                          {i["reason"] for i in context["routing_report"]["ISSUES"]})
+            self.assertEqual(0, context["routing_report"]["BLOCKED_ROWS"])
+            self.assertEqual("READY", context["routing_report"]["STATUS"])
+            if context["config"]["OSCAL_MODEL"] == "SSP":
+                self.assertEqual(1, context["routing_report"]["SELECTED_ROWS"])
+                self.assertEqual("SSP", context["mapping_rows"][0]["OSCAL_MODEL"])
+                self.assertEqual(row["OSCAL_MODEL"], context["mapping_rows"][0]["ARTIFACT_MODEL"])
+            else:
+                self.assertEqual(1, context["routing_report"]["EXCLUDED_ROWS"])
 
     def test_unknown_root_path_is_visible_and_blocked(self):
         row = mapping(model="SSP", path="unapproved-model.branch[]")
