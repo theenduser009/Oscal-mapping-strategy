@@ -562,7 +562,9 @@ _default_context = next((context for context in MAPPING_CONTEXTS
 CANONICAL_MAPPING_ROWS = _default_context["mapping_rows"]
 MAPPINGS_BY_ELEMENT_PATH = _default_context["mappings_by_path"]
 canonical_mapping_pdf = pd.DataFrame(CANONICAL_MAPPING_ROWS)
-canonical_mapping_df = session.create_dataframe(canonical_mapping_pdf)
+# The engine consumes compiled Python contexts, not a Snowpark mapping frame.
+# Keep the inspection view local; uploading nested metadata adds no runtime value.
+canonical_mapping_df = None
 active_registry_paths = [_registry_path(row) for row in _default_context["registry_rows"]]
 print("Mapping routes:", [
     {"source": context["source_key"], "model": context["config"]["OSCAL_MODEL"],

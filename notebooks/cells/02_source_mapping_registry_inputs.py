@@ -14,13 +14,6 @@ def _normalized_columns(columns):
     return result
 
 
-def _required_lookup_column(columns, expected_name, component_type):
-    names = _normalized_columns(columns)
-    if expected_name not in names:
-        raise ValueError("Required lookup column missing: " + expected_name)
-    return names[expected_name]
-
-
 def _input_no_transaction(active_session):
     # Temporary-table DDL must never commit somebody else's open transaction.
     try:

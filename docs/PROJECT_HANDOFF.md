@@ -1,5 +1,31 @@
 # Project handoff — read this before resuming
 
+## Current action - reviewed compilation; simplify accepted rules
+
+The owner reviewed the [147-entry compiled workbook](../Mapping/REVIEW.md),
+confirmed the blank-path control entries, and authorized continuing. The eight
+source documents are partial transcriptions, not the full original 608-row sheet.
+Compilation review does not approve new paths or rules. Do not request the
+original CSV again as a blanket blocker; use the supplied documents and existing
+accepted evidence, leaving unseen and unresolved rows out of scope.
+
+The [interim cleanup](checkpoints/2026-09-12-mapper-simplification-audit.md) removes
+Cell Three's unused metadata upload, three unused helpers and one ignored
+argument. **567 local tests pass**, including accepted SSP/AR parity and whole-cell
+no-upload regressions. V2 and combined pages are synchronized. The JSON catalog
+is still required; this is not the final simplified release or live acceptance.
+
+**Next:** migrate the known accepted rules to readable mapping metadata, preserve
+accepted/deferred boundaries and reconcile specific Notes conflicts. All accepted
+SSP source fields, including the eleven CIA fields, and all seventeen accepted AR
+fields are present. The missing reject-populated guard remains preserved. Do not
+replace accepted CIA rules with the draft's conflicting shared note.
+
+No notebook rerun, new field approval, registry change or database write is
+requested. Normal writes remain disabled. Prior persisted SSP scope, AR17
+in-memory acceptance and the unexplained old-row reduction remain unchanged.
+Earlier run advice and requests for the complete CSV below are superseded.
+
 Last reconciled: **2026-09-11**. Purpose: durable context requested by the owner, so the cell roles, completed work and pending decisions do not need to be retold.
 
 ## Resume here

@@ -9,6 +9,8 @@
 
 ## Non-negotiable metadata-driven architecture
 
+- Latest owner clarification: keep the simple seven-cell configuration and one maintained Excel/CSV mapping source plus registry. A second hand-maintained JSON catalog is not the final design; current code still requires it. The owner reviewed Mapping/REVIEW.md's 147-entry compilation and authorized continuing. Do not request the original 608-row file again as a blanket blocker. Preserve accepted rule evidence and all unresolved/deferred boundaries; do not infer approval from workbook verification. Read the latest simplification checkpoint before run advice.
+
 - The owner's prime requirement is metadata-driven execution, not merely metadata validation of hardcoded field rules.
 - Excel/CSV governs approved source-to-target mappings; the registry governs hierarchy/identity; the reviewed deployment catalog supplies executable transforms, parameters, operators, source bindings and storage contracts.
 - Active source/model routes must use the compiled metadata engine. Do not add source-field or model-name branches to the graph builder, writer or active dispatch.

@@ -1,20 +1,30 @@
-# Mapper V2 — individual cells
+# Mapper V2 - individual cells
 
 Seven separate, copy-ready Python files for the published shared mapper. Each cell is generated from `notebooks/cells/`. The current revision executes reviewed mapping metadata through the shared engine; publication does not establish live acceptance. Cell Four no longer includes the historical SSP/AR engines; their frozen copy is test-only, not a notebook dependency.
 
 ## Open each cell
 
-1. [Cell 1 — Configuration](01_initialization_and_configuration.py)
-2. [Cell 2 — Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)
-3. [Cell 3 — Mapping contracts and routing](03_canonical_mapping_contract.py)
-4. [Cell 4 — Parsing and transformations](04_parsing_transform_payload_helpers.py)
-5. [Cell 5 — Shared graph construction](05_registry_graph_builder.py)
-6. [Cell 6 — Validation and guarded persistence](06_validation_and_guarded_loader.py)
-7. [Cell 7 — Orchestration](07_mapper_orchestrator.py)
+1. [Cell 1 - Configuration](01_initialization_and_configuration.py)
+2. [Cell 2 - Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)
+3. [Cell 3 - Mapping contracts and routing](03_canonical_mapping_contract.py)
+4. [Cell 4 - Parsing and transformations](04_parsing_transform_payload_helpers.py)
+5. [Cell 5 - Shared graph construction](05_registry_graph_builder.py)
+6. [Cell 6 - Validation and guarded persistence](06_validation_and_guarded_loader.py)
+7. [Cell 7 - Orchestration](07_mapper_orchestrator.py)
 
 ## One model selector
 
-### Current routing correction
+### Current cleanup and run hold
+
+The unused Cell Three metadata upload and confirmed dead helpers are removed;
+567 local tests pass. The requested final Excel-only simplification is **not**
+complete: this release still requires the JSON catalog. The owner reviewed the
+[compiled 147-entry workbook](../../Mapping/REVIEW.md) and authorized continuing.
+It is a review artifact, not a replacement notebook input. Unresolved paths stay
+unresolved. See the [cleanup and next action](../../docs/checkpoints/2026-09-12-mapper-simplification-audit.md).
+**Do not rerun yet.** Earlier routing-only run instructions below are historical.
+
+### Previous routing correction (run instructions superseded)
 
 Replace the notebook Files copy of [mapper_contract.v1.json](../metadata/mapper_contract.v1.json) and replace only [Cell Three](03_canonical_mapping_contract.py). In the existing active session, run Cell One to reload that catalog, then Cell Three, then Cell Seven in PREVIEW. Keep the existing model selection and writes disabled. Cells Two/Four/Five/Six and their session inputs can stay as they are. If the session has ended, run the matching seven cells in order instead. No extra runtime cell or registry change.
 

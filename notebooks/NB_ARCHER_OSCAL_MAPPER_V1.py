@@ -158,13 +158,6 @@ def _normalized_columns(columns):
     return result
 
 
-def _required_lookup_column(columns, expected_name, component_type):
-    names = _normalized_columns(columns)
-    if expected_name not in names:
-        raise ValueError("Required lookup column missing: " + expected_name)
-    return names[expected_name]
-
-
 def _input_no_transaction(active_session):
     # Temporary-table DDL must never commit somebody else's open transaction.
     try:
@@ -889,7 +882,9 @@ _default_context = next((context for context in MAPPING_CONTEXTS
 CANONICAL_MAPPING_ROWS = _default_context["mapping_rows"]
 MAPPINGS_BY_ELEMENT_PATH = _default_context["mappings_by_path"]
 canonical_mapping_pdf = pd.DataFrame(CANONICAL_MAPPING_ROWS)
-canonical_mapping_df = session.create_dataframe(canonical_mapping_pdf)
+# The engine consumes compiled Python contexts, not a Snowpark mapping frame.
+# Keep the inspection view local; uploading nested metadata adds no runtime value.
+canonical_mapping_df = None
 active_registry_paths = [_registry_path(row) for row in _default_context["registry_rows"]]
 print("Mapping routes:", [
     {"source": context["source_key"], "model": context["config"]["OSCAL_MODEL"],
@@ -931,9 +926,7 @@ def _context_config(context=None):
     return context["config"]
 
 
-def _context_lookup(name, legacy_name, context=None):
-    # The argument remains for reusable helper signatures, not global lookup fallback.
-    del legacy_name
+def _context_lookup(name, context=None):
     if not isinstance(context, dict):
         raise ValueError("An explicit source/model lookup context is required")
     return context.get("lookups", {}).get(name, {})
@@ -1051,7 +1044,7 @@ def _contains_archer_select_id_container(value):
 
 
 def resolve_archer_select_value(value, context=None):
-    value_lookup = _context_lookup("archer_values", "ARCHER_VALUE_LOOKUP", context)
+    value_lookup = _context_lookup("archer_values", context)
     strict_select_ids = _contains_archer_select_id_container(value)
     extracted = _extract_reference_ids(value)
 
@@ -1574,9 +1567,9 @@ def transform_fips_199(value, context=None):
         if item is None:
             continue
         key = str(item).strip()
-        label = _context_lookup("fips_values", "FIPS_199_VALUE_LOOKUP", context).get(key)
+        label = _context_lookup("fips_values", context).get(key)
         if label is None:
-            candidate = str(_context_lookup("archer_values", "ARCHER_VALUE_LOOKUP", context).get(key, item)).strip().lower()
+            candidate = str(_context_lookup("archer_values", context).get(key, item)).strip().lower()
             if candidate in {"low", "moderate", "high"}:
                 label = candidate
         if label is not None:
@@ -1601,7 +1594,7 @@ def _single_archer_label(value, context=None):
     if not key:
         return None
 
-    resolved = _context_lookup("archer_values", "ARCHER_VALUE_LOOKUP", context).get(key)
+    resolved = _context_lookup("archer_values", context).get(key)
     if resolved is not None:
         label = str(resolved).strip()
         return label or None
@@ -3046,14 +3039,6 @@ WHERE COALESCE(d.N,0)<>COALESCE(r.N,0)"""
     _load_zero(session, sql, "BATCH_DISCONNECTED_RECORD_TREE")
     report["DISCONNECTED_RECORDS"] = 0
     return report
-
-
-def _assert_safe_identifier(identifier):
-    _load_table(identifier)
-
-
-def _duplicate_count(dataframe, key_column):
-    return dataframe.group_by(col(key_column)).count().filter(col("COUNT") > lit(1)).count()
 
 
 def _load_columns(columns):

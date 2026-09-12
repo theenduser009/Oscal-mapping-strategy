@@ -330,14 +330,6 @@ WHERE COALESCE(d.N,0)<>COALESCE(r.N,0)"""
     return report
 
 
-def _assert_safe_identifier(identifier):
-    _load_table(identifier)
-
-
-def _duplicate_count(dataframe, key_column):
-    return dataframe.group_by(col(key_column)).count().filter(col("COUNT") > lit(1)).count()
-
-
 def _load_columns(columns):
     names = [c["name"] if isinstance(c, dict) else c for c in columns]
     for name in names:
