@@ -1,7 +1,34 @@
 # Current Status
 
 
-## Current action - CSV-only Cell Three release for preview
+## Current action - review Cells Three and Four metadata cleanup
+
+The owner authorized the first bounded simplification of V2. This candidate
+normalizes CSV/registry rows once, resolves reference families once, and puts
+compiled-plan validation and operator identity rules in one shared location.
+Unchanged compiled plans skip repeated constraint compilation; edited or
+independently supplied plans still validate before source rows are read.
+
+All **720 local tests pass**, with no failures, errors or skips. The twenty new
+tests cover preparation reuse, reference-family rejection, changed plans,
+required/enum enforcement, provenance compatibility and metadata-only edits.
+Existing SSP/CIA11/AR17 parity, future-model, identity and guarded-write checks
+remain green. Maintained cells, generated V2 pages and the combined notebook
+are synchronized. Frozen fixtures, mappings, registry SQL and Cells One, Two,
+Five, Six and Seven are unchanged.
+
+**Next action:** review the candidate on `simplify-metadata-boundary` before
+adopting it. See the [implementation and validation checkpoint](checkpoints/2026-09-12-metadata-boundary-simplification.md).
+This is a review candidate, not a merged release or live Snowflake acceptance.
+No notebook or SQL was executed against Snowflake; normal writes remain false.
+The prior release's live preview and daily writer acceptance remain pending.
+No registry cleanup, DEV reload or unchanged preview rerun is requested here.
+
+The cleanup removes repeated work and rule ownership; it does not materially
+reduce total notebook length or complete the other audit suggestions. If
+adopted, Cells Three and Four must be replaced together.
+
+## Previous action - CSV-only Cell Three release for preview
 
 Cell Three now uses one flat CSV compiler for executable mappings. The unused
 programmatic-format compiler is removed; required CSV rule IDs still undergo

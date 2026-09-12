@@ -317,7 +317,7 @@ class MetadataRuntimeTests(unittest.TestCase):
     def test_registry_identity_drift_blocks_even_when_mapping_is_approved(self):
         ctx = context([mapping("NEW_SCORE", OBS, transform="scalar-score")])
         ctx["registry_rows"] = registry_rows(ctx, {OBS: "LIST_INDEX"})
-        with self.assertRaisesRegex(ValueError, "source-field identity"):
+        with self.assertRaisesRegex(ValueError, "SOURCE_FIELD_NAME identity"):
             build(graph.namespace(), ctx)
 
 

@@ -8,10 +8,9 @@ import re
 import uuid
 from decimal import Decimal
 
-# Capabilities are declared once in Cell 3. Metadata cannot execute arbitrary code.
+# Cell 3 owns the shared compiled-plan boundary.
 try:
-    _METADATA_TRANSFORMS = frozenset(METADATA_TRANSFORM_IDS)
-    _METADATA_OPERATORS = frozenset(METADATA_OPERATORS)
+    _validate_compiled_metadata
 except NameError:
     raise RuntimeError("Run the matching Cell 3 before Cell 4") from None
 
@@ -925,18 +924,6 @@ def _metadata_text(value, label):
     return value
 
 
-def _metadata_params(row):
-    params = row.get("REPRESENTATION_PARAMS") or {}
-    if not isinstance(params, dict):
-        raise ValueError("Representation parameters must be an object")
-    return params
-
-
-def _metadata_target(row):
-    params = _metadata_params(row)
-    return params.get("target") or row.get("FIELD_RELATIVE_PATH") or row.get("OSCAL_FIELD_NAME")
-
-
 def _metadata_transform(row, value, context):
     transform_id = row["TRANSFORM_ID"]
     params = row.get("TRANSFORM_PARAMS") or {}
@@ -1085,19 +1072,12 @@ def _metadata_registry_policy(rows, context):
         if row["parent_path"] and row["parent_path"] not in by_path:
             raise ValueError("Registry parent is absent")
         operator = specification["operator"]
-        if operator in {"record", "observations", "properties", "values", "references",
-                        "roles", "parties", "assignments"} and not row["is_collection"]:
+        if operator in METADATA_INSTANCE_RULES and not row["is_collection"]:
             raise ValueError("Collection representation requires collection registry row")
-        if operator == "record" and row["instance_key_rule"] != "SOURCE_RECORD_ID":
-            raise ValueError("Record collection requires source-record identity")
-        if operator == "observations" and row["instance_key_rule"] != "SOURCE_FIELD_NAME":
-            raise ValueError("Observation collection requires source-field identity")
-        if operator == "properties" and row["instance_key_rule"] != "SOURCE_FIELD_NAME+VALUE":
-            raise ValueError("Property collection requires source-field/value identity")
-        if operator == "values" and row["instance_key_rule"] != "VALUE":
-            raise ValueError("Value collection requires value identity")
-        if operator == "references" and row["instance_key_rule"] != "CONTENT_ID":
-            raise ValueError("Reference collection requires referenced-record identity")
+        # Linked families validate their established registry contract above.
+        if operator not in {"roles", "parties", "assignments"} and operator in METADATA_INSTANCE_RULES and (
+                row["instance_key_rule"] != METADATA_INSTANCE_RULES[operator]):
+            raise ValueError(f"Collection requires {METADATA_INSTANCE_RULES[operator]} identity")
     context["_metadata_registry"] = by_path
     for group in plan.get("reference_groups", ()):
         paths = [group.get(key) for key in ("roles_path", "parties_path", "assignments_path")]
@@ -1561,51 +1541,15 @@ def _prepare_model_context(context, model_key, source_system, source_table):
         raise ValueError("Graph arguments conflict with compiled metadata context")
     _metadata_text(config.get("IDENTITY_VERSION"), "Identity version")
     plan = context.get("compiled_plan")
-    if not isinstance(plan, dict) or plan.get("version") != 1:
-        raise ValueError("A compiled metadata plan is required")
-    if not isinstance(plan.get("elements"), dict) or not isinstance(plan.get("mappings"), list):
-        raise ValueError("Compiled metadata element and mapping plans are required")
+    snapshot = _metadata_plan_snapshot(plan)
+    if snapshot is None or snapshot != context.get("_compiled_plan_snapshot"):
+        _validate_compiled_metadata(plan, contract.get("ROOT_PATH"))
+        context["_compiled_plan_snapshot"] = snapshot
     if contract.get("ROOT_PATH") not in plan["elements"]:
         raise ValueError("Compiled plan must describe the configured root")
-    specifications = list(plan["elements"].values())
-    if plan.get("default_element") is not None:
-        specifications.append(plan["default_element"])
-    for specification in specifications:
-        if not isinstance(specification, dict) or specification.get("operator") not in _METADATA_OPERATORS:
-            raise ValueError("Unsupported reviewed element representation")
-        if not isinstance(specification.get("parameters", {}), dict):
-            raise ValueError("Element parameters must be an object")
-        for field in specification.get("parameters", {}).get("controlled_fields", ()):
-            if field.get("transform_id", "direct") not in _METADATA_TRANSFORMS:
-                raise ValueError("Unknown controlled-field transform")
-    grouped, seen = {}, set()
+    grouped = {}
     for row in plan["mappings"]:
-        if row.get("TRANSFORM_ID") not in _METADATA_TRANSFORMS:
-            raise ValueError("Unknown metadata transformation")
-        approval = str(row.get("APPROVAL_STATUS") or "").lower().replace("_", "-")
-        approved = approval in {"approved", "accepted", "runtime-accepted", "runtime-accepted-in-memory"}
-        guarded_null = approval == "blocked-if-populated" and row["TRANSFORM_ID"] == "reject-populated"
-        if not approved and not guarded_null:
-            raise ValueError("Unapproved mapping cannot enter runtime plan")
-        _metadata_text(row.get("SOURCE_FIELD_NAME"), "Source field")
-        path = _metadata_text(row.get("OWNER_ELEMENT_PATH"), "Owner element")
-        if path not in plan["elements"]:
-            raise ValueError("Mapped element lacks a reviewed representation")
-        representation = str(row.get("REPRESENTATION") or "").lower()
-        operator = plan["elements"][path]["operator"]
-        if representation not in {"", "scalar", "merge-object", operator}:
-            raise ValueError("Unknown metadata mapping representation")
-        if not isinstance(row.get("TRANSFORM_PARAMS", {}), dict):
-            raise ValueError("Transform parameters must be an object")
-        _metadata_params(row)
-        if not isinstance(row.get("VALUE_CONSTRAINTS", {}), dict):
-            raise ValueError("Compiled value constraints must be an object")
-        _compile_value_constraints(row.get("VALUE_CONSTRAINTS"))
-        identity = (path, row["SOURCE_FIELD_NAME"], str(_metadata_target(row) or ""))
-        if identity in seen:
-            raise ValueError("Duplicate compiled mapping row")
-        seen.add(identity)
-        grouped.setdefault(path, []).append(row)
+        grouped.setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
     options = dict(plan.get("options") or {})
     context["_metadata_options"] = options
     context["_metadata_by_path"] = grouped
