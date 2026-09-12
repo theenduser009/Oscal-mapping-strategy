@@ -1,6 +1,60 @@
 # Current Status
 
-## Current action - registry-backed release, live setup pending
+## Current action - corrected seven-cell release; live setup pending
+
+The three boundary defects are corrected. **All 685 local tests pass**, with
+zero failures, errors or skips, including the six formerly failing cases.
+The source cells, V2 pages and combined notebook are synchronized.
+
+- Cell Three blocks approved mappings at or beneath known disabled/inactive
+  registry paths rather than routing them into an enabled ancestor.
+- Cell Five supplies explicit canonical types for empty graph dataframes;
+  populated data still uses the existing inference behavior.
+- Registry migration rejects null/blank paths and invalid parent/root links
+  before DDL; its UPDATE count comes from the executed statement's result.
+
+The existing per-model entrypoint calls the same graph builder and writer.
+No model-specific mapper, second selector or new notebook execution cell was
+added. CSV mappings, original registry columns/seeds, accepted SSP/CIA/AR17
+payloads and identities remain unchanged. Normal mapper writes stay disabled.
+
+**Next action:** use the corrected
+[one-time registry SQL](../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql) in a
+fresh Snowflake SQL worksheet with the approved DEV role and no competing
+registry writer, then share its aggregate report. Do not run the seven cells
+against the old registry. After setup is verified, replace the matching V2
+cells and preview in order as described in
+[setup instructions](REGISTRY_METADATA_SETUP.md).
+
+This supersedes the additional-testing hold. It is not live Snowflake
+acceptance: no SQL migration, DIM/FACT write, Matillion run or daily-loader
+acceptance occurred here. The accepted SSP DEV reload, unresolved old-row
+difference, AR17 in-memory-only scope and unverified AR targets are unchanged.
+See the [correction checkpoint](checkpoints/2026-09-12-registry-release-corrections.md).
+
+## Previous action - additional tests found defects (corrected below)
+
+The owner's request to keep testing exposed boundary defects in the published
+registry-backed release. **Do not run the new registry setup or notebook
+PREVIEW yet.** This supersedes the previous run instruction below.
+
+The original 654 tests still pass, and accepted SSP/CIA and AR17 parity remains
+intact. The expanded suite runs 666 tests: 660 pass, with five assertion failures
+and one error in new regression cases (no skips). New tests reproduce
+disabled/inactive singleton mappings executing
+through their parent and empty-relationship dataframe failure for a future
+model. Migration preflight also needs to reject malformed paths and parents
+before the runtime decoder encounters them. See the
+[additional testing checkpoint](checkpoints/2026-09-12-registry-release-additional-tests.md)
+for evidence, limitations and regression files.
+
+**Next action is engineering correction and retesting, not an owner rerun.**
+Only local tests and these continuity notes changed during this testing turn.
+The hold/checkpoint has not been published to GitHub; runtime code, migration
+SQL and database data are unchanged. Normal writes remain disabled. No accepted
+field or prior persistence milestone has been reclassified.
+
+## Previous action - registry-backed release, live setup pending (on hold)
 
 The owner approved extending the development registry so the seven cells no
 longer require a separate JSON catalog. Code and migration SQL are prepared;

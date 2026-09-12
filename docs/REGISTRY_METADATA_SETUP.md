@@ -4,6 +4,11 @@ The code no longer needs the JSON catalog. The registry must receive its
 approved structural metadata before this release can run. **The SQL is prepared
 and locally reviewed; it has not been executed in your Snowflake environment.**
 
+The additional-testing hold is superseded by the corrected release: all 685
+local tests pass. Known disabled-path routing, typed empty dataframes and
+migration preflight are corrected. Live setup/preview still needs verification;
+local tests are not permission to enable the daily database writer.
+
 ## Your next step: registry SQL only
 
 Open [EXTEND_OSCAL_MAPPER_METADATA.sql](../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql),
@@ -16,7 +21,8 @@ The role needs SELECT, ALTER and UPDATE access plus database/schema usage.
 This does not create permanent backup tables or need access to DIM/FACT.
 
 Share the aggregate result showing `STATUS = REGISTRY_METADATA_VERIFIED`
-and `ORIGINAL_COLUMNS_UNCHANGED = true`. Stop on any error and share the
+and `ORIGINAL_COLUMNS_UNCHANGED = true`, including numeric `UPDATED_ROWS`.
+Stop on any error and share the
 actual Snowflake message; do not bypass it or change privileges automatically.
 
 ## What the migration changes
@@ -92,6 +98,6 @@ A new model requires its registry metadata and visible source/destination
 configuration, then reuses these seven cells. Genuinely unsupported operations
 need one reusable code enhancement, not a new model-specific mapper.
 
-All 654 local unit, parity and full input-flow tests pass. They are not live Snowflake proof.
+All 685 local unit, parity, boundary and notebook-flow tests pass. They are not live Snowflake proof.
 No registry setup, DIM/FACT write, Matillion run, daily-loader acceptance or
 full-model conformance is claimed by this release.

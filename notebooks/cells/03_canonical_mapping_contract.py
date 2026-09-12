@@ -750,6 +750,10 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     raise ValueError("Required model collection is absent from registry")
                 model_registry = [row for row in model_registry if _registry_path(row) in selected_paths]
                 paths = list(selected_paths)
+            # Retain known non-executable boundaries before resolving payload owners.
+            # Otherwise a disabled singleton silently becomes a member of its parent.
+            unavailable_paths = {_registry_path(row) for row in registry
+                                 if _registry_model(row) == model and _registry_path(row)} - set(paths)
             report = {"STATUS": "READY", "INPUT_ROWS": len(rows), "SELECTED_ROWS": 0,
                       "EXCLUDED_ROWS": 0, "DEFERRED_ROWS": 0, "BLOCKED_ROWS": 0,
                       "ROUTING_POLICY": "registry-first-v1", "ISSUES": []}
@@ -820,6 +824,13 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     continue
                 canonical = dict(row)
                 canonical_path = path
+                if any(path == boundary or path.startswith(boundary + ".")
+                       for boundary in unavailable_paths):
+                    report["BLOCKED_ROWS"] += 1
+                    report["ISSUES"].append({"row": index, "field": field,
+                                             "reason": "REGISTRY_PATH_NOT_EXECUTABLE",
+                                             "severity": "BLOCKED"})
+                    continue
                 owner = _owner_for_path(canonical_path, paths)
                 if owner is None:
                     report["BLOCKED_ROWS"] += 1

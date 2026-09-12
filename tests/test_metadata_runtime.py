@@ -4,6 +4,7 @@ import json
 import unittest
 
 import test_multi_model_graph as graph
+from test_typed_graph_frames import StrictGraphSession, snowpark_types_stub
 
 
 ROOT_PATH = "test-model"
@@ -71,10 +72,13 @@ def registry(ctx, rules=None):
 def build(ns, ctx, data=None, reg=None):
     rows = data if data is not None else [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": {}}]
     cfg = ctx["config"]
-    return ns["build_oscal_graph"](
-        graph.Frame(rows), graph.Frame(ctx["mapping_rows"]), reg or registry(ctx),
-        cfg["OSCAL_MODEL"], cfg["SOURCE_SYSTEM_NAME"], cfg["SOURCE_TABLE_NAME"], context=ctx,
-    )
+    # Support the real empty-data schema contract without installing Snowpark.
+    ns["session"] = StrictGraphSession()
+    with snowpark_types_stub():
+        return ns["build_oscal_graph"](
+            graph.Frame(rows), graph.Frame(ctx["mapping_rows"]), reg or registry(ctx),
+            cfg["OSCAL_MODEL"], cfg["SOURCE_SYSTEM_NAME"], cfg["SOURCE_TABLE_NAME"], context=ctx,
+        )
 
 
 def payload_at(nodes, path):

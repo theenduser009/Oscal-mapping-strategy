@@ -1178,6 +1178,10 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     raise ValueError("Required model collection is absent from registry")
                 model_registry = [row for row in model_registry if _registry_path(row) in selected_paths]
                 paths = list(selected_paths)
+            # Retain known non-executable boundaries before resolving payload owners.
+            # Otherwise a disabled singleton silently becomes a member of its parent.
+            unavailable_paths = {_registry_path(row) for row in registry
+                                 if _registry_model(row) == model and _registry_path(row)} - set(paths)
             report = {"STATUS": "READY", "INPUT_ROWS": len(rows), "SELECTED_ROWS": 0,
                       "EXCLUDED_ROWS": 0, "DEFERRED_ROWS": 0, "BLOCKED_ROWS": 0,
                       "ROUTING_POLICY": "registry-first-v1", "ISSUES": []}
@@ -1248,6 +1252,13 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     continue
                 canonical = dict(row)
                 canonical_path = path
+                if any(path == boundary or path.startswith(boundary + ".")
+                       for boundary in unavailable_paths):
+                    report["BLOCKED_ROWS"] += 1
+                    report["ISSUES"].append({"row": index, "field": field,
+                                             "reason": "REGISTRY_PATH_NOT_EXECUTABLE",
+                                             "severity": "BLOCKED"})
+                    continue
                 owner = _owner_for_path(canonical_path, paths)
                 if owner is None:
                     report["BLOCKED_ROWS"] += 1
@@ -3033,6 +3044,39 @@ print("Cell 4 metadata runtime initialized")
 
 # %% Cell 5 - Registry-driven canonical node and edge graph
 
+def _create_canonical_graph_frame(rows, graph_kind):
+    """Give empty graph results a schema without altering populated inference."""
+    if graph_kind not in {"nodes", "edges"}:
+        raise ValueError("Unknown canonical graph frame kind")
+    if rows:
+        return session.create_dataframe(rows)
+
+    # Canonical transport columns, not model-specific mapping rules.
+    from snowflake.snowpark.types import (
+        StringType, StructField, StructType, TimestampType, TimestampTimeZone,
+    )
+
+    if graph_kind == "nodes":
+        columns = (
+            "NODE_KEY", "ELEMENT_PATH", "INSTANCE_KEY", "PARENT_INSTANCE_KEY",
+            "OSCAL_UUID", "ELEMENT_TYPE", "METADATA_JSON", "SOURCE_SYSTEM_NAME",
+            "SOURCE_TABLE_NAME", "SOURCE_RECORD_ID", "DW_PIPELINE_RUN_ID",
+            "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ",
+        )
+    else:
+        columns = (
+            "EDGE_KEY", "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH",
+            "DEPENDENCY_TYPE", "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID",
+        )
+    timestamps = {"DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
+    schema = StructType([
+        StructField(name, TimestampType(TimestampTimeZone.TZ)
+                    if name in timestamps else StringType(), nullable=True)
+        for name in columns
+    ])
+    return session.create_dataframe(rows, schema=schema)
+
+
 def build_oscal_graph(
     source_df,
     canonical_mapping_df,
@@ -3156,8 +3200,8 @@ def build_oscal_graph(
     policy["finish"](node_rows, edge_rows, context)
     if not node_rows:
         raise ValueError("Graph builder produced no nodes")
-    canonical_nodes_df = session.create_dataframe(node_rows)
-    canonical_edges_df = session.create_dataframe(edge_rows)
+    canonical_nodes_df = _create_canonical_graph_frame(node_rows, "nodes")
+    canonical_edges_df = _create_canonical_graph_frame(edge_rows, "edges")
     return canonical_nodes_df, canonical_edges_df
 
 

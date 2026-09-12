@@ -80,6 +80,10 @@ def expected_metadata(row, seed):
 def simulate_guarded_update(rows, seed):
     """Independent reference model of the SQL's scope/conflict/rerun contract."""
     changed = copy.deepcopy(rows)
+    for row in rows:
+        if row["OSCAL_MODEL_KEY"] in {"SSP", "ASSESSMENT_RESULTS"} and row["IS_ACTIVE"]:
+            if not isinstance(row["NODE_PATH"], str) or not row["NODE_PATH"].strip():
+                raise ValueError("blank active path")
     keys = [(r["OSCAL_MODEL_KEY"], r["NODE_PATH"]) for r in rows
             if r["OSCAL_MODEL_KEY"] in {"SSP", "ASSESSMENT_RESULTS"}]
     if len(keys) != len(set(keys)):
@@ -94,6 +98,22 @@ def simulate_guarded_update(rows, seed):
         if any(actual[columns[name]] != value for name, value in expected.items()):
             raise ValueError("identity conflict")
     changes = 0
+    for (model, path), row in active.items():
+        if model not in {"SSP", "ASSESSMENT_RESULTS"} or not expected_metadata(row, seed)["MAPPER_ENABLED"]:
+            continue
+        root = "system-security-plan" if model == "SSP" else "assessment-results"
+        parent = (row.get("PARENT_NODE_PATH") or "").strip() or None
+        if row["IS_COLLECTION"] != path.endswith("[]"):
+            raise ValueError("collection path conflict")
+        if path != root and not path.startswith(root + "."):
+            raise ValueError("root path conflict")
+        if path == root:
+            if parent is not None:
+                raise ValueError("root parent conflict")
+        elif (parent is None or (model, parent) not in active
+              or not expected_metadata(active[model, parent], seed)["MAPPER_ENABLED"]
+              or not path.startswith(parent + ".")):
+            raise ValueError("parent path conflict")
     for row in changed:
         if row["OSCAL_MODEL_KEY"] not in {"SSP", "ASSESSMENT_RESULTS"} or not row["IS_ACTIVE"]:
             continue
@@ -317,6 +337,73 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
         self.assertIn("EXCEPTION WHEN OTHER THEN RAISE rollback_unknown", self.sql)
         self.assertIn("DDL_ROLLBACK_AVAILABLE',FALSE", self.sql)
         self.assertIn("added columns cannot be rolled back", self.sql)
+
+    def test_null_and_blank_active_paths_fail_before_ddl_without_mutation(self):
+        preddl = self.sql.split("  -- DDL PHASE:", 1)[0]
+        self.assertIn("AND NULLIF(TRIM(NODE_PATH),'') IS NULL", preddl)
+        for model in ("SSP", "ASSESSMENT_RESULTS"):
+            for value in (None, "", "   "):
+                with self.subTest(model=model, value=value):
+                    rows = synthetic_registry(self.oracle)
+                    extra = copy.deepcopy(next(row for row in rows if row["OSCAL_MODEL_KEY"] == model))
+                    extra.update(NODE_PATH=value)
+                    rows.append(extra)
+                    before = copy.deepcopy(rows)
+                    with self.assertRaisesRegex(ValueError, "blank active path"):
+                        simulate_guarded_update(rows, self.seed)
+                    self.assertEqual(rows, before)
+
+    def test_unseeded_self_nonancestor_and_missing_parent_fail_before_ddl(self):
+        preddl = " ".join(self.sql.split("  -- DDL PHASE:", 1)[0].split())
+        self.assertIn("STARTSWITH(d.x:PATH::VARCHAR, NULLIF(TRIM(r.PARENT_NODE_PATH),'') || '.')", preddl)
+        path = "system-security-plan.system-implementation"
+        self.assertNotIn(("SSP", path), self.seed)
+        for parent in (path, "system-security-plan.metadata", None, "system-security-plan.missing"):
+            with self.subTest(parent=parent):
+                rows = synthetic_registry(self.oracle)
+                next(row for row in rows if row["NODE_PATH"] == path)["PARENT_NODE_PATH"] = parent
+                before = copy.deepcopy(rows)
+                with self.assertRaisesRegex(ValueError, "parent path conflict"):
+                    simulate_guarded_update(rows, self.seed)
+                self.assertEqual(rows, before)
+
+    def test_malformed_roots_and_cross_model_root_are_rejected(self):
+        preddl = " ".join(self.sql.split("  -- DDL PHASE:", 1)[0].split())
+        self.assertIn("IFF(value:MODEL::VARCHAR='SSP','system-security-plan','assessment-results') root_path", preddl)
+        self.assertIn("d.x:PATH::VARCHAR IS DISTINCT FROM d.root_path", preddl)
+        self.assertIn("STARTSWITH(d.x:PATH::VARCHAR,d.root_path || '.')", preddl)
+        for model in ("SSP", "ASSESSMENT_RESULTS"):
+            root = self.oracle["MODELS"][model]["ROOT_PATH"]
+            for column, value in (("PARENT_NODE_PATH", root), ("IS_COLLECTION", True)):
+                with self.subTest(model=model, column=column):
+                    rows = synthetic_registry(self.oracle)
+                    next(row for row in rows if row["NODE_PATH"] == root)[column] = value
+                    with self.assertRaisesRegex(ValueError, "identity conflict"):
+                        simulate_guarded_update(rows, self.seed)
+        rows = synthetic_registry(self.oracle)
+        extra = copy.deepcopy(next(row for row in rows if row["NODE_PATH"] == "system-security-plan"))
+        extra["NODE_PATH"] = "assessment-results"
+        rows.append(extra)
+        with self.assertRaisesRegex(ValueError, "root path conflict"):
+            simulate_guarded_update(rows, self.seed)
+
+    def test_update_result_count_is_validated_before_verification_and_commit(self):
+        # Source-contract plus scalar simulation: never executes an UPDATE.
+        phase = self.sql.split("  BEGIN TRANSACTION;", 1)[1].split("  COMMIT;", 1)[0]
+        compact = " ".join(phase.split())
+        self.assertIn("result_rows := (EXECUTE IMMEDIATE :update_sql USING (desired));", phase)
+        self.assertIn('changed_rows := migration_row."number of rows updated";', phase)
+        self.assertNotIn("changed_rows := SQLROWCOUNT", phase)
+        self.assertIn("n := 0; changed_rows := NULL; FOR migration_row IN result_rows DO n := n + 1;", compact)
+        guard = "IF (n<>1 OR changed_rows IS NULL OR changed_rows<0 OR changed_rows>ARRAY_SIZE(desired)) THEN RAISE verification_error; END IF;"
+        self.assertIn(guard, compact)
+        self.assertLess(compact.index(guard), compact.index("EXECUTE IMMEDIATE :verify_sql"))
+        for result, rejected in (([], True), ([None], True), ([-1], True), ([23], True),
+                                 ([0], False), ([22], False), ([1, 1], True)):
+            with self.subTest(result=result):
+                n, changed_rows = len(result), result[-1] if result else None
+                self.assertEqual(rejected, n != 1 or changed_rows is None
+                                 or changed_rows < 0 or changed_rows > 22)
 
 
 if __name__ == "__main__":

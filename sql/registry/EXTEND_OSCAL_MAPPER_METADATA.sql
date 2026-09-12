@@ -13,6 +13,8 @@
 -- https://docs.snowflake.com/en/sql-reference/transactions
 -- https://docs.snowflake.com/en/sql-reference/sql/alter-table
 -- https://docs.snowflake.com/en/developer-guide/snowflake-scripting/resultsets
+-- https://docs.snowflake.com/en/sql-reference/sql/execute-immediate
+-- https://docs.snowflake.com/en/sql-reference/sql/update
 --
 -- Seed provenance: tests/fixtures/mapper_contract_pre_registry.json (accepted
 -- structure plus recorded 2026-09-09 collection/setup identity contracts, frozen before removing the production JSON dependency). Field rules
@@ -218,6 +220,13 @@ BEGIN
     AS seed_rows(model,path,metadata,expected);
   -- END EXPLICIT SEED
 
+  -- NULL/blank active keys cannot survive the desired/verification equality joins.
+  SELECT COUNT(*) INTO :n
+  FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+  WHERE IS_ACTIVE AND UPPER(TRIM(OSCAL_MODEL_KEY)) IN ('SSP','ASSESSMENT_RESULTS')
+    AND NULLIF(TRIM(NODE_PATH),'') IS NULL;
+  IF (n<>0) THEN RAISE path_error; END IF;
+
   -- Ambiguous keys cannot be updated, even if one duplicate happens to be inactive.
   SELECT COUNT(*) INTO :n FROM (
     SELECT UPPER(TRIM(OSCAL_MODEL_KEY)), TRIM(NODE_PATH)
@@ -257,17 +266,25 @@ BEGIN
     ON UPPER(TRIM(r.OSCAL_MODEL_KEY))=s.s:MODEL::VARCHAR AND TRIM(r.NODE_PATH)=s.s:PATH::VARCHAR;
 
   -- Enabled paths have an enabled parent, except for the two existing roots.
-  WITH d AS (SELECT value x FROM TABLE(FLATTEN(INPUT=>:desired)))
+  -- Match the decoder's strict ancestry/root rules; membership alone allows cycles.
+  WITH d AS (SELECT value x,
+    IFF(value:MODEL::VARCHAR='SSP','system-security-plan','assessment-results') root_path
+    FROM TABLE(FLATTEN(INPUT=>:desired)))
   SELECT COUNT(*) INTO :n FROM d
   JOIN RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY r
     ON UPPER(TRIM(r.OSCAL_MODEL_KEY))=d.x:MODEL::VARCHAR AND TRIM(r.NODE_PATH)=d.x:PATH::VARCHAR
   LEFT JOIN d p ON p.x:MODEL=d.x:MODEL AND p.x:PATH::VARCHAR=NULLIF(TRIM(r.PARENT_NODE_PATH),'')
   WHERE d.x:META:MAPPER_ENABLED::BOOLEAN AND
     (r.IS_COLLECTION IS NULL OR r.ELEMENT_TYPE IS NULL OR r.PROCESS_ORDER IS NULL
+     OR r.IS_COLLECTION IS DISTINCT FROM ENDSWITH(d.x:PATH::VARCHAR,'[]')
      OR (NULLIF(TRIM(r.PARENT_NODE_PATH),'') IS NOT NULL
-         AND NOT COALESCE(p.x:META:MAPPER_ENABLED::BOOLEAN,FALSE))
+         AND (NOT COALESCE(p.x:META:MAPPER_ENABLED::BOOLEAN,FALSE)
+              OR NOT COALESCE(STARTSWITH(d.x:PATH::VARCHAR,
+                NULLIF(TRIM(r.PARENT_NODE_PATH),'') || '.'),FALSE)))
      OR (NULLIF(TRIM(r.PARENT_NODE_PATH),'') IS NULL
-         AND d.x:PATH::VARCHAR NOT IN ('system-security-plan','assessment-results')));
+         AND d.x:PATH::VARCHAR IS DISTINCT FROM d.root_path)
+     OR NOT COALESCE(d.x:PATH::VARCHAR=d.root_path
+                    OR STARTSWITH(d.x:PATH::VARCHAR,d.root_path || '.'),FALSE));
   IF (n<>0) THEN RAISE path_error; END IF;
 
   -- Capture all original rows (including other models) for unchanged-row verification.
@@ -305,8 +322,16 @@ BEGIN
   IF (n<>0) THEN RAISE metadata_conflict; END IF;
 
   -- UPDATE itself refuses conflicting non-null cells, including concurrent changes.
-  EXECUTE IMMEDIATE :update_sql USING (desired);
-  changed_rows := SQLROWCOUNT;
+  -- Read the executed UPDATE's result, not SQLROWCOUNT across dynamic execution.
+  result_rows := (EXECUTE IMMEDIATE :update_sql USING (desired));
+  n := 0;
+  changed_rows := NULL;
+  FOR migration_row IN result_rows DO
+    n := n + 1;
+    changed_rows := migration_row."number of rows updated";
+  END FOR;
+  IF (n<>1 OR changed_rows IS NULL OR changed_rows<0
+      OR changed_rows>ARRAY_SIZE(desired)) THEN RAISE verification_error; END IF;
   result_rows := (EXECUTE IMMEDIATE :verify_sql USING (desired));
   FOR migration_row IN result_rows DO n := migration_row.N; END FOR;
   IF (n<>0) THEN RAISE verification_error; END IF;

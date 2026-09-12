@@ -1,5 +1,9 @@
 # Mapper V2 - seven copy-ready cells
 
+**Corrected release:** all 685 local tests pass, including the earlier six
+failing boundary cases. The prior testing hold is superseded; live registry
+setup and notebook preview are still pending. No new execution cells were added.
+
 Field mappings come from the [CSV](../../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
 Structure and identity come from the extended registry. **No JSON catalog is
 required.** These pages are generated from one maintained implementation.
