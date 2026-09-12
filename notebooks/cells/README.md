@@ -10,7 +10,7 @@ original nine registry columns. Only `OPERATOR`, `UUID_POLICY` and
 visible deployment settings. No JSON catalog upload or extra daily runtime cell
 is required.
 
-The compactness audit is closed. All 691 local tests pass after removing
+The compactness audit is closed. All 697 local tests pass after removing
 duplicate registry normalization from Cell Four and SSP-only compatibility from
 Cell Six. First complete the
 [lean one-time registry setup](../../docs/REGISTRY_METADATA_SETUP.md), then use

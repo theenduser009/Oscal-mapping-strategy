@@ -1,6 +1,6 @@
 # Project handoff - read this before resuming
 
-## Current action - compact lean release ready; verify registry in DEV
+## Current action - remove retired DEV registry columns
 
 The lean runtime is implemented locally. Cell One and Cell Three now compile
 the maintained mapping CSV with the original nine registry fields plus only
@@ -12,13 +12,17 @@ Exact SSP, CIA11 and AR17 parity is preserved. Multi-source routing and a
 metadata-only third model remain supported. Cell Four now relies on Cell Three's
 single normalized registry boundary; Cell Six removes SSP-only compatibility
 and repeated projection helpers while retaining guarded-write behavior. The
-source cells, V2 pages and combined notebook are synchronized; all 691 local
+source cells, V2 pages and combined notebook are synchronized; all 697 local
 tests pass. Cells Four and Six are 119 executable lines smaller in total. Writes
 remain disabled. No Snowflake execution has occurred for this lean change.
 
-**Next:** run only the published lean three-rule registry SQL and share its
-aggregate result. Do not run the notebook before registry setup is verified. See
-[the lean runtime checkpoint](checkpoints/2026-09-12-lean-registry-runtime.md).
+The owner explicitly approved removing the fifteen unused experimental columns.
+Run only the published
+[guarded cleanup SQL](../sql/registry/CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql)
+in a fresh DEV worksheet and share its returned object. It preserves all rows
+and leaves exactly the original nine plus three active columns. Do not run the
+notebook yet. See the
+[cleanup checkpoint](checkpoints/2026-09-12-registry-column-cleanup.md).
 
 ## Previous action - registry binding correction; superseded
 

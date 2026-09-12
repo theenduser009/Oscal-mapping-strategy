@@ -1,6 +1,6 @@
 # Mapper V2 - seven copy-ready cells
 
-**Compact lean release:** all 691 local tests pass. Exact accepted SSP, CIA11
+**Compact lean release:** all 697 local tests pass. Exact accepted SSP, CIA11
 and AR17 outputs remain unchanged. The compactness audit is closed: duplicate
 registry parsing and SSP-only loader compatibility were removed without changing
 the seven-cell interface. Live registry setup and notebook preview are still

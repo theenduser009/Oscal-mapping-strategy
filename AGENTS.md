@@ -19,9 +19,10 @@
 - The earlier eighteen-column registry design is superseded. The lean setup SQL
   adds or verifies only the three active extension columns and never drops any
   legacy DEV columns. It has not been live-verified. The compactness audit is
-  closed with 691 tests passing; do not advise a notebook run until the coherent
-  release is published and the registry setup is live-verified. Normal DIM/FACT
-  writes remain disabled.
+  closed with 697 tests passing. The owner approved the exact fifteen-column DEV
+  cleanup; run only the guarded cleanup SQL before further registry verification.
+  Do not advise a notebook run until the registry setup is live-verified. Normal
+  DIM/FACT writes remain disabled.
 - The deployed JSON file is retired. Historical settings and mappings are
   frozen under tests/fixtures for independent parity only, never uploaded or
   loaded in production. Required title/version and AR17 gates remain preserved.

@@ -1,6 +1,6 @@
 # Current Status
 
-## Current action - compact lean release ready; verify registry in DEV
+## Current action - remove retired DEV registry columns
 
 The maintained mapper has been changed locally to use the mapping CSV, the
 original nine registry columns, and only three sparse registry rules:
@@ -13,7 +13,7 @@ normalized registry contract instead of parsing it again. Cell Six drops its
 SSP-only compatibility constants and consolidates repeated physical projection
 helpers while retaining the public writer API, transaction, rollback, integrity,
 idempotency and read-back checks. The maintained cells, V2 pages and combined
-notebook are synchronized. All **691 local tests pass**, including the
+notebook are synchronized. All **697 local tests pass**, including the
 exact accepted SSP graph digest, all eleven CIA transforms, all seventeen
 accepted Assessment Results outputs, metadata-only third-model execution,
 routing boundaries, migration bindings, PK/FK safeguards and loader behavior.
@@ -28,9 +28,16 @@ is local verification, not live acceptance. Normal writes remain disabled. The
 accepted SSP DEV reload, unresolved old-versus-new SSP row difference and AR17
 in-memory-only status are unchanged.
 
-**Next action:** run the published lean three-rule registry SQL once in a fresh
-DEV worksheet and share only its aggregate result. Do not run the notebook
-before registry setup is verified.
+The owner has now approved physical cleanup of the fifteen retired experimental
+DEV columns. The guarded cleanup preflights the exact schema, preserves a full
+row fingerprint, uses one `RESTRICT` drop, and verifies exactly the original
+nine plus three active columns afterward. It does not access DIM/FACT.
+
+**Next action:** run the complete
+[registry cleanup SQL](../sql/registry/CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql)
+once in a fresh DEV worksheet and share its single returned object. Do not run
+the notebook yet. See the
+[cleanup checkpoint](checkpoints/2026-09-12-registry-column-cleanup.md).
 See the [lean runtime checkpoint](checkpoints/2026-09-12-lean-registry-runtime.md).
 
 ## Previous action - registry binding correction; superseded

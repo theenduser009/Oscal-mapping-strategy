@@ -49,7 +49,7 @@ identity and integrity behavior, so they were not deleted merely to reduce LOC.
 
 ## Verification
 
-The synchronized maintained cells, V2 pages and combined notebook pass all 691
+The synchronized maintained cells, V2 pages and combined notebook pass all 697
 local tests. Focused metadata, routing, release, migration, binding, SSP digest,
 CIA11, AR17, future-model, hydration, typed-graph and guarded-loader tests also
 pass. Local tests do not prove Snowflake execution or authorize DIM/FACT writes.

@@ -15,7 +15,15 @@ does not broaden the SSP/Assessment Results scope or approve new mappings.
 See the [binding correction checkpoint](checkpoints/2026-09-12-registry-binding-correction.md).
 Local tests are not permission to enable the daily database writer.
 
-## Your next step: registry SQL only
+## Your next step: remove retired columns first
+
+Because the earlier experimental setup created additional DEV columns, first
+run [CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql](../sql/registry/CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql)
+in a fresh worksheet. It removes only the fifteen retired columns and returns
+`STATUS = REGISTRY_UNUSED_COLUMNS_REMOVED`. Then share that one result; do not
+run the notebook yet.
+
+## Lean registry metadata verification
 
 Open [EXTEND_OSCAL_MAPPER_METADATA.sql](../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql),
 copy the whole file into a **fresh Snowflake SQL worksheet**, and run it with
@@ -112,7 +120,7 @@ need a supported shared assembler receive an `OPERATOR`; `UUID_POLICY` or
 Genuinely unsupported operations need one reusable code enhancement, not a new
 model-specific mapper or another policy-column expansion.
 
-The current compact release passes 691 local tests, including static and
+The current compact release passes 697 local tests, including static and
 synthetic bind-transport regressions. None is live Snowflake proof. Successful
 registry setup, DIM/FACT writes, Matillion runs, daily-loader acceptance and
 full-model conformance remain unverified for this release.

@@ -8,7 +8,7 @@ cell responsibilities, unresolved gaps and the next action are recorded there.
 **Current compact lean release:** one mapping CSV, the original nine registry
 columns plus only three sparse execution rules, and the same
 [seven V2 cells](notebooks/cells_v2/README.md). No JSON catalog upload. The
-release passes all 691 local tests and its compactness audit is closed. The
+release passes all 697 local tests and its compactness audit is closed. The
 registry setup still needs live DEV verification before the notebook preview;
 follow the single current action in [current status](docs/CURRENT_STATUS.md).
 
