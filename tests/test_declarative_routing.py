@@ -60,11 +60,12 @@ def profile(models=("SSP", "ASSESSMENT_RESULTS")):
 
 
 def mapping(field="UNSEEN_APPROVED_FIELD", model="SSP", root=SSP, **changes):
+    path = changes.get("OSCAL_ELEMENT_PATH", root + ".title")
     row = {
-        "SOURCE_FIELD_NAME": field, "OSCAL_MODEL": model,
-        "OSCAL_ELEMENT_PATH": root + ".title", "MAPPING_TYPE": "Direct",
-        "TRANSFORM_ID": "text", "APPROVAL_STATUS": "APPROVED",
-        "TRANSFORM_PARAMS": {}, "REPRESENTATION_PARAMS": {},
+        "SOURCE_KEY": "source-one", "SOURCE_FIELD_NAME": field, "OSCAL_MODEL": model,
+        "OSCAL_ELEMENT_PATH": path, "MAPPING_TYPE": "Direct",
+        "TRANSFORM_ID": "text", "EXECUTION_STATUS": "APPROVED",
+        "RUNTIME_TARGET_PATH": path, "RULE_ID": "routing:" + str(field) + ":" + str(path),
     }
     row.update(changes)
     return row
@@ -175,7 +176,7 @@ class DeclarativeRouting(unittest.TestCase):
         rows = []
         for index in range(60):
             row = mapping(field="UNREVIEWED_" + str(index))
-            for key in ("APPROVAL_STATUS", "TRANSFORM_ID", "TRANSFORM_PARAMS", "REPRESENTATION_PARAMS"):
+            for key in ("EXECUTION_STATUS", "TRANSFORM_ID", "RUNTIME_TARGET_PATH", "RULE_ID"):
                 row.pop(key)
             rows.append(row)
         rows.extend(mapping(field="BAD_PATH_" + str(index), model="Unknown Model",

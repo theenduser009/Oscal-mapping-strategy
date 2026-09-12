@@ -85,13 +85,13 @@ def registry_rows():
 
 
 def mapping(field="NEVER_SEEN_SOURCE_FIELD", path=SUMMARY + ".title",
-            transform="text", **extra):
+            transform="text", source="source-one", **extra):
     row = {
-        "SOURCE_FIELD_NAME": field, "OSCAL_MODEL": MODEL,
+        "SOURCE_KEY": source, "SOURCE_FIELD_NAME": field, "OSCAL_MODEL": MODEL,
         "OSCAL_ELEMENT_PATH": path, "MAPPING_TYPE": "Direct",
         "NOTES": "Approved mapping from a synthetic metadata fixture",
-        "APPROVAL_STATUS": "APPROVED", "TRANSFORM_ID": transform,
-        "TRANSFORM_PARAMS": {}, "REPRESENTATION_PARAMS": {},
+        "EXECUTION_STATUS": "APPROVED", "TRANSFORM_ID": transform,
+        "RUNTIME_TARGET_PATH": path, "RULE_ID": "synthetic:" + str(field) + ":" + str(path),
     }
     row.update(extra)
     return row
@@ -200,7 +200,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
         row = mapping("NEW_SCORE", OBSERVATION, "scalar-score")
         records = [{"SOURCE_RECORD_ID": "same-record", "CURATED_JSON": {"NEW_SCORE": 5}}]
         first = compile_context(self.ns, [row], "source-one", "SOURCE_ONE")
-        second = compile_context(self.ns, [row], "source-two", "SOURCE_TWO")
+        second = compile_context(self.ns, [dict(row, SOURCE_KEY="source-two")], "source-two", "SOURCE_TWO")
         poison_legacy_classifier(self.ns)
         an, ae = build(self.ns, first, records)
         bn, be = build(self.ns, second, records)
@@ -225,9 +225,9 @@ class MetadataDrivenContractTests(unittest.TestCase):
     def test_missing_blank_or_unapproved_status_never_becomes_executable(self):
         for approval in (None, "", " ", False, "PENDING", "TBD"):
             with self.subTest(approval=approval):
-                self.assert_blocked(mapping(APPROVAL_STATUS=approval))
+                self.assert_blocked(mapping(EXECUTION_STATUS=approval))
         row = mapping()
-        del row["APPROVAL_STATUS"]
+        del row["EXECUTION_STATUS"]
         self.assert_blocked(row)
 
     def test_unknown_missing_or_blank_transform_never_falls_back_to_field_name(self):
@@ -260,17 +260,21 @@ class MetadataDrivenContractTests(unittest.TestCase):
                 self.assert_blocked(mapping(TRANSFORM_PARAMS=params))
 
 
-    def test_json_parameters_and_property_name_are_taken_from_metadata(self):
+    def test_raw_property_name_override_cannot_bypass_flat_metadata(self):
         row = mapping("NEW_SCORE", OBSERVATION, "scalar-score",
                       TRANSFORM_PARAMS="{}",
                       REPRESENTATION_PARAMS='{"property_name":"approved-score-label"}')
+        self.assert_blocked(row)
+
+    def test_flat_observation_uses_governed_source_field_naming(self):
+        row = mapping("NEW_SCORE", OBSERVATION, "scalar-score")
         context = compile_context(self.ns, [row])
         self.assert_ready(context)
         poison_legacy_classifier(self.ns)
         nodes, _ = build(self.ns, context, [
             {"SOURCE_RECORD_ID": "record-one", "CURATED_JSON": {"NEW_SCORE": 0}}])
         self.assertEqual(payloads(nodes, OBSERVATION)[0]["props"],
-                         [{"name": "approved-score-label", "value": "0"}])
+                         [{"name": "new-score", "value": "0"}])
 
     def test_conflicting_values_for_one_member_do_not_publish_partial_graph(self):
         rows = [mapping("FIELD_ONE"), mapping("FIELD_TWO")]
@@ -300,7 +304,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
             with self.subTest(metadata=explicit_metadata):
                 row = dict(baseline, OSCAL_MODEL="SSP", **explicit_metadata)
                 with self.assertRaises(ValueError):
-                    self.ns["_compile_metadata_mapping"](
+                    self.ns["_compile_flat_mapping"](
                         row, catalog["MODELS"]["SSP"]["ELEMENTS"])
                 contexts = self.ns["compile_mapping_contexts"](
                     {source["SOURCE_KEY"]: [row]}, registry_data, [source], catalog["MODELS"])

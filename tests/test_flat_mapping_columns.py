@@ -109,6 +109,14 @@ class FlatMappingColumnsTests(unittest.TestCase):
             with self.subTest(extra=extra):
                 self.assert_blocked(mapping(**extra))
 
+    def test_programmatic_approval_cannot_bypass_the_csv_contract(self):
+        row = mapping()
+        for key in self.ns["FLAT_MAPPING_COLUMNS"]:
+            row.pop(key, None)
+        row.update(APPROVAL_STATUS="APPROVED", TRANSFORM_PARAMS={},
+                   REPRESENTATION_PARAMS={"target": "title"})
+        self.assert_blocked(row)
+
     def test_source_scoping_prevents_cross_source_execution(self):
         rows = [mapping(), mapping("SECOND", SOURCE_KEY="source-two")]
         contexts = self.ns["compile_mapping_contexts"](

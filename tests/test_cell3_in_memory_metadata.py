@@ -46,9 +46,10 @@ class CellThreeInMemoryMetadataTests(unittest.TestCase):
         for context in result["MAPPING_CONTEXTS"]:
             self.assertEqual("READY", context["routing_report"]["STATUS"])
             row = context["compiled_plan"]["mappings"][0]
-            for key in ("VALUE_CONSTRAINTS", "TRANSFORM_PARAMS", "REPRESENTATION_PARAMS"):
+            for key in ("VALUE_CONSTRAINTS", "TRANSFORM_PARAMS"):
                 self.assertEqual({}, row[key])
                 self.assertIsInstance(row[key], dict)
+            self.assertEqual({"target": "title"}, row["REPRESENTATION_PARAMS"])
 
     def test_nested_constraints_keep_false_zero_and_empty_parameters(self):
         constraints = {"required": False, "null_policy": "omit",
@@ -65,8 +66,8 @@ class CellThreeInMemoryMetadataTests(unittest.TestCase):
 
     def test_zero_selected_rows_do_not_require_dataframe_type_inference(self):
         result = self.execute([
-            base.mapping(APPROVAL_STATUS=None, TRANSFORM_ID=None,
-                         TRANSFORM_PARAMS=None, REPRESENTATION_PARAMS=None),
+            base.mapping(EXECUTION_STATUS="DEFERRED", TRANSFORM_ID=None,
+                         RUNTIME_TARGET_PATH=None, RULE_ID=None),
         ], selected=("SSP",))
         self.assertEqual([], result["CANONICAL_MAPPING_ROWS"])
         self.assertTrue(result["canonical_mapping_pdf"].empty)

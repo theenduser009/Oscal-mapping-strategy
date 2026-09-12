@@ -378,11 +378,10 @@ class RegistryMetadataContractTests(unittest.TestCase):
             self.decode(rows)
 
         profiles = [base.profile(), base.profile("source-two", "OTHER_SOURCE")]
-        mappings = {"source-one": [base.mapping()], "source-two": [base.mapping()]}
+        mappings = {"source-one": [base.mapping()], "source-two": [base.mapping(source="source-two")]}
         with self.assertRaises(ValueError):
             self.decode(reference_registry(), profiles=profiles, mappings=mappings)
 
 
 if __name__ == "__main__":
     unittest.main()
-

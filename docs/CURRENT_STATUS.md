@@ -1,7 +1,36 @@
 # Current Status
 
 
-## Current action - rerun Cell Three preview with scalar legacy fix
+## Current action - CSV-only Cell Three release for preview
+
+Cell Three now uses one flat CSV compiler for executable mappings. The unused
+programmatic-format compiler is removed; required CSV rule IDs still undergo
+uniqueness checks. Cell Three shrank from 896 to 862 nonblank, non-comment lines.
+The maintained source, V2 page and combined notebook are synchronized.
+
+All **700 local tests pass**, with no failures, errors or skips. Six test files
+now exercise explicit CSV inputs, including rejection of attempts to bypass that
+contract. Frozen historical fixtures are unchanged. Accepted SSP/CIA11/AR17
+comparisons, future-model execution, deferred rows, required/null rules and
+key/write checks remain intact. Cells One, Two and Four through Seven, mapping
+CSV and registry SQL are unchanged. This is a bounded cleanup, not completion of
+every suggestion in the external review or acceptance of the daily writer.
+
+**Next action:** use the complete updated
+[V2 Cell Three](../notebooks/cells_v2/03_canonical_mapping_contract.py).
+If Cell Two has already succeeded in the same active session, replace and run
+Cell Three, then run Cells Four through Seven in PREVIEW with
+`EXECUTE_WRITES = False`. If the session was restarted, run the matching
+[V2 Cells One through Seven](../notebooks/cells_v2/README.md) in order.
+Share the aggregate Cell Seven report. Stop if any cell fails; do not enable writes.
+No registry setup, cleanup or DEV reload rerun is needed.
+
+The earlier scalar-identity correction remains included. This release is
+published, but its Snowflake preview is **not yet accepted**. No database data
+was changed during this cleanup. A pending destination-contract status is not
+write-readiness approval.
+
+## Previous action - rerun Cell Three preview with scalar legacy fix
 
 The owner-confirmed registry cleanup is complete: the fifteen retired DEV
 columns were removed, twelve columns remain, and the retained-row fingerprint

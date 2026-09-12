@@ -250,40 +250,6 @@ def _compile_flat_mapping(row, elements):
     return result
 
 
-def _compile_metadata_mapping(row, elements):
-    if _flat_mapping_status(row) is not None:
-        return _compile_flat_mapping(row, elements)
-    # Programmatic callers may supply already explicit executable metadata.
-    # No source-name lookup, Notes matching or catalog approval fallback exists.
-    if _model_token(row.get("APPROVAL_STATUS")) != "approved":
-        raise ValueError("Executable mapping metadata requires explicit approval")
-    transform = row.get("TRANSFORM_ID")
-    if transform not in METADATA_TRANSFORM_IDS:
-        raise ValueError("Unknown reusable transform identifier")
-    constraints = _compile_value_constraints(row.get("VALUE_CONSTRAINTS"))
-    if transform == "skip" and (constraints.get("required") or
-                                constraints.get("null_policy") == "reject" or
-                                constraints.get("cardinality", {}).get("min", 0) > 0):
-        raise ValueError("Skip transform conflicts with required-value constraints")
-    owner = row["OWNER_ELEMENT_PATH"]
-    if owner not in elements:
-        raise ValueError("Mapping has no metadata-defined element operator")
-    operator = elements[owner]["operator"]
-    if row.get("REPRESENTATION") not in (None, "", operator):
-        raise ValueError("Mapping representation conflicts with its element operator")
-    result = copy.deepcopy(row)
-    result.update(
-        TRANSFORM_ID=transform,
-        TRANSFORM_PARAMS=_metadata_object(row.get("TRANSFORM_PARAMS"), "TRANSFORM_PARAMS"),
-        REPRESENTATION=operator,
-        REPRESENTATION_PARAMS=_metadata_object(row.get("REPRESENTATION_PARAMS"), "REPRESENTATION_PARAMS"),
-        VALUE_CONSTRAINTS=constraints, APPROVAL_STATUS="APPROVED",
-        RULE_ID=row.get("RULE_ID") or row.get("MAPPING_ID"),
-        CONTRACT_SOURCE="mapping-artifact",
-    )
-    return result
-
-
 def compile_metadata_plan(context):
     """Compile approved metadata to inert operations; never evaluate Notes as code."""
     contract = context["model_contract"]
@@ -313,13 +279,9 @@ def compile_metadata_plan(context):
         elements[path] = definition
     if contract["ROOT_PATH"] not in elements:
         raise ValueError("Registry root has no metadata-defined operator")
-    mappings = [_compile_metadata_mapping(row, elements) for row in context["mapping_rows"]]
-    counts = {}
-    for row in mappings:
-        if row.get("RULE_ID"):
-            counts[row["RULE_ID"]] = counts.get(row["RULE_ID"], 0) + 1
-    flat_ids = {row["RULE_ID"] for row in mappings if row.get("CONTRACT_SOURCE") == "flat-mapping-artifact"}
-    if any(counts[rule_id] != 1 for rule_id in flat_ids):
+    mappings = [_compile_flat_mapping(row, elements) for row in context["mapping_rows"]]
+    rule_ids = [row["RULE_ID"] for row in mappings]
+    if len(rule_ids) != len(set(rule_ids)):
         raise ValueError("Duplicate flat mapping RULE_ID within source/model")
     reference_groups = []
     for group in contract.get("REFERENCE_GROUPS", []):
@@ -517,7 +479,7 @@ def _decode_registry_element(row, root, by_path):
     operator = _registry_operator(row)
     collection = _registry_meta_bool(row, "IS_COLLECTION")
     parent = _registry_meta_text(row, "PARENT_NODE_PATH")
-    # INSTANCE_KEY_RULE and ITEM_PATH describe collection instances. Some
+    # INSTANCE_KEY_RULE and ITEM_PATH describe collection instances.  Some
     # established scalar registry rows retain legacy values in those columns;
     # they do not change scalar identity and must not make a valid path fail.
     key_rule = _registry_meta_text(row, "INSTANCE_KEY_RULE") if collection else None
@@ -990,4 +952,3 @@ print("Mapping routes:", [
     {"source": context["source_key"], "model": context["config"]["OSCAL_MODEL"],
      **context["routing_report"]} for context in MAPPING_CONTEXTS
 ])
-

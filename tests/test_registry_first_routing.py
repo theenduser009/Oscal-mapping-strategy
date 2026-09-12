@@ -170,7 +170,9 @@ class RegistryFirstRouting(unittest.TestCase):
         path = POSTED_PAIRS[-1][1]
         for row in (
             unapproved_row("PENDING_IMPACT", "TBD", path),
-            base.mapping(field="PENDING_IMPACT", model="TBD", OSCAL_ELEMENT_PATH=path),
+            dict(unapproved_row("PENDING_IMPACT", "TBD", path),
+                 APPROVAL_STATUS="APPROVED", TRANSFORM_ID="text",
+                 TRANSFORM_PARAMS={}, REPRESENTATION_PARAMS={}),
         ):
             context = self.compile([row])["SSP"]
             self.assertEqual(1, context["routing_report"]["DEFERRED_ROWS"])
