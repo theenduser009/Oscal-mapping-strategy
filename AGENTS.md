@@ -13,9 +13,13 @@
   Mapping/ARCHER_OSCAL_MAPPINGS.csv. The 147 reviewed occurrences and one
   existing guard preserve source Notes and accepted scope. Structural settings
   remain in mapper_contract.v1.json, without MAPPING_RULES/PATH_RULES/EXCLUDED_FIELDS.
-  Do not claim every JSON dependency or the older compiler compatibility branch
-  is removed. No owner approval is pending for the authorized simplification.
-  Retire that branch and reconcile remaining structural settings next.
+  The active catalog matching/path-rewrite branch is now removed; old behavior
+  is frozen under tests/fixtures only. Model settings containing obsolete field
+  rule keys fail closed. Do not claim every JSON dependency is removed.
+  No owner approval is pending for the authorized simplification.
+  Reconcile remaining structural/assembly settings next, including the required
+  metadata title and AR17 completeness gate; do not discard them or claim they
+  are already present in the live registry.
 
 - Latest owner clarification: final design must use the simple configuration,
   one maintained Excel/CSV mapping source (including Notes), and registry, without

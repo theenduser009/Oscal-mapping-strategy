@@ -194,7 +194,7 @@ class RegistryFirstRouting(unittest.TestCase):
         self.assertEqual({"MISSING_APPROVED_METADATA": 1}, context["routing_report"]["REASON_COUNTS"])
         self.assertEqual([], context["mapping_rows"])
 
-    def test_reviewed_catalog_rule_still_governs_unknown_label_row(self):
+    def test_reviewed_catalog_rule_cannot_supply_missing_artifact_approval(self):
         row = unapproved_row("REVIEWED_FIELD", "Unconfigured label", base.SSP + ".title")
         models = base.contracts()
         models["SSP"]["MAPPING_RULES"] = [{
@@ -202,13 +202,11 @@ class RegistryFirstRouting(unittest.TestCase):
             "OWNER_PATH": base.SSP, "TARGET_FIELDS": ["title"],
             "APPROVAL_STATUS": "APPROVED", "TRANSFORM_ID": "text",
         }]
-        context = self.compile([row], models=models)["SSP"]
-        self.assertEqual(1, context["routing_report"]["SELECTED_ROWS"])
-        self.assertEqual("reviewed-catalog", context["compiled_plan"]["mappings"][0]["CONTRACT_SOURCE"])
-        row["OSCAL_ELEMENT_PATH"] = base.SSP + ".different"
-        context = self.compile([row], models=models)["SSP"]
-        self.assertEqual("BLOCKED", context["routing_report"]["STATUS"])
-        self.assertEqual([], context["mapping_rows"])
+        for path in (base.SSP + ".title", base.SSP + ".different"):
+            with self.subTest(path=path):
+                row["OSCAL_ELEMENT_PATH"] = path
+                with self.assertRaisesRegex(ValueError, "Field rules belong in the mapping artifact"):
+                    self.compile([row], models=models)
 
     def test_recognized_label_path_conflicts_still_block(self):
         rows = [

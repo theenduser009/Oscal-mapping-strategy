@@ -1,6 +1,6 @@
 # Project handoff - read this before resuming
 
-## Current action - field rules moved to the mapping CSV
+## Current action - obsolete field-rule branch retired
 
 No owner approval is pending. The owner reviewed the compilation and authorized
 the simplification; earlier approval prompts were stale.
@@ -12,29 +12,33 @@ One additional, explicitly labelled existing populated-value guard is preserved.
 There are 60 approved rules, one guard, 85 deferred rows and two excluded helpers.
 Compilation review did not approve unresolved mappings or unseen source rows.
 
-The deployed settings no longer contain field rules, source-field path rewrites
-or exclusions. They still contain structural/source/lookup/destination settings
-that the current registry does not fully hold. **The JSON dependency is not yet
-removed.** The old input compatibility branch also remains in Cell Three.
-This is the completed field-rule migration, not the final catalog-free release.
+Cell Three no longer matches fields or rewrites their paths through the old
+catalog. That behavior is frozen under tests only; active model settings
+containing retired field-rule keys are rejected. Incomplete executable metadata
+blocks explicitly rather than falling back to another rule.
 
-All 593 local tests pass. Regression checks preserve all 61 execution contracts, the accepted SSP
-graph fingerprint, all eleven CIA mappings and AR17 output. Original Notes
-conflicts and accepted/deferred boundaries remain unchanged. Source input now
-preserves UTF-8 Notes and literal N/A labels. V2 and combined notebook pages are
-generated from the maintained cells. No new Snowflake run has been accepted.
+**599 local tests pass**, including exact accepted SSP output, all eleven CIA
+mappings, AR17 output, the 61 execution contracts and metadata-only third-model
+checks. V2 and combined pages are generated from the maintained cells.
+Historical-input tests use a frozen compiler; active parity tests use the
+current mapping CSV and compiler. No new Snowflake run has been accepted.
 
-**Next:** retire the older field-rule input branch and consolidate the remaining
-structural settings without introducing guessed identities or a second
-hand-maintained mapping catalog. No additional owner approval is needed for the
-authorized refactor. No notebook rerun, normal write, reload or registry mutation
-is requested during that work. Normal writes remain disabled.
+**Next:** consolidate the remaining structural/assembly settings. The JSON file
+is still required: the live registry does not yet supply every operator,
+parent-instance binding or UUID/empty-assembly policy. Required metadata title
+sourcing and the AR17 completeness gate also need to retain their governed
+definitions. Do not move these into hidden Python constants or silently discard
+them to remove the file. This is not the final catalog-free release.
+
+Nothing is waiting on owner approval for the authorized refactor. No notebook
+rerun, normal write, reload or live registry mutation is requested during that
+work. Normal writes remain disabled.
 
 Earlier SSP persisted scope, AR17 in-memory-only acceptance and the unexplained
 old-row reduction remain unchanged. Prior run instructions and requests for
 the full CSV or repeated approval below are superseded.
 
-## Current action - reviewed compilation; simplify accepted rules
+## Previous action - reviewed compilation (superseded)
 
 The owner reviewed the [147-entry compiled workbook](../Mapping/REVIEW.md),
 confirmed the blank-path control entries, and authorized continuing. The eight
@@ -62,7 +66,7 @@ Earlier run advice and requests for the complete CSV below are superseded.
 
 Last reconciled: **2026-09-11**. Purpose: durable context requested by the owner, so the cell roles, completed work and pending decisions do not need to be retold.
 
-## Resume here
+## Historical checkpoint (superseded; use current action above)
 
 **Latest owner direction and current blocker:** simplify the existing seven cells
 against the original design, using one maintained Excel/CSV mapping source and

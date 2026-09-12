@@ -2,6 +2,7 @@
 import ast
 import contextlib
 import copy
+import csv
 import hashlib
 import io
 import json
@@ -13,7 +14,8 @@ import test_multi_model_graph as legacy_graph
 
 ROOT = Path(__file__).resolve().parents[1]
 CELL3 = ROOT / "notebooks/cells/03_canonical_mapping_contract.py"
-LEGACY_CATALOG = ROOT / "tests/fixtures/mapper_contract_pre_flat.json"
+STRUCTURAL_CATALOG = ROOT / "notebooks/metadata/mapper_contract.v1.json"
+FLAT_MAPPING = ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv"
 MODEL = "SYNTHETIC_THIRD_MODEL"
 ROOT_PATH = "synthetic-model"
 RESULT = ROOT_PATH + ".results[]"
@@ -280,7 +282,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
                 "FIELD_ONE": "first", "FIELD_TWO": "second"}}])
 
     def test_partial_executable_metadata_cannot_silently_use_legacy_catalog_approval(self):
-        catalog = json.loads(LEGACY_CATALOG.read_text(encoding="utf-8"))
+        catalog = json.loads(STRUCTURAL_CATALOG.read_text(encoding="utf-8"))
         original, _, registry, _ = legacy_graph.ssp_fixture(legacy_graph.namespace(legacy=True))
         source = copy.deepcopy(catalog["SOURCES"][0])
         source["MODEL_KEYS"] = ("SSP",)
@@ -297,6 +299,9 @@ class MetadataDrivenContractTests(unittest.TestCase):
         ):
             with self.subTest(metadata=explicit_metadata):
                 row = dict(baseline, OSCAL_MODEL="SSP", **explicit_metadata)
+                with self.assertRaises(ValueError):
+                    self.ns["_compile_metadata_mapping"](
+                        row, catalog["MODELS"]["SSP"]["ELEMENTS"])
                 contexts = self.ns["compile_mapping_contexts"](
                     {source["SOURCE_KEY"]: [row]}, registry_data, [source], catalog["MODELS"])
                 context = contexts[0]
@@ -306,19 +311,40 @@ class MetadataDrivenContractTests(unittest.TestCase):
                 self.assertFalse(context["config"]["EXECUTE_WRITES"])
 
     def catalog_context(self, original, registry):
-        catalog = json.loads(LEGACY_CATALOG.read_text(encoding="utf-8"))
+        """Run current flat mappings; the frozen fixture supplies only oracle scope."""
+        catalog = json.loads(STRUCTURAL_CATALOG.read_text(encoding="utf-8"))
         model = original["config"]["OSCAL_MODEL"]
         source = copy.deepcopy(catalog["SOURCES"][0])
         source["MODEL_KEYS"] = (model,)
         source["BASE_CONFIG"] = copy.deepcopy(original["config"])
-        rows = copy.deepcopy(original["mapping_rows"])
-        for row in rows:
-            row["OSCAL_MODEL"] = model
         registry_data = [dict(row, OSCAL_MODEL_KEY=model) for row in registry.collect()]
+        paths = [row["NODE_PATH"] for row in registry_data]
+        wanted = {(row["SOURCE_FIELD_NAME"], row["OWNER_ELEMENT_PATH"])
+                  for row in original["mapping_rows"]}
+        with FLAT_MAPPING.open(encoding="utf-8-sig", newline="") as handle:
+            artifact = list(csv.DictReader(handle))
+        rows, found = [], []
+        for row in artifact:
+            if row["EXECUTION_STATUS"] != "APPROVED" or row["SOURCE_KEY"] != source["SOURCE_KEY"]:
+                continue
+            path = row["RUNTIME_TARGET_PATH"]
+            owners = [owner for owner in paths if path == owner or path.startswith(owner + ".")]
+            if not owners:
+                continue
+            pair = (row["SOURCE_FIELD_NAME"], max(owners, key=len))
+            if pair in wanted:
+                rows.append(row)
+                found.append(pair)
+        self.assertEqual(wanted, set(found), "Every oracle mapping needs its current flat row")
+        self.assertEqual(len(wanted), len(found), "Do not duplicate an oracle mapping")
         context = self.ns["compile_mapping_contexts"](
-            {source["SOURCE_KEY"]: rows}, registry_data, [source], catalog["MODELS"])[0]
+            {source["SOURCE_KEY"]: rows}, registry_data, [source], catalog["MODELS"],
+            routing_metadata=catalog.get("ROUTING", {}))[0]
         context["lookups"] = copy.deepcopy(original["lookups"])
         self.assert_ready(context)
+        self.assertEqual(len(wanted), len(context["mapping_rows"]))
+        self.assertTrue(all(row["CONTRACT_SOURCE"] == "flat-mapping-artifact"
+                            for row in context["mapping_rows"]))
         return context
 
     def test_ssp_catalog_matches_independent_preconsolidation_fingerprint(self):

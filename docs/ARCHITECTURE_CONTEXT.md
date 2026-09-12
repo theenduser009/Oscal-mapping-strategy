@@ -6,7 +6,22 @@ Build one generic, metadata-driven mapper that can be configured for SSP, POA&M,
 
 ## Approved consolidation - September 11
 
-### Metadata-driven execution implemented - September 11
+### Current simplification checkpoint
+
+The maintained mapping artifact is now Mapping/ARCHER_OSCAL_MAPPINGS.csv:
+147 reviewed source occurrences plus one preserved reject-populated guard.
+Executable field rules no longer live in the deployment catalog. Cell Three's
+old catalog matching and field-specific path rewriting are removed; settings
+containing those retired rule keys are rejected. Current-code SSP/AR parity and
+metadata-only new-model checks pass in the 599-test local suite.
+
+The settings JSON remains required for source/storage and structural/assembly
+policies not fully represented in the live registry, including required title
+sourcing and the AR17 completeness gate. Consolidating those definitions is the
+remaining architectural work, not a new mapping approval or database run.
+The seven-cell interface and writes-disabled boundary remain unchanged.
+
+### Earlier metadata-engine migration - September 11 (superseded where noted above)
 
 The owner made metadata-driven behavior non-negotiable and authorized the required changes. Cell One now loads the reviewed [deployment catalog](../notebooks/metadata/mapper_contract.v1.json); it exposes one model selector. Source fields, source bindings, model roots, approved transform choices, property names, reference types, controlled values and storage contracts are metadata, not active field/model branches.
 
@@ -146,4 +161,3 @@ Coverage must be measurable at field level:
 - Populated record count and population percentage
 
 Approved status values should distinguish completed work, in-progress work, more information required, no source data, and not applicable.
-

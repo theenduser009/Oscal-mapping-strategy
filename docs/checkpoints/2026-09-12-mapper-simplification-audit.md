@@ -1,6 +1,6 @@
 # Mapper simplification: verified cleanup and compiled mapping review
 
-## Completed field-rule migration
+## Completed field-rule migration and compatibility retirement
 
 No owner approval is pending. All 61 prior execution contracts now compile from
 the readable mapping CSV: 60 approved rules and one existing populated-value
@@ -10,10 +10,13 @@ Notes and provenance. Other entries remain 85 deferred and two excluded.
 The deployed settings shrink from 1,705 lines to 364 lines by removing
 MAPPING_RULES, PATH_RULES and EXCLUDED_FIELDS. Source bindings, element behavior,
 identity and destination settings remain explicit; the JSON dependency is not
-yet removed. The compiler's older input branch is also not yet retired.
+yet removed. Cell Three's catalog field matching, Notes matching and source-field
+path rewriting are now removed from active execution. Historical input behavior
+is frozen in tests/fixtures/legacy_cell3_catalog_input.py, not production.
+Active model settings reject retired field-rule keys, even when empty.
 Do not describe this staged migration as the final simplified architecture.
 
-All 593 local tests pass; generated notebook pages are synchronized.
+All 599 local tests pass; generated notebook pages are synchronized.
 Regression coverage pins the original 61 rule contracts independently of the
 new artifact, the accepted SSP graph fingerprint and AR17 business output.
 All eleven CIA routes, reference parameters and the populated-value guard are
@@ -21,8 +24,16 @@ unchanged. Flat metadata also works for a synthetic third model, without the
 catalog matching functions. UTF-8 Notes and literal N/A labels survive input.
 Unsupported member paths fail rather than being silently ignored.
 
-Remaining simplification: retire the compatibility input branch and consolidate
-structural settings without guessing registry capabilities. The existing SSP
+Active SSP and AR parity checks consume the current flat mapping file directly;
+they do not use the frozen compiler. Missing approval on partially specified
+executable metadata blocks explicitly, and no fallback is available.
+
+Remaining simplification: consolidate structural settings without guessing
+registry capabilities. The current registry does not provide all operator,
+parent-instance, UUID and optional-assembly rules. Required metadata.title
+sourcing and the AR17 completeness gate also remain in the settings file and
+need a governed home; removing them or hiding them in Python is not cleanup.
+No additional owner approval is pending for the authorized refactor. The existing SSP
 guard-presence gap is recorded: the guard currently executes, but removing its
 CSV row is not detected by an SSP required-rule list. AR's exact required IDs
 remain enforced. No new live acceptance or database write is claimed.
@@ -33,7 +44,7 @@ the existing guarded writer. A second hand-maintained JSON catalog duplicating
 the sheet is not the desired final design. The current code still requires that
 catalog; this cleanup does not claim to remove it or finish the redesign.
 
-## Confirmed and corrected
+## Earlier cleanup (completed)
 
 - The posted Cell Three failure occurred while uploading empty nested metadata
   to Snowpark. Its resulting dataframe has no active consumer: the graph builder
@@ -91,7 +102,7 @@ populated mapping. The shared low/moderate/high note conflicts with accepted
 legacy CIA labels, and FULL_CONTROL_ASSESSMENT_HELPER is an additional unapproved
 candidate. Neither changes accepted behavior automatically.
 
-**Next:** migrate known accepted executable rules into readable mapping metadata,
+**Earlier plan (now completed above):** migrate known accepted executable rules into readable mapping metadata,
 carrying forward acceptance/deferment, identity, null/assembly and reference rules
 from existing evidence. Reconcile specific conflicting Notes separately; the
 unresolved control candidates need not block work on accepted rows. Remove

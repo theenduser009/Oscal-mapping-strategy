@@ -35,11 +35,8 @@ class FlatMappingColumnsTests(unittest.TestCase):
         self.assertFalse(context["config"]["EXECUTE_WRITES"])
 
     def test_flat_row_does_not_read_catalog_matchers(self):
-        def poison(*args):
-            raise AssertionError("Flat rows must not use catalog matching")
-        self.ns["_metadata_rule_candidates"] = poison
-        self.ns["_metadata_rule_matches"] = poison
-        self.ns["_apply_mapping_path_rules"] = poison
+        for name in ("_metadata_rule_candidates", "_metadata_rule_matches", "_apply_mapping_path_rules"):
+            self.assertNotIn(name, self.ns)
         context = self.compile([mapping()])
         self.assertEqual(context["routing_report"]["STATUS"], "READY")
         row = context["compiled_plan"]["mappings"][0]

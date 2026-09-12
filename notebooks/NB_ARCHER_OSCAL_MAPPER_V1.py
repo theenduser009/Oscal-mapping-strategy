@@ -378,10 +378,6 @@ def _metadata_object(value, label):
     return copy.deepcopy(value)
 
 
-def _metadata_words(value):
-    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
-
-
 def _compile_value_constraints(value):
     """Validate declarative output constraints once, before reading source values."""
     rules = _metadata_object(value, "VALUE_CONSTRAINTS")
@@ -564,95 +560,36 @@ def _compile_flat_mapping(row, elements):
     return result
 
 
-def _metadata_rule_candidates(row, contract):
-    return [rule for rule in contract.get("MAPPING_RULES", ())
-            if row.get("SOURCE_FIELD_NAME") in rule.get("SOURCE_FIELDS", ())]
-
-
-def _metadata_rule_matches(row, rule):
-    checks = [row.get("OWNER_ELEMENT_PATH") == rule.get("OWNER_PATH")]
-    for key, value in (
-        ("MAPPING_TYPES", row.get("MAPPING_TYPE")),
-        ("TARGET_FIELDS", row.get("OSCAL_FIELD_NAME") or row.get("FIELD_RELATIVE_PATH")),
-        ("ARTIFACT_PATHS", row.get("OSCAL_ELEMENT_PATH")),
-    ):
-        if key in rule:
-            if key == "MAPPING_TYPES":
-                checks.append(_metadata_words(value) in {_metadata_words(v) for v in rule[key]})
-            else:
-                checks.append(value in rule[key])
-    if "NOTES_EQUALS" in rule:
-        checks.append(_metadata_words(row.get("NOTES")) == _metadata_words(rule["NOTES_EQUALS"]))
-    for token in rule.get("NOTES_CONTAINS", ()):
-        checks.append(_metadata_words(token) in _metadata_words(
-            " ".join(str(row.get(k) or "") for k in ("NOTES", "TRANSFORMATION_LOGIC", "MAPPING_NOTES"))))
-    checks.extend(not row.get(key) for key in rule.get("EMPTY_COLUMNS", ()))
-    return all(checks)
-
-
-def _compile_metadata_mapping(row, contract, elements):
+def _compile_metadata_mapping(row, elements):
     if _flat_mapping_status(row) is not None:
         return _compile_flat_mapping(row, elements)
-    result = copy.deepcopy(row)
-    approval = _model_token(row.get("APPROVAL_STATUS"))
-    candidates = _metadata_rule_candidates(row, contract)
-    matches = [rule for rule in candidates if _metadata_rule_matches(row, rule)]
-    if len(matches) > 1:
-        raise ValueError("Multiple approved metadata rules match one mapping")
-    if approval:
-        if approval != "approved":
-            raise ValueError("Mapping metadata is not approved")
-        if candidates and not matches:
-            raise ValueError("Mapping contradicts its current reviewed release contract")
-        chosen = matches[0] if matches else {}
-        if chosen and row.get("TRANSFORM_ID") != chosen.get("TRANSFORM_ID"):
-            raise ValueError("Transform conflicts with the current reviewed release contract")
-        transform = row.get("TRANSFORM_ID")
-        transform_params = _metadata_object(row.get("TRANSFORM_PARAMS"), "TRANSFORM_PARAMS")
-        representation_params = _metadata_object(row.get("REPRESENTATION_PARAMS"), "REPRESENTATION_PARAMS")
-        value_constraints = _compile_value_constraints(row.get("VALUE_CONSTRAINTS"))
-        if chosen:
-            for actual, key in ((transform_params, "TRANSFORM_PARAMS"),
-                                (representation_params, "REPRESENTATION_PARAMS")):
-                if actual != chosen.get(key, {}):
-                    raise ValueError("Parameters conflict with the current reviewed release contract")
-            if value_constraints != _compile_value_constraints(chosen.get("VALUE_CONSTRAINTS")):
-                raise ValueError("Constraints conflict with the current reviewed release contract")
-    else:
-        if any(row.get(key) not in (None, "") for key in
-               ("TRANSFORM_ID", "TRANSFORM_PARAMS", "REPRESENTATION", "REPRESENTATION_PARAMS", "VALUE_CONSTRAINTS")):
-            raise ValueError("Executable mapping metadata requires explicit approval")
-        if len(matches) != 1:
-            raise ValueError("Mapping requires an explicit approved executable contract")
-        chosen = matches[0]
-        if chosen.get("APPROVAL_STATUS") not in {"APPROVED", "BLOCKED_IF_POPULATED"}:
-            raise ValueError("Release metadata rule is not approved")
-        transform = chosen.get("TRANSFORM_ID")
-        transform_params = _metadata_object(chosen.get("TRANSFORM_PARAMS"), "TRANSFORM_PARAMS")
-        representation_params = _metadata_object(chosen.get("REPRESENTATION_PARAMS"), "REPRESENTATION_PARAMS")
-        value_constraints = _compile_value_constraints(chosen.get("VALUE_CONSTRAINTS"))
-        approval = chosen["APPROVAL_STATUS"]
+    # Programmatic callers may supply already explicit executable metadata.
+    # No source-name lookup, Notes matching or catalog approval fallback exists.
+    if _model_token(row.get("APPROVAL_STATUS")) != "approved":
+        raise ValueError("Executable mapping metadata requires explicit approval")
+    transform = row.get("TRANSFORM_ID")
     if transform not in METADATA_TRANSFORM_IDS:
         raise ValueError("Unknown reusable transform identifier")
-    if transform == "skip" and (value_constraints.get("required") or
-                                value_constraints.get("null_policy") == "reject" or
-                                value_constraints.get("cardinality", {}).get("min", 0) > 0):
+    constraints = _compile_value_constraints(row.get("VALUE_CONSTRAINTS"))
+    if transform == "skip" and (constraints.get("required") or
+                                constraints.get("null_policy") == "reject" or
+                                constraints.get("cardinality", {}).get("min", 0) > 0):
         raise ValueError("Skip transform conflicts with required-value constraints")
-    if chosen.get("APPROVAL_STATUS") == "BLOCKED_IF_POPULATED" and transform != "reject-populated":
-        raise ValueError("Unresolved populated values must remain rejected")
     owner = row["OWNER_ELEMENT_PATH"]
     if owner not in elements:
         raise ValueError("Mapping has no metadata-defined element operator")
     operator = elements[owner]["operator"]
     if row.get("REPRESENTATION") not in (None, "", operator):
         raise ValueError("Mapping representation conflicts with its element operator")
+    result = copy.deepcopy(row)
     result.update(
-        TRANSFORM_ID=transform, TRANSFORM_PARAMS=transform_params,
-        REPRESENTATION=operator, REPRESENTATION_PARAMS=representation_params,
-        VALUE_CONSTRAINTS=value_constraints,
-        APPROVAL_STATUS=(chosen.get("APPROVAL_STATUS") or "APPROVED"),
-        RULE_ID=chosen.get("RULE_ID") or row.get("RULE_ID") or row.get("MAPPING_ID"),
-        CONTRACT_SOURCE="reviewed-catalog" if chosen else "mapping-artifact",
+        TRANSFORM_ID=transform,
+        TRANSFORM_PARAMS=_metadata_object(row.get("TRANSFORM_PARAMS"), "TRANSFORM_PARAMS"),
+        REPRESENTATION=operator,
+        REPRESENTATION_PARAMS=_metadata_object(row.get("REPRESENTATION_PARAMS"), "REPRESENTATION_PARAMS"),
+        VALUE_CONSTRAINTS=constraints, APPROVAL_STATUS="APPROVED",
+        RULE_ID=row.get("RULE_ID") or row.get("MAPPING_ID"),
+        CONTRACT_SOURCE="mapping-artifact",
     )
     return result
 
@@ -686,7 +623,7 @@ def compile_metadata_plan(context):
         elements[path] = definition
     if contract["ROOT_PATH"] not in elements:
         raise ValueError("Registry root has no metadata-defined operator")
-    mappings = [_compile_metadata_mapping(row, contract, elements) for row in context["mapping_rows"]]
+    mappings = [_compile_metadata_mapping(row, elements) for row in context["mapping_rows"]]
     counts = {}
     for row in mappings:
         if row.get("RULE_ID"):
@@ -787,6 +724,8 @@ def _validate_source_profiles(source_profiles, model_contracts, mapping_rows):
             raise ValueError("Storage contract override has no enabled model route")
         for model in models:
             contract = model_contracts[model]
+            if {"MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS"} & contract.keys():
+                raise ValueError("Field rules belong in the mapping artifact, not model settings")
             if contract.get("MODEL_KEY") != model or not contract.get("ROOT_PATH"):
                 raise ValueError("Model contract identity is invalid")
         if key not in mapping_rows or not isinstance(mapping_rows[key], list):
@@ -799,24 +738,6 @@ def _owner_for_path(path, paths):
     candidates = [p for p in paths if path == p or path.startswith(p + ".")]
     return max(candidates, key=lambda p: (p.count("."), len(p))) if candidates else None
 
-
-def _apply_mapping_path_rules(row, contract, paths):
-    path = str(row.get("OSCAL_ELEMENT_PATH") or "")
-    field = row.get("SOURCE_FIELD_NAME")
-    kind = _model_token(row.get("MAPPING_TYPE") or "Direct")
-    for rule in contract.get("PATH_RULES", ()):
-        if field not in rule["SOURCE_FIELDS"] or kind != _model_token(rule["MAPPING_TYPE"]):
-            continue
-        parent, props = rule["PARENT_PATH"], rule["COLLECTION_PATH"]
-        if _owner_for_path(path, paths) not in {parent, props}:
-            continue
-        relative = path[len(parent):].lstrip(".")
-        direct_leaf = not any(token in relative for token in (".", "[", "]"))
-        if direct_leaf or path in {props, props + ".name", props + ".value"}:
-            if props not in paths:
-                raise ValueError("Approved collection route requires active registry path")
-            return props + ".value"
-    return path
 
 
 def _summarize_routing_issues(report, sample_limit=25):
@@ -940,9 +861,12 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     classification, reason = "DEFERRED_ROWS", "PLACEHOLDER_MAPPING"
                 elif path_model and path_model != model or not path and labelled and labelled != model:
                     classification = "EXCLUDED_ROWS"
-                elif flat_status is None and field in contract.get("EXCLUDED_FIELDS", ()):
-                    classification, reason = "DEFERRED_ROWS", "DEFERRED_RELEASE_FIELD"
-                elif flat_status is None and contract.get("POLICY") == "metadata-v1" and not _metadata_rule_candidates(row, contract) and not row.get("APPROVAL_STATUS"):
+                elif flat_status is None and not row.get("APPROVAL_STATUS") and any(
+                        row.get(key) not in (None, "") for key in (
+                            "TRANSFORM_ID", "TRANSFORM_PARAMS", "REPRESENTATION",
+                            "REPRESENTATION_PARAMS", "VALUE_CONSTRAINTS")):
+                    classification, reason = "BLOCKED_ROWS", "UNAPPROVED_EXECUTABLE_METADATA"
+                elif flat_status is None and contract.get("POLICY") == "metadata-v1" and not row.get("APPROVAL_STATUS"):
                     classification = "DEFERRED_ROWS" if contract.get("UNREVIEWED_ROWS") == "DEFER" else "BLOCKED_ROWS"
                     reason = "MISSING_APPROVED_METADATA"
                 elif flat_status is None and (_model_token(row.get("STATUS")) in {"deferred", "blocked", "tbd", "moreinformationneeded", "notmapped"} or _model_token(row.get("MAPPING_TYPE")) == "tbd"):
@@ -967,7 +891,7 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                                                  "target_path": path, "resolved_model": path_model})
                     continue
                 canonical = dict(row)
-                canonical_path = path if flat_status else _apply_mapping_path_rules(canonical, contract, paths)
+                canonical_path = path
                 owner = _owner_for_path(canonical_path, paths)
                 if owner is None:
                     report["BLOCKED_ROWS"] += 1

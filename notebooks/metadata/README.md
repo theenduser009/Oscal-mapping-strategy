@@ -40,11 +40,16 @@ Unresolved Notes, control paths, workflow fields and AR candidates remain
 unapproved. The review workbook is the unchanged compilation snapshot, not
 another executable input.
 
-The prior catalog is frozen under tests/fixtures solely as a regression oracle.
-Cell Three temporarily retains its older metadata input branch for compatibility
-tests; the deployed settings contain no rules for that branch. Retiring this
-branch and consolidating the remaining structural settings are unfinished
-simplification work, not requests for more owner approval.
+The prior catalog and compiler are frozen under tests/fixtures solely as
+historical references. The active compiler has no catalog matching or
+source-field path-rewrite branch. Obsolete field-rule settings are rejected,
+not silently ignored. Explicit approved mapping APIs and the readable CSV both
+compile through the shared engine; neither can borrow approval from a catalog.
+
+Structural settings still include the required metadata-title source and the
+AR17 release-completeness gate. Those are preserved, not removed by deleting a
+file. The remaining design work is giving these assembly/identity settings a
+clear governed home without another duplicate field-mapping source.
 
 Normal writes remain disabled. SSP's earlier DEV reload is still accepted;
 the old-row reduction remains unexplained. AR has no verified destination and

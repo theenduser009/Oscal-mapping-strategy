@@ -26,6 +26,7 @@ except ImportError:
 
 ROOT = Path(__file__).parents[1]
 CELLS = ROOT / "notebooks" / "cells"
+LEGACY_CELL_3_PATH = ROOT / "tests/fixtures/legacy_cell3_catalog_input.py"
 SSP = "system-security-plan"
 SC = SSP + ".system-characteristics"
 PROPS = SC + ".props[]"
@@ -119,7 +120,7 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
             exec(compile(module, "<test-config>", "exec"), config_ns)
         profiles = config_ns["SOURCE_PROFILES"]
         with contextlib.redirect_stdout(io.StringIO()):
-            result = runpy.run_path(str(CELLS / "03_canonical_mapping_contract.py"),
+            result = runpy.run_path(str(LEGACY_CELL_3_PATH),
                 init_globals={
                     "CONFIG": config_ns["CONFIG"], "re": re, "pd": pd,
                     "MAPPER_CATALOG": config_ns["MAPPER_CATALOG"],

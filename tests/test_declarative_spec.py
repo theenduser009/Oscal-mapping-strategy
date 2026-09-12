@@ -105,10 +105,9 @@ class DeclarativeSpecTests(unittest.TestCase):
             "RULE_ID": "approved-example", "SOURCE_FIELDS": [row["SOURCE_FIELD_NAME"]],
             "OWNER_PATH": routing.SSP, "APPROVAL_STATUS": "APPROVED", "TRANSFORM_ID": "text",
         }]
-        contexts = self.ns["compile_mapping_contexts"](
-            {"source-one": [row]}, routing.registry(), [routing.profile(("SSP",))], models)
-        self.assertEqual("BLOCKED", contexts[0]["routing_report"]["STATUS"])
-        self.assertIn("Constraints conflict", contexts[0]["routing_report"]["CONTRACT_ERROR"])
+        with self.assertRaisesRegex(ValueError, "Field rules belong in the mapping artifact"):
+            self.ns["compile_mapping_contexts"](
+                {"source-one": [row]}, routing.registry(), [routing.profile(("SSP",))], models)
 
     def test_frozen_dispatchers_are_not_available_in_active_engine(self):
         for symbol in ("_legacy_prepare_model_context", "MODEL_GRAPH_POLICIES", "_mapping_handler_for_row",

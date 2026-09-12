@@ -24,9 +24,10 @@ guard are retained; other compiled entries stay deferred or excluded.
 
 All 593 local tests pass, including frozen SSP and AR17 output parity.
 
-Structural settings still require JSON, and the older compiler input branch is
-not yet retired. This is not the final catalog-free release. No approval is
-pending and no notebook rerun is requested while that simplification continues.
+The older catalog matching and path-rewrite branch is removed from active code.
+Structural settings still require JSON. This is not the final catalog-free
+release. No approval is pending and no notebook rerun is requested while the
+remaining structural simplification continues.
 Normal writes remain disabled. Earlier setup/run instructions below are
 historical and do not override [current status](../../docs/CURRENT_STATUS.md).
 
