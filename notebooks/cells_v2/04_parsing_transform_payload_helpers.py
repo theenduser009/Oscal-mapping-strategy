@@ -1625,4 +1625,3 @@ def _prepare_model_context(context, model_key, source_system, source_table):
 
 
 print("Cell 4 metadata runtime initialized")
-

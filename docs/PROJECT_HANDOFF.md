@@ -1,33 +1,37 @@
 # Project handoff - read this before resuming
 
 
-## Current action - live preview blocked by scalar/collection metadata conflict
+## Current action - rerun Cell Three preview with scalar legacy fix
 
-The owner-provided Snowflake screenshot shows Cell Three failing during
-`decode_registry_model_contracts(...)` with:
+The owner confirmed that the guarded registry cleanup completed with fifteen
+retired DEV columns removed, twelve columns remaining and an unchanged retained
+fingerprint. Do not repeat registry setup or cleanup.
 
-```text
-ValueError: Scalar object operator cannot define collection identity metadata
-```
+The following V2 run passed Cell Two and stopped in Cell Three before graph
+construction or target DML with
+`Scalar object operator cannot define collection identity metadata`. The fix is
+limited to Cell Three: `INSTANCE_KEY_RULE` and `ITEM_PATH` are interpreted only
+for collection rows. Legacy values on a scalar registry row are ignored in the
+compiled runtime contract; true collections retain strict identity and item-path
+validation. Cell Four consumes that normalized contract.
 
-The failure occurs before `compile_mapping_contexts(...)` completes. No graph
-build, persistence stage or target DML is established by this evidence. The
-screenshot does not expose the offending model or registry path.
+The maintained Cell Three, V2 page and combined notebook are synchronized. All
+**698 local tests pass**, including the new scalar Cell Three-to-Four boundary,
+accepted SSP/CIA11/AR17 parity, metadata-only third-model behavior, PK/FK,
+idempotency and preview safety. Cells One, Two and Four through Seven have no
+runtime logic change. Normal writes remain disabled; this is not live Snowflake
+acceptance.
 
-**Next action:** perform only a read-only inspection of active registry rows to
-identify any scalar-object operator carrying collection identity metadata.
-Report the exact model, node path, operator, collection flag, instance-key rule,
-item path and parent-instance identity setting. Do not weaken the decoder guard,
-update metadata or enable writes. See the
-[dated failure checkpoint](checkpoints/2026-09-12-scalar-object-collection-identity-failure.md).
-
-This runtime failure supersedes the earlier instruction to proceed directly
-with the matching seven-cell preview. The corrected local release and its 685
-passing tests remain local evidence; this screenshot is the current live
-checkpoint.
+**Next action:** if the session where Cell Two passed is still open, replace only
+[V2 Cell Three](../notebooks/cells_v2/03_canonical_mapping_contract.py), run it,
+then run the existing Cells Four through Seven with `EXECUTE_WRITES = False`.
+If the session restarted, run the matching V2 Cells One through Seven in order.
+Share the Cell Seven aggregate report. Do not rerun registry SQL or enable
+writes. See the
+[fix checkpoint](checkpoints/2026-09-12-cell3-scalar-legacy-identity-fix.md).
 
 
-## Current action - remove retired DEV registry columns
+## Previous action - remove retired DEV registry columns
 
 The lean runtime is implemented locally. Cell One and Cell Three now compile
 the maintained mapping CSV with the original nine registry fields plus only

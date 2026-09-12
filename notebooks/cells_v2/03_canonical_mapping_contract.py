@@ -517,8 +517,11 @@ def _decode_registry_element(row, root, by_path):
     operator = _registry_operator(row)
     collection = _registry_meta_bool(row, "IS_COLLECTION")
     parent = _registry_meta_text(row, "PARENT_NODE_PATH")
-    key_rule = _registry_meta_text(row, "INSTANCE_KEY_RULE")
-    item_path = _registry_meta_text(row, "ITEM_PATH")
+    # INSTANCE_KEY_RULE and ITEM_PATH describe collection instances. Some
+    # established scalar registry rows retain legacy values in those columns;
+    # they do not change scalar identity and must not make a valid path fail.
+    key_rule = _registry_meta_text(row, "INSTANCE_KEY_RULE") if collection else None
+    item_path = _registry_meta_text(row, "ITEM_PATH") if collection else None
     if operator != "object" and not collection:
         raise ValueError("Registry operator requires a collection")
     identities = {"record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
@@ -535,10 +538,10 @@ def _decode_registry_element(row, root, by_path):
         raise ValueError("Linked identity operator requires reviewed user-list item path")
     if operator == "object" and collection and (key_rule, item_path) != ("VALUE", "$"):
         raise ValueError("Object-list operator requires VALUE identity at the root item path")
-    if operator == "object" and not collection and (key_rule is not None or item_path is not None):
-        raise ValueError("Scalar object operator cannot define collection identity metadata")
-    parameters = {"registry_contract": {"parent_path": parent, "is_collection": collection,
-                                        "instance_key_rule": key_rule, "item_path": item_path}}
+    registry_contract = {"parent_path": parent, "is_collection": collection}
+    if collection:
+        registry_contract.update(instance_key_rule=key_rule, item_path=item_path)
+    parameters = {"registry_contract": registry_contract}
     if parent:
         parent_operator = _registry_operator(by_path[parent])
         if _registry_meta_bool(by_path[parent], "IS_COLLECTION"):
@@ -987,4 +990,3 @@ print("Mapping routes:", [
     {"source": context["source_key"], "model": context["config"]["OSCAL_MODEL"],
      **context["routing_report"]} for context in MAPPING_CONTEXTS
 ])
-

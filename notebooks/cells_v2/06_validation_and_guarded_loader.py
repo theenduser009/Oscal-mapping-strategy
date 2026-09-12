@@ -904,4 +904,3 @@ def _load_logical_graph(nodes, edges, contract, expected_records=None):
 
 validate_and_load_oscal._oscal_loader_release = "oscal-shared-daily-upsert-v2"
 print("Cell 6 validation and loader initialized; execution remains in Cell 7")
-

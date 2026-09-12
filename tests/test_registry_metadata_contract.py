@@ -253,6 +253,30 @@ class RegistryMetadataContractTests(unittest.TestCase):
         }]
         self.assertNotIn(future_path, self.decode(ignored)[base.MODEL]["ELEMENTS"])
 
+    def test_scalar_rows_ignore_legacy_collection_identity_metadata(self):
+        rows = annotated_registry()
+        scalar = next(row for row in rows if row["NODE_PATH"] == base.SUMMARY)
+        scalar["INSTANCE_KEY_RULE"] = "SINGLETON"
+        scalar["ITEM_PATH"] = "$"
+
+        contract = self.decode(rows)[base.MODEL]
+        registry_contract = contract["ELEMENTS"][base.SUMMARY]["parameters"][
+            "registry_contract"
+        ]
+        self.assertEqual(
+            {"parent_path": base.ROOT_PATH, "is_collection": False},
+            registry_contract,
+        )
+
+        context = self.compile(rows=rows)
+        config = context["config"]
+        self.ns["_prepare_model_context"](
+            context,
+            config["OSCAL_MODEL"],
+            config["SOURCE_SYSTEM_NAME"],
+            config["SOURCE_TABLE_NAME"],
+        )
+
     def test_object_list_shape_is_narrow(self):
         path = base.SUMMARY + ".identifiers[]"
         row = {
