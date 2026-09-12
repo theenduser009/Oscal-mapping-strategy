@@ -1,5 +1,32 @@
 # Project handoff - read this before resuming
 
+
+## Current action - live preview blocked by scalar/collection metadata conflict
+
+The owner-provided Snowflake screenshot shows Cell Three failing during
+`decode_registry_model_contracts(...)` with:
+
+```text
+ValueError: Scalar object operator cannot define collection identity metadata
+```
+
+The failure occurs before `compile_mapping_contexts(...)` completes. No graph
+build, persistence stage or target DML is established by this evidence. The
+screenshot does not expose the offending model or registry path.
+
+**Next action:** perform only a read-only inspection of active registry rows to
+identify any scalar-object operator carrying collection identity metadata.
+Report the exact model, node path, operator, collection flag, instance-key rule,
+item path and parent-instance identity setting. Do not weaken the decoder guard,
+update metadata or enable writes. See the
+[dated failure checkpoint](checkpoints/2026-09-12-scalar-object-collection-identity-failure.md).
+
+This runtime failure supersedes the earlier instruction to proceed directly
+with the matching seven-cell preview. The corrected local release and its 685
+passing tests remain local evidence; this screenshot is the current live
+checkpoint.
+
+
 ## Current action - remove retired DEV registry columns
 
 The lean runtime is implemented locally. Cell One and Cell Three now compile
