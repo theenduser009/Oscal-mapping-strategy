@@ -82,3 +82,26 @@ before graph loading or target writes. The next investigation must resolve the
 459 unknown model labels and separately account for the 58 rows missing approved
 metadata. This checkpoint does not authorize changing those labels, bypassing
 the routing guard, or running in commit mode.
+
+
+## Unknown-model-label diagnostic
+
+A follow-up read-only diagnostic accounted for all 459 `UNKNOWN_MODEL_LABEL`
+rows by mapping model-label/target-path pairs:
+
+| Model label | Target path | Rows |
+|---|---|---:|
+| Multiple - See Notes | Multiple - See Notes | 1 |
+| N/A - Calculated | empty | 37 |
+| Profile | Multiple - See Notes | 1 |
+| Profile | profile.imports[] | 1 |
+| Security Assessment Plan | security-assessment-plan.tasks[] | 2 |
+| Security Assessment Plan | security-assessment-plan.tasks[].remarks | 1 |
+| TBD | empty | 413 |
+| TBD | All Nulls | 1 |
+| TBD | Multiple - See Notes | 1 |
+| TBD | system-security-plan.system-characteristics.security-impact-level | 1 |
+
+The pair counts total 459. Most blocked rows are therefore `TBD` with an empty
+target path (413 rows), followed by `N/A - Calculated` with an empty target path
+(37 rows). This diagnostic was observational and does not show any target DML.
