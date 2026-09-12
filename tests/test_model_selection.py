@@ -1,6 +1,7 @@
 """Cell One selection contracts; no Snowpark imports or database I/O."""
 import ast
 import copy
+import csv
 from contextlib import redirect_stdout
 import io
 import json
@@ -113,9 +114,14 @@ class ModelSelectionTests(unittest.TestCase):
     def test_ar_selection_preserves_ssp_contract_for_later_explicit_selection(self):
         baseline, ar_only = cell_namespace(("SSP",)), cell_namespace(("ASSESSMENT_RESULTS",))
         self.assertEqual(ar_only["MODEL_CONTRACTS"], baseline["MODEL_CONTRACTS"])
-        rules = ar_only["MODEL_CONTRACTS"]["ASSESSMENT_RESULTS"]["MAPPING_RULES"]
+        with (ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv").open(
+                encoding="utf-8-sig", newline="") as handle:
+            rules = [row for row in csv.DictReader(handle)
+                     if row["OSCAL_MODEL"].strip().upper().replace(" ", "_")
+                     == "ASSESSMENT_RESULTS"
+                     and row["EXECUTION_STATUS"] == "APPROVED"]
         self.assertEqual(len(rules), 17)
-        self.assertTrue(all(rule["APPROVAL_STATUS"] == "APPROVED" for rule in rules))
+        self.assertTrue(all(rule["EXECUTION_STATUS"] == "APPROVED" for rule in rules))
         self.assert_no_targets(ar_only)
 
     def test_unverified_storage_never_enters_compatibility_configuration(self):

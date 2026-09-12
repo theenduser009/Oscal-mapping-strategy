@@ -9,7 +9,22 @@
 
 ## Non-negotiable metadata-driven architecture
 
-- Latest owner clarification: keep the simple seven-cell configuration and one maintained Excel/CSV mapping source plus registry. A second hand-maintained JSON catalog is not the final design; current code still requires it. The owner reviewed Mapping/REVIEW.md's 147-entry compilation and authorized continuing. Do not request the original 608-row file again as a blanket blocker. Preserve accepted rule evidence and all unresolved/deferred boundaries; do not infer approval from workbook verification. Read the latest simplification checkpoint before run advice.
+- Latest completed step: executable field rules are maintained once in
+  Mapping/ARCHER_OSCAL_MAPPINGS.csv. The 147 reviewed occurrences and one
+  existing guard preserve source Notes and accepted scope. Structural settings
+  remain in mapper_contract.v1.json, without MAPPING_RULES/PATH_RULES/EXCLUDED_FIELDS.
+  Do not claim every JSON dependency or the older compiler compatibility branch
+  is removed. No owner approval is pending for the authorized simplification.
+  Retire that branch and reconcile remaining structural settings next.
+
+- Latest owner clarification: final design must use the simple configuration,
+  one maintained Excel/CSV mapping source (including Notes), and registry, without
+  a second hand-maintained JSON catalog duplicating the sheet. Current code still
+  requires that catalog; do not claim it is removed. Read the latest simplification
+  checkpoint before proposing a run. The owner reviewed the compiled 147-entry
+  workbook in Mapping/REVIEW.md and authorized continuing. Use those documents
+  plus accepted rule evidence; do not repeatedly request the original CSV.
+  Unseen rows remain out of scope, and blanks or ambiguous Notes are not approval.
 
 - The owner's prime requirement is metadata-driven execution, not merely metadata validation of hardcoded field rules.
 - Excel/CSV governs approved source-to-target mappings; the registry governs hierarchy/identity; the reviewed deployment catalog supplies executable transforms, parameters, operators, source bindings and storage contracts.

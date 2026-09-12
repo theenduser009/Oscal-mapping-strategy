@@ -1,4 +1,4 @@
-"""Regression from artifact row through Cells 3, 4 and graph construction.
+"""Historical catalog regression through Cells 3, 4 and graph construction.
 
 Run with the bundled Python runtime (pandas installed). Snowflake transport and
 unrelated component lookup I/O are fakes; mapping and graph logic are real.
@@ -97,7 +97,9 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
         # exclude Snowflake imports/session acquisition, not its dependencies.
         import copy
         config_ns = {"datetime": datetime, "copy": copy, "Path": Path, "json": json,
-                     "__file__": str(CELLS / "01_initialization_and_configuration.py")}
+                     "__file__": str(CELLS / "01_initialization_and_configuration.py"),
+                     "_historical_catalog": json.loads(
+                         (ROOT / "tests/fixtures/mapper_contract_pre_flat.json").read_text(encoding="utf-8"))}
         tree = ast.parse((CELLS / "01_initialization_and_configuration.py").read_text(encoding="utf-8"))
         configuration = []
         for node in tree.body:
@@ -109,6 +111,8 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
                     continue
                 if "SELECTED_MODELS" in names:
                     node.value = ast.Constant(value="SSP")
+                if "MAPPER_CATALOG" in names:
+                    node.value = ast.Name(id="_historical_catalog", ctx=ast.Load())
             configuration.append(node)
         module = ast.fix_missing_locations(ast.Module(body=configuration, type_ignores=[]))
         with contextlib.redirect_stdout(io.StringIO()):

@@ -1,5 +1,32 @@
 # Mapper simplification: verified cleanup and compiled mapping review
 
+## Completed field-rule migration
+
+No owner approval is pending. All 61 prior execution contracts now compile from
+the readable mapping CSV: 60 approved rules and one existing populated-value
+guard. The 147 reviewed source occurrences retain exact paths, labels, types,
+Notes and provenance. Other entries remain 85 deferred and two excluded.
+
+The deployed settings shrink from 1,705 lines to 364 lines by removing
+MAPPING_RULES, PATH_RULES and EXCLUDED_FIELDS. Source bindings, element behavior,
+identity and destination settings remain explicit; the JSON dependency is not
+yet removed. The compiler's older input branch is also not yet retired.
+Do not describe this staged migration as the final simplified architecture.
+
+All 593 local tests pass; generated notebook pages are synchronized.
+Regression coverage pins the original 61 rule contracts independently of the
+new artifact, the accepted SSP graph fingerprint and AR17 business output.
+All eleven CIA routes, reference parameters and the populated-value guard are
+unchanged. Flat metadata also works for a synthetic third model, without the
+catalog matching functions. UTF-8 Notes and literal N/A labels survive input.
+Unsupported member paths fail rather than being silently ignored.
+
+Remaining simplification: retire the compatibility input branch and consolidate
+structural settings without guessing registry capabilities. The existing SSP
+guard-presence gap is recorded: the guard currently executes, but removing its
+CSV row is not detected by an SSP required-rule list. AR's exact required IDs
+remain enforced. No new live acceptance or database write is claimed.
+
 The owner requires a simple seven-cell interface, one human-maintained Excel/CSV
 mapping source, registry-owned structure/identity, reusable transformations and
 the existing guarded writer. A second hand-maintained JSON catalog duplicating

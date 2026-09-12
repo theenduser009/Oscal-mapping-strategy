@@ -190,7 +190,7 @@ class MultiModelInputs(unittest.TestCase):
     def setUp(self):
         self.ns = namespace()
         self.real_header_reader = self.ns["_read_mapping_header"]
-        self.ns["_read_mapping_header"] = lambda filename: ["SOURCE_FIELD_NAME"]
+        self.ns["_read_mapping_header"] = lambda filename, encoding="cp1252": ["SOURCE_FIELD_NAME"]
 
     def test_source_is_cached_once_before_counts_and_snapshot_is_retained(self):
         session = Session({"RAW_ONE": [raw("a", 1), raw("b", 2)]})
@@ -276,8 +276,32 @@ class MultiModelInputs(unittest.TestCase):
         with patch.object(pd, "read_csv", return_value=original.copy(deep=True)) as read:
             frame = self.ns["load_mapping_rows"](selected)
         self.assertEqual(["ONE"], frame["ARCHER FIELD NAME"].tolist())
-        read.assert_called_once_with("one.csv", encoding="cp1252", dtype=str)
+        read.assert_called_once_with("one.csv", encoding="cp1252", dtype=str,
+                                     keep_default_na=False)
         pd.testing.assert_frame_equal(before, original)
+
+    def test_live_flat_mapping_file_keeps_utf8_notes_and_source_binding(self):
+        catalog = json.loads((ROOT / "notebooks/metadata/mapper_contract.v1.json").read_text(encoding="utf-8"))
+        selected = copy.deepcopy(catalog["SOURCES"][0])
+        selected["MAPPING_FILE"] = str(ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv")
+        with patch.dict(self.ns, {"_read_mapping_header": self.real_header_reader}):
+            actual = self.ns["load_mapping_rows"](selected)
+        with open(selected["MAPPING_FILE"], encoding="utf-8", newline="") as handle:
+            expected = list(csv.DictReader(handle))
+        self.assertEqual(len(actual), len(expected))
+        self.assertEqual(actual["NOTES"].fillna("").tolist(),
+                         [row["NOTES"] for row in expected])
+        self.assertEqual(set(actual["SOURCE_KEY"]), {"source-one"})
+
+    def test_csv_literal_na_and_unicode_are_not_lost(self):
+        text = 'SOURCE_FIELD_NAME,NOTES\nN/A,"Keep nulls — do not drop"\n'
+        selected = profile()
+        selected["MAPPING_ENCODING"] = "utf-8-sig"
+        read_csv = pd.read_csv
+        with patch.object(pd, "read_csv", side_effect=lambda filename, **kwargs: read_csv(io.StringIO(text), **kwargs)):
+            actual = self.ns["load_mapping_rows"](selected)
+        self.assertEqual(actual.iloc[0]["SOURCE_FIELD_NAME"], "N/A")
+        self.assertEqual(actual.iloc[0]["NOTES"], "Keep nulls — do not drop")
 
     def test_explicit_mapping_source_value_does_not_default_to_another_source(self):
         selected = profile()

@@ -1,5 +1,39 @@
 # Current Status
 
+## Current action - field rules moved to the mapping CSV
+
+No owner approval is pending. The owner reviewed the compilation and authorized
+the simplification; earlier approval prompts were stale.
+
+Executable field rules now live in [ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv),
+with [readable columns](../Mapping/MAPPING_COLUMNS.md). The 147 original source
+occurrences retain exact field names, labels, paths, types, Notes and provenance.
+One additional, explicitly labelled existing populated-value guard is preserved.
+There are 60 approved rules, one guard, 85 deferred rows and two excluded helpers.
+Compilation review did not approve unresolved mappings or unseen source rows.
+
+The deployed settings no longer contain field rules, source-field path rewrites
+or exclusions. They still contain structural/source/lookup/destination settings
+that the current registry does not fully hold. **The JSON dependency is not yet
+removed.** The old input compatibility branch also remains in Cell Three.
+This is the completed field-rule migration, not the final catalog-free release.
+
+All 593 local tests pass. Regression checks preserve all 61 execution contracts, the accepted SSP
+graph fingerprint, all eleven CIA mappings and AR17 output. Original Notes
+conflicts and accepted/deferred boundaries remain unchanged. Source input now
+preserves UTF-8 Notes and literal N/A labels. V2 and combined notebook pages are
+generated from the maintained cells. No new Snowflake run has been accepted.
+
+**Next:** retire the older field-rule input branch and consolidate the remaining
+structural settings without introducing guessed identities or a second
+hand-maintained mapping catalog. No additional owner approval is needed for the
+authorized refactor. No notebook rerun, normal write, reload or registry mutation
+is requested during that work. Normal writes remain disabled.
+
+Earlier SSP persisted scope, AR17 in-memory-only acceptance and the unexplained
+old-row reduction remain unchanged. Prior run instructions and requests for
+the full CSV or repeated approval below are superseded.
+
 ## Current action - reviewed compilation; simplify accepted rules
 
 The owner reviewed the [147-entry compiled workbook](../Mapping/REVIEW.md),
@@ -28,7 +62,25 @@ Earlier run advice and requests for the complete CSV below are superseded.
 
 Last reconciled: 2026-09-11
 
-## Current action - registry-first routing correction; live PREVIEW pending
+## Current action - simplify against the actual mapping CSV; no rerun requested
+
+The owner requires the original simple seven-cell interface and Excel/CSV plus
+registry as the maintained mapping metadata, without a second duplicate JSON
+catalog. The [simplification audit](checkpoints/2026-09-12-mapper-simplification-audit.md)
+records the recovered original design, current dependencies and exact cleanup.
+Cell Three's unused Snowpark metadata upload is removed, along with three unused
+helpers and one ignored compatibility argument. All **567 tests pass**, including
+whole-cell initialization checks. The existing JSON dependency has **not** been
+removed; this is not the final Excel-only release or a live accepted run.
+
+The eleven CIA mappings remain intact and match the accepted implementation.
+The complete 608-row source mapping CSV is absent from both the current GitHub
+tree and the saved earlier checkout/history. Next: obtain the actual mapping
+CSV from notebook Files, including full Notes, and finish the rules/dependency
+reconciliation before finalizing simplified code. No new notebook run, mapping
+approval, database write or reload is requested. Accepted SSP/AR scope is unchanged.
+
+## Previous action - registry-first routing correction (run advice superseded)
 
 **Implemented and regression-verified:** the same seven-cell workflow now excludes the old SSP/AR engines from deployed Cell Four; their original code is frozen for tests only. One compiled metadata plan controls mapping decisions. Optional declarative constraints cover cardinality, required/absent-value policy, type, enum and numeric bounds. Cell Five, Six and Seven retain the shared graph, guarded writer and runner. Original split cells are the maintained source; a developer-only generator keeps V2/combined copies synchronized.
 

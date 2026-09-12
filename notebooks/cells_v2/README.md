@@ -1,18 +1,34 @@
-# Mapper V2 - individual cells
+# Mapper V2 — individual cells
 
 Seven separate, copy-ready Python files for the published shared mapper. Each cell is generated from `notebooks/cells/`. The current revision executes reviewed mapping metadata through the shared engine; publication does not establish live acceptance. Cell Four no longer includes the historical SSP/AR engines; their frozen copy is test-only, not a notebook dependency.
 
 ## Open each cell
 
-1. [Cell 1 - Configuration](01_initialization_and_configuration.py)
-2. [Cell 2 - Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)
-3. [Cell 3 - Mapping contracts and routing](03_canonical_mapping_contract.py)
-4. [Cell 4 - Parsing and transformations](04_parsing_transform_payload_helpers.py)
-5. [Cell 5 - Shared graph construction](05_registry_graph_builder.py)
-6. [Cell 6 - Validation and guarded persistence](06_validation_and_guarded_loader.py)
-7. [Cell 7 - Orchestration](07_mapper_orchestrator.py)
+1. [Cell 1 — Configuration](01_initialization_and_configuration.py)
+2. [Cell 2 — Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)
+3. [Cell 3 — Mapping contracts and routing](03_canonical_mapping_contract.py)
+4. [Cell 4 — Parsing and transformations](04_parsing_transform_payload_helpers.py)
+5. [Cell 5 — Shared graph construction](05_registry_graph_builder.py)
+6. [Cell 6 — Validation and guarded persistence](06_validation_and_guarded_loader.py)
+7. [Cell 7 — Orchestration](07_mapper_orchestrator.py)
 
 ## One model selector
+
+### Current field-rule migration
+
+The maintained input is now [ARCHER_OSCAL_MAPPINGS.csv](../../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
+Its [column guide](../../Mapping/MAPPING_COLUMNS.md) preserves original paths and
+Notes alongside explicit execution choices. The settings file no longer
+duplicates field rules. All 60 approved mappings and the existing populated-value
+guard are retained; other compiled entries stay deferred or excluded.
+
+All 593 local tests pass, including frozen SSP and AR17 output parity.
+
+Structural settings still require JSON, and the older compiler input branch is
+not yet retired. This is not the final catalog-free release. No approval is
+pending and no notebook rerun is requested while that simplification continues.
+Normal writes remain disabled. Earlier setup/run instructions below are
+historical and do not override [current status](../../docs/CURRENT_STATUS.md).
 
 ### Current cleanup and run hold
 

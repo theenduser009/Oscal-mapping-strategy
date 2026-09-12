@@ -21,8 +21,8 @@ import uuid
 
 session = get_active_session()
 
-# One selector. Capabilities, source bindings, mappings, and destinations
-# come from the reviewed metadata artifact, not per-model Python branches.
+# One selector. Field mappings live only in the mapping CSV. The settings file
+# retains source bindings, element behavior and verified destinations.
 SELECTED_MODELS = ("SSP", "ASSESSMENT_RESULTS")
 MAPPER_METADATA_FILE = "mapper_contract.v1.json"
 
@@ -42,7 +42,7 @@ def _selected_model_keys(selection, model_contracts):
 
 
 def _load_mapper_catalog(filename):
-    # In Snowflake, upload the reviewed JSON alongside the mapping CSV.
+    # Structural settings only; executable field rules belong in the CSV.
     # Local repository execution may resolve the checked-in deployment artifact.
     path = Path(filename)
     if not path.is_file() and "__file__" in globals():

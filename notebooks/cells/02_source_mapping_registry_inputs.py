@@ -67,10 +67,10 @@ def load_source_input(active_session, profile):
                     "DUPLICATE_SOURCE_ROWS_RESOLVED": count - selected_count}, candidates
 
 
-def _read_mapping_header(mapping_file):
+def _read_mapping_header(mapping_file, encoding="cp1252"):
     # Inspect the real header before pandas can mangle repeated column names.
     # Use the same encoding and CSV quoting rules as the mapping-file read.
-    with open(mapping_file, encoding="cp1252", newline="") as handle:
+    with open(mapping_file, encoding=encoding, newline="") as handle:
         header = next((row for row in csv.reader(handle)
                        if row and any(value.strip() for value in row)), None)
     if header is None:
@@ -79,11 +79,15 @@ def _read_mapping_header(mapping_file):
 
 
 def load_mapping_rows(profile):
+    encoding = profile.get("MAPPING_ENCODING", "cp1252")
     header = [str(name).strip().upper()
-              for name in _read_mapping_header(profile["MAPPING_FILE"])]
+              for name in _read_mapping_header(profile["MAPPING_FILE"], encoding)]
     if len(header) != len(set(header)):
         raise ValueError("Duplicate normalized mapping columns")
-    frame = pd.read_csv(profile["MAPPING_FILE"], encoding="cp1252", dtype=str)
+    frame = pd.read_csv(profile["MAPPING_FILE"], encoding=encoding, dtype=str,
+                        keep_default_na=False)
+    # Preserve literal labels such as N/A; only empty cells are absent metadata.
+    frame = frame.replace("", None)
     frame = frame.where(lambda data: data.notna(), None)
     frame.columns = [str(name).strip().upper() for name in frame.columns]
     if len(frame.columns) != len(set(frame.columns)):

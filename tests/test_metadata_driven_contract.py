@@ -13,6 +13,7 @@ import test_multi_model_graph as legacy_graph
 
 ROOT = Path(__file__).resolve().parents[1]
 CELL3 = ROOT / "notebooks/cells/03_canonical_mapping_contract.py"
+LEGACY_CATALOG = ROOT / "tests/fixtures/mapper_contract_pre_flat.json"
 MODEL = "SYNTHETIC_THIRD_MODEL"
 ROOT_PATH = "synthetic-model"
 RESULT = ROOT_PATH + ".results[]"
@@ -279,7 +280,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
                 "FIELD_ONE": "first", "FIELD_TWO": "second"}}])
 
     def test_partial_executable_metadata_cannot_silently_use_legacy_catalog_approval(self):
-        catalog = json.loads((ROOT / "notebooks/metadata/mapper_contract.v1.json").read_text(encoding="utf-8"))
+        catalog = json.loads(LEGACY_CATALOG.read_text(encoding="utf-8"))
         original, _, registry, _ = legacy_graph.ssp_fixture(legacy_graph.namespace(legacy=True))
         source = copy.deepcopy(catalog["SOURCES"][0])
         source["MODEL_KEYS"] = ("SSP",)
@@ -305,7 +306,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
                 self.assertFalse(context["config"]["EXECUTE_WRITES"])
 
     def catalog_context(self, original, registry):
-        catalog = json.loads((ROOT / "notebooks/metadata/mapper_contract.v1.json").read_text(encoding="utf-8"))
+        catalog = json.loads(LEGACY_CATALOG.read_text(encoding="utf-8"))
         model = original["config"]["OSCAL_MODEL"]
         source = copy.deepcopy(catalog["SOURCES"][0])
         source["MODEL_KEYS"] = (model,)

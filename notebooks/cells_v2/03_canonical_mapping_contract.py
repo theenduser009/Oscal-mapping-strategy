@@ -102,6 +102,143 @@ def _compile_value_constraints(value):
     return rules
 
 
+
+FLAT_MAPPING_COLUMNS = {
+    "EXECUTION_STATUS", "RUNTIME_TARGET_PATH", "ALLOWED_VALUES", "VALUE_MAP",
+    "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE", "REFERENCE_TYPE",
+    "LOOKUP_KEY", "DESCRIPTION_REQUIRED",
+}
+
+
+def _flat_mapping_status(row):
+    if not any(row.get(key) not in (None, "") for key in FLAT_MAPPING_COLUMNS):
+        return None
+    status = row.get("EXECUTION_STATUS")
+    if not isinstance(status, str) or status.upper() not in {
+        "APPROVED", "BLOCKED_IF_POPULATED", "DEFERRED", "EXCLUDED",
+    }:
+        raise ValueError("Flat mapping requires an explicit valid EXECUTION_STATUS")
+    return status.upper()
+
+
+def _flat_text(row, key, required=False):
+    value = row.get(key)
+    if value in (None, "") and not required:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(key + " must contain nonblank text")
+    return value.strip()
+
+
+def _flat_items(row, key):
+    value = _flat_text(row, key)
+    if value is None:
+        return []
+    items = [item.strip() for item in value.split("|")]
+    if any(not item for item in items) or len(set(items)) != len(items):
+        raise ValueError(key + " contains empty or duplicate entries")
+    return items
+
+
+def _compile_flat_mapping(row, elements):
+    """Translate readable sheet columns to inert runtime parameters, never code."""
+    status = _flat_mapping_status(row)
+    if status not in {"APPROVED", "BLOCKED_IF_POPULATED"}:
+        raise ValueError("Non-executable row cannot enter the compiled plan")
+    transform = _flat_text(row, "TRANSFORM_ID", required=True)
+    if transform not in METADATA_TRANSFORM_IDS:
+        raise ValueError("Unknown reusable transform identifier")
+    if status == "BLOCKED_IF_POPULATED" and transform != "reject-populated":
+        raise ValueError("Populated-only guard requires reject-populated transform")
+    rule_id = _flat_text(row, "RULE_ID", required=True)
+    _flat_text(row, "RUNTIME_TARGET_PATH", required=True)
+    owner = row["OWNER_ELEMENT_PATH"]
+    if owner not in elements:
+        raise ValueError("Mapping has no metadata-defined element operator")
+    operator = elements[owner]["operator"]
+    transform_params, representation_params = {}, {}
+    allowed = set()
+    if transform == "security-objective":
+        allowed.add("ALLOWED_VALUES")
+        labels = _flat_items(row, "ALLOWED_VALUES")
+        if labels:
+            transform_params["approved_legacy_values"] = labels
+    if transform == "status-crosswalk":
+        allowed.update({"VALUE_MAP", "OTHER_REMARKS_TEMPLATE"})
+        crosswalk = {}
+        for entry in _flat_items(row, "VALUE_MAP"):
+            if entry.count("=") != 1:
+                raise ValueError("VALUE_MAP entries must be source=target")
+            source, target = (token.strip() for token in entry.split("=", 1))
+            # Match the runtime's stable-property-name normalization exactly.
+            source = re.sub(r"[^a-z0-9]+", "-", source.lower()).strip("-")
+            if not source or not target or source in crosswalk:
+                raise ValueError("VALUE_MAP contains empty or conflicting labels")
+            crosswalk[source] = target
+        if not crosswalk:
+            raise ValueError("Crosswalk transform requires VALUE_MAP")
+        transform_params["crosswalk"] = crosswalk
+        template = _flat_text(row, "OTHER_REMARKS_TEMPLATE")
+        if template is not None:
+            if template.count("{label}") != 1 or any(
+                    brace in template.replace("{label}", "") for brace in "{}"):
+                raise ValueError("OTHER_REMARKS_TEMPLATE requires one {label} placeholder")
+            prefix, suffix = template.split("{label}")
+            transform_params.update(other_remarks_prefix=prefix, other_remarks_suffix=suffix)
+        elif "other" in crosswalk.values():
+            raise ValueError("Crosswalk other value requires an explanation template")
+    if operator == "assignments":
+        allowed.update({"ROLE_ID", "ROLE_TITLE"})
+        representation_params.update(
+            role_id=_flat_text(row, "ROLE_ID", required=True),
+            role_title=_flat_text(row, "ROLE_TITLE", required=True),
+        )
+    if operator == "references":
+        allowed.update({"REFERENCE_TYPE", "LOOKUP_KEY", "DESCRIPTION_REQUIRED"})
+        representation_params["reference_type"] = _flat_text(row, "REFERENCE_TYPE", required=True)
+        binding = _flat_text(row, "LOOKUP_KEY")
+        if binding is not None:
+            representation_params["hydrate_lookup"] = binding
+        required = row.get("DESCRIPTION_REQUIRED")
+        if required not in (None, ""):
+            if binding is None:
+                raise ValueError("DESCRIPTION_REQUIRED needs a LOOKUP_KEY")
+            if type(required) is bool:
+                flag = required
+            elif isinstance(required, str) and required.lower() in {"true", "false"}:
+                flag = required.lower() == "true"
+            else:
+                raise ValueError("DESCRIPTION_REQUIRED must be true or false")
+            representation_params["description_required"] = flag
+    parameters = FLAT_MAPPING_COLUMNS - {"EXECUTION_STATUS", "RUNTIME_TARGET_PATH"}
+    if any(row.get(key) not in (None, "") for key in parameters - allowed):
+        raise ValueError("Flat parameter does not apply to the chosen operation")
+    target = row.get("FIELD_RELATIVE_PATH")
+    if target:
+        if operator not in {"object", "record", "values"}:
+            raise ValueError("Member target is unsupported by the chosen element operator")
+        representation_params["target"] = target
+    for key, expected in (("TRANSFORM_PARAMS", transform_params),
+                          ("REPRESENTATION_PARAMS", representation_params)):
+        if row.get(key) not in (None, "") and _metadata_object(row[key], key) != expected:
+            raise ValueError("Flat columns contradict " + key)
+    if row.get("REPRESENTATION") not in (None, "", operator):
+        raise ValueError("Mapping representation conflicts with its element operator")
+    if row.get("APPROVAL_STATUS") not in (None, "", status):
+        raise ValueError("EXECUTION_STATUS contradicts APPROVAL_STATUS")
+    constraints = _compile_value_constraints(row.get("VALUE_CONSTRAINTS"))
+    if transform == "skip" and (constraints.get("required") or
+                                constraints.get("null_policy") == "reject" or
+                                constraints.get("cardinality", {}).get("min", 0) > 0):
+        raise ValueError("Skip transform conflicts with required-value constraints")
+    result = copy.deepcopy(row)
+    result.update(TRANSFORM_ID=transform, TRANSFORM_PARAMS=transform_params,
+                  REPRESENTATION=operator, REPRESENTATION_PARAMS=representation_params,
+                  VALUE_CONSTRAINTS=constraints, APPROVAL_STATUS=status,
+                  RULE_ID=rule_id, CONTRACT_SOURCE="flat-mapping-artifact")
+    return result
+
+
 def _metadata_rule_candidates(row, contract):
     return [rule for rule in contract.get("MAPPING_RULES", ())
             if row.get("SOURCE_FIELD_NAME") in rule.get("SOURCE_FIELDS", ())]
@@ -129,6 +266,8 @@ def _metadata_rule_matches(row, rule):
 
 
 def _compile_metadata_mapping(row, contract, elements):
+    if _flat_mapping_status(row) is not None:
+        return _compile_flat_mapping(row, elements)
     result = copy.deepcopy(row)
     approval = _model_token(row.get("APPROVAL_STATUS"))
     candidates = _metadata_rule_candidates(row, contract)
@@ -227,6 +366,9 @@ def compile_metadata_plan(context):
     for row in mappings:
         if row.get("RULE_ID"):
             counts[row["RULE_ID"]] = counts.get(row["RULE_ID"], 0) + 1
+    flat_ids = {row["RULE_ID"] for row in mappings if row.get("CONTRACT_SOURCE") == "flat-mapping-artifact"}
+    if any(counts[rule_id] != 1 for rule_id in flat_ids):
+        raise ValueError("Duplicate flat mapping RULE_ID within source/model")
     if any(counts.get(rule_id) != 1 for rule_id in contract.get("REQUIRED_RULE_IDS", ())):
         raise ValueError("Required reviewed mapping row is missing or duplicated")
     reference_groups = []
@@ -440,27 +582,45 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
             selected = []
             for index, row in enumerate(rows):
                 field = row.get("SOURCE_FIELD_NAME")
-                path = str(row.get("OSCAL_ELEMENT_PATH") or "")
+                original_path = str(row.get("OSCAL_ELEMENT_PATH") or "")
+                classification, reason, flat_status = None, None, None
+                try:
+                    flat_status = _flat_mapping_status(row)
+                except ValueError:
+                    classification, reason = "BLOCKED_ROWS", "INVALID_EXECUTION_STATUS"
+                path = (str(row.get("RUNTIME_TARGET_PATH") or "")
+                        if flat_status in {"APPROVED", "BLOCKED_IF_POPULATED"} else original_path)
                 label = _model_token(row.get("OSCAL_MODEL"))
                 labelled = aliases.get(label)
-                root = path.split(".", 1)[0]
-                path_model = root_models.get(root)
-                classification, reason = None, None
-                # Registered path ownership is authoritative; recognized labels
-                # cross-check it. Unknown display labels do not override a path.
-                # Ownership alone never approves an unfinished mapping.
-                if labelled and path_model and labelled != path_model:
+                path_model = root_models.get(path.split(".", 1)[0])
+                original_model = root_models.get(original_path.split(".", 1)[0])
+                source_key = row.get("SOURCE_KEY")
+                # The original row remains provenance. Explicit runtime paths
+                # choose representation, but cannot silently move across models.
+                if classification:
+                    pass
+                elif source_key and source_key not in mapping_rows:
+                    classification, reason = "BLOCKED_ROWS", "UNKNOWN_SOURCE_KEY"
+                elif source_key and source_key != profile["SOURCE_KEY"]:
+                    classification, reason = "EXCLUDED_ROWS", "OTHER_SOURCE"
+                elif flat_status is not None and not source_key:
+                    classification, reason = "BLOCKED_ROWS", "MISSING_SOURCE_KEY"
+                elif flat_status in {"DEFERRED", "EXCLUDED"}:
+                    classification = flat_status + "_ROWS"
+                    reason = "EXPLICIT_" + flat_status
+                elif labelled and path_model and labelled != path_model or (
+                        flat_status and original_model and path_model and original_model != path_model):
                     classification, reason = "BLOCKED_ROWS", "MODEL_PATH_CONFLICT"
-                elif label in deferred_labels or path in deferred_paths:
+                elif flat_status is None and (label in deferred_labels or path in deferred_paths):
                     classification, reason = "DEFERRED_ROWS", "PLACEHOLDER_MAPPING"
                 elif path_model and path_model != model or not path and labelled and labelled != model:
                     classification = "EXCLUDED_ROWS"
-                elif field in contract.get("EXCLUDED_FIELDS", ()):
+                elif flat_status is None and field in contract.get("EXCLUDED_FIELDS", ()):
                     classification, reason = "DEFERRED_ROWS", "DEFERRED_RELEASE_FIELD"
-                elif contract.get("POLICY") == "metadata-v1" and not _metadata_rule_candidates(row, contract) and not row.get("APPROVAL_STATUS"):
+                elif flat_status is None and contract.get("POLICY") == "metadata-v1" and not _metadata_rule_candidates(row, contract) and not row.get("APPROVAL_STATUS"):
                     classification = "DEFERRED_ROWS" if contract.get("UNREVIEWED_ROWS") == "DEFER" else "BLOCKED_ROWS"
                     reason = "MISSING_APPROVED_METADATA"
-                elif _model_token(row.get("STATUS")) in {"deferred", "blocked", "tbd", "moreinformationneeded", "notmapped"} or _model_token(row.get("MAPPING_TYPE")) == "tbd":
+                elif flat_status is None and (_model_token(row.get("STATUS")) in {"deferred", "blocked", "tbd", "moreinformationneeded", "notmapped"} or _model_token(row.get("MAPPING_TYPE")) == "tbd"):
                     classification, reason = "DEFERRED_ROWS", "UNAPPROVED_MAPPING"
                 elif path and path_model is None:
                     classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
@@ -469,7 +629,8 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 elif contract.get("SELECTED_FIELDS") and field not in contract["SELECTED_FIELDS"]:
                     classification = "EXCLUDED_ROWS"
                 elif not path:
-                    classification, reason = "DEFERRED_ROWS", "MISSING_TARGET_PATH"
+                    classification = "BLOCKED_ROWS" if flat_status else "DEFERRED_ROWS"
+                    reason = "MISSING_TARGET_PATH"
                 elif path_model != model:
                     classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
                 if classification:
@@ -481,7 +642,7 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                                                  "target_path": path, "resolved_model": path_model})
                     continue
                 canonical = dict(row)
-                canonical_path = _apply_mapping_path_rules(canonical, contract, paths)
+                canonical_path = path if flat_status else _apply_mapping_path_rules(canonical, contract, paths)
                 owner = _owner_for_path(canonical_path, paths)
                 if owner is None:
                     report["BLOCKED_ROWS"] += 1
@@ -489,7 +650,7 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                                              "severity": "BLOCKED"})
                     continue
                 relative = canonical_path[len(owner):].lstrip(".")
-                if "[]" in relative:
+                if "[]" in relative or flat_status and any(token in relative for token in ("[", "]", "..")):
                     report["BLOCKED_ROWS"] += 1
                     report["ISSUES"].append({"row": index, "field": field, "reason": "UNREGISTERED_COLLECTION",
                                              "severity": "BLOCKED"})
