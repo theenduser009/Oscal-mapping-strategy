@@ -4,6 +4,9 @@ import hashlib
 import io
 import json
 from pathlib import Path
+
+# Historical field-policy regression oracle; never imported by production.
+LEGACY_CELL_4_PATH = Path(__file__).parents[1] / "tests/fixtures/legacy_cell4_pre_declarative.py"
 import re
 import runpy
 import unittest
@@ -44,14 +47,14 @@ SOURCE_FIELDS = (
 
 
 def _run_graph_cells(path, init_globals=None):
-    """Run dependent notebook cells in the same namespace, as Snowflake does."""
+    """Exercise the frozen policy oracle with the shared graph mechanics."""
     import datetime
     import hashlib
     import json
     import re
     import uuid
 
-    cell_4_path = Path(path).with_name("04_parsing_transform_payload_helpers.py")
+    cell_4_path = LEGACY_CELL_4_PATH
     namespace = {
         "datetime": datetime, "hashlib": hashlib, "json": json,
         "re": re, "uuid": uuid, "ARCHER_VALUE_LOOKUP": {},
@@ -63,7 +66,7 @@ def _run_graph_cells(path, init_globals=None):
                  str(cell_4_path), "exec"), namespace)
     for name, value in supplied.items():
         code = getattr(value, "__code__", None)
-        # Keep freshly defined production helpers attached to this namespace.
+        # Keep freshly defined legacy oracle helpers attached to this namespace.
         # Intentional test doubles still override their production counterparts.
         if code is not None and Path(code.co_filename) == cell_4_path:
             continue
@@ -77,7 +80,7 @@ def _load_cell_4():
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
         return runpy.run_path(
-            str(CELL_4_PATH),
+            str(LEGACY_CELL_4_PATH),
             init_globals={
                 "ARCHER_VALUE_LOOKUP": {},
                 "CONFIG": {"SOURCE_SYSTEM_NAME": "unit-test"},
@@ -189,7 +192,7 @@ class SecurityImpactAtomicEmissionTests(unittest.TestCase):
         cases = (
             (
                 CELL_4_PATH,
-                "# %% Cell 4 - Generic parsing, transformation, and payload helpers",
+                "# %% Cell 4 - Shared metadata runtime and reusable transformations",
                 "# %% Cell 5 - Registry-driven canonical node and edge graph",
             ),
             (

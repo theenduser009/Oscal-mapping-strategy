@@ -3,6 +3,9 @@ import hashlib
 import io
 import json
 from pathlib import Path
+
+# Historical field-policy regression oracle; never imported by production.
+LEGACY_CELL_4_PATH = Path(__file__).parents[1] / "tests/fixtures/legacy_cell4_pre_declarative.py"
 import re
 import runpy
 import unittest
@@ -29,7 +32,7 @@ def _load_helpers():
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
         return runpy.run_path(
-            str(CELL_4_PATH),
+            str(LEGACY_CELL_4_PATH),
             init_globals={
                 "ARCHER_VALUE_LOOKUP": {},
                 "CONFIG": {"SOURCE_SYSTEM_NAME": "unit-test"},
@@ -93,7 +96,7 @@ class MetadataTimestampResolutionTests(unittest.TestCase):
             "\r\n", "\n"
         )
         start_marker = (
-            "# %% Cell 4 - Generic parsing, transformation, and payload helpers"
+            "# %% Cell 4 - Shared metadata runtime and reusable transformations"
         )
         end_marker = (
             "# %% Cell 5 - Registry-driven canonical node and edge graph"

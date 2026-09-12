@@ -1,4 +1,5 @@
 
+import ast
 import contextlib
 import copy
 import datetime
@@ -13,7 +14,9 @@ import unittest
 import uuid
 
 ROOT = Path(__file__).parents[1]
+C3 = ROOT / "notebooks/cells/03_canonical_mapping_contract.py"
 C4 = ROOT / "notebooks/cells/04_parsing_transform_payload_helpers.py"
+LEGACY_C4 = ROOT / "tests/fixtures/legacy_cell4_pre_declarative.py"
 C5 = ROOT / "notebooks/cells/05_registry_graph_builder.py"
 AR = ROOT / "notebooks/assessment_results/01_map_observation_scores.py"
 AUDIT = {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
@@ -39,13 +42,29 @@ class Session:
         return Frame(rows)
 
 
-def namespace():
+def namespace(legacy=False):
+    """Default is the active engine; legacy=True is an explicit frozen oracle."""
     ns = dict(datetime=datetime, json=json, re=re, uuid=uuid, hashlib=hashlib,
               session=Session(), CONFIG={"SOURCE_SYSTEM_NAME": "POISON"},
               ARCHER_VALUE_LOOKUP={"1": "global-poison"}, FIPS_199_VALUE_LOOKUP={},
               MAPPINGS_BY_ELEMENT_PATH={})
     with contextlib.redirect_stdout(io.StringIO()):
-        exec(compile(C4.read_text(encoding="utf-8"), str(C4), "exec"), ns)
+        if not legacy:
+            # Cell3 owns executable capabilities; omit only notebook I/O statements.
+            tree = ast.parse(C3.read_text(encoding="utf-8"))
+            definitions = []
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.Import, ast.ImportFrom)):
+                    definitions.append(node)
+                elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    try:
+                        ast.literal_eval(node.value)
+                    except (ValueError, TypeError, SyntaxError):
+                        continue
+                    definitions.append(node)
+            exec(compile(ast.Module(body=definitions, type_ignores=[]), str(C3), "exec"), ns)
+        helper_path = LEGACY_C4 if legacy else C4
+        exec(compile(helper_path.read_text(encoding="utf-8"), str(helper_path), "exec"), ns)
         exec(compile(C5.read_text(encoding="utf-8"), str(C5), "exec"), ns)
     return ns
 
@@ -161,9 +180,17 @@ def ssp_fixture(ns):
                model_contract={"MODEL_KEY": "SSP", "ROOT_PATH": root, "POLICY": "ssp-approved-v1"})
     return ctx, [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": source}], Frame(registry), lookups
 
-class MultiModelGraphTests(unittest.TestCase):
+class LegacyMultiModelGraphTests(unittest.TestCase):
+    def test_frozen_pre_declarative_oracle_hash(self):
+        # Normalize platform line endings only; no behavioral oracle edits.
+        source = LEGACY_C4.read_text(encoding="utf-8").replace("\r\n", "\n")
+        self.assertEqual(
+            hashlib.sha256(source.encode("utf-8")).hexdigest(),
+            "a13c16f27481159b70891aaeeed13d8d69ff4dd330ebc798d2cd43344ad2ec1b",
+        )
+
     def test_ssp_mixed_branches_match_preconsolidation_business_fingerprint(self):
-        ns = namespace()
+        ns = namespace(legacy=True)
         ctx, records, registry, lookups = ssp_fixture(ns)
         # Lookup acquisition is separately Snowpark-tested; this fixture fixes
         # the already approved reference payload so graph parity is independent.
@@ -183,7 +210,7 @@ class MultiModelGraphTests(unittest.TestCase):
         self.assertFalse({row["NODE_KEY"] for row in nodes.rows} & {row["NODE_KEY"] for row in ar_nodes.rows})
 
     def test_ar17_exact_business_parity_with_accepted_standalone(self):
-        ns = namespace()
+        ns = namespace(legacy=True)
         ctx = ar_context(ns)
         records = [
             {"SOURCE_RECORD_ID": "100", "CURATED_JSON": json.dumps(
@@ -209,7 +236,7 @@ class MultiModelGraphTests(unittest.TestCase):
         self.assertEqual(nodes.rows[0]["ELEMENT_TYPE"], "assessment-results-document")
 
     def test_context_lookup_does_not_leak_between_sources(self):
-        ns = namespace()
+        ns = namespace(legacy=True)
         a, b = ar_context(ns, "SOURCE_A"), ar_context(ns, "SOURCE_B")
         a["lookups"]["archer_values"]["1"] = "A"
         b["lookups"]["archer_values"]["1"] = "B"
@@ -225,7 +252,7 @@ class MultiModelGraphTests(unittest.TestCase):
         self.assertEqual(ns["ARCHER_VALUE_LOOKUP"]["1"], "global-poison")
 
     def test_ar_selected_invalid_values_block_all_outputs_with_aggregate_evidence(self):
-        ns = namespace()
+        ns = namespace(legacy=True)
         ctx = ar_context(ns)
         with self.assertRaisesRegex(ValueError, "values rejected"):
             build(ns, ctx, [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": {"PATCH_SCORE": [1, 2]}}])
@@ -233,7 +260,7 @@ class MultiModelGraphTests(unittest.TestCase):
         self.assertEqual(ctx["graph_report"]["FIELDS"]["PATCH_SCORE"]["invalid"], 1)
 
     def test_ar17_excludes_later_candidate_and_counts_it(self):
-        ns = namespace()
+        ns = namespace(legacy=True)
         ctx = ar_context(ns)
         ctx["mapping_rows"].append(dict(SOURCE_FIELD_NAME="RISK_ACCEPTANCE_RBDS",
             OSCAL_MODEL="Assessment Results", OSCAL_ELEMENT_PATH="assessment-results.results[].observations[] or props[]",
@@ -245,7 +272,7 @@ class MultiModelGraphTests(unittest.TestCase):
         self.assertEqual(len(edges.rows), 2)
 
     def test_parent_ids_and_model_namespaces_are_isolated(self):
-        ns = namespace()
+        ns = namespace(legacy=True)
         ctx = ar_context(ns)
         nodes, edges = build(ns, ctx, [
             {"SOURCE_RECORD_ID": str(i), "CURATED_JSON": {"PATCH_SCORE": i}} for i in (100, 101)])
@@ -262,14 +289,14 @@ class MultiModelGraphTests(unittest.TestCase):
 
     def test_duplicate_and_missing_source_ids_never_publish_partial_ar(self):
         for ids in ((None,), ("100", "100")):
-            ns = namespace()
+            ns = namespace(legacy=True)
             ctx = ar_context(ns)
             with self.assertRaises(ValueError):
                 build(ns, ctx, [{"SOURCE_RECORD_ID": i, "CURATED_JSON": {"PATCH_SCORE": 1}} for i in ids])
             self.assertFalse(ctx["graph_report"]["OUTPUTS_PUBLISHED"])
 
     def test_ssp_party_identity_retains_source_one_and_namespaces_other_sources(self):
-        ns = namespace()
+        ns = namespace(legacy=True)
         ctx = ar_context(ns)
         ctx["config"]["OSCAL_MODEL"] = "SSP"
         actual = ns["_party_uuid"]("100", "user-7", ctx)
@@ -278,7 +305,7 @@ class MultiModelGraphTests(unittest.TestCase):
         self.assertNotEqual(actual, ns["_party_uuid"]("100", "user-7", ctx))
 
     def test_same_input_rebuild_preserves_all_business_keys_and_values(self):
-        ns = namespace()
+        ns = namespace(legacy=True)
         records = [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": {"PATCH_SCORE": False}}]
         first = build(ns, ar_context(ns), records)
         second = build(ns, ar_context(ns), records)

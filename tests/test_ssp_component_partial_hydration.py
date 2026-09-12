@@ -2,6 +2,9 @@ import ast
 import hashlib
 import json
 from pathlib import Path
+
+# Historical field-policy regression oracle; never imported by production.
+LEGACY_CELL_4_PATH = Path(__file__).parents[1] / "tests/fixtures/legacy_cell4_pre_declarative.py"
 import re
 import runpy
 import unittest
@@ -78,7 +81,7 @@ def _load_cell_4(**extra_globals):
         "uuid": uuid,
     }
     init_globals.update(extra_globals)
-    return runpy.run_path(str(CELL_4_PATH), init_globals=init_globals)
+    return runpy.run_path(str(LEGACY_CELL_4_PATH), init_globals=init_globals)
 
 
 def _extract_notebook_cell(notebook, start_marker, end_marker):
@@ -549,14 +552,14 @@ class ComponentPartialHydrationTests(unittest.TestCase):
 
 
 class ComponentPartialHydrationRepositoryTests(unittest.TestCase):
-    def test_cell_2_and_cell_4_share_the_same_source_field_contract(self):
+    def test_cell_2_catalog_preserves_frozen_hydration_source_contract(self):
         self.assertEqual(
             _source_one_hydration_contract(),
             EXPECTED_HYDRATION_CONTRACT,
         )
 
         self.assertEqual(
-            _literal_assignment(CELL_4_PATH, "COMPONENT_HYDRATION_CONTRACT"),
+            _literal_assignment(LEGACY_CELL_4_PATH, "COMPONENT_HYDRATION_CONTRACT"),
             EXPECTED_HYDRATION_CONTRACT,
         )
         self.assertIn(
@@ -604,7 +607,7 @@ class ComponentPartialHydrationRepositoryTests(unittest.TestCase):
             ),
             (
                 CELL_4_PATH,
-                "# %% Cell 4 - Generic parsing, transformation, and payload helpers",
+                "# %% Cell 4 - Shared metadata runtime and reusable transformations",
                 "# %% Cell 5 - Registry-driven canonical node and edge graph",
             ),
             (

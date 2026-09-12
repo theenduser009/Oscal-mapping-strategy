@@ -87,9 +87,9 @@ class MetadataRuntimeTests(unittest.TestCase):
         ns["_mapping_handler_for_row"] = lambda *args: self.fail("Legacy field dispatcher called")
         ns["_legacy_prepare_model_context"] = lambda *args: self.fail("Legacy model selector called")
         ns["_SCORE_ACCEPTED_FIELDS"] = ()
-        ns["MODEL_GRAPH_POLICIES"].clear()
-        ns["APPROVED_TEXT_MAPPING_CONTRACTS"].clear()
-        ns["COMPONENT_SOURCE_TYPES"].clear()
+        self.assertNotIn("MODEL_GRAPH_POLICIES", ns)
+        self.assertNotIn("APPROVED_TEXT_MAPPING_CONTRACTS", ns)
+        self.assertNotIn("COMPONENT_SOURCE_TYPES", ns)
         rows = [mapping("NEVER_SEEN_BEFORE_SCORE", OBS, transform="scalar-score")]
         ctx = context(rows)
         nodes, edges = build(ns, ctx, [{"SOURCE_RECORD_ID": "100", "CURATED_JSON":
@@ -212,7 +212,7 @@ class MetadataRuntimeTests(unittest.TestCase):
         ctx = context(rows, elements)
         ns = graph.namespace()
         ns["_component_mapping_type"] = lambda *args: self.fail("Legacy source/type selector called")
-        ns["COMPONENT_SOURCE_TYPES"].clear()
+        self.assertNotIn("COMPONENT_SOURCE_TYPES", ns)
         nodes, _ = build(ns, ctx, [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": {
             "ASSET_IDS": [{"ContentId": 123}, 123]}}])
         payloads = payload_at(nodes, path)
@@ -241,7 +241,7 @@ class MetadataRuntimeTests(unittest.TestCase):
             "component_sources": {"inventory": object()},
         }
         ns = graph.namespace()
-        ns["COMPONENT_SOURCE_TYPES"].clear()
+        self.assertNotIn("COMPONENT_SOURCE_TYPES", ns)
         captured = []
         def query_backend(source, rows, frames, supplied_context):
             spec = supplied_context["_metadata_hydration_spec"]
@@ -289,7 +289,7 @@ class MetadataRuntimeTests(unittest.TestCase):
         ctx = context([row], elements, [group])
         ns = graph.namespace()
         ns["_party_uuid"] = lambda *args: self.fail("Legacy source identity selection called")
-        ns["RESPONSIBLE_PARTY_ROLE_DEFINITIONS"].clear()
+        self.assertNotIn("RESPONSIBLE_PARTY_ROLE_DEFINITIONS", ns)
         data = [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": {
             "NEW_USER_FIELD": {"UserList": [{"Id": "user-1"}, {"Id": "user-1"}]}}}]
         first, _ = build(ns, copy.deepcopy(ctx), data)

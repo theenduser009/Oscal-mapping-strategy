@@ -1,12 +1,14 @@
 # Mapper V1 — copy-ready Snowflake cells
 
-These files are synchronized copies of the seven sections in
-[the authoritative complete notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py).
+These seven files are the maintained source. The
+[complete notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py) and
+[V2 copy-ready pages](../cells_v2/README.md) are generated from them.
 
 Copy each file into one Snowflake Python cell and run them in numerical order.
-The files depend on state initialized by the preceding cells. Do not maintain a
-separate implementation here; future mapper corrections must update the
-complete notebook and the affected split cell together.
+The files depend on state initialized by the preceding cells. Developers edit
+these files once, then run `python tools/sync_notebook_cells.py` from the repository
+root; `--check` detects stale generated pages without changing files. This is a
+local packaging command, not another Snowflake cell.
 
 ## Current metadata-driven workflow revision
 

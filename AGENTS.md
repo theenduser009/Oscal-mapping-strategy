@@ -13,8 +13,9 @@
 - Excel/CSV governs approved source-to-target mappings; the registry governs hierarchy/identity; the reviewed deployment catalog supplies executable transforms, parameters, operators, source bindings and storage contracts.
 - Active source/model routes must use the compiled metadata engine. Do not add source-field or model-name branches to the graph builder, writer or active dispatch.
 - A new approved field or model using existing operators must work through metadata changes alone. Add reusable Python only for genuinely new behavior, with tests and explicit scope.
-- Preserve one public model selector and the same seven cells. Keep original split, V2 split and combined notebook synchronized, including the catalog dependency.
-- Prove accepted SSP and AR17 output parity and metadata-only new-field/third-model execution before publishing changes. Historical compatibility helpers are not the active mapping architecture.
+- Preserve one public model selector and the same seven cells. Maintain code only in notebooks/cells; generate V2 split and combined notebook with tools/sync_notebook_cells.py and verify --check. This is a developer packaging tool, not an extra Snowflake cell.
+- Prove accepted SSP and AR17 output parity and metadata-only new-field/third-model execution before publishing changes. Historical compatibility engines live only in tests/fixtures/legacy_cell4_pre_declarative.py; never import that fixture into production or edit it to make parity pass.
+- The single compiled plan is generated from approved rows, registry and catalog supplements. The catalog is not automatically generated from Excel; do not claim it is. Prefer executable mapping columns for new rules, and reject conflicting duplicated metadata rather than silently choosing a winner.
 - Blank or ambiguous metadata is not approval. Keep rejected/deferred rows separate; never silently fall back from partial executable metadata to an older rule.
 
 ## Keep these boundaries explicit

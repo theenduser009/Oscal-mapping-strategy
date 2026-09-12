@@ -1,3 +1,5 @@
+# HISTORICAL — legacy field-dispatch workflow only; not for metadata-v1.
+# Current workflow: Cell 3 routing reports and Cell 7 mapping coverage.
 # Read-only populated-mapping dispatcher coverage diagnostic.
 #
 # Run this standalone Snowflake Python cell after Mapper V1 Cells 1 through 4.
@@ -7,6 +9,38 @@
 
 import re
 
+
+
+def _require_legacy_dispatch_context():
+    """Do not classify executable metadata with the retired field dispatcher."""
+    state = globals()
+    contexts = state.get("MAPPING_CONTEXTS", [])
+    if not isinstance(contexts, (list, tuple)):
+        contexts = []
+    contexts = list(contexts) + [state.get("_default_context")]
+    contracts = state.get("MODEL_CONTRACTS", {})
+    if not isinstance(contracts, dict):
+        contracts = {}
+    metadata_context = any(
+        isinstance(context, dict) and (
+            context.get("model_contract", {}).get("POLICY") == "metadata-v1"
+            or isinstance(context.get("compiled_plan"), dict)
+        )
+        for context in contexts
+    )
+    metadata_contract = any(
+        isinstance(contract, dict) and contract.get("POLICY") == "metadata-v1"
+        for contract in contracts.values()
+    )
+    rows = state.get("CANONICAL_MAPPING_ROWS", [])
+    metadata_rows = isinstance(rows, (list, tuple)) and any(
+        isinstance(row, dict) and bool(row.get("TRANSFORM_ID")) for row in rows
+    )
+    if metadata_context or metadata_contract or metadata_rows:
+        raise RuntimeError(
+            "Historical legacy-only diagnostic cannot run on metadata-v1. "
+            "Use Cell 3 routing_report and Cell 7 mapping coverage instead."
+        )
 
 def _dispatch_safe_metadata(value):
     return re.sub(r"[\r\n\t]+", " ", str(value or "")).strip()
@@ -55,6 +89,7 @@ def _dispatch_row_value(row, key):
 
 
 def run_mapping_dispatch_coverage_diagnostic():
+    _require_legacy_dispatch_context()
     required_state = {
         "session": globals().get("session"),
         "CONFIG": globals().get("CONFIG"),

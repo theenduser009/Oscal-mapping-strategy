@@ -10,6 +10,9 @@ import hashlib
 import io
 import json
 from pathlib import Path
+
+# Historical field-policy regression oracle; never imported by production.
+LEGACY_CELL_4_PATH = Path(__file__).parents[1] / "tests/fixtures/legacy_cell4_pre_declarative.py"
 import re
 import runpy
 import unittest
@@ -126,7 +129,7 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
 
     def helpers(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            return runpy.run_path(str(CELLS / "04_parsing_transform_payload_helpers.py"),
+            return runpy.run_path(str(LEGACY_CELL_4_PATH),
                 init_globals={
                     "CONFIG": {"SOURCE_SYSTEM_NAME": "unit-test"},
                     "ARCHER_VALUE_LOOKUP": {"101": "Mission Critical"},

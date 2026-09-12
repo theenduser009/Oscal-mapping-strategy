@@ -57,6 +57,51 @@ def _metadata_words(value):
     return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
 
 
+def _compile_value_constraints(value):
+    """Validate declarative output constraints once, before reading source values."""
+    rules = _metadata_object(value, "VALUE_CONSTRAINTS")
+    if set(rules) - {"required", "null_policy", "cardinality", "validation"}:
+        raise ValueError("Unknown value constraint")
+    if "required" in rules and not isinstance(rules["required"], bool):
+        raise ValueError("Required must be a boolean")
+    if rules.get("null_policy", "omit") not in {"omit", "reject"}:
+        raise ValueError("Null policy must be omit or reject")
+    cardinality = _metadata_object(rules.get("cardinality"), "Cardinality")
+    if set(cardinality) - {"min", "max"}:
+        raise ValueError("Cardinality supports only min and max")
+    for key, limit in cardinality.items():
+        if key == "max" and limit is None:
+            continue
+        if type(limit) is not int or limit < 0:
+            raise ValueError("Cardinality limits must be nonnegative integers")
+    lower, upper = cardinality.get("min", 0), cardinality.get("max")
+    if upper is not None and (upper < lower or rules.get("required") and upper == 0):
+        raise ValueError("Conflicting required/cardinality constraints")
+    validation = _metadata_object(rules.get("validation"), "Validation")
+    if set(validation) - {"type", "enum", "minimum", "maximum"}:
+        raise ValueError("Unknown value validation")
+    if "type" in validation and validation["type"] not in {"string", "integer", "number", "boolean", "object", "array"}:
+        raise ValueError("Unknown validation type")
+    if "enum" in validation:
+        if not isinstance(validation["enum"], list) or not validation["enum"]:
+            raise ValueError("Enum must be a nonempty JSON array")
+        try:
+            json.dumps(validation["enum"], allow_nan=False)
+        except (TypeError, ValueError):
+            raise ValueError("Enum must contain JSON values") from None
+    for key in ("minimum", "maximum"):
+        if key in validation and (type(validation[key]) not in (int, float) or
+                                  type(validation[key]) is float and not math.isfinite(validation[key])):
+            raise ValueError("Numeric bounds must be finite numbers")
+    if "minimum" in validation and "maximum" in validation and validation["minimum"] > validation["maximum"]:
+        raise ValueError("Conflicting numeric bounds")
+    if "cardinality" in rules:
+        rules["cardinality"] = cardinality
+    if "validation" in rules:
+        rules["validation"] = validation
+    return rules
+
+
 def _metadata_rule_candidates(row, contract):
     return [rule for rule in contract.get("MAPPING_RULES", ())
             if row.get("SOURCE_FIELD_NAME") in rule.get("SOURCE_FIELDS", ())]
@@ -101,14 +146,17 @@ def _compile_metadata_mapping(row, contract, elements):
         transform = row.get("TRANSFORM_ID")
         transform_params = _metadata_object(row.get("TRANSFORM_PARAMS"), "TRANSFORM_PARAMS")
         representation_params = _metadata_object(row.get("REPRESENTATION_PARAMS"), "REPRESENTATION_PARAMS")
+        value_constraints = _compile_value_constraints(row.get("VALUE_CONSTRAINTS"))
         if chosen:
             for actual, key in ((transform_params, "TRANSFORM_PARAMS"),
                                 (representation_params, "REPRESENTATION_PARAMS")):
                 if actual != chosen.get(key, {}):
                     raise ValueError("Parameters conflict with the current reviewed release contract")
+            if value_constraints != _compile_value_constraints(chosen.get("VALUE_CONSTRAINTS")):
+                raise ValueError("Constraints conflict with the current reviewed release contract")
     else:
         if any(row.get(key) not in (None, "") for key in
-               ("TRANSFORM_ID", "TRANSFORM_PARAMS", "REPRESENTATION", "REPRESENTATION_PARAMS")):
+               ("TRANSFORM_ID", "TRANSFORM_PARAMS", "REPRESENTATION", "REPRESENTATION_PARAMS", "VALUE_CONSTRAINTS")):
             raise ValueError("Executable mapping metadata requires explicit approval")
         if len(matches) != 1:
             raise ValueError("Mapping requires an explicit approved executable contract")
@@ -118,9 +166,14 @@ def _compile_metadata_mapping(row, contract, elements):
         transform = chosen.get("TRANSFORM_ID")
         transform_params = _metadata_object(chosen.get("TRANSFORM_PARAMS"), "TRANSFORM_PARAMS")
         representation_params = _metadata_object(chosen.get("REPRESENTATION_PARAMS"), "REPRESENTATION_PARAMS")
+        value_constraints = _compile_value_constraints(chosen.get("VALUE_CONSTRAINTS"))
         approval = chosen["APPROVAL_STATUS"]
     if transform not in METADATA_TRANSFORM_IDS:
         raise ValueError("Unknown reusable transform identifier")
+    if transform == "skip" and (value_constraints.get("required") or
+                                value_constraints.get("null_policy") == "reject" or
+                                value_constraints.get("cardinality", {}).get("min", 0) > 0):
+        raise ValueError("Skip transform conflicts with required-value constraints")
     if chosen.get("APPROVAL_STATUS") == "BLOCKED_IF_POPULATED" and transform != "reject-populated":
         raise ValueError("Unresolved populated values must remain rejected")
     owner = row["OWNER_ELEMENT_PATH"]
@@ -132,6 +185,7 @@ def _compile_metadata_mapping(row, contract, elements):
     result.update(
         TRANSFORM_ID=transform, TRANSFORM_PARAMS=transform_params,
         REPRESENTATION=operator, REPRESENTATION_PARAMS=representation_params,
+        VALUE_CONSTRAINTS=value_constraints,
         APPROVAL_STATUS=(chosen.get("APPROVAL_STATUS") or "APPROVED"),
         RULE_ID=chosen.get("RULE_ID") or row.get("RULE_ID") or row.get("MAPPING_ID"),
         CONTRACT_SOURCE="reviewed-catalog" if chosen else "mapping-artifact",
@@ -298,6 +352,28 @@ def _apply_mapping_path_rules(row, contract, paths):
     return path
 
 
+def _summarize_routing_issues(report, sample_limit=25):
+    """Keep exact issue counts but bound printed samples, showing blockers first."""
+    issues = report["ISSUES"]
+    reason_counts, severity_counts = {}, {}
+    for issue in issues:
+        count = issue.get("affected_rows", 1)
+        reason = issue["reason"]
+        severity = issue["severity"]
+        reason_counts[reason] = reason_counts.get(reason, 0) + count
+        severity_counts[severity] = severity_counts.get(severity, 0) + count
+    ordered = sorted(issues, key=lambda issue: (
+        0 if issue["severity"] == "BLOCKED" else 1,
+        issue.get("row") if issue.get("row") is not None else -1,
+    ))
+    report.update(
+        REASON_COUNTS=reason_counts, SEVERITY_COUNTS=severity_counts,
+        ISSUE_EVENTS_TOTAL=len(issues), ISSUE_SAMPLE_LIMIT=sample_limit,
+        ISSUE_SAMPLES_TRUNCATED=len(issues) > sample_limit,
+        ISSUES=ordered[:sample_limit],
+    )
+
+
 def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model_contracts):
     """Pure source/model routing. No data reads, globals mutation or writes."""
     _validate_source_profiles(source_profiles, model_contracts, mapping_rows)
@@ -349,9 +425,10 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 root = path.split(".", 1)[0]
                 path_model = root_models.get(root)
                 classification, reason = None, None
-                if not field:
-                    classification, reason = "BLOCKED_ROWS", "MISSING_SOURCE_FIELD"
-                elif labelled and path_model and labelled != path_model:
+                # Establish unambiguous model ownership before validating an
+                # executable field. An incomplete row owned by another model is
+                # out of scope here; unknown/conflicting ownership is not.
+                if labelled and path_model and labelled != path_model:
                     classification, reason = "BLOCKED_ROWS", "MODEL_PATH_CONFLICT"
                 elif label and not labelled and label not in {"extensionproperty", "extensionproperties"}:
                     classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_LABEL"
@@ -359,6 +436,8 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
                 elif path_model and path_model != model or not path and labelled and labelled != model:
                     classification = "EXCLUDED_ROWS"
+                elif not field:
+                    classification, reason = "BLOCKED_ROWS", "MISSING_SOURCE_FIELD"
                 elif contract.get("SELECTED_FIELDS") and field not in contract["SELECTED_FIELDS"]:
                     classification = "EXCLUDED_ROWS"
                 elif field in contract.get("EXCLUDED_FIELDS", ()):
@@ -375,19 +454,22 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 if classification:
                     report[classification] += 1
                     if reason:
-                        report["ISSUES"].append({"row": index, "field": field, "reason": reason})
+                        report["ISSUES"].append({"row": index, "field": field, "reason": reason,
+                                                 "severity": classification.removesuffix("_ROWS")})
                     continue
                 canonical = dict(row)
                 canonical_path = _apply_mapping_path_rules(canonical, contract, paths)
                 owner = _owner_for_path(canonical_path, paths)
                 if owner is None:
                     report["BLOCKED_ROWS"] += 1
-                    report["ISSUES"].append({"row": index, "field": field, "reason": "UNREGISTERED_PATH"})
+                    report["ISSUES"].append({"row": index, "field": field, "reason": "UNREGISTERED_PATH",
+                                             "severity": "BLOCKED"})
                     continue
                 relative = canonical_path[len(owner):].lstrip(".")
                 if "[]" in relative:
                     report["BLOCKED_ROWS"] += 1
-                    report["ISSUES"].append({"row": index, "field": field, "reason": "UNREGISTERED_COLLECTION"})
+                    report["ISSUES"].append({"row": index, "field": field, "reason": "UNREGISTERED_COLLECTION",
+                                             "severity": "BLOCKED"})
                     continue
                 canonical.update(ARTIFACT_MODEL=row.get("ARTIFACT_MODEL", row.get("OSCAL_MODEL")),
                                  CANONICAL_ELEMENT_PATH=canonical_path,
@@ -433,10 +515,15 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 except ValueError as error:
                     report["STATUS"] = "BLOCKED"
                     report["CONTRACT_ERROR"] = str(error)
+                    report["ISSUES"].append({"row": None, "field": None,
+                                             "reason": "METADATA_CONTRACT_ERROR",
+                                             "severity": "BLOCKED",
+                                             "affected_rows": report["SELECTED_ROWS"]})
                     report["BLOCKED_ROWS"] += report["SELECTED_ROWS"]
                     report["SELECTED_ROWS"] = 0
                     context["mapping_rows"] = []
                     context["mappings_by_path"] = {}
+            _summarize_routing_issues(report)
             contexts.append(context)
     return contexts
 

@@ -11,7 +11,13 @@ This artifact makes the active seven-cell mapper metadata-driven. It does not ad
 | Reviewed JSON catalog | Executable choices previously recorded in Python: transform identifiers/parameters, element operators, property/reference names, controlled values, source bindings and verified storage contracts. Existing sheet rows must match their reviewed rules. |
 | Shared Python | Generic parsing, transformations, registry traversal, keys, validation, guarded persistence and reporting. It does not select active mappings by hardcoded field/model names. |
 
-The catalog is a reviewed deployment artifact, not a replacement for business approval. Existing SSP and accepted AR17 choices were migrated without expanding scope. Historical Python helpers remain for old diagnostics only; Cell One requires metadata policy for every active model.
+The catalog is a reviewed deployment artifact, not a replacement for business approval. Existing SSP and accepted AR17 choices were migrated without expanding scope. Historical field-specific Python now lives only in a frozen test fixture; it is not imported or uploaded by the seven-cell workflow. Earlier standalone diagnostics that depend on that dispatcher are historical and refuse active metadata contexts.
+
+### One generated executable specification
+
+Cell Three generates `compiled_plan` from the approved mapping rows, registry and reviewed supplements. The daily engine interprets that plan; it does not choose a second SSP/AR implementation. The plan is generated in memory, not another file to maintain. Original Notes are never executed or interpreted as code.
+
+The catalog is **not automatically synchronized from Excel**. It still contains approved executable choices for legacy rows whose sheet has only prose. For new rules, prefer explicit executable columns in the mapping artifact. Do not create conflicting copies of a rule: when migrating a reviewed legacy rule to the sheet, retire its supplementary rule in the same reviewed metadata release. Unknown meaning remains a clarification, not an inferred transformation.
 
 ## Adding an approved mapping
 
@@ -21,13 +27,33 @@ For an existing supported model/operator, add the approved Excel/CSV row with th
 - `TRANSFORM_ID`: a supported reusable transformation below.
 - `TRANSFORM_PARAMS`: JSON object; use `{}` when none.
 - `REPRESENTATION_PARAMS`: JSON object, such as an explicitly approved property name or reference type.
+- Optional `VALUE_CONSTRAINTS`: JSON object defining required values, null policy, cardinality and validation, as below.
 - Optional `RULE_ID` for stable review traceability; optional `REPRESENTATION` must match the owning element's operator.
 
-Source field, model, original target path and mapping type are still required. The compiler resolves the owner from the registry. Notes remain business evidence, never executable Python. Blank approval or partially supplied executable metadata blocks the row. Existing reviewed rules cannot be overridden by changing a CSV transform alone; revise the governed release deliberately.
+Source field, model, original target path and mapping type are still required. The compiler resolves the owner from the registry. Notes remain business evidence, never executable Python. Unreviewed rows are deferred under the current Source One policy; selected rows with invalid or conflicting executable metadata block the group. Existing reviewed rules cannot be overridden by changing a CSV transform or constraint alone; revise the governed release deliberately.
 
 For legacy rows without executable columns, a single matching approved catalog rule supplies those choices. Matching checks the original field/path/type and any specific Notes constraints. Required AR17 rule identities must occur exactly once. Unreviewed Source One rows are reported deferred, not silently mapped. The all-null unresolved rule remains `BLOCKED_IF_POPULATED` and rejects populated values.
 
 ## Adding another model or source
+
+### Declarative value constraints
+
+Example for an approved direct numeric value (not a new business mapping):
+
+```json
+{
+  "required": true,
+  "null_policy": "reject",
+  "cardinality": {"min": 1, "max": 1},
+  "validation": {"type": "number", "minimum": 0, "maximum": 100}
+}
+```
+
+Constraints run after transformation and before payload construction. A scalar or object counts as one; an array counts its members; an omitted value counts as zero. Cardinality describes this row's converted value, not all graph descendants. `max: null` means unbounded. `required: true` requires at least one value. `null_policy` is `omit` (default) or `reject`, covering absent/null/empty values omitted by the selected transform; it does not invent an OSCAL null property or change upstream CURATED_JSON null preservation.
+
+Validation supports whole-value `type` (`string`, `integer`, `number`, `boolean`, `object`, `array`), `enum`, and finite numeric `minimum`/`maximum`. Bounds do not coerce text to numbers; zero and false are present values. Numeric constraints require JSON-native finite integers/floats, not Decimal objects that the existing graph serializer would stringify. A model requiring native JSON numbers can explicitly configure `RUNTIME_OPTIONS.parse_decimal: false`; do not change accepted score parsing automatically. Enum compares JSON representations, distinguishing nested booleans and numbers. Enum values and unknown constraints are checked during compilation. No executable expressions are allowed. Existing rows without these optional constraints retain accepted behavior. Failed validation prevents publishing a partial graph or committing it; an untracked failure is raised, never silently skipped.
+
+### Model/source onboarding
 
 1. Supply approved source-to-model bindings and an unambiguous mapping artifact/source-column binding in `SOURCES`.
 2. Add the model key, root/aliases, `POLICY: metadata-v1`, element operators and reviewed mapping rules in `MODELS`.

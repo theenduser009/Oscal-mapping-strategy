@@ -4,6 +4,9 @@ import hashlib
 import io
 import json
 from pathlib import Path
+
+# Historical field-policy regression oracle; never imported by production.
+LEGACY_CELL_4_PATH = Path(__file__).parents[1] / "tests/fixtures/legacy_cell4_pre_declarative.py"
 import re
 import runpy
 import unittest
@@ -105,7 +108,7 @@ def _load_cell_4():
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
         return runpy.run_path(
-            str(CELL_4_PATH),
+            str(LEGACY_CELL_4_PATH),
             init_globals={
                 "ARCHER_VALUE_LOOKUP": {
                     "101": "Mission Critical",
@@ -494,6 +497,27 @@ class MappingDispatchContractTests(unittest.TestCase):
                 self.assertEqual(
                     _normalized_legacy_values(path), expected_normalized
                 )
+
+
+    def test_historical_diagnostic_refuses_metadata_before_classifier_or_source_access(self):
+        cases = (
+            {"MAPPING_CONTEXTS": [{"model_contract": {"POLICY": "metadata-v1"}}]},
+            {"_default_context": {"compiled_plan": {"version": 1}}},
+            {"MODEL_CONTRACTS": {"SSP": {"POLICY": "metadata-v1"}}},
+            {"CANONICAL_MAPPING_ROWS": [{"SOURCE_FIELD_NAME": "NEW_FIELD", "TRANSFORM_ID": "direct"}]},
+        )
+        def forbidden(*args, **kwargs):
+            self.fail("Historical diagnostic must stop before classification or data access")
+        for metadata in cases:
+            with self.subTest(metadata=metadata):
+                state = {
+                    "CONFIG": {"EXECUTE_WRITES": False},
+                    "_mapping_handler_for_row": forbidden,
+                    "CANONICAL_MAPPING_ROWS": [{"SOURCE_FIELD_NAME": "LEGACY_FIELD"}],
+                }
+                state.update(metadata)
+                with self.assertRaisesRegex(RuntimeError, "Historical legacy-only.*metadata-v1"):
+                    runpy.run_path(str(DISPATCH_DIAGNOSTIC_PATH), init_globals=state)
 
 
 if __name__ == "__main__":

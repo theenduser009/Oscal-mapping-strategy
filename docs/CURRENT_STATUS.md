@@ -2,13 +2,13 @@
 
 Last reconciled: 2026-09-11
 
-## Current action - metadata-driven seven-cell execution
+## Current action - simplified declarative engine; live routing report pending
 
-**Implemented locally and regression-verified:** Cell One loads the reviewed metadata catalog; Cell Three compiles approved Excel/CSV mappings against registry ownership; Cell Four executes generic operators/transforms. Source/model field rules are no longer selected by the active Python dispatcher. Cell Five, Six and Seven reuse the shared graph, guarded persistence and orchestration paths. Original/V2/combined notebook copies are synchronized.
+**Implemented and regression-verified:** the same seven-cell workflow now excludes the old SSP/AR engines from deployed Cell Four; their original code is frozen for tests only. One compiled metadata plan controls mapping decisions. Optional declarative constraints cover cardinality, required/absent-value policy, type, enum and numeric bounds. Cell Five, Six and Seven retain the shared graph, guarded writer and runner. Original split cells are the maintained source; a developer-only generator keeps V2/combined copies synchronized.
 
-All **520 local tests pass**, including exact accepted SSP fixture parity, AR17 standalone-output parity and a metadata-only new field/third-model test. This is implementation evidence, not live Snowflake acceptance. No source, registry or target data was written.
+All **549 local tests pass**, including exact accepted SSP fixture parity, AR17 standalone-output parity, metadata-only new field/third-model execution, mixed 608-row routing, and constraint failure checks. This is implementation evidence, not live Snowflake acceptance. No source, registry or target data was written.
 
-**Next action:** deploy the matching seven-cell revision and [metadata catalog](../notebooks/metadata/mapper_contract.v1.json), then validate the shared workflow once in PREVIEW when ready. Upload that JSON to notebook Files alongside the existing approved mapping CSV; there is no additional execution cell. Keep normal writes disabled and do not use COMMIT or rerun the DEV reload. [Exact preview procedure](SHARED_SEVEN_CELL_MAPPER.md#live-preview-procedure---when-requested).
+**Next action:** inspect the owner's existing full Cell Seven report. The reported 608 inputs / 459 blocked / 60 deferred / 46 excluded remain only partially described; the full report is not in the verified GitHub evidence. The reported missing-approved-metadata example is deferred, not an explanation of all blocked rows. A reproduced bug is corrected: clearly other-model rows are excluded before source-field validation. Unknown labels/roots and conflicting ownership still stop execution. Reports retain exact totals and at most 25 blocker-first samples. Do not claim this proves the live 459-row failure resolved, request an unchanged rerun, or use COMMIT. No new standalone cell or catalog change is needed.
 
 The catalog preserves the existing SSP rules and 17 accepted AR fields. New approved mappings using supported behavior can be added through metadata alone; new field-specific Python is not required. Missing approval, unknown transformations and contradictory contracts stop execution. Rejected/deferred AR rows do not become approved automatically.
 

@@ -1,6 +1,6 @@
 # Shared metadata-driven seven-cell mapper
 
-Status: active metadata-driven execution implemented; all 520 repository tests pass, with exact SSP/AR17 parity and metadata-only new-field/third-model proof. Original/V2/combined notebooks are synchronized. No shared-workflow Snowflake run or AR database load is accepted yet.
+Status: simplified metadata-driven execution implemented; all 549 repository tests pass, with exact SSP/AR17 parity and metadata-only new-field/third-model proof. Legacy SSP/AR engines are test-only; deployed Cell Four is roughly half its prior size. V2/combined notebooks are generated from the original split source. No shared-workflow Snowflake run or AR database load is accepted yet.
 
 This is the owner-approved consolidation, not a new mapping batch. The seven existing cells now route Source One through a common graph builder and guarded persistence API. The accepted SSP mappings and 17 accepted AR fields are the parity baseline. The blocked 34-field AR candidate is not enabled.
 
@@ -42,9 +42,9 @@ Source snapshots use Snowpark [cache_result](https://docs.snowflake.com/en/devel
 
 ## Live preview procedure - when requested
 
-The refactor has local acceptance only. A live preview is the next deployment check; this procedure is not authorization for COMMIT.
+The refactor has local acceptance only. The owner's existing routing failure report is still needed before prescribing another live run. A reproduced other-model field-validation bug is fixed, but that does not prove the reported 459 blockers are resolved. The procedure below is for a future agreed preview, not an instruction to rerun now and not authorization for COMMIT.
 
-1. Replace the existing seven Python cells with the corresponding seven sections of [the complete notebook](../notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py). This revision changes the interfaces across all seven, so do not mix old and new cells.
+1. Use one matching revision of the [seven V2 pages](../notebooks/cells_v2/README.md) or [complete notebook](../notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py). For this simplification, runtime changes are in Cells Three/Four; Cells One/Two/Five/Six/Seven and the catalog are unchanged from the preceding metadata release. Do not combine the new Cell Four with an older Cell Three. No extra cell or fixture upload is needed.
 2. Keep Cell 1 `CONFIG["EXECUTE_WRITES"] = False` and Cell 7 `OSCAL_LOAD_MODE = "PREVIEW"`.
 3. Run Cells 1–7 once, in order, using the existing approved mapping CSV. No additional standalone execution cell.
 4. Share only the printed `OSCAL_PIPELINE_REPORT`; keep raw values and source IDs in Snowflake.

@@ -66,5 +66,26 @@ class MappingContractReportTests(unittest.TestCase):
                 self.assertNotIn(node.attr, forbidden)
 
 
+    def test_historical_diagnostic_refuses_metadata_before_classifier_or_source_access(self):
+        cases = (
+            {"MAPPING_CONTEXTS": [{"model_contract": {"POLICY": "metadata-v1"}}]},
+            {"_default_context": {"compiled_plan": {"version": 1}}},
+            {"MODEL_CONTRACTS": {"SSP": {"POLICY": "metadata-v1"}}},
+            {"CANONICAL_MAPPING_ROWS": [{"SOURCE_FIELD_NAME": "NEW_FIELD", "TRANSFORM_ID": "direct"}]},
+        )
+        def forbidden(*args, **kwargs):
+            self.fail("Historical diagnostic must stop before classification or data access")
+        for metadata in cases:
+            with self.subTest(metadata=metadata):
+                state = {
+                    "CONFIG": {"EXECUTE_WRITES": False},
+                    "_mapping_handler_for_row": forbidden,
+                    "CANONICAL_MAPPING_ROWS": [{"SOURCE_FIELD_NAME": "LEGACY_FIELD"}],
+                }
+                state.update(metadata)
+                with self.assertRaisesRegex(RuntimeError, "Historical legacy-only.*metadata-v1"):
+                    runpy.run_path(str(REPORT), init_globals=state)
+
+
 if __name__ == "__main__":
     unittest.main()

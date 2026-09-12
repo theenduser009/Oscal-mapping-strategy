@@ -280,7 +280,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
 
     def test_partial_executable_metadata_cannot_silently_use_legacy_catalog_approval(self):
         catalog = json.loads((ROOT / "notebooks/metadata/mapper_contract.v1.json").read_text(encoding="utf-8"))
-        original, _, registry, _ = legacy_graph.ssp_fixture(self.ns)
+        original, _, registry, _ = legacy_graph.ssp_fixture(legacy_graph.namespace(legacy=True))
         source = copy.deepcopy(catalog["SOURCES"][0])
         source["MODEL_KEYS"] = ("SSP",)
         source["BASE_CONFIG"] = copy.deepcopy(original["config"])
@@ -321,7 +321,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
         return context
 
     def test_ssp_catalog_matches_independent_preconsolidation_fingerprint(self):
-        original, records, registry, lookups = legacy_graph.ssp_fixture(self.ns)
+        original, records, registry, lookups = legacy_graph.ssp_fixture(legacy_graph.namespace(legacy=True))
         context = self.catalog_context(original, registry)
         context["lookups"]["component_sources"] = {
             "software": legacy_graph.Frame([]), "interconnection": legacy_graph.Frame([])}
@@ -336,7 +336,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
                          "e483797474dab461f193225f88439fe1182f2f0f1e66eaf7968eb0f8a411a6c1")
 
     def test_unmapped_singleton_below_collection_does_not_expand_accepted_ssp_graph(self):
-        original, records, registry, lookups = legacy_graph.ssp_fixture(self.ns)
+        original, records, registry, lookups = legacy_graph.ssp_fixture(legacy_graph.namespace(legacy=True))
         parent = "system-security-plan.system-implementation.components[]"
         nested = parent + ".component"
         registry = legacy_graph.Frame(list(registry.rows) + [{
@@ -344,8 +344,10 @@ class MetadataDrivenContractTests(unittest.TestCase):
             "ELEMENT_TYPE": "component", "IS_ACTIVE": True, "IS_COLLECTION": False,
             "PROCESS_ORDER": max(row["PROCESS_ORDER"] for row in registry.rows) + 1,
         }])
+        oracle_ns = legacy_graph.namespace(legacy=True)
+        oracle_ns["_build_component_hydration_lookups"] = lambda *args: lookups
+        baseline_nodes, baseline_edges = legacy_graph.build(oracle_ns, original, records, registry)
         self.ns["_build_component_hydration_lookups"] = lambda *args: lookups
-        baseline_nodes, baseline_edges = legacy_graph.build(self.ns, original, records, registry)
         context = self.catalog_context(original, registry)
         context["lookups"]["component_sources"] = {
             "software": legacy_graph.Frame([]), "interconnection": legacy_graph.Frame([])}
@@ -363,7 +365,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
 
     def test_ar17_catalog_matches_accepted_standalone_business_output(self):
         import runpy
-        original = legacy_graph.ar_context(self.ns)
+        original = legacy_graph.ar_context(legacy_graph.namespace(legacy=True))
         context = self.catalog_context(original, legacy_graph.ar_registry())
         fields = tuple(row["SOURCE_FIELD_NAME"] for row in original["mapping_rows"])
         self.assertEqual(len(fields), 17)
@@ -377,8 +379,9 @@ class MetadataDrivenContractTests(unittest.TestCase):
         oracle_globals = oracle["build_ar_score_batch"].__globals__
         oracle_globals["AR_SCORE_FIELDS"] = oracle_globals["AR_ACCEPTED_SCORE_FIELDS"]
         oracle_globals["AR_ALTERNATIVE_SCORE_FIELDS"] = ()
-        helpers = {name: self.ns[name] for name in oracle["AR_HELPERS"]}
-        helpers["resolve_archer_select_value"] = lambda value: self.ns["resolve_archer_select_value"](value, original)
+        oracle_ns = legacy_graph.namespace(legacy=True)
+        helpers = {name: oracle_ns[name] for name in oracle["AR_HELPERS"]}
+        helpers["resolve_archer_select_value"] = lambda value: oracle_ns["resolve_archer_select_value"](value, original)
         expected = oracle["build_ar_score_batch"](
             records, original["mapping_rows"], legacy_graph.ar_registry().collect(),
             original["config"], helpers)
