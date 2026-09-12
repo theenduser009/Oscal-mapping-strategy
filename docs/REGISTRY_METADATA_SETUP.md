@@ -1,13 +1,16 @@
 # One-time DEV registry setup, then the same seven cells
 
 The code no longer needs the JSON catalog. The registry must receive its
-approved structural metadata before this release can run. **The SQL is prepared
-and locally reviewed; it has not been executed in your Snowflake environment.**
+approved structural metadata before this release can run. **The previous SQL
+failed in Snowflake before making registry changes. The corrected SQL still
+needs live verification.**
 
-The additional-testing hold is superseded by the corrected release: all 685
-local tests pass. Known disabled-path routing, typed empty dataframes and
-migration preflight are corrected. Live setup/preview still needs verification;
-local tests are not permission to enable the daily database writer.
+The reported block-line-270 error was a JSON binding type mismatch in the first
+dynamic conflict check, before ALTER or UPDATE. The correction binds explicit
+JSON strings and decodes them with PARSE_JSON in all four dynamic templates.
+It does not change the seven cells, metadata seeds or registry update scope.
+See the [binding correction checkpoint](checkpoints/2026-09-12-registry-binding-correction.md).
+Local tests are not permission to enable the daily database writer.
 
 ## Your next step: registry SQL only
 
@@ -98,6 +101,8 @@ A new model requires its registry metadata and visible source/destination
 configuration, then reuses these seven cells. Genuinely unsupported operations
 need one reusable code enhancement, not a new model-specific mapper.
 
-All 685 local unit, parity, boundary and notebook-flow tests pass. They are not live Snowflake proof.
-No registry setup, DIM/FACT write, Matillion run, daily-loader acceptance or
-full-model conformance is claimed by this release.
+The earlier 685 local tests did not exercise actual Snowflake bind transport;
+static and synthetic binding regressions are now included. None is live
+Snowflake proof. Successful registry setup, DIM/FACT writes, Matillion runs,
+daily-loader acceptance and full-model conformance remain unverified for this
+release.

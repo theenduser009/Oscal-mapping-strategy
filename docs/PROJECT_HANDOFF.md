@@ -1,6 +1,32 @@
 # Project handoff - read this before resuming
 
-## Current action - corrected seven-cell release; live setup pending
+## Current action - registry binding correction; live setup pending
+
+The owner reported a Snowflake statement error at anonymous-block line 270,
+position 18: `FLATTEN` received `VARCHAR(17076)` as its `INPUT`. In the
+published failing SQL this identifies the first dynamic conflict check, before
+this invocation's ALTER or metadata UPDATE. This attempt did not change the
+registry or DIM/FACT; it does not establish what existed from older attempts.
+
+The correction serializes the two array bindings to JSON text and explicitly
+parses them inside all four dynamic SQL templates (six calls). Native arrays,
+original registry columns, metadata seeds, conflict checks and transaction
+boundaries remain unchanged. The seven notebook cells and write settings are
+unchanged. See the [binding correction checkpoint](checkpoints/2026-09-12-registry-binding-correction.md).
+
+**Next action:** use the complete corrected
+[registry SQL](../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql) in a fresh
+Snowflake SQL worksheet with the approved DEV role, no active transaction and
+no competing registry writer. Share the aggregate completion report. Keep the
+seven-cell preview on hold until registry setup is verified; normal mapper
+writes remain disabled.
+
+Local regression checks are not live Snowflake acceptance. The prior suite
+missed this bind-transport defect because it used static checks and Python
+simulations. The accepted SSP load, unresolved old-row difference and AR17
+in-memory-only status are unchanged.
+
+## Previous action - corrected seven-cell release; live setup pending
 
 The three boundary defects are corrected. **All 685 local tests pass**, with
 zero failures, errors or skips, including the six formerly failing cases.

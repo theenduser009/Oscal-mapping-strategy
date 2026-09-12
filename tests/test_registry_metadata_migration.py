@@ -329,10 +329,10 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
     def test_update_transaction_contains_no_ddl_and_rechecks_baseline(self):
         phase = self.sql.split("  BEGIN TRANSACTION;", 1)[1].split("  COMMIT;", 1)[0]
         self.assertNotRegex(phase, r"(?i)\b(?:ALTER|CREATE|DROP)\s+")
-        self.assertEqual(phase.count("EXECUTE IMMEDIATE :baseline_sql USING (baseline)"), 2)
+        self.assertEqual(phase.count("EXECUTE IMMEDIATE :baseline_sql USING (baseline_json)"), 2)
         self.assertLess(phase.index("EXECUTE IMMEDIATE :conflict_sql"),
                         phase.index("EXECUTE IMMEDIATE :update_sql"))
-        self.assertIn("EXECUTE IMMEDIATE :verify_sql USING (desired)", phase)
+        self.assertIn("EXECUTE IMMEDIATE :verify_sql USING (desired_json)", phase)
         self.assertIn("IF (commit_attempted) THEN RAISE commit_unknown", self.sql)
         self.assertIn("EXCEPTION WHEN OTHER THEN RAISE rollback_unknown", self.sql)
         self.assertIn("DDL_ROLLBACK_AVAILABLE',FALSE", self.sql)
@@ -391,7 +391,7 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
         # Source-contract plus scalar simulation: never executes an UPDATE.
         phase = self.sql.split("  BEGIN TRANSACTION;", 1)[1].split("  COMMIT;", 1)[0]
         compact = " ".join(phase.split())
-        self.assertIn("result_rows := (EXECUTE IMMEDIATE :update_sql USING (desired));", phase)
+        self.assertIn("result_rows := (EXECUTE IMMEDIATE :update_sql USING (desired_json));", phase)
         self.assertIn('changed_rows := migration_row."number of rows updated";', phase)
         self.assertNotIn("changed_rows := SQLROWCOUNT", phase)
         self.assertIn("n := 0; changed_rows := NULL; FOR migration_row IN result_rows DO n := n + 1;", compact)

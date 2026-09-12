@@ -15,6 +15,7 @@
 -- https://docs.snowflake.com/en/developer-guide/snowflake-scripting/resultsets
 -- https://docs.snowflake.com/en/sql-reference/sql/execute-immediate
 -- https://docs.snowflake.com/en/sql-reference/sql/update
+-- https://docs.snowflake.com/en/sql-reference/bind-variables#use-bind-variables-with-semi-structured-data
 --
 -- Seed provenance: tests/fixtures/mapper_contract_pre_registry.json (accepted
 -- structure plus recorded 2026-09-09 collection/setup identity contracts, frozen before removing the production JSON dependency). Field rules
@@ -25,10 +26,12 @@ DECLARE
   seed ARRAY;
   desired ARRAY;
   baseline ARRAY;
+  desired_json VARCHAR;
+  baseline_json VARCHAR;
   column_specs ARRAY DEFAULT PARSE_JSON('[{"NAME":"MAPPER_METADATA_VERSION","TYPE":"NUMBER(1,0)"},{"NAME":"MAPPER_ENABLED","TYPE":"BOOLEAN"},{"NAME":"OPERATOR","TYPE":"VARCHAR"},{"NAME":"PARENT_INSTANCE_RULE","TYPE":"VARCHAR"},{"NAME":"UUID_POLICY","TYPE":"VARCHAR"},{"NAME":"EMPTY_POLICY","TYPE":"VARCHAR"},{"NAME":"LIST_INSTANCE_RULE","TYPE":"VARCHAR"},{"NAME":"PROPERTY_NAME_RULE","TYPE":"VARCHAR"},{"NAME":"ASSEMBLY_POLICY","TYPE":"VARCHAR"},{"NAME":"REQUIRED_MEMBERS","TYPE":"VARCHAR"},{"NAME":"DEFAULT_SINGLETON_POLICY","TYPE":"VARCHAR"},{"NAME":"REQUIRED_RULE_IDS","TYPE":"VARCHAR"},{"NAME":"ROLES_PATH","TYPE":"VARCHAR"},{"NAME":"PARTIES_PATH","TYPE":"VARCHAR"},{"NAME":"PARTY_TYPE","TYPE":"VARCHAR"},{"NAME":"PARTY_UUID_PARTS","TYPE":"VARCHAR"},{"NAME":"PARTY_UUID_SOURCE_KEY","TYPE":"VARCHAR"},{"NAME":"REPORT_TARGET_PATH","TYPE":"VARCHAR"}]')::ARRAY;
   result_rows RESULTSET;
   statement VARCHAR;
-  conflict_sql VARCHAR DEFAULT 'WITH desired AS (SELECT value d FROM TABLE(FLATTEN(INPUT => ?))),
+  conflict_sql VARCHAR DEFAULT 'WITH desired AS (SELECT value d FROM TABLE(FLATTEN(INPUT => PARSE_JSON(?)))),
 current_rows AS (SELECT UPPER(TRIM(OSCAL_MODEL_KEY)) model, TRIM(NODE_PATH) path,
 OBJECT_CONSTRUCT_KEEP_NULL(r.*) present FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY r WHERE IS_ACTIVE)
 SELECT COUNT(*) N FROM desired d JOIN current_rows r
@@ -36,7 +39,7 @@ ON r.model=d.d:MODEL::VARCHAR AND r.path=d.d:PATH::VARCHAR,
 LATERAL FLATTEN(INPUT=>d.d:META) k
 WHERE NOT COALESCE(IS_NULL_VALUE(GET(r.present,k.key)),TRUE)
 AND GET(r.present,k.key) IS DISTINCT FROM k.value';
-  baseline_sql VARCHAR DEFAULT 'WITH expected AS (SELECT value row_value, COUNT(*) n FROM TABLE(FLATTEN(INPUT=>?)) GROUP BY value),
+  baseline_sql VARCHAR DEFAULT 'WITH expected AS (SELECT value row_value, COUNT(*) n FROM TABLE(FLATTEN(INPUT=>PARSE_JSON(?))) GROUP BY value),
 actual AS (SELECT OBJECT_CONSTRUCT_KEEP_NULL(''OSCAL_MODEL_KEY'', r."OSCAL_MODEL_KEY", ''NODE_PATH'', r."NODE_PATH", ''ELEMENT_TYPE'', r."ELEMENT_TYPE", ''PARENT_NODE_PATH'', r."PARENT_NODE_PATH", ''IS_COLLECTION'', r."IS_COLLECTION", ''INSTANCE_KEY_RULE'', r."INSTANCE_KEY_RULE", ''PROCESS_ORDER'', r."PROCESS_ORDER", ''IS_ACTIVE'', r."IS_ACTIVE", ''ITEM_PATH'', r."ITEM_PATH") row_value, COUNT(*) n FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY r GROUP BY row_value)
 SELECT COUNT(*) N FROM expected e FULL OUTER JOIN actual a ON e.row_value=a.row_value
 WHERE e.n IS DISTINCT FROM a.n';
@@ -59,7 +62,7 @@ WHERE e.n IS DISTINCT FROM a.n';
   "PARTY_UUID_PARTS" = IFF(IS_NULL_VALUE(d.meta:PARTY_UUID_PARTS),NULL,d.meta:PARTY_UUID_PARTS::VARCHAR),
   "PARTY_UUID_SOURCE_KEY" = IFF(IS_NULL_VALUE(d.meta:PARTY_UUID_SOURCE_KEY),NULL,d.meta:PARTY_UUID_SOURCE_KEY::VARCHAR),
   "REPORT_TARGET_PATH" = IFF(IS_NULL_VALUE(d.meta:REPORT_TARGET_PATH),NULL,d.meta:REPORT_TARGET_PATH::VARCHAR)
-FROM (SELECT value:MODEL::VARCHAR model, value:PATH::VARCHAR path, value:META meta FROM TABLE(FLATTEN(INPUT=>?))) d
+FROM (SELECT value:MODEL::VARCHAR model, value:PATH::VARCHAR path, value:META meta FROM TABLE(FLATTEN(INPUT=>PARSE_JSON(?)))) d
 WHERE UPPER(TRIM(OSCAL_MODEL_KEY))=d.model AND TRIM(NODE_PATH)=d.path AND IS_ACTIVE
 AND ("MAPPER_METADATA_VERSION" IS DISTINCT FROM IFF(IS_NULL_VALUE(d.meta:MAPPER_METADATA_VERSION),NULL,d.meta:MAPPER_METADATA_VERSION::NUMBER(1,0))
   OR "MAPPER_ENABLED" IS DISTINCT FROM IFF(IS_NULL_VALUE(d.meta:MAPPER_ENABLED),NULL,d.meta:MAPPER_ENABLED::BOOLEAN)
@@ -97,7 +100,7 @@ AND (("MAPPER_METADATA_VERSION" IS NULL OR "MAPPER_METADATA_VERSION" IS NOT DIST
   AND ("PARTY_UUID_PARTS" IS NULL OR "PARTY_UUID_PARTS" IS NOT DISTINCT FROM IFF(IS_NULL_VALUE(d.meta:PARTY_UUID_PARTS),NULL,d.meta:PARTY_UUID_PARTS::VARCHAR))
   AND ("PARTY_UUID_SOURCE_KEY" IS NULL OR "PARTY_UUID_SOURCE_KEY" IS NOT DISTINCT FROM IFF(IS_NULL_VALUE(d.meta:PARTY_UUID_SOURCE_KEY),NULL,d.meta:PARTY_UUID_SOURCE_KEY::VARCHAR))
   AND ("REPORT_TARGET_PATH" IS NULL OR "REPORT_TARGET_PATH" IS NOT DISTINCT FROM IFF(IS_NULL_VALUE(d.meta:REPORT_TARGET_PATH),NULL,d.meta:REPORT_TARGET_PATH::VARCHAR)))';
-  verify_sql VARCHAR DEFAULT 'SELECT COUNT(*) N FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY r JOIN (SELECT value:MODEL::VARCHAR model, value:PATH::VARCHAR path, value:META meta FROM TABLE(FLATTEN(INPUT=>?))) d
+  verify_sql VARCHAR DEFAULT 'SELECT COUNT(*) N FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY r JOIN (SELECT value:MODEL::VARCHAR model, value:PATH::VARCHAR path, value:META meta FROM TABLE(FLATTEN(INPUT=>PARSE_JSON(?)))) d
 ON UPPER(TRIM(r.OSCAL_MODEL_KEY))=d.model AND TRIM(r.NODE_PATH)=d.path AND r.IS_ACTIVE
 WHERE r."MAPPER_METADATA_VERSION" IS DISTINCT FROM IFF(IS_NULL_VALUE(d.meta:MAPPER_METADATA_VERSION),NULL,d.meta:MAPPER_METADATA_VERSION::NUMBER(1,0))
   OR r."MAPPER_ENABLED" IS DISTINCT FROM IFF(IS_NULL_VALUE(d.meta:MAPPER_ENABLED),NULL,d.meta:MAPPER_ENABLED::BOOLEAN)
@@ -289,7 +292,10 @@ BEGIN
 
   -- Capture all original rows (including other models) for unchanged-row verification.
   SELECT ARRAY_AGG(OBJECT_CONSTRUCT_KEEP_NULL('OSCAL_MODEL_KEY', r."OSCAL_MODEL_KEY", 'NODE_PATH', r."NODE_PATH", 'ELEMENT_TYPE', r."ELEMENT_TYPE", 'PARENT_NODE_PATH', r."PARENT_NODE_PATH", 'IS_COLLECTION', r."IS_COLLECTION", 'INSTANCE_KEY_RULE', r."INSTANCE_KEY_RULE", 'PROCESS_ORDER', r."PROCESS_ORDER", 'IS_ACTIVE', r."IS_ACTIVE", 'ITEM_PATH', r."ITEM_PATH")) INTO :baseline FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY r;
-  result_rows := (EXECUTE IMMEDIATE :conflict_sql USING (desired));
+  -- Dynamic SQL transports semi-structured binds as JSON text; decode in each template.
+  desired_json := TO_JSON(TO_VARIANT(desired));
+  baseline_json := TO_JSON(TO_VARIANT(baseline));
+  result_rows := (EXECUTE IMMEDIATE :conflict_sql USING (desired_json));
   FOR migration_row IN result_rows DO n := migration_row.N; END FOR;
   IF (n<>0) THEN RAISE metadata_conflict; END IF;
 
@@ -314,16 +320,16 @@ BEGIN
   -- UPDATE PHASE: one explicit transaction, no DDL inside it.
   BEGIN TRANSACTION;
   transaction_started := TRUE;
-  result_rows := (EXECUTE IMMEDIATE :baseline_sql USING (baseline));
+  result_rows := (EXECUTE IMMEDIATE :baseline_sql USING (baseline_json));
   FOR migration_row IN result_rows DO n := migration_row.N; END FOR;
   IF (n<>0) THEN RAISE baseline_changed; END IF;
-  result_rows := (EXECUTE IMMEDIATE :conflict_sql USING (desired));
+  result_rows := (EXECUTE IMMEDIATE :conflict_sql USING (desired_json));
   FOR migration_row IN result_rows DO n := migration_row.N; END FOR;
   IF (n<>0) THEN RAISE metadata_conflict; END IF;
 
   -- UPDATE itself refuses conflicting non-null cells, including concurrent changes.
   -- Read the executed UPDATE's result, not SQLROWCOUNT across dynamic execution.
-  result_rows := (EXECUTE IMMEDIATE :update_sql USING (desired));
+  result_rows := (EXECUTE IMMEDIATE :update_sql USING (desired_json));
   n := 0;
   changed_rows := NULL;
   FOR migration_row IN result_rows DO
@@ -332,10 +338,10 @@ BEGIN
   END FOR;
   IF (n<>1 OR changed_rows IS NULL OR changed_rows<0
       OR changed_rows>ARRAY_SIZE(desired)) THEN RAISE verification_error; END IF;
-  result_rows := (EXECUTE IMMEDIATE :verify_sql USING (desired));
+  result_rows := (EXECUTE IMMEDIATE :verify_sql USING (desired_json));
   FOR migration_row IN result_rows DO n := migration_row.N; END FOR;
   IF (n<>0) THEN RAISE verification_error; END IF;
-  result_rows := (EXECUTE IMMEDIATE :baseline_sql USING (baseline));
+  result_rows := (EXECUTE IMMEDIATE :baseline_sql USING (baseline_json));
   FOR migration_row IN result_rows DO n := migration_row.N; END FOR;
   IF (n<>0) THEN RAISE baseline_changed; END IF;
 
