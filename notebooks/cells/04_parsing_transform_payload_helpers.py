@@ -1289,7 +1289,16 @@ def _metadata_mapped_value(row, source_obj, context):
     field = row["SOURCE_FIELD_NAME"]
     counts = context["graph_report"]["FIELDS"].get(field)
     try:
-        value = _metadata_transform(row, resolve_json_path(source_obj, field), context)
+        source_kind = _metadata_params(row).get("value_source", "FIELD")
+        if source_kind not in {"FIELD", "CONFIG"}:
+            raise ValueError("Unknown mapped value source")
+        raw_value = (context["config"].get(field) if source_kind == "CONFIG"
+                     else resolve_json_path(source_obj, field))
+        value = _metadata_transform(row, raw_value, context)
+        required = (_metadata_params(row).get("required")
+                    or (row.get("TRANSFORM_PARAMS") or {}).get("required"))
+        if required and (value is SKIP_VALUE or not _has_value(value)):
+            raise ValueError("Required mapped value is absent after conversion")
         _metadata_validate_value(value, row.get("VALUE_CONSTRAINTS") or {})
     except (TypeError, ValueError, ArithmeticError):
         if counts is not None:

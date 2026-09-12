@@ -23,7 +23,7 @@ class CellThreeInMemoryMetadataTests(unittest.TestCase):
             result = runpy.run_path(str(base.CELL3), init_globals={
                 "pd": pd, "session": NoDatabaseSession(),
                 "CONFIG": {"OSCAL_MODEL": selected[0]},
-                "MAPPER_CATALOG": {},
+                "ROUTING_METADATA": {},
                 "MAPPING_INPUTS": inputs,
                 "REGISTRY_INPUT_ROWS": base.registry(),
                 "SOURCE_PROFILES": [base.profile(selected)],

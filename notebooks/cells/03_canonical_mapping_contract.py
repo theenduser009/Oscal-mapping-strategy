@@ -27,6 +27,7 @@ import copy
 import json
 import math
 import re
+from decimal import Decimal
 
 
 # Engine capabilities, not source/model-specific mapping decisions.
@@ -102,7 +103,7 @@ def _compile_value_constraints(value):
 FLAT_MAPPING_COLUMNS = {
     "EXECUTION_STATUS", "RUNTIME_TARGET_PATH", "ALLOWED_VALUES", "VALUE_MAP",
     "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE", "REFERENCE_TYPE",
-    "LOOKUP_KEY", "DESCRIPTION_REQUIRED",
+    "LOOKUP_KEY", "DESCRIPTION_REQUIRED", "VALUE_SOURCE", "VALUE_REQUIRED",
 }
 
 
@@ -153,7 +154,22 @@ def _compile_flat_mapping(row, elements):
         raise ValueError("Mapping has no metadata-defined element operator")
     operator = elements[owner]["operator"]
     transform_params, representation_params = {}, {}
-    allowed = set()
+    allowed = {"VALUE_SOURCE", "VALUE_REQUIRED"}
+    value_source = _flat_text(row, "VALUE_SOURCE") or "FIELD"
+    if value_source not in {"FIELD", "CONFIG"}:
+        raise ValueError("VALUE_SOURCE must be FIELD or CONFIG")
+    if value_source == "CONFIG":
+        if operator not in {"object", "record"} or not row.get("FIELD_RELATIVE_PATH"):
+            raise ValueError("Config values require an explicit object member target")
+        representation_params["value_source"] = "CONFIG"
+    required = row.get("VALUE_REQUIRED")
+    if required not in (None, ""):
+        if type(required) is bool:
+            representation_params["required"] = required
+        elif isinstance(required, str) and required.lower() in {"true", "false"}:
+            representation_params["required"] = required.lower() == "true"
+        else:
+            raise ValueError("VALUE_REQUIRED must be true or false")
     if transform == "security-objective":
         allowed.add("ALLOWED_VALUES")
         labels = _flat_items(row, "ALLOWED_VALUES")
@@ -223,7 +239,7 @@ def _compile_flat_mapping(row, elements):
     if row.get("APPROVAL_STATUS") not in (None, "", status):
         raise ValueError("EXECUTION_STATUS contradicts APPROVAL_STATUS")
     constraints = _compile_value_constraints(row.get("VALUE_CONSTRAINTS"))
-    if transform == "skip" and (constraints.get("required") or
+    if transform == "skip" and (representation_params.get("required") or constraints.get("required") or
                                 constraints.get("null_policy") == "reject" or
                                 constraints.get("cardinality", {}).get("min", 0) > 0):
         raise ValueError("Skip transform conflicts with required-value constraints")
@@ -372,6 +388,240 @@ def _model_aliases(model_contracts):
     return aliases
 
 
+def _registry_meta_text(row, key, required=False):
+    value = row.get(key)
+    if value is None or value == "":
+        if required:
+            raise ValueError("Registry metadata requires " + key)
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Registry metadata must be nonblank text: " + key)
+    return value.strip()
+
+
+def _registry_meta_enum(row, key, choices, required=False):
+    value = _registry_meta_text(row, key, required)
+    if value is not None and value not in choices:
+        raise ValueError("Unknown registry policy: " + key)
+    return value
+
+
+def _registry_meta_bool(row, key):
+    value = row.get(key)
+    if type(value) is bool:
+        return value
+    if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
+        return value.strip().lower() == "true"
+    raise ValueError("Registry metadata requires explicit boolean: " + key)
+
+
+def _registry_meta_list(row, key):
+    value = _registry_meta_text(row, key)
+    if value is None:
+        return []
+    values = [part.strip() for part in value.split("|")]
+    if any(not part for part in values) or len(values) != len(set(values)):
+        raise ValueError("Registry list contains empty or duplicate values: " + key)
+    return values
+
+
+def _registry_meta_version(value):
+    # Snowflake NUMBER(38,0) can arrive as int or Decimal, never a boolean.
+    if type(value) is bool or isinstance(value, float):
+        return False
+    if isinstance(value, str):
+        return value.strip() == "1"
+    if isinstance(value, int):
+        return value == 1
+    return isinstance(value, Decimal) and value.is_finite() and value == Decimal(1)
+
+
+def _decode_registry_element(row, root):
+    path = _registry_path(row)
+    operator = _registry_meta_enum(row, "OPERATOR", METADATA_OPERATORS, True)
+    collection = _registry_meta_bool(row, "IS_COLLECTION")
+    if collection != path.endswith("[]"):
+        raise ValueError("Registry collection flag conflicts with path")
+    if operator != "object" and not collection:
+        raise ValueError("Registry operator requires a collection")
+    parent = _registry_meta_text(row, "PARENT_NODE_PATH")
+    key_rule = _registry_meta_text(row, "INSTANCE_KEY_RULE")
+    item_path = _registry_meta_text(row, "ITEM_PATH")
+    # These are reusable operator capabilities, not source/model decisions.
+    identities = {"record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
+                  "properties": "SOURCE_FIELD_NAME+VALUE", "values": "VALUE",
+                  "references": "CONTENT_ID", "roles": "SOURCE_FIELD_NAME",
+                  "parties": "ID", "assignments": "SOURCE_FIELD_NAME+ID"}
+    if operator in identities and key_rule != identities[operator]:
+        raise ValueError("Registry instance rule conflicts with operator")
+    if operator in {"record", "observations"} and item_path is not None:
+        raise ValueError("Record/observation operator requires null item path")
+    if operator in {"properties", "values", "references", "roles"} and item_path != "$":
+        raise ValueError("Registry operator requires root item path")
+    if operator in {"parties", "assignments"} and item_path != "UserList[]":
+        raise ValueError("Linked identity operator requires reviewed user-list item path")
+    parameters = {"registry_contract": {"parent_path": parent, "is_collection": collection,
+                                        "instance_key_rule": key_rule, "item_path": item_path}}
+    parent_rule = _registry_meta_enum(row, "PARENT_INSTANCE_RULE",
+                                      {"none", "singleton", "source-record"})
+    if parent_rule not in (None, "none"):
+        parameters["parent_instance_rule"] = parent_rule
+    uuid_policy = _registry_meta_enum(row, "UUID_POLICY", {"omit", "node", "instance"}, True)
+    if uuid_policy != "omit":
+        parameters["include_uuid"] = True
+    if uuid_policy == "instance":
+        if not collection:
+            raise ValueError("Instance UUID policy requires a collection")
+        parameters["uuid_from_instance"] = True
+    empty = _registry_meta_enum(row, "EMPTY_POLICY", {"omit", "emit"}, True)
+    if empty == "emit":
+        if operator not in {"object", "record"}:
+            raise ValueError("Empty emission is not supported by this operator")
+        parameters["materialize_empty"] = True
+    list_rule = _registry_meta_enum(row, "LIST_INSTANCE_RULE", {"none", "source-field-index"}, True)
+    if list_rule == "source-field-index":
+        if not collection or operator != "object":
+            raise ValueError("List identity requires an object collection")
+        parameters.update(allow_list_instances=True, list_identity=list_rule)
+    name_rule = _registry_meta_enum(row, "PROPERTY_NAME_RULE", {"source-field-slug"})
+    if operator in {"properties", "observations"}:
+        if name_rule is None:
+            raise ValueError("Property/observation operator requires property naming metadata")
+        parameters["property_name_rule"] = name_rule
+    elif name_rule is not None:
+        raise ValueError("Property naming does not apply to this operator")
+    assembly = _registry_meta_enum(row, "ASSEMBLY_POLICY", {"normal", "complete-only"}, True)
+    members = _registry_meta_list(row, "REQUIRED_MEMBERS")
+    if members or assembly == "complete-only":
+        if operator not in {"object", "record"} or not members:
+            raise ValueError("Assembly policy requires object members")
+        if any(any(not token or "[" in token or "]" in token for token in member.split("."))
+               for member in members):
+            raise ValueError("Assembly members must be relative scalar paths")
+        parameters["required_members"] = members
+        if assembly == "complete-only":
+            parameters["optional_assembly"] = True
+    if path != root and any(row.get(key) not in (None, "") for key in
+                           ("DEFAULT_SINGLETON_POLICY", "REQUIRED_RULE_IDS", "REPORT_TARGET_PATH")):
+        raise ValueError("Model-wide registry metadata belongs on its root")
+    return {"operator": operator, "parameters": parameters}
+
+
+def decode_registry_model_contracts(registry_rows, source_profiles, model_contracts):
+    """Decode only enabled versioned registry metadata; never infer field rules."""
+    result = copy.deepcopy(model_contracts)
+    enabled = {model for profile in source_profiles for model in profile.get("MODEL_KEYS", ())}
+    selected = [model for model in enabled
+                if model in result and "REGISTRY_METADATA_VERSION" in result[model]]
+    if not selected:
+        return result
+    registry = [_meta_row(row) for row in registry_rows]
+    active = [row for row in registry if _metadata_active(row)]
+    for model in sorted(selected):
+        contract = result[model]
+        if not _registry_meta_version(contract.get("REGISTRY_METADATA_VERSION")):
+            raise ValueError("Unsupported configured registry metadata version")
+        report = _metadata_object(contract.get("REPORT"), "REPORT")
+        forbidden = {"ELEMENTS", "ROOT_PATH", "ELEMENT_PATHS", "REFERENCE_GROUPS",
+                     "DEFAULT_ELEMENT", "REQUIRED_RULE_IDS", "MAPPING_RULES",
+                     "PATH_RULES", "EXCLUDED_FIELDS"}
+        if forbidden & contract.keys() or "TARGET_PATH" in report:
+            raise ValueError("Registry-owned structure cannot be duplicated in model settings")
+        if contract.get("MODEL_KEY") != model or contract.get("POLICY") != "metadata-v1":
+            raise ValueError("Versioned registry model identity is invalid")
+        rows = [row for row in active if _registry_model(row) == model]
+        paths = [_registry_path(row) for row in rows]
+        if not paths or any(not path for path in paths) or len(paths) != len(set(paths)):
+            raise ValueError("Enabled model requires unique active registry paths")
+        markers = [row for row in rows if row.get("MAPPER_METADATA_VERSION") not in (None, "")]
+        if len(markers) != 1 or not _registry_meta_version(markers[0]["MAPPER_METADATA_VERSION"]):
+            raise ValueError("Enabled model requires exactly one versioned registry root")
+        root_row = markers[0]
+        root = _registry_path(root_row)
+        if "." in root or _registry_meta_text(root_row, "PARENT_NODE_PATH") is not None:
+            raise ValueError("Registry metadata marker must identify the actual root")
+        included = { _registry_path(row): row for row in rows
+                     if _registry_meta_bool(row, "MAPPER_ENABLED") }
+        if root not in included:
+            raise ValueError("Registry root must be mapper-enabled")
+        if any(path != root and not path.startswith(root + ".") for path in included):
+            raise ValueError("Enabled registry paths must share the marked root")
+        elements = {path: _decode_registry_element(row, root) for path, row in included.items()}
+        if elements[root]["operator"] != "object":
+            raise ValueError("Registry root requires an object operator")
+        for path, row in included.items():
+            parent = _registry_meta_text(row, "PARENT_NODE_PATH")
+            if path != root and (parent not in included or not path.startswith(parent + ".")):
+                raise ValueError("Enabled registry child requires its included path ancestor")
+            if parent:
+                parent_spec = elements[parent]
+                parent_rule = elements[path]["parameters"].get("parent_instance_rule")
+                if _registry_meta_bool(included[parent], "IS_COLLECTION"):
+                    if parent_spec["operator"] != "record" or parent_rule != "source-record":
+                        raise ValueError("Collection parent needs a supported explicit instance binding")
+                elif parent_rule == "source-record":
+                    raise ValueError("Source-record parent binding requires a record collection")
+        default_policy = _registry_meta_enum(root_row, "DEFAULT_SINGLETON_POLICY",
+                                             {"none", "emit-outside-collections"}, True)
+        default = None if default_policy == "none" else {
+            "operator": "object", "parameters": {"materialize_empty": True},
+            "scope": "singletons-without-collection-ancestors"}
+        groups, linked_paths = [], set()
+        reference_keys = ("ROLES_PATH", "PARTIES_PATH", "PARTY_TYPE",
+                          "PARTY_UUID_PARTS", "PARTY_UUID_SOURCE_KEY")
+        tokens = {"$source_system", "$source_table", "$source_record", "$source_record_id",
+                  "$reference_id", "$model", "$identity_version"}
+        for path, row in included.items():
+            if elements[path]["operator"] != "assignments":
+                if any(row.get(key) not in (None, "") for key in reference_keys):
+                    raise ValueError("Reference family metadata belongs on assignments")
+                continue
+            roles = _registry_meta_text(row, "ROLES_PATH", True)
+            parties = _registry_meta_text(row, "PARTIES_PATH", True)
+            group_paths = {roles, parties, path}
+            if len(group_paths) != 3 or not group_paths.issubset(included) or group_paths & linked_paths:
+                raise ValueError("Reference family requires distinct unshared enabled paths")
+            if elements[roles]["operator"] != "roles" or elements[parties]["operator"] != "parties":
+                raise ValueError("Reference family operators conflict")
+            if len({_registry_meta_text(included[item], "PARENT_NODE_PATH") for item in group_paths}) != 1:
+                raise ValueError("Reference family paths must have the same parent")
+            parts = _registry_meta_list(row, "PARTY_UUID_PARTS")
+            if not parts or any(part.startswith("$") and part not in tokens for part in parts):
+                raise ValueError("Reference UUID parts contain missing or unknown tokens")
+            if "$reference_id" not in parts or not {"$source_record", "$source_record_id"} & set(parts):
+                raise ValueError("Reference UUID parts must retain record and reference identity")
+            group = {"roles_path": roles, "parties_path": parties, "assignments_path": path,
+                     "party_type": _registry_meta_text(row, "PARTY_TYPE", True),
+                     "party_uuid_parts": parts}
+            source_key = _registry_meta_text(row, "PARTY_UUID_SOURCE_KEY")
+            if source_key:
+                sources = [profile for profile in source_profiles if profile.get("SOURCE_KEY") == source_key]
+                if len(sources) != 1 or model not in sources[0].get("MODEL_KEYS", ()):
+                    raise ValueError("Reference UUID source key must resolve to one enabled source")
+                source = sources[0]
+                group["source_namespace"] = {
+                    "SOURCE_SYSTEM_NAME": _registry_meta_text(source, "SOURCE_SYSTEM_NAME", True),
+                    "SOURCE_TABLE_NAME": _registry_meta_text(source, "SOURCE_TABLE_NAME", True),
+                    "MODEL_KEY": model}
+            elif not {"$source_system", "$source_table", "$model", "$identity_version"}.issubset(parts):
+                raise ValueError("Unscoped reference UUID recipe must include the full source namespace")
+            groups.append(group)
+            linked_paths.update(group_paths)
+        if any(spec["operator"] in {"roles", "parties"} and path not in linked_paths
+               for path, spec in elements.items()):
+            raise ValueError("Linked identity operator lacks a reference family")
+        target = _registry_meta_text(root_row, "REPORT_TARGET_PATH")
+        if target:
+            if target not in included:
+                raise ValueError("Report target must be an enabled registry path")
+            report["TARGET_PATH"] = target
+        contract.update(ROOT_PATH=root, ELEMENTS=elements, ELEMENT_PATHS=tuple(sorted(included)),
+                        DEFAULT_ELEMENT=default, REFERENCE_GROUPS=groups,
+                        REQUIRED_RULE_IDS=_registry_meta_list(root_row, "REQUIRED_RULE_IDS"),
+                        REPORT=report)
+    return result
+
+
 def _validate_source_profiles(source_profiles, model_contracts, mapping_rows):
     if not isinstance(mapping_rows, dict) or not source_profiles:
         raise ValueError("Explicit source-to-mapping bindings are required")
@@ -440,6 +690,7 @@ def _summarize_routing_issues(report, sample_limit=25):
 def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model_contracts,
                              routing_metadata=None):
     """Pure source/model routing. No data reads, globals mutation or writes."""
+    model_contracts = decode_registry_model_contracts(registry_rows, source_profiles, model_contracts)
     _validate_source_profiles(source_profiles, model_contracts, mapping_rows)
     routing = _metadata_object(routing_metadata, "ROUTING")
     if set(routing) - {"DEFERRED_MODEL_LABELS", "DEFERRED_TARGET_PATHS"}:
@@ -472,7 +723,9 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     raise ValueError("Registry label conflicts with configured model ownership")
                 aliases[token] = model
     for model, contract in model_contracts.items():
-        root = contract["ROOT_PATH"]
+        root = contract.get("ROOT_PATH")
+        if not root:
+            continue  # Unselected strict models have not loaded registry metadata.
         if root in root_models and root_models[root] != model:
             raise ValueError("Configured root conflicts with registry model")
         root_models[root] = model
@@ -589,7 +842,7 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 canonical["STATUS"] = canonical.get("STATUS") or "In Progress"
                 selected.append(canonical)
                 report["SELECTED_ROWS"] += 1
-            selected.sort(key=lambda row: (row["OWNER_ELEMENT_PATH"], row["OSCAL_ELEMENT_PATH"], row["SOURCE_FIELD_NAME"]))
+            selected.sort(key=lambda row: (row["OWNER_ELEMENT_PATH"], row["CANONICAL_ELEMENT_PATH"], row["SOURCE_FIELD_NAME"]))
             grouped = {}
             for row in selected:
                 grouped.setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
@@ -638,7 +891,7 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
 
 MAPPING_CONTEXTS = compile_mapping_contexts(
     MAPPING_INPUTS, REGISTRY_INPUT_ROWS, SOURCE_PROFILES, MODEL_CONTRACTS,
-    routing_metadata=MAPPER_CATALOG.get("ROUTING", {}),
+    routing_metadata=ROUTING_METADATA,
 )
 # Legacy SSP aliases are observational only; the active runner uses contexts.
 _default_context = next((context for context in MAPPING_CONTEXTS

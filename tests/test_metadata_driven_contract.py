@@ -14,8 +14,8 @@ import test_multi_model_graph as legacy_graph
 
 ROOT = Path(__file__).resolve().parents[1]
 CELL3 = ROOT / "notebooks/cells/03_canonical_mapping_contract.py"
-STRUCTURAL_CATALOG = ROOT / "notebooks/metadata/mapper_contract.v1.json"
-FLAT_MAPPING = ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv"
+STRUCTURAL_CATALOG = ROOT / "tests/fixtures/mapper_contract_pre_registry.json"
+FLAT_MAPPING = ROOT / "tests/fixtures/mappings_pre_registry.csv"
 MODEL = "SYNTHETIC_THIRD_MODEL"
 ROOT_PATH = "synthetic-model"
 RESULT = ROOT_PATH + ".results[]"

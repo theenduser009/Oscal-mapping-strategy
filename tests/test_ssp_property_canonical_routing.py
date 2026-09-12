@@ -4,7 +4,7 @@ Run with the bundled Python runtime (pandas installed). Snowflake transport and
 unrelated component lookup I/O are fakes; mapping and graph logic are real.
 """
 import contextlib
-import ast
+import copy
 import datetime
 import hashlib
 import io
@@ -94,37 +94,27 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
     def canonicalize(self, mappings, registry_frame=None):
         artifact = pd.DataFrame(mappings)
         original = artifact.copy(deep=True)
-        # Execute pure configuration, including derived selector state;
-        # exclude Snowflake imports/session acquisition, not its dependencies.
-        import copy
-        config_ns = {"datetime": datetime, "copy": copy, "Path": Path, "json": json,
-                     "__file__": str(CELLS / "01_initialization_and_configuration.py"),
-                     "_historical_catalog": json.loads(
-                         (ROOT / "tests/fixtures/mapper_contract_pre_flat.json").read_text(encoding="utf-8"))}
-        tree = ast.parse((CELLS / "01_initialization_and_configuration.py").read_text(encoding="utf-8"))
-        configuration = []
-        for node in tree.body:
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                continue
-            if isinstance(node, ast.Assign):
-                names = {target.id for target in node.targets if isinstance(target, ast.Name)}
-                if "session" in names:
-                    continue
-                if "SELECTED_MODELS" in names:
-                    node.value = ast.Constant(value="SSP")
-                if "MAPPER_CATALOG" in names:
-                    node.value = ast.Name(id="_historical_catalog", ctx=ast.Load())
-            configuration.append(node)
-        module = ast.fix_missing_locations(ast.Module(body=configuration, type_ignores=[]))
-        with contextlib.redirect_stdout(io.StringIO()):
-            exec(compile(module, "<test-config>", "exec"), config_ns)
-        profiles = config_ns["SOURCE_PROFILES"]
+        # Freeze the historical catalog/compiler contract independently of the
+        # current deployment-only Cell One and its registry metadata extension.
+        catalog = json.loads(
+            (ROOT / "tests/fixtures/mapper_contract_pre_flat.json").read_text(encoding="utf-8"))
+        models = copy.deepcopy(catalog["MODELS"])
+        config = copy.deepcopy(catalog["CONFIG_DEFAULTS"])
+        config.update(OSCAL_MODEL="SSP", ROOT_PATH=models["SSP"]["ROOT_PATH"],
+                      RUN_ID="historical-routing-test",
+                      METADATA_RELEASE=catalog.get("RELEASE_ID"))
+        profiles = []
+        for source in catalog["SOURCES"]:
+            if "SSP" in source["MODEL_BINDINGS"]:
+                profile = copy.deepcopy(source)
+                profile.update(MODEL_KEYS=("SSP",), BASE_CONFIG=copy.deepcopy(config))
+                profiles.append(profile)
         with contextlib.redirect_stdout(io.StringIO()):
             result = runpy.run_path(str(LEGACY_CELL_3_PATH),
                 init_globals={
-                    "CONFIG": config_ns["CONFIG"], "re": re, "pd": pd,
-                    "MAPPER_CATALOG": config_ns["MAPPER_CATALOG"],
-                    "SOURCE_PROFILES": profiles, "MODEL_CONTRACTS": config_ns["MODEL_CONTRACTS"],
+                    "CONFIG": config, "re": re, "pd": pd,
+                    "MAPPER_CATALOG": catalog,
+                    "SOURCE_PROFILES": profiles, "MODEL_CONTRACTS": models,
                     "MAPPING_INPUTS": {"source-one": artifact.to_dict(orient="records")},
                     "REGISTRY_INPUT_ROWS": list((registry_frame or registry()).rows),
                     "session": Session(), "mapping_artifact_pdf": artifact,

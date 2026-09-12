@@ -1,30 +1,22 @@
-# Mapper V1 — copy-ready Snowflake cells
+# Maintained seven-cell mapper source
 
-These seven files are the maintained source. The
-[complete notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py) and
-[V2 copy-ready pages](../cells_v2/README.md) are generated from them.
+These files are the single maintained implementation. The
+[V2 copy-ready pages](../cells_v2/README.md) and
+[combined notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py) are generated from them.
 
-Copy each file into one Snowflake Python cell and run them in numerical order.
-The files depend on state initialized by the preceding cells. Developers edit
-these files once, then run `python tools/sync_notebook_cells.py` from the repository
-root; `--check` detects stale generated pages without changing files. This is a
-local packaging command, not another Snowflake cell.
+Field rules come from the mapping CSV; structure and identity come from the
+versioned registry. Cell One contains visible deployment settings. No JSON
+catalog upload or extra daily runtime cell is required.
 
-## Current metadata-driven workflow revision
+**First complete the [one-time registry setup](../../docs/REGISTRY_METADATA_SETUP.md).**
+Then use the updated mapping CSV and all seven matching cells in one Snowflake
+session, with normal writes disabled and Cell Seven in PREVIEW. Do not mix old
+and new interfaces or rerun the accepted full DEV reload.
 
-Upload [mapper_contract.v1.json](../metadata/mapper_contract.v1.json) to notebook Files alongside the approved mapping CSV. Source/model rules and executable choices come from this reviewed artifact and approved CSV metadata; the live registry supplies hierarchy/identity. [Metadata contract](../metadata/README.md).
-
-Replace all seven matching sections for this revision; do not mix old and new
-interfaces. Cell Seven uses `OSCAL_LOAD_MODE = "PREVIEW"`. Global
-`CONFIG["EXECUTE_WRITES"]` remains false.
-
-Source One routes to SSP and the accepted 17 AR fields. AR has no verified
-storage contract, so it receives graph-only validation and cannot be committed.
-[Exact scope, pending work and expected report](../../docs/SHARED_SEVEN_CELL_MAPPER.md).
-
-No additional execution cell. Do not rerun the accepted full reload, old pilots,
-or expanded standalone AR candidate. Historical diagnostic instructions below
-are not part of this consolidated workflow.
+Developers edit these files once, then use `python tools/sync_notebook_cells.py`;
+`--check` reports generated-page drift. This is a packaging tool, not a
+Snowflake execution step. Historical diagnostics below are not current run
+requests.
 
 ## Run order
 

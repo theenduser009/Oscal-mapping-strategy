@@ -11,9 +11,9 @@ import test_multi_model_graph as graph
 from test_flat_mapping_release import _registry_for_release
 
 ROOT = Path(__file__).resolve().parents[1]
-CATALOG = ROOT / "notebooks/metadata/mapper_contract.v1.json"
+CATALOG = ROOT / "tests/fixtures/mapper_contract_pre_registry.json"
 OLD_CATALOG = ROOT / "tests/fixtures/mapper_contract_pre_flat.json"
-MAPPING = ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv"
+MAPPING = ROOT / "tests/fixtures/mappings_pre_registry.csv"
 BUILDER = ROOT / "notebooks/cells/05_registry_graph_builder.py"
 RETIRED_KEYS = ("MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS")
 RETIRED_FUNCTIONS = ("_metadata_rule_candidates", "_metadata_rule_matches", "_apply_mapping_path_rules")

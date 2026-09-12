@@ -2,8 +2,10 @@
 
 [ARCHER_OSCAL_MAPPINGS.csv](ARCHER_OSCAL_MAPPINGS.csv) is the single maintained
 field-mapping input for this migration. Open it in Excel or a text editor.
-It preserves the 147 reviewed source occurrences and adds one explicitly
-labelled existing populated-value guard. It is not the missing full 608-row file.
+It preserves the 147 reviewed source occurrences, one explicitly labelled
+existing populated-value guard, and three existing required support values.
+Those support rows replace structural settings, not newly completed Excel rows.
+This is not the missing full 608-row file.
 
 The first five columns retain the source field, original model label, original
 OSCAL path, mapping type and Notes. Source document, line and original Excel row
@@ -24,6 +26,8 @@ compilation snapshot; it is not a second executable mapping input.
 | OTHER_REMARKS_TEMPLATE | Status remarks with one literal {label} placeholder. |
 | ROLE_ID / ROLE_TITLE | Accepted role reference details. |
 | REFERENCE_TYPE / LOOKUP_KEY / DESCRIPTION_REQUIRED | Reference kind, approved lookup binding and required-description flag. |
+| VALUE_SOURCE | FIELD (default) reads the named source path; CONFIG reads the explicitly named Cell One setting. There is no fallback between them. |
+| VALUE_REQUIRED | true requires a nonempty value before and after conversion. Blank/false preserves optional behavior; 0 and false are values, not missing data. |
 
 Blank optional operation columns mean no extra option. They are not JSON.
 Notes remain evidence, not executable code. Changing prose alone does not
@@ -31,9 +35,11 @@ silently change a transformation.
 
 ## Preserved scope
 
-There are 60 approved mappings (43 SSP and 17 AR), one existing populated-value
-guard, 85 deferred rows and two excluded helpers. The count is executable rules,
-not a claim that every populated field or complete OSCAL model is accepted.
+There are 60 original approved mappings (43 SSP and 17 AR), three existing
+support rules, one populated-value guard, 85 deferred rows and two excluded
+helpers: 151 rows total. The three support rules source metadata title from
+AUTHORIZATION_PACKAGE_NAME and the two versions from Cell One settings.
+These counts are not a claim that a complete OSCAL model is accepted.
 
 Accepted CIA legacy values, status remarks, component hydration, property naming,
 and AR observation behavior are preserved. Recorded Notes conflicts remain
@@ -43,11 +49,10 @@ evidence, not a fabricated source-sheet row.
 
 ## What remains separate
 
-The reduced [structural settings](../notebooks/metadata/mapper_contract.v1.json)
-still define source tables, lookup bindings, element operators, identity rules
-and verified destinations that the current registry does not fully contain.
-It no longer contains field rules, field-specific path rewrites or exclusions.
-This removes duplicated field-rule maintenance, but does not yet remove every
-JSON dependency. No registry schema change or database write is part of this work.
+The [extended registry](../docs/REGISTRY_METADATA_SETUP.md) defines element
+operators, parent identity, UUID/empty/assembly policies and required-mapping
+gates. Cell One holds visible source/lookup locations and verified destinations.
+No JSON catalog is maintained or read. The one-time DEV registry migration is
+prepared, not live-verified; normal DIM/FACT writes remain disabled.
 
 See [current status](../docs/CURRENT_STATUS.md) before any notebook run.

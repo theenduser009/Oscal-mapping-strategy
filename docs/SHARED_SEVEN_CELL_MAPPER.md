@@ -1,6 +1,6 @@
 # Shared metadata-driven seven-cell mapper
 
-Status: registry-first metadata-driven execution implemented; all 564 repository tests pass, with exact SSP/AR17 parity, the posted routing failure pattern and metadata-only new-field/third-model proof. Legacy SSP/AR engines are test-only; deployed Cell Four is roughly half its prior size. V2/combined notebooks are generated from the original split source. No shared-workflow Snowflake run or AR database load is accepted yet.
+Status: registry-backed, JSON-free code release prepared. Local parity and input-flow checks pass; one-time DEV registry setup and the matching live PREVIEW are still pending. No shared daily-write or AR persistence acceptance is claimed.
 
 This is the owner-approved consolidation, not a new mapping batch. The seven existing cells now route Source One through a common graph builder and guarded persistence API. The accepted SSP mappings and 17 accepted AR fields are the parity baseline. The blocked 34-field AR candidate is not enabled.
 
@@ -22,11 +22,11 @@ model selections fail before source reads. The first selected model supplies
 compatibility outputs; AR-first selection does not borrow SSP target tables.
 The [V2 cell pages](../notebooks/cells_v2/README.md) mirror the same implementation.
 
-Cell One loads the [reviewed deployment catalog](../notebooks/metadata/mapper_contract.v1.json). Original Excel/CSV rows retain their source, path, type and Notes. The catalog records already-approved executable choices; new rows can supply explicit approved transform metadata. Cell Three compiles these with the registry, and Cell Four executes reusable operators. [Contract and onboarding rules](../notebooks/metadata/README.md). No new field/model is implicitly approved.
+Cell One provides visible source, lookup, selection and destination settings. The mapping CSV owns field rules and Notes; the extended registry owns operators, hierarchy and identity. Cell Three compiles these into one in-memory plan. No JSON catalog is read. [One-time setup and preview](REGISTRY_METADATA_SETUP.md).
 
 | Cell | Responsibility |
 | --- | --- |
-| 1 | One selector; load metadata for source/model bindings, operators, reviewed mappings and storage contracts. |
+| 1 | One selector; visible source/lookup bindings, version settings and verified storage contracts. |
 | 2 | Read each source separately; freeze a session-local snapshot reused by its model routes; read mapping rows, registry and approved lookups. |
 | 3 | Compile approved executable plans against the registry; preserve original paths/Notes and report selected, excluded, deferred and blocked rows. |
 | 4 | Reusable transformations and element operators execute the metadata plan; no active source-field/model-name dispatch. |
@@ -40,14 +40,13 @@ A source profile can supply explicit `MODEL_STORAGE_CONTRACTS` overrides per mod
 
 Source snapshots use Snowpark [cache_result](https://docs.snowflake.com/en/developer-guide/snowpark/reference/python/1.35.0/snowpark/api/snowflake.snowpark.DataFrame.cache_result). These are temporary session tables, not writes to RAW data or OSCAL DIM/FACT. Keep the same session open; the input dictionaries retain the cache handles. Snapshots of different tables are captured separately, not as a cross-table transaction. Finish upstream ingestion before the notebook run.
 
-## Live preview procedure - when requested
+## Live preview procedure
 
-The posted report now explains all 459 unknown-label blockers. Cell Three is corrected to derive ownership from active registry paths, defer catalog-declared placeholders and unreviewed rows, and exclude registered other-model paths without enabling their models. Genuine known-label/path contradictions still block. The local regression reproduces the failure pattern; a new live PREVIEW is needed before acceptance. This is not authorization for COMMIT.
-
-1. Replace the notebook Files copy of [mapper_contract.v1.json](../notebooks/metadata/mapper_contract.v1.json) and replace only [V2 Cell Three](../notebooks/cells_v2/03_canonical_mapping_contract.py). All other cell code is unchanged from the simplified metadata release. No extra cell or fixture upload is needed.
-2. Keep Cell 1 `CONFIG["EXECUTE_WRITES"] = False` and Cell 7 `OSCAL_LOAD_MODE = "PREVIEW"`.
-3. In the same active session that produced the failure, run Cell One to reload the catalog, then Cell Three, then Cell Seven. Existing Cell Two snapshots and Cell Four/Five/Six definitions remain usable. If the session has ended, run the complete matching seven-cell set in order instead. The mapping CSV stays unchanged.
-4. Share only the printed `OSCAL_PIPELINE_REPORT`; keep raw values and source IDs in Snowflake.
+First run only the [one-time registry migration](REGISTRY_METADATA_SETUP.md)
+and share its aggregate result. It changes DEV registry metadata, not DIM/FACT.
+After setup is verified, upload the updated CSV and use all seven matching V2
+cells in one session with normal writes disabled and PREVIEW. No JSON upload,
+additional daily cell, old pilot or DEV reload is needed.
 
 Expected successful preview: `PREVIEW_WITH_TARGET_CONTRACTS_PENDING`, with one Source One/SSP group and one Source One/Assessment Results group. SSP must pass its target-aware preview. AR must select exactly the accepted 17 fields and report `MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING`, `storage_verified=false`, and no writes. This validates AR graph structure, not saved AR data or full OSCAL schema conformance.
 

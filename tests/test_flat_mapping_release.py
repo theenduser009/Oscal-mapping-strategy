@@ -18,8 +18,10 @@ import test_multi_model_graph as graph
 from test_ssp_mapping_dispatch_contracts import EXPECTED_CIA_CONTRACTS, _mapping_row
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV_PATH = ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv"
-CATALOG_PATH = ROOT / "notebooks/metadata/mapper_contract.v1.json"
+# Frozen migration inputs preserve this historical release's exact 61 contracts.
+# The deployed CSV/Cell One/registry path is tested in test_registry_release.py.
+CSV_PATH = ROOT / "tests/fixtures/mappings_pre_registry.csv"
+CATALOG_PATH = ROOT / "tests/fixtures/mapper_contract_pre_registry.json"
 OLD_CATALOG_PATH = ROOT / "tests/fixtures/mapper_contract_pre_flat.json"
 CONTRACT_DIGEST = "d9d3691f3e4f6781d17d79306f1cbbbf6bf01726c83f3b70e722495ac6d34bf3"
 PROVENANCE_DIGEST = "dc54e527b481e35d2f438f7dbc7334bc99e73c2c9eb53ffda02767419b2b4e50"

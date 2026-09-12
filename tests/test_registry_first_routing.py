@@ -7,7 +7,8 @@ import unittest
 import test_declarative_routing as base
 
 ROOT = Path(__file__).resolve().parents[1]
-CATALOG = ROOT / "notebooks/metadata/mapper_contract.v1.json"
+# Fixed routing-policy fixture for explicit compiler API regressions.
+CATALOG = ROOT / "tests/fixtures/mapper_contract_pre_registry.json"
 # Counts/labels/paths are posted evidence; source field names below are synthetic.
 POSTED_PAIRS = (
     ("Multiple - See Notes", "Multiple - See Notes", 1),

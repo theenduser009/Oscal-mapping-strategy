@@ -2,17 +2,16 @@
 
 This repository is the durable checkpoint for the metadata-driven Archer-to-OSCAL mapper.
 
-**Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Cell responsibilities,
-accepted runs, unresolved gaps and the next daily-loading step are recorded here.
-[Project startup instructions](AGENTS.md) require this context to be read before work.
+**Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Accepted runs,
+cell responsibilities, unresolved gaps and the next action are recorded there.
 
-**Current direction:** one shared seven-cell workflow for Source One → SSP and
-the 17 accepted AR mappings. [Scope and preview instructions](docs/SHARED_SEVEN_CELL_MAPPER.md).
-No standalone mapper was added. Shared live acceptance and AR persistence are
-pending; writes remain disabled. The full SSP DEV reload stays accepted and
-must not be rerun for this consolidation.
+**Current release:** one mapping CSV, versioned registry metadata, and the same
+[seven V2 cells](notebooks/cells_v2/README.md). No JSON catalog upload.
+First run the [one-time DEV registry setup](docs/REGISTRY_METADATA_SETUP.md);
+live setup and the matching notebook PREVIEW remain pending.
 
-**V2 individual cell pages:** [Open Cells 1–7](notebooks/cells_v2/README.md).
+Normal writes stay disabled. SSP's accepted full DEV reload is not repeated;
+AR remains seventeen accepted in-memory mappings without verified storage.
 
 ## Authoritative files
 

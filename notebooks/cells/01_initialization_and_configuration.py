@@ -11,7 +11,6 @@ from snowflake.snowpark.functions import (
 from snowflake.snowpark.window import Window
 
 import copy
-from pathlib import Path
 import datetime
 import hashlib
 import json
@@ -21,10 +20,137 @@ import uuid
 
 session = get_active_session()
 
-# One selector. Field mappings live only in the mapping CSV. The settings file
-# retains source bindings, element behavior and verified destinations.
+# One selector. Field mappings live in the CSV; graph structure and identity
+# policies come from the extended registry. These are deployment settings only.
 SELECTED_MODELS = ("SSP", "ASSESSMENT_RESULTS")
-MAPPER_METADATA_FILE = "mapper_contract.v1.json"
+
+CONFIG = {
+    "OSCAL_VERSION": "1.2.3",
+    "SSP_DOCUMENT_VERSION": "1.0",
+    "EXECUTE_WRITES": False,
+    "BUILD_COVERAGE_REPORT": True,
+    "ARCHER_META_VALUE_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE",
+    "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
+    "IDENTITY_VERSION": "v1_registry_path_instance",
+    "METADATA_RELEASE": "registry-metadata-v1",
+}
+
+SOURCE_FILES = [
+    {
+        "SOURCE_KEY": "source-one",
+        "SOURCE_SYSTEM_NAME": "ARCHER",
+        "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+        "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+        "CONTENT_ID_COLUMN": "CONTENT_ID",
+        "CURATED_JSON_COLUMN": "CURATED_JSON",
+        "MAPPING_FILE": "ARCHER_OSCAL_MAPPINGS.csv",
+        "MAPPING_SOURCE_COLUMN": "SOURCE_KEY",
+        "SOURCE_ORDER_CANDIDATES": [
+            "DW_LOAD_TIMESTAMP_TZ",
+            "DW_LOAD_TIMESTAMP",
+            "UPDATED_DATE",
+            "LAST_UPDATED_DATE",
+            "MODIFIED_DATE",
+            "CREATE_DATE",
+        ],
+        "LOOKUP_CONTRACTS": {
+            "software": {
+                "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_SOFTWARE_RAW",
+                "title_field": "SOFTWARE_NAME",
+                "description_field": "DESCRIPTION",
+            },
+            "interconnection": {
+                "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_INTERCONNECTIONS_RAW",
+                "title_field": "INTERCONNECTION_NAME",
+                "description_field": "DESCRIPTION",
+            },
+        },
+        "MODEL_BINDINGS": [
+            "SSP",
+            "ASSESSMENT_RESULTS",
+        ],
+        "MAPPING_SOURCE_VALUE": "source-one",
+        "MAPPING_ENCODING": "utf-8-sig",
+    },
+]
+
+ROUTING_METADATA = {
+    "DEFERRED_MODEL_LABELS": [
+        "TBD",
+        "N/A - Calculated",
+        "Multiple - See Notes",
+    ],
+    "DEFERRED_TARGET_PATHS": [
+        "TBD",
+        "All Nulls",
+        "Multiple - See Notes",
+    ],
+}
+
+# Storage guards describe the verified destination, not registry defaults.
+MODEL_CONTRACTS = {
+    "SSP": {
+        "MODEL_KEY": "SSP",
+        "POLICY": "metadata-v1",
+        "REGISTRY_METADATA_VERSION": 1,
+        "UNREVIEWED_ROWS": "DEFER",
+        "LOOKUP_GROUPS": [
+            "components",
+        ],
+        "MODEL_ALIASES": [
+            "SSP",
+            "System Security Plan",
+            "SSP - Metadata",
+            "SSP - System Characteristics",
+            "SSP - System Implementation",
+            "SSP - Control Implementation",
+        ],
+        "STORAGE_CONTRACT": {
+            "VERIFIED": True,
+            "PHYSICAL_PROFILE": "BINARY16_UUID32",
+            "MODEL_KEY": "SSP",
+            "ROOT_PATH": "system-security-plan",
+            "ROOT_ELEMENT_TYPE": "system-security-plan",
+            "SOURCE_SYSTEM_NAME": "ARCHER",
+            "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+            "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+            "TARGET_DIM": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT",
+            "TARGET_FACT": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY",
+            "DIM_PK_COLUMN": "PK_OSCAL_SSP_ELEMENT_HASH",
+            "FACT_PK_COLUMN": "PK_FACT_OSCAL_DEPENDENCY_HASH",
+            "IDENTITY_VERSION": "v1_registry_path_instance",
+        },
+        "RUNTIME_OPTIONS": {
+            "parse_decimal": False,
+            "null_source_as_empty": True,
+            "aggregate_invalid": False,
+            "allow_nan": True,
+        },
+    },
+    "ASSESSMENT_RESULTS": {
+        "MODEL_KEY": "ASSESSMENT_RESULTS",
+        "POLICY": "metadata-v1",
+        "REGISTRY_METADATA_VERSION": 1,
+        "UNREVIEWED_ROWS": "DEFER",
+        "LOOKUP_GROUPS": [],
+        "MODEL_ALIASES": [
+            "ASSESSMENT_RESULTS",
+            "Assessment Results",
+            "AR",
+        ],
+        "STORAGE_CONTRACT": None,
+        "RUNTIME_OPTIONS": {
+            "parse_decimal": True,
+            "null_source_as_empty": False,
+            "aggregate_invalid": True,
+            "allow_nan": False,
+        },
+        "REPORT": {
+            "MAPPING_RELEASE": "ar-observation-scores-v2-17-fields",
+            "REPRESENTATION": "one-named-property-per-observation",
+        },
+    },
+}
 
 
 def _selected_model_keys(selection, model_contracts):
@@ -41,55 +167,26 @@ def _selected_model_keys(selection, model_contracts):
     return tuple(selection)
 
 
-def _load_mapper_catalog(filename):
-    # Structural settings only; executable field rules belong in the CSV.
-    # Local repository execution may resolve the checked-in deployment artifact.
-    path = Path(filename)
-    if not path.is_file() and "__file__" in globals():
-        origin = Path(__file__).resolve()
-        for directory in (origin.parent, *origin.parents):
-            candidate = directory / "metadata" / filename
-            if candidate.is_file():
-                path = candidate
-                break
-    if not path.is_file():
-        raise ValueError("Reviewed mapper metadata file is missing; upload it to notebook Files")
-    def unique_object(pairs):
-        result = {}
-        for key, value in pairs:
-            if key in result:
-                raise ValueError("Duplicate key in mapper metadata")
-            result[key] = value
-        return result
-    with path.open(encoding="utf-8") as handle:
-        catalog = json.load(handle, object_pairs_hook=unique_object)
-    if not isinstance(catalog, dict) or catalog.get("CATALOG_VERSION") != 1:
-        raise ValueError("Unsupported mapper metadata catalog version")
-    if not isinstance(catalog.get("MODELS"), dict) or not catalog["MODELS"]:
-        raise ValueError("Mapper metadata must define models")
-    if not isinstance(catalog.get("SOURCES"), list) or not catalog["SOURCES"]:
-        raise ValueError("Mapper metadata must define source bindings")
-    if not isinstance(catalog.get("CONFIG_DEFAULTS"), dict):
-        raise ValueError("Mapper metadata defaults must be an object")
-    for key, contract in catalog["MODELS"].items():
-        if not isinstance(contract, dict) or contract.get("MODEL_KEY") != key:
-            raise ValueError("Invalid model metadata identity")
-        if contract.get("POLICY") != "metadata-v1" or not contract.get("ROOT_PATH"):
-            raise ValueError("Active models require the metadata-driven engine and a root")
-    return catalog
-
-
-MAPPER_CATALOG = _load_mapper_catalog(MAPPER_METADATA_FILE)
-MODEL_CONTRACTS = copy.deepcopy(MAPPER_CATALOG["MODELS"])
+if not isinstance(MODEL_CONTRACTS, dict) or not MODEL_CONTRACTS:
+    raise ValueError("Deployment configuration must define models")
+for _model_key, _contract in MODEL_CONTRACTS.items():
+    if not isinstance(_contract, dict) or _contract.get("MODEL_KEY") != _model_key:
+        raise ValueError("Invalid model deployment identity")
+    if (_contract.get("POLICY") != "metadata-v1" or
+            type(_contract.get("REGISTRY_METADATA_VERSION")) is not int or
+            _contract["REGISTRY_METADATA_VERSION"] != 1):
+        raise ValueError("Active models require registry metadata version 1")
+    if {"ROOT_PATH", "ELEMENTS", "DEFAULT_ELEMENT", "REFERENCE_GROUPS",
+            "REQUIRED_RULE_IDS", "ELEMENT_PATHS", "MAPPING_RULES", "PATH_RULES",
+            "EXCLUDED_FIELDS"} & _contract.keys():
+        raise ValueError("Graph structure belongs in the registry; field rules belong in the mapping CSV")
 _enabled_models = _selected_model_keys(SELECTED_MODELS, MODEL_CONTRACTS)
-CONFIG = copy.deepcopy(MAPPER_CATALOG["CONFIG_DEFAULTS"])
-if CONFIG.get("EXECUTE_WRITES") is not False:
-    raise ValueError("Reviewed metadata must keep normal mapper writes disabled")
+if not isinstance(CONFIG, dict) or CONFIG.get("EXECUTE_WRITES") is not False:
+    raise ValueError("Deployment configuration must keep normal mapper writes disabled")
 CONFIG["RUN_ID"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-CONFIG["METADATA_RELEASE"] = MAPPER_CATALOG.get("RELEASE_ID")
 CONFIG["OSCAL_MODEL"] = _enabled_models[0]
-CONFIG["ROOT_PATH"] = MODEL_CONTRACTS[_enabled_models[0]]["ROOT_PATH"]
-# Compatibility aliases only; Cell Seven uses source/model contexts.
+# Root paths are resolved from the live registry in Cell Three, not guessed here.
+# Compatibility targets are projected only from a verified default contract.
 _default_storage = MODEL_CONTRACTS[_enabled_models[0]].get("STORAGE_CONTRACT")
 for _key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
     CONFIG.pop(_key, None)
@@ -97,9 +194,13 @@ if _default_storage and _default_storage.get("VERIFIED") is True:
     for _key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
         CONFIG[_key] = _default_storage[_key]
 
+if not isinstance(SOURCE_FILES, (tuple, list)) or not SOURCE_FILES:
+    raise ValueError("Deployment configuration must define source bindings")
 _source_profiles = []
 _source_keys = set()
-for _source in MAPPER_CATALOG["SOURCES"]:
+for _source in SOURCE_FILES:
+    if not isinstance(_source, dict):
+        raise ValueError("Source binding must be an object")
     _profile = copy.deepcopy(_source)
     _source_key = _profile.get("SOURCE_KEY")
     if not isinstance(_source_key, str) or not _source_key.strip() or _source_key in _source_keys:
@@ -122,6 +223,8 @@ if any(not any(model in profile["MODEL_KEYS"] for profile in SOURCE_PROFILES)
 # Historical diagnostics resolve the first source, never choose routes.
 for _key in ("SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME", "RAW_TABLE", "MAPPING_FILE"):
     CONFIG[_key] = SOURCE_PROFILES[0][_key]
+CONFIG["SOURCE_ORDER_CANDIDATES"] = copy.deepcopy(
+    SOURCE_PROFILES[0].get("SOURCE_ORDER_CANDIDATES", []))
 print("Cell 1 initialized")
 print("Metadata release:", CONFIG["METADATA_RELEASE"])
 print("Selected OSCAL models:", list(_enabled_models))

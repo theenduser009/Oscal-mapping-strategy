@@ -9,36 +9,35 @@
 
 ## Non-negotiable metadata-driven architecture
 
-- Latest completed step: executable field rules are maintained once in
-  Mapping/ARCHER_OSCAL_MAPPINGS.csv. The 147 reviewed occurrences and one
-  existing guard preserve source Notes and accepted scope. Structural settings
-  remain in mapper_contract.v1.json, without MAPPING_RULES/PATH_RULES/EXCLUDED_FIELDS.
-  The active catalog matching/path-rewrite branch is now removed; old behavior
-  is frozen under tests/fixtures only. Model settings containing obsolete field
-  rule keys fail closed. Do not claim every JSON dependency is removed.
-  No owner approval is pending for the authorized simplification.
-  Reconcile remaining structural/assembly settings next, including the required
-  metadata title and AR17 completeness gate; do not discard them or claim they
-  are already present in the live registry.
-
-- Latest owner clarification: final design must use the simple configuration,
-  one maintained Excel/CSV mapping source (including Notes), and registry, without
-  a second hand-maintained JSON catalog duplicating the sheet. Current code still
-  requires that catalog; do not claim it is removed. Read the latest simplification
-  checkpoint before proposing a run. The owner reviewed the compiled 147-entry
-  workbook in Mapping/REVIEW.md and authorized continuing. Use those documents
-  plus accepted rule evidence; do not repeatedly request the original CSV.
-  Unseen rows remain out of scope, and blanks or ambiguous Notes are not approval.
+- Current code is JSON-free. Mapping/ARCHER_OSCAL_MAPPINGS.csv maintains the
+  147 reviewed occurrences, existing guard and three existing support rules.
+  These support rows are not new Excel approvals. Cell One holds deployment
+  settings; the extended registry holds operators, hierarchy, identity and
+  required/assembly policies. No field-specific execution branch or duplicate
+  catalog is allowed.
+- The owner approved the one-time DEV registry metadata extension, not DIM/FACT
+  writes. sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql is prepared; live setup
+  and the matching seven-cell PREVIEW are still pending. Read
+  docs/REGISTRY_METADATA_SETUP.md for the exact current action. DDL additions
+  auto-commit; the metadata UPDATE uses a separate transaction. Do not claim
+  all setup is rollbackable or live-executed.
+- The deployed JSON file is retired. Historical settings and mappings are
+  frozen under tests/fixtures for independent parity only, never uploaded or
+  loaded in production. Required title/version and AR17 gates remain preserved.
+- No owner approval is pending for this scoped implementation. Do not ask the
+  owner to reconstruct history or upload the original CSV again as a blanket
+  blocker. The reviewed compilation is partial; unseen or blank-path mappings
+  remain unresolved.
 
 - The owner's prime requirement is metadata-driven execution, not merely metadata validation of hardcoded field rules.
-- Excel/CSV governs approved source-to-target mappings; the registry governs hierarchy/identity; the reviewed deployment catalog supplies executable transforms, parameters, operators, source bindings and storage contracts.
+- Excel/CSV governs approved source-to-target mappings; the registry governs hierarchy/identity; explicit CSV execution columns select reusable transforms; registry columns select operators/assembly policies; Cell One supplies source bindings and verified storage settings.
 - Active source/model routes must use the compiled metadata engine. Do not add source-field or model-name branches to the graph builder, writer or active dispatch.
 - A new approved field or model using existing operators must work through metadata changes alone. Add reusable Python only for genuinely new behavior, with tests and explicit scope.
 - Preserve one public model selector and the same seven cells. Maintain code only in notebooks/cells; generate V2 split and combined notebook with tools/sync_notebook_cells.py and verify --check. This is a developer packaging tool, not an extra Snowflake cell.
 - Prove accepted SSP and AR17 output parity and metadata-only new-field/third-model execution before publishing changes. Historical compatibility engines live only in tests/fixtures/legacy_cell4_pre_declarative.py; never import that fixture into production or edit it to make parity pass.
-- The single compiled plan is generated from approved rows, registry and catalog supplements. The catalog is not automatically generated from Excel; do not claim it is. Prefer executable mapping columns for new rules, and reject conflicting duplicated metadata rather than silently choosing a winner.
+- The single compiled plan is generated from approved CSV rows, versioned registry columns and visible deployment settings. Required source values must survive conversion. Reject conflicting duplicated metadata rather than silently choosing a winner.
 - Blank or ambiguous metadata is not approval. Keep rejected/deferred rows separate; never silently fall back from partial executable metadata to an older rule.
-- Resolve ownership from active registry paths before executing mappings. Known label/path contradictions block; unknown display labels do not override registered paths. Catalog-declared placeholders stay deferred, including TBD rows with real SSP paths. Recognition of another model never enables its execution or storage. Do not reinstate a global unknown-display-label gate over the full workbook.
+- Resolve ownership from active registry paths before executing mappings. Known label/path contradictions block; unknown display labels do not override registered paths. Configured placeholders stay deferred, including TBD rows with real SSP paths. Recognition of another model never enables its execution or storage. Do not reinstate a global unknown-display-label gate over the full workbook.
 
 ## Keep these boundaries explicit
 

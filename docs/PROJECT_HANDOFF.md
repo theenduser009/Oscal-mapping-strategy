@@ -1,42 +1,49 @@
 # Project handoff - read this before resuming
 
-## Current action - obsolete field-rule branch retired
+## Current action - registry-backed release, live setup pending
 
-No owner approval is pending. The owner reviewed the compilation and authorized
-the simplification; earlier approval prompts were stale.
+The owner approved extending the development registry so the seven cells no
+longer require a separate JSON catalog. Code and migration SQL are prepared;
+the live registry has NOT been changed by this task.
 
-Executable field rules now live in [ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv),
-with [readable columns](../Mapping/MAPPING_COLUMNS.md). The 147 original source
-occurrences retain exact field names, labels, paths, types, Notes and provenance.
-One additional, explicitly labelled existing populated-value guard is preserved.
-There are 60 approved rules, one guard, 85 deferred rows and two excluded helpers.
-Compilation review did not approve unresolved mappings or unseen source rows.
+The maintained [mapping CSV](../Mapping/ARCHER_OSCAL_MAPPINGS.csv) owns field
+rules. It preserves all 147 reviewed occurrences, the existing populated-value
+guard, and three explicitly labelled existing support values (metadata title,
+OSCAL version and document version). These support rows replace old structural
+settings; they are not three newly completed Excel mappings.
 
-Cell Three no longer matches fields or rewrites their paths through the old
-catalog. That behavior is frozen under tests only; active model settings
-containing retired field-rule keys are rejected. Incomplete executable metadata
-blocks explicitly rather than falling back to another rule.
+The [one-time registry migration](../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql)
+adds 18 sparse, readable metadata columns and fills existing active SSP/AR rows.
+It does not insert registry rows, change the original nine columns, or read or
+write DIM/FACT. Non-null conflicts block rather than being overwritten.
+Schema additions auto-commit; a failed DDL phase can leave nullable columns.
+The metadata UPDATE has a separate transaction. No live SQL success is claimed.
 
-**599 local tests pass**, including exact accepted SSP output, all eleven CIA
-mappings, AR17 output, the 61 execution contracts and metadata-only third-model
-checks. V2 and combined pages are generated from the maintained cells.
-Historical-input tests use a frozen compiler; active parity tests use the
-current mapping CSV and compiler. No new Snowflake run has been accepted.
+Cell One holds visible deployment settings. Cell Three reads the versioned
+registry and mapping CSV; Cell Four uses the same reusable operators. The
+production JSON is retired; frozen copies exist only under tests/fixtures for
+parity. No additional daily cell or model-specific mapper was added.
 
-**Next:** consolidate the remaining structural/assembly settings. The JSON file
-is still required: the live registry does not yet supply every operator,
-parent-instance binding or UUID/empty-assembly policy. Required metadata title
-sourcing and the AR17 completeness gate also need to retain their governed
-definitions. Do not move these into hidden Python constants or silently discard
-them to remove the file. This is not the final catalog-free release.
+All **654 local tests pass**, including complete Cells One-to-Three input flow
+with the released CSV and extended registry across model selections. Checks
+preserve the accepted SSP graph, all eleven CIA mappings, AR17
+outputs, original field-rule contracts and source Notes. Required values must
+survive conversion; zero and false remain valid. Local tests do not establish
+Snowflake execution, daily writer acceptance or complete OSCAL conformance.
 
-Nothing is waiting on owner approval for the authorized refactor. No notebook
-rerun, normal write, reload or live registry mutation is requested during that
-work. Normal writes remain disabled.
+**Next action:** run only the one-time registry SQL in a fresh Snowflake SQL
+worksheet, with no active transaction or other registry writer, and share its
+aggregate report. It needs permission to ALTER and UPDATE the existing DEV
+registry, not permanent backup-table creation. Follow [setup and preview
+instructions](REGISTRY_METADATA_SETUP.md); do not run the new notebook against
+the old registry. Once setup is verified, use the updated CSV and matching V2
+Cells One through Seven in PREVIEW. No JSON upload is needed.
 
-Earlier SSP persisted scope, AR17 in-memory-only acceptance and the unexplained
-old-row reduction remain unchanged. Prior run instructions and requests for
-the full CSV or repeated approval below are superseded.
+No approval is pending for this scoped extension. Normal mapper writes remain
+disabled. Do not rerun the accepted DEV reload. SSP persisted scope, the
+unexplained old-row reduction, AR17 in-memory-only acceptance, deferred work and
+unverified AR targets are unchanged. Historical instructions below are not
+current run requests.
 
 ## Previous action - reviewed compilation (superseded)
 
@@ -104,7 +111,7 @@ No database write, registry change, Matillion execution or new mapping acceptanc
 | Step | Existing file / component | What it does |
 | --- | --- | --- |
 | Upstream Matillion | [Null-preserving UPDATE](../sql/matillion/CANDIDATE_raw_curated_preserve_null_keys.sql) | Converts raw field IDs to field names and writes CURATED_JSON on the Archer RAW table. Retains named nulls. Not part of notebook Cells 1-7. |
-| Cell 1 | [Configuration](../notebooks/cells/01_initialization_and_configuration.py) | Loads reviewed metadata for source/model bindings, executable rules and verified storage contracts; one model selector. Baseline EXECUTE_WRITES is false and initialization rejects true. |
+| Cell 1 | [Configuration](../notebooks/cells/01_initialization_and_configuration.py) | Visible source/lookup bindings, version settings, verified storage contracts and one model selector. No JSON file read. Baseline EXECUTE_WRITES is false and initialization rejects true. |
 | Cell 2 | [Inputs](../notebooks/cells/02_source_mapping_registry_inputs.py) | Reads source-local CONTENT_ID and CURATED_JSON snapshots, each bound mapping artifact, registry and approved lookups; model routes reuse the same source snapshot. Resolves duplicate source IDs by the configured technical ordering, not arbitrary deduplication. |
 | Cell 3 | [Mapping contract](../notebooks/cells/03_canonical_mapping_contract.py) | Compiles isolated source/model contexts, preserving paths/Notes and reporting selected, excluded, deferred and blocked rows. |
 | Cell 4 | [Helpers](../notebooks/cells/04_parsing_transform_payload_helpers.py) | Shared helpers/operators execute the compiled plan; legacy field-specific engines are test fixtures only. |

@@ -281,8 +281,8 @@ class MultiModelInputs(unittest.TestCase):
         pd.testing.assert_frame_equal(before, original)
 
     def test_live_flat_mapping_file_keeps_utf8_notes_and_source_binding(self):
-        catalog = json.loads((ROOT / "notebooks/metadata/mapper_contract.v1.json").read_text(encoding="utf-8"))
-        selected = copy.deepcopy(catalog["SOURCES"][0])
+        from test_model_selection import cell_namespace
+        selected = copy.deepcopy(cell_namespace()["SOURCE_PROFILES"][0])
         selected["MAPPING_FILE"] = str(ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv")
         with patch.dict(self.ns, {"_read_mapping_header": self.real_header_reader}):
             actual = self.ns["load_mapping_rows"](selected)
@@ -294,14 +294,14 @@ class MultiModelInputs(unittest.TestCase):
         self.assertEqual(set(actual["SOURCE_KEY"]), {"source-one"})
 
     def test_csv_literal_na_and_unicode_are_not_lost(self):
-        text = 'SOURCE_FIELD_NAME,NOTES\nN/A,"Keep nulls — do not drop"\n'
+        text = 'SOURCE_FIELD_NAME,NOTES\nN/A,"Keep nulls - do not drop"\n'
         selected = profile()
         selected["MAPPING_ENCODING"] = "utf-8-sig"
         read_csv = pd.read_csv
         with patch.object(pd, "read_csv", side_effect=lambda filename, **kwargs: read_csv(io.StringIO(text), **kwargs)):
             actual = self.ns["load_mapping_rows"](selected)
         self.assertEqual(actual.iloc[0]["SOURCE_FIELD_NAME"], "N/A")
-        self.assertEqual(actual.iloc[0]["NOTES"], "Keep nulls — do not drop")
+        self.assertEqual(actual.iloc[0]["NOTES"], "Keep nulls - do not drop")
 
     def test_explicit_mapping_source_value_does_not_default_to_another_source(self):
         selected = profile()

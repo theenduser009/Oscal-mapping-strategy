@@ -2,24 +2,37 @@
 
 ## Direction
 
-Build one generic, metadata-driven mapper that can be configured for SSP, POA&M, Assessment Results, Assessment Plan, and Component Definition. Do not create a separate growing notebook for each OSCAL model.
+One reusable metadata-driven ingestion template for current and future OSCAL
+models and approved source tables. Do not create a separate mapper per model.
 
-## Approved consolidation - September 11
+## Current registry-backed release
 
-### Current simplification checkpoint
+Field mappings, status, transforms and Notes are maintained once in
+[ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv). The existing
+registry supplies hierarchy plus versioned operator, identity and assembly
+columns after the approved [one-time setup](REGISTRY_METADATA_SETUP.md).
+There is no deployed JSON catalog or field-rule fallback.
 
-The maintained mapping artifact is now Mapping/ARCHER_OSCAL_MAPPINGS.csv:
-147 reviewed source occurrences plus one preserved reject-populated guard.
-Executable field rules no longer live in the deployment catalog. Cell Three's
-old catalog matching and field-specific path rewriting are removed; settings
-containing those retired rule keys are rejected. Current-code SSP/AR parity and
-metadata-only new-model checks pass in the 599-test local suite.
+Cell One supplies visible source/lookup bindings, model selection and verified
+storage settings. Cell Three compiles these inputs to an inert in-memory plan.
+Cell Four executes reusable transforms/operators; Cells Five through Seven keep
+the shared graph builder, guarded writer and runner. No metadata is evaluated
+as Python or SQL, and prose Notes are not executable.
 
-The settings JSON remains required for source/storage and structural/assembly
-policies not fully represented in the live registry, including required title
-sourcing and the AR17 completeness gate. Consolidating those definitions is the
-remaining architectural work, not a new mapping approval or database run.
-The seven-cell interface and writes-disabled boundary remain unchanged.
+The three existing required metadata support values are now ordinary labelled
+CSV rows, not new field approvals. Required-mapping gates and complete-only CIA
+assembly remain in registry columns. Original SSP/AR behavior stays the parity
+baseline. Frozen historical catalogs and engines are tests only.
+
+A future approved field using supported operations needs a mapping row.
+A future model also needs governed registry rows and deployment/destination
+settings. Unsupported transformation or collection identity behavior must be
+implemented once as a reusable capability; model selection does not invent it.
+
+The DEV registry extension is authorized but has not run here. Normal writes
+remain disabled. The full DEV reload remains accepted; the daily path and AR
+persistence still require live acceptance. Earlier architecture snapshots below
+describe history, not current inputs.
 
 ### Earlier metadata-engine migration - September 11 (superseded where noted above)
 
