@@ -16,18 +16,14 @@ class LoadError(RuntimeError):
         self.details = details or {}
         super().__init__(code)
 
-_LOAD_DIM_SOURCES = {
-    "ELEMENT_TYPE": "ELEMENT_TYPE", "OSCAL_UUID": "OSCAL_UUID",
-    "METADATA_JSON": "METADATA_JSON",
-    "SOURCE_SYSTEM_NAME": "SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME": "SOURCE_TABLE_NAME",
-    "SOURCE_RECORD_ID": "SOURCE_RECORD_ID", "DW_PIPELINE_RUN_ID": "DW_PIPELINE_RUN_ID",
-    "DW_LOAD_TIMESTAMP": "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ": "DW_LOAD_TIMESTAMP_TZ",
-}
-_LOAD_FACT_SOURCES = {
-    "FK_SOURCE_ELEMENT_HASH": "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH": "FK_TARGET_ELEMENT_HASH",
-    "DEPENDENCY_TYPE": "DEPENDENCY_TYPE",
-    "SOURCE_OSCAL_UUID": "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID": "TARGET_OSCAL_UUID",
-}
+_LOAD_DIM_COLUMNS = (
+    "ELEMENT_TYPE", "OSCAL_UUID", "METADATA_JSON", "SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME",
+    "SOURCE_RECORD_ID", "DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ",
+)
+_LOAD_FACT_COLUMNS = (
+    "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH", "DEPENDENCY_TYPE",
+    "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID",
+)
 _LOAD_HASH_SOURCES = {"NODE_KEY", "EDGE_KEY", "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"}
 _LOAD_UUID_SOURCES = {"OSCAL_UUID", "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"}
 _LOAD_HEX_PATTERN = r"[0-9a-fA-F]{32}"
@@ -117,47 +113,34 @@ def _load_column_plan(description, kind, contract=None):
                                    "LIVE_TYPE": str(raw_type)[:128]})
         source, encoding = sources[name], None
         expression = "s." + _load_ident(source)
-        if source in _LOAD_HASH_SOURCES and dtype == "BINARY(16)":
-            # Decode the existing MD5 hex identity; never hash again or truncate.
+        if source in _LOAD_HASH_SOURCES:
+            if dtype != "BINARY(16)":
+                raise LoadError("CONFIRMED_BINARY16_SCHEMA_REQUIRED")
+            # Decode the existing identity; never hash again or truncate.
             expression = "TO_BINARY(" + expression + ", 'HEX')"
             encoding = "HEX_TO_BINARY16"
-        elif source in _LOAD_UUID_SOURCES and dtype == "VARCHAR(32)":
-            # Storage only. Canonical UUIDs inside the graph and JSON stay unchanged.
+        elif source in _LOAD_UUID_SOURCES:
+            if dtype != "VARCHAR(32)":
+                raise LoadError("VERIFIED_UUID32_PROFILE_REQUIRED")
             expression = "REPLACE(" + expression + ", '-', '')"
             encoding = "UUID_TO_COMPACT32"
-        elif name == "METADATA_JSON":
-            if dtype == "VARIANT":
-                expression = "PARSE_JSON(" + expression + ")"
-            elif dtype.startswith("VARCHAR"):
-                expression = "CAST(" + expression + " AS VARCHAR)"
-            else:
-                raise LoadError("UNSUPPORTED_PAYLOAD_DATATYPE")
+        elif name == "METADATA_JSON" and dtype == "VARIANT":
+            expression = "PARSE_JSON(" + expression + ")"
         elif name in {"DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}:
             if not dtype.startswith("TIMESTAMP_"):
                 raise LoadError("EXPLICIT_AUDIT_TIMESTAMP_TYPE_REQUIRED")
             expression = "CAST(" + expression + " AS " + dtype + ")"
         else:
             if not dtype.startswith("VARCHAR"):
-                raise LoadError("IDENTIFIERS_AND_LABELS_REQUIRE_STRING_TYPE")
+                raise LoadError("UNSUPPORTED_PAYLOAD_DATATYPE" if name == "METADATA_JSON"
+                                else "IDENTIFIERS_AND_LABELS_REQUIRE_STRING_TYPE")
             expression = "CAST(" + expression + " AS VARCHAR)"
         plan.append({"name": name, "source": source, "expression": expression,
                      "type": dtype, "nullable": nullable == "Y", "encoding": encoding})
-    required = set(sources)
-    if kind == "DIM":
-        # The existing loader projects these audit columns only when exposed.
-        # Do not invent a requirement that an optional target column must exist.
-        required -= {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
-    if required - seen:
-        raise LoadError("MISSING_TARGET_COLUMNS_" + "_".join(sorted(required - seen)))
-    types = {column["name"]: column["type"] for column in plan}
-    binary = ((c["DIM_PK_COLUMN"],) if kind == "DIM" else
-              (c["FACT_PK_COLUMN"], "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"))
-    uuids = (("OSCAL_UUID",) if kind == "DIM" else
-             ("SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"))
-    if any(types.get(name) != "BINARY(16)" for name in binary):
-        raise LoadError("CONFIRMED_BINARY16_SCHEMA_REQUIRED")
-    if any(types.get(name) != "VARCHAR(32)" for name in uuids):
-        raise LoadError("VERIFIED_UUID32_PROFILE_REQUIRED")
+    optional = _LOAD_AUDIT_COLUMNS if kind == "DIM" else set()
+    missing = set(sources) - optional - seen
+    if missing:
+        raise LoadError("MISSING_TARGET_COLUMNS_" + "_".join(sorted(missing)))
     return plan
 
 
@@ -187,8 +170,7 @@ def _load_projection_values(session, query, plan, stage_codes=False):
             checks.append((name + " IS NULL OR OCTET_LENGTH(" + name + ")<>16",
                            "BINARY_KEY_WIDTH_INVALID"))
         if column["source"] in _LOAD_UUID_SOURCES:
-            pattern = r"[0-9a-f]{32}" if dtype == "VARCHAR(32)" else _LOAD_UUID_PATTERN
-            checks.append((name + " IS NULL OR NOT REGEXP_LIKE(" + name + ", '" + pattern + "')", None))
+            checks.append((name + " IS NULL OR NOT REGEXP_LIKE(" + name + ", '[0-9a-f]{32}')", None))
         width = re.fullmatch(r"VARCHAR\((\d+)\)", dtype)
         if width:
             checks.append(("LENGTH(" + name + ")>" + width[1], "TARGET_STRING_CAPACITY_EXCEEDED"))
@@ -220,19 +202,18 @@ def _load_stage(session, raw_stage, stage, plan):
             _load_unique(session, stage, name)
 
 
+def _load_equal(session, current, frozen, code):
+    for left, right in ((current, frozen), (frozen, current)):
+        _load_zero(session, f"SELECT COUNT(*) AS N FROM (({left}) MINUS ({right}))", code)
+
+
 def _load_baseline_equal(session, names, queries):
     # Multiset comparison: keep duplicate multiplicities in the OLD full tables.
     # GROUP BY ALL includes every existing target column, including VARIANT payloads.
     for baseline, query in zip((names["DB"], names["FB"]), queries):
         current = f"SELECT *, COUNT(*) AS OSCAL_LOAD_ROW_MULTIPLICITY FROM ({query}) GROUP BY ALL"
         frozen = f"SELECT *, COUNT(*) AS OSCAL_LOAD_ROW_MULTIPLICITY FROM {baseline} GROUP BY ALL"
-        _load_zero(session, f"SELECT COUNT(*) AS N FROM (({current}) MINUS ({frozen}))",
-                    "TARGET_BASELINE_CHANGED")
-        _load_zero(session, f"SELECT COUNT(*) AS N FROM (({frozen}) MINUS ({current}))",
-                    "TARGET_BASELINE_CHANGED")
-        if _load_count(session, f"SELECT COUNT(*) AS N FROM ({query})") != _load_count(
-                session, f"SELECT COUNT(*) AS N FROM {baseline}"):
-            raise LoadError("TARGET_BASELINE_CHANGED")
+        _load_equal(session, current, frozen, "TARGET_BASELINE_CHANGED")
 
 
 def _load_integrity_sql(queries, ids, allow_absent=False, contract=None):
@@ -517,9 +498,7 @@ def _load_unchanged_scope(session, names, contract=None):
         (fact_table, names["FB"], "F", fk)):
         current = f"SELECT t.* FROM {target} t WHERE NOT EXISTS (SELECT 1 FROM {names[kind]} s WHERE s.{pk}=t.{pk})"
         frozen = f"SELECT t.* FROM {baseline} t WHERE NOT EXISTS (SELECT 1 FROM {names[kind]} s WHERE s.{pk}=t.{pk})"
-        for lhs, rhs in ((current, frozen), (frozen, current)):
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM (({lhs}) MINUS ({rhs}))",
-                       "UNTOUCHED_TARGET_ROWS_CHANGED")
+        _load_equal(session, current, frozen, "UNTOUCHED_TARGET_ROWS_CHANGED")
 
 
 def _load_verify_context(session, context):
@@ -756,7 +735,8 @@ def _load_targets(contract):
 
 
 def _load_sources(contract):
-    dim, fact = dict(_LOAD_DIM_SOURCES), dict(_LOAD_FACT_SOURCES)
+    dim = {name: name for name in _LOAD_DIM_COLUMNS}
+    fact = {name: name for name in _LOAD_FACT_COLUMNS}
     dim[contract["DIM_PK_COLUMN"]] = "NODE_KEY"
     fact[contract["FACT_PK_COLUMN"]] = "EDGE_KEY"
     return {"DIM": dim, "FACT": fact}
@@ -823,7 +803,7 @@ def _load_logical_graph(nodes, edges, contract, expected_records=None):
         return value
 
     root = contract["ROOT_PATH"]
-    by_key, roots, parents, children, root_types = {}, {}, {}, {}, set()
+    by_key, roots, parents, root_types = {}, {}, {}, set()
     for raw in rows(nodes):
         n = row(raw)
         k = key(n.get("NODE_KEY"))
@@ -850,7 +830,7 @@ def _load_logical_graph(nodes, edges, contract, expected_records=None):
         if not isinstance(payload, dict):
             raise LoadError("INVALID_LOGICAL_PAYLOAD")
         by_key[k] = (sid, path, canonical_uuid(n.get("OSCAL_UUID")), instance, n.get("PARENT_INSTANCE_KEY"))
-        parents[k], children[k] = 0, []
+        parents[k] = 0
         if path == root:
             if sid in roots:
                 raise LoadError("MULTIPLE_MODEL_ROOTS_FOR_RECORD")
@@ -877,25 +857,17 @@ def _load_logical_graph(nodes, edges, contract, expected_records=None):
         if s[0] != t[0] or s[0] not in roots:
             raise LoadError("CROSS_RECORD_LOGICAL_EDGE")
         if (e.get("DEPENDENCY_TYPE") != "CONTAINS"
-                or canonical_uuid(e.get("SOURCE_OSCAL_UUID")) != s[2]
-                or canonical_uuid(e.get("TARGET_OSCAL_UUID")) != t[2]):
+                or e.get("SOURCE_OSCAL_UUID") != s[2]
+                or e.get("TARGET_OSCAL_UUID") != t[2]):
             raise LoadError("LOGICAL_RELATIONSHIP_OR_UUID_MISMATCH")
         if not t[1].startswith(s[1] + ".") or (t[4] is not None and t[4] != s[3]):
             raise LoadError("LOGICAL_PARENT_CONTEXT_MISMATCH")
         parents[target] += 1
-        children[source].append(target)
     root_keys = set(roots.values())
     if any(parents[k] != (0 if k in root_keys else 1) for k in by_key):
         raise LoadError("INVALID_LOGICAL_PARENT_CARDINALITY")
-    visited, pending = set(), list(root_keys)
-    while pending:
-        k = pending.pop()
-        if k in visited:
-            raise LoadError("LOGICAL_GRAPH_CYCLE")
-        visited.add(k)
-        pending.extend(children[k])
-    if visited != set(by_key) or any(n[0] not in roots for n in by_key.values()):
-        raise LoadError("DISCONNECTED_LOGICAL_GRAPH")
+    # Strictly descending paths exclude cycles. One parent per non-root then
+    # proves every node is reachable from its record root; no second walk is needed.
     return {"SELECTED_RECORDS": len(roots), "NODES": len(by_key), "EDGES": len(edge_keys),
             "DIM_DUPLICATE_KEYS": 0, "FACT_DUPLICATE_KEYS": 0,
             "DANGLING_SOURCE_KEYS": 0, "DANGLING_TARGET_KEYS": 0,

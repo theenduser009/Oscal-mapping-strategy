@@ -176,34 +176,25 @@ def resolve_archer_select_value(value, context=None):
     return resolve_one(extracted)
 
 
+def _scalar_text(value, shape_error, value_error, allow_bool=False):
+    """Canonical scalar text shared by properties and external identifiers."""
+    value = _to_python(value)
+    if value is None or isinstance(value, (dict, list)) or (isinstance(value, bool) and not allow_bool):
+        raise ValueError(shape_error)
+    if isinstance(value, bool):
+        text = "true" if value else "false"
+    else:
+        text = str(value).strip()
+    if not text or text.lower() in {"nan", "inf", "+inf", "-inf"}:
+        raise ValueError(value_error)
+    return text
+
+
 def _oscal_property_values(value):
     values = value if isinstance(value, list) else [value]
-    normalized = []
-
-    for item in values:
-        item = _to_python(item)
-        if isinstance(item, (dict, list)) or item is None:
-            raise ValueError(
-                "OSCAL property value must resolve to a scalar"
-            )
-
-        if isinstance(item, bool):
-            text = "true" if item else "false"
-        else:
-            text = str(item).strip()
-
-        if not text or text.lower() in {
-            "nan",
-            "inf",
-            "+inf",
-            "-inf",
-        }:
-            raise ValueError(
-                "OSCAL property value must be a nonblank finite scalar"
-            )
-        normalized.append(text)
-
-    return normalized
+    return [_scalar_text(item, "OSCAL property value must resolve to a scalar",
+                         "OSCAL property value must be a nonblank finite scalar", allow_bool=True)
+            for item in values]
 
 
 def _append_unique_collection_instance(instances, instance):
@@ -236,18 +227,8 @@ def _value_instance_key(value):
 
 
 def _canonical_component_content_id(value):
-    value = _to_python(value)
-    if isinstance(value, (bool, dict, list)) or value is None:
-        raise ValueError("Component reference has invalid ContentId")
-    content_id = str(value).strip()
-    if not content_id or content_id.lower() in {
-        "nan",
-        "inf",
-        "+inf",
-        "-inf",
-    }:
-        raise ValueError("Component reference has invalid ContentId")
-    return content_id
+    message = "Component reference has invalid ContentId"
+    return _scalar_text(value, message, message)
 
 
 def _component_reference_content_ids(value):
@@ -259,12 +240,8 @@ def _component_reference_content_ids(value):
         if isinstance(member, dict):
             if "ContentId" not in member:
                 raise ValueError("Component reference is missing ContentId")
-            content_id = _canonical_component_content_id(
-                member["ContentId"]
-            )
-        else:
-            content_id = _canonical_component_content_id(member)
-        content_ids.append(content_id)
+            member = member["ContentId"]
+        content_ids.append(_canonical_component_content_id(member))
     return content_ids
 
 
@@ -298,370 +275,162 @@ def _component_text(value, label, required):
 
 
 def _build_component_hydration_lookups(
-    source_dataframe,
-    mapping_rows,
-    hydration_source_dfs,
-    context=None,
+    source_dataframe, mapping_rows, hydration_source_dfs, context=None,
 ):
-    if not isinstance(context, dict) or not isinstance(context.get("_metadata_hydration_spec"), dict):
-        raise RuntimeError("A compiled reference hydration plan is required")
-    metadata_spec = context["_metadata_hydration_spec"]
-    hydration_contract = metadata_spec["contracts"]
-    source_types = metadata_spec["source_types"]
-    hydration_routes = metadata_spec["routes"]
-    if _context_config(context).get("EXECUTE_WRITES", False):
-        raise RuntimeError(
-            "Component hydration must be built before guarded writes"
-        )
-    if not isinstance(hydration_source_dfs, dict):
-        raise RuntimeError("Component hydration sources are unavailable")
-    if set(hydration_source_dfs) != set(hydration_contract):
-        raise RuntimeError("Component hydration source contract is incomplete")
-    component_rows_by_field = {}
-    unexpected_component_rows = 0
+    """Validate reference routes, join their lookup rows, and collect only the payloads."""
+    if not isinstance(context, dict):
+        raise RuntimeError("A compiled reference hydration context is required")
+    contracts, source_types, fields_to_hydrate = {}, {}, {}
+    duplicate_fields = False
+    declared_lookups = context.get("lookups", {}).get("component_contract") or {}
     for row in mapping_rows:
-        source_field = str(row.get("SOURCE_FIELD_NAME") or "").strip()
-        if source_field in source_types:
-            component_rows_by_field.setdefault(source_field, []).append(row)
-        else:
-            unexpected_component_rows += 1
+        params = _metadata_params(row)
+        type_name = _metadata_text(params.get("reference_type"), "Reference type")
+        field = row["SOURCE_FIELD_NAME"]
+        if field in source_types:
+            if source_types[field] != type_name:
+                raise ValueError("Source reference has conflicting type declarations")
+            duplicate_fields = True
+        source_types[field] = type_name
+        binding = params.get("hydrate_lookup")
+        if not binding:
+            continue
+        contract = declared_lookups.get(binding)
+        if not isinstance(contract, dict):
+            raise ValueError("Reviewed reference lookup source is absent")
+        contract = dict(contract, lookup_binding=binding,
+                        description_required=bool(params.get("description_required", False)))
+        if type_name in contracts and contracts[type_name] != contract:
+            raise ValueError("Reference type has contradictory hydration contracts")
+        contracts[type_name] = contract
+        fields_to_hydrate[field] = type_name
+    if not fields_to_hydrate:
+        return {}
+    if duplicate_fields:
+        raise RuntimeError("Canonical component mapping is duplicated")
+    if _context_config(context).get("EXECUTE_WRITES", False):
+        raise RuntimeError("Component hydration must be built before guarded writes")
+    if not isinstance(hydration_source_dfs, dict):
+        raise ValueError("Reference lookup dataframes are unavailable")
+    if any(contract["lookup_binding"] not in hydration_source_dfs for contract in contracts.values()):
+        raise ValueError("Reference lookup dataframe binding is missing")
 
-    if unexpected_component_rows:
-        raise RuntimeError("Canonical component mapping contract has drifted")
-    if set(component_rows_by_field) != set(source_types):
-        raise RuntimeError("Canonical component mapping contract has drifted")
-    for source_field, rows in component_rows_by_field.items():
-        if len(rows) != 1:
-            raise RuntimeError(
-                "Canonical component mapping is duplicated"
-            )
-        actual_type = rows[0].get("REPRESENTATION_PARAMS", {}).get("reference_type")
-        if actual_type != source_types[source_field]:
-            raise RuntimeError("Canonical component mapping type drifted")
+    from snowflake.snowpark import functions as F
 
-    from snowflake.snowpark.functions import (
-        col as hydration_col,
-        count as hydration_count,
-        count_distinct as hydration_count_distinct,
-        length as hydration_length,
-        lit as hydration_lit,
-        parse_json as hydration_parse_json,
-        trim as hydration_trim,
-        typeof as hydration_typeof,
-        upper as hydration_upper,
-        when as hydration_when,
-    )
+    def kind(value):
+        return F.upper(F.typeof(value))
 
-    def hydration_nonblank(column):
-        return (
-            column.is_not_null()
-            & (
-                hydration_length(hydration_trim(column.cast("string")))
-                > hydration_lit(0)
-            )
-        )
+    def nonblank(value):
+        return value.is_not_null() & (F.length(F.trim(value.cast("string"))) > F.lit(0))
 
-    source_columns = {
-        str(name).strip().upper(): name for name in source_dataframe.columns
-    }
+    def checked_count(frame, checks, unique_key=None):
+        # Each condition identifies invalid rows; collect one aggregate, never source JSON.
+        aggregates = [F.count(F.lit(1)).alias("_TOTAL")]
+        for index, (condition, message) in enumerate(checks):
+            aggregates.append(F.count(F.when(condition, F.lit(1))).alias(f"_INVALID_{index}"))
+        if unique_key is not None:
+            aggregates.append(F.count_distinct(unique_key).alias("_UNIQUE"))
+        summary = frame.agg(*aggregates).collect()[0]
+        for index, (condition, message) in enumerate(checks):
+            if _component_row_value(summary, f"_INVALID_{index}"):
+                raise RuntimeError(message)
+        total = int(_component_row_value(summary, "_TOTAL") or 0)
+        if unique_key is not None and total != int(_component_row_value(summary, "_UNIQUE") or 0):
+            raise RuntimeError("Approved component lookup contains duplicate ContentId values")
+        return total
+
+    source_columns = {str(name).strip().upper(): name for name in source_dataframe.columns}
     if not {"SOURCE_RECORD_ID", "CURATED_JSON"}.issubset(source_columns):
         raise RuntimeError("Component hydration source columns are missing")
-
-    source_json = hydration_parse_json(
-        hydration_col(source_columns["CURATED_JSON"]).cast("string")
-    )
-    route_frames = []
-    scalar_types = (
-        "VARCHAR",
-        "INTEGER",
-        "DECIMAL",
-        "NUMBER",
-        "FIXED",
-        "REAL",
-        "DOUBLE",
-    )
-    for source_field, component_type in (
-        hydration_routes.items()
-    ):
-        roots_df = source_dataframe.select(
-            hydration_lit(source_field).alias("_SOURCE_FIELD"),
-            hydration_lit(component_type).alias("_COMPONENT_TYPE"),
-            source_json.getItem(source_field).alias("_REFERENCE_ROOT"),
+    source_json = F.parse_json(F.col(source_columns["CURATED_JSON"]).cast("string"))
+    scalar_types = ("VARCHAR", "INTEGER", "DECIMAL", "NUMBER", "FIXED", "REAL", "DOUBLE")
+    routes = None
+    for field, component_type in fields_to_hydrate.items():
+        roots = source_dataframe.select(
+            F.lit(component_type).alias("_COMPONENT_TYPE"),
+            source_json.getItem(field).alias("_REFERENCE_ROOT"),
         )
-        invalid_roots = roots_df.filter(
-            hydration_col("_REFERENCE_ROOT").is_not_null()
-            & ~hydration_upper(
-                hydration_typeof(hydration_col("_REFERENCE_ROOT"))
-            ).isin("ARRAY", "NULL_VALUE")
-        ).count()
-        if invalid_roots:
-            raise RuntimeError(
-                "Approved component reference root has invalid shape"
-            )
-
-        members_df = roots_df.filter(
-            hydration_upper(
-                hydration_typeof(hydration_col("_REFERENCE_ROOT"))
-            )
-            == hydration_lit("ARRAY")
-        ).join_table_function(
-            "flatten",
-            hydration_col("_REFERENCE_ROOT"),
+        root = F.col("_REFERENCE_ROOT")
+        if roots.filter(root.is_not_null() & ~kind(root).isin("ARRAY", "NULL_VALUE")).count():
+            raise RuntimeError("Approved component reference root has invalid shape")
+        members = roots.filter(kind(root) == F.lit("ARRAY")).join_table_function("flatten", root)
+        member = F.col("VALUE")
+        content_id = member.getItem("ContentId")
+        member_id = (
+            F.when((kind(member) == F.lit("OBJECT")) & kind(content_id).isin(*scalar_types), content_id)
+            .when(kind(member).isin(*scalar_types), member)
+            .otherwise(F.lit(None))
         )
-        member_value = hydration_col("VALUE")
-        member_type = hydration_upper(hydration_typeof(member_value))
-        object_content_id = member_value.getItem("ContentId")
-        object_id_type = hydration_upper(hydration_typeof(object_content_id))
-        component_id_value = (
-            hydration_when(
-                (member_type == hydration_lit("OBJECT"))
-                & object_id_type.isin(*scalar_types),
-                object_content_id,
-            )
-            .when(member_type.isin(*scalar_types), member_value)
-            .otherwise(hydration_lit(None))
+        ids = members.select(
+            F.col("_COMPONENT_TYPE"), F.trim(member_id.cast("string")).alias("_COMPONENT_ID"),
         )
-        member_ids_df = members_df.select(
-            hydration_col("_SOURCE_FIELD"),
-            hydration_col("_COMPONENT_TYPE"),
-            hydration_trim(component_id_value.cast("string")).alias(
-                "_COMPONENT_ID"
-            ),
-        )
-        invalid_members = member_ids_df.filter(
-            ~hydration_nonblank(hydration_col("_COMPONENT_ID"))
-        ).count()
-        if invalid_members:
-            raise RuntimeError(
-                "Approved component reference contains an invalid ContentId"
-            )
-        route_frames.append(member_ids_df)
-
-    component_routes_df = route_frames[0]
-    for route_frame in route_frames[1:]:
-        component_routes_df = component_routes_df.union_all(route_frame)
-
-    type_collisions = (
-        component_routes_df.select(
-            hydration_col("_COMPONENT_TYPE"),
-            hydration_col("_COMPONENT_ID"),
-        )
-        .distinct()
-        .group_by(hydration_col("_COMPONENT_ID"))
-        .agg(
-            hydration_count_distinct(
-                hydration_col("_COMPONENT_TYPE")
-            ).alias("_TYPE_COUNT")
-        )
-        .filter(hydration_col("_TYPE_COUNT") > hydration_lit(1))
-        .count()
-    )
-    if type_collisions:
+        if ids.filter(~nonblank(F.col("_COMPONENT_ID"))).count():
+            raise RuntimeError("Approved component reference contains an invalid ContentId")
+        routes = ids if routes is None else routes.union_all(ids)
+    collisions = (routes.distinct().group_by(F.col("_COMPONENT_ID"))
+                  .agg(F.count_distinct(F.col("_COMPONENT_TYPE")).alias("_TYPE_COUNT")))
+    if collisions.filter(F.col("_TYPE_COUNT") > F.lit(1)).count():
         raise RuntimeError("Component hydration identity has a type collision")
 
-    hydration_lookups = {}
-    for component_type, contract in hydration_contract.items():
-        routed_ids_df = (
-            component_routes_df.filter(
-                hydration_col("_COMPONENT_TYPE")
-                == hydration_lit(component_type)
-            )
-            .select(
-                hydration_col("_COMPONENT_ID").alias("_ROUTE_ID")
-            )
-            .distinct()
+    lookups = {}
+    for component_type, contract in contracts.items():
+        routed_ids = (routes.filter(F.col("_COMPONENT_TYPE") == F.lit(component_type))
+                      .select(F.col("_COMPONENT_ID").alias("_ROUTE_ID")).distinct())
+        lookup_source = hydration_source_dfs[contract["lookup_binding"]]
+        columns = {str(name).strip().upper(): name for name in lookup_source.columns}
+        if not {"CONTENT_ID", "CURATED_JSON"}.issubset(columns):
+            raise RuntimeError("Approved component lookup source columns are missing")
+        lookup_rows = lookup_source.select(
+            F.trim(F.col(columns["CONTENT_ID"]).cast("string")).alias("_LOOKUP_ID"),
+            F.parse_json(F.col(columns["CURATED_JSON"]).cast("string")).alias("_LOOKUP_JSON"),
         )
-        lookup_source_df = hydration_source_dfs[component_type]
-        lookup_columns = {
-            str(name).strip().upper(): name
-            for name in lookup_source_df.columns
-        }
-        if not {"CONTENT_ID", "CURATED_JSON"}.issubset(lookup_columns):
-            raise RuntimeError(
-                "Approved component lookup source columns are missing"
-            )
-        lookup_rows_df = lookup_source_df.select(
-            hydration_trim(
-                hydration_col(lookup_columns["CONTENT_ID"]).cast("string")
-            ).alias("_LOOKUP_ID"),
-            hydration_parse_json(
-                hydration_col(lookup_columns["CURATED_JSON"]).cast("string")
-            ).alias("_LOOKUP_JSON"),
-        )
-        key_summary = lookup_rows_df.agg(
-            hydration_count(hydration_lit(1)).alias("_TOTAL_ROWS"),
-            hydration_count(
-                hydration_when(
-                    hydration_nonblank(hydration_col("_LOOKUP_ID")),
-                    hydration_lit(1),
-                )
-            ).alias("_NONBLANK_ROWS"),
-            hydration_count_distinct(
-                hydration_col("_LOOKUP_ID")
-            ).alias("_DISTINCT_IDS"),
-            hydration_count(
-                hydration_when(
-                    hydration_upper(
-                        hydration_typeof(hydration_col("_LOOKUP_JSON"))
-                    )
-                    != hydration_lit("OBJECT"),
-                    hydration_lit(1),
-                )
-            ).alias("_INVALID_JSON_ROWS"),
-        ).collect()[0]
-        total_rows = int(_component_row_value(key_summary, "_TOTAL_ROWS") or 0)
-        nonblank_rows = int(
-            _component_row_value(key_summary, "_NONBLANK_ROWS") or 0
-        )
-        distinct_ids = int(
-            _component_row_value(key_summary, "_DISTINCT_IDS") or 0
-        )
-        invalid_lookup_json_rows = int(
-            _component_row_value(key_summary, "_INVALID_JSON_ROWS") or 0
-        )
-        if total_rows != nonblank_rows:
-            raise RuntimeError(
-                "Approved component lookup contains a missing ContentId"
-            )
-        if nonblank_rows != distinct_ids:
-            raise RuntimeError(
-                "Approved component lookup contains duplicate ContentId values"
-            )
-        if invalid_lookup_json_rows:
-            raise RuntimeError(
-                "Approved component lookup contains invalid curated JSON"
-            )
-
-        matched_df = routed_ids_df.join(
-            lookup_rows_df,
-            routed_ids_df["_ROUTE_ID"] == lookup_rows_df["_LOOKUP_ID"],
-            "left",
-        )
-        title_value = hydration_col("_LOOKUP_JSON").getItem(
-            contract["title_field"]
-        )
-        description_value = hydration_col("_LOOKUP_JSON").getItem(
-            contract["description_field"]
-        )
-        title_is_valid = (
-            hydration_upper(hydration_typeof(title_value))
-            == hydration_lit("VARCHAR")
-        ) & hydration_nonblank(title_value)
-        description_type = hydration_upper(
-            hydration_typeof(description_value)
-        )
-        description_is_text = description_type == hydration_lit("VARCHAR")
-        description_is_nonblank = (
-            description_is_text & hydration_nonblank(description_value)
-        )
-        description_required = bool(contract.get("description_required"))
-        if description_required:
-            invalid_description_condition = ~description_is_nonblank
-        else:
-            description_is_absent = (
-                description_value.is_null()
-                | (description_type == hydration_lit("NULL_VALUE"))
-                | (description_is_text & ~hydration_nonblank(description_value))
-            )
-            invalid_description_condition = ~(
-                description_is_absent | description_is_nonblank
-            )
-
-        match_summary = matched_df.agg(
-            hydration_count(hydration_lit(1)).alias("_MATCHED_ROWS"),
-            hydration_count(
-                hydration_when(
-                    hydration_col("_LOOKUP_ID").is_null(),
-                    hydration_lit(1),
-                )
-            ).alias("_MISSING_LOOKUP_ROWS"),
-            hydration_count(
-                hydration_when(~title_is_valid, hydration_lit(1))
-            ).alias("_INVALID_TITLE_ROWS"),
-            hydration_count(
-                hydration_when(
-                    invalid_description_condition,
-                    hydration_lit(1),
-                )
-            ).alias("_INVALID_DESCRIPTION_ROWS"),
-        ).collect()[0]
-        routed_id_count = int(
-            _component_row_value(match_summary, "_MATCHED_ROWS") or 0
-        )
-        missing_lookup_rows = int(
-            _component_row_value(match_summary, "_MISSING_LOOKUP_ROWS") or 0
-        )
-        invalid_title_rows = int(
-            _component_row_value(match_summary, "_INVALID_TITLE_ROWS") or 0
-        )
-        invalid_description_rows = int(
-            _component_row_value(
-                match_summary,
-                "_INVALID_DESCRIPTION_ROWS",
-            )
-            or 0
-        )
-        if missing_lookup_rows:
-            raise RuntimeError(
-                "Approved component hydration lookup record is missing"
-            )
-        if invalid_title_rows:
-            raise RuntimeError(
-                "Approved component hydration title is missing or invalid"
-            )
-        if invalid_description_rows:
-            raise RuntimeError(
-                "Approved component hydration description is invalid"
-            )
-
-        projected_df = matched_df.select(
-            hydration_col("_ROUTE_ID").alias("COMPONENT_ID"),
-            hydration_trim(title_value.cast("string")).alias("TITLE"),
-            hydration_when(
-                description_is_nonblank,
-                hydration_trim(description_value.cast("string")),
-            )
-            .otherwise(hydration_lit(None))
-            .alias("DESCRIPTION"),
+        lookup_id, lookup_json = F.col("_LOOKUP_ID"), F.col("_LOOKUP_JSON")
+        # Validate the full approved lookup source, including currently unreferenced rows.
+        checked_count(lookup_rows, [
+            (~nonblank(lookup_id), "Approved component lookup contains a missing ContentId"),
+            (kind(lookup_json) != F.lit("OBJECT"), "Approved component lookup contains invalid curated JSON"),
+        ], unique_key=lookup_id)
+        matched = routed_ids.join(lookup_rows, routed_ids["_ROUTE_ID"] == lookup_rows["_LOOKUP_ID"], "left")
+        title = lookup_json.getItem(contract["title_field"])
+        description = lookup_json.getItem(contract["description_field"])
+        title_valid = (kind(title) == F.lit("VARCHAR")) & nonblank(title)
+        description_text = kind(description) == F.lit("VARCHAR")
+        description_nonblank = description_text & nonblank(description)
+        description_absent = description.is_null() | (kind(description) == F.lit("NULL_VALUE"))
+        description_valid = description_nonblank
+        if not contract.get("description_required"):
+            description_valid = description_absent | description_text
+        routed_count = checked_count(matched, [
+            (lookup_id.is_null(), "Approved component hydration lookup record is missing"),
+            (~title_valid, "Approved component hydration title is missing or invalid"),
+            (~description_valid, "Approved component hydration description is invalid"),
+        ])
+        projected = matched.select(
+            F.col("_ROUTE_ID").alias("COMPONENT_ID"),
+            F.trim(title.cast("string")).alias("TITLE"),
+            F.when(description_nonblank, F.trim(description.cast("string")))
+             .otherwise(F.lit(None)).alias("DESCRIPTION"),
         )
         type_lookup = {}
-        for row in projected_df.to_local_iterator():
-            content_id = _canonical_component_content_id(
-                _component_row_value(row, "COMPONENT_ID")
-            )
+        for row in projected.to_local_iterator():
+            content_id = _canonical_component_content_id(_component_row_value(row, "COMPONENT_ID"))
             if content_id in type_lookup:
-                raise RuntimeError(
-                    "Component hydration lookup contains duplicate routed IDs"
-                )
+                raise RuntimeError("Component hydration lookup contains duplicate routed IDs")
             type_lookup[content_id] = {
                 "title": _component_row_value(row, "TITLE"),
                 "description": _component_row_value(row, "DESCRIPTION"),
             }
-        if len(type_lookup) != routed_id_count:
-            raise RuntimeError(
-                "Component hydration lookup collection is incomplete"
-            )
-        hydration_lookups[component_type] = type_lookup
+        if len(type_lookup) != routed_count:
+            raise RuntimeError("Component hydration lookup collection is incomplete")
+        lookups[component_type] = type_lookup
 
-    print(
-        "Component hydration lookup rows:",
-        sum(len(type_lookup) for type_lookup in hydration_lookups.values()),
-    )
-    for component_type in sorted(hydration_lookups):
-        type_lookup = hydration_lookups[component_type]
-        print(
-            f"Component hydration {component_type} rows:",
-            len(type_lookup),
-        )
-        print(
-            f"Component hydration {component_type} descriptions:",
-            sum(
-                1
-                for payload in type_lookup.values()
-                if payload.get("description") is not None
-            ),
-        )
-    return hydration_lookups
+    print("Component hydration lookup rows:", sum(map(len, lookups.values())))
+    for component_type in sorted(lookups):
+        payloads = lookups[component_type]
+        print(f"Component hydration {component_type} rows:", len(payloads))
+        print(f"Component hydration {component_type} descriptions:",
+              sum(payload.get("description") is not None for payload in payloads.values()))
+    return lookups
 
 
 def transform_fips_199(value, context=None):
@@ -712,19 +481,8 @@ def _single_archer_label(value, context=None):
 
 
 def transform_document_identifier(value):
-    value = _to_python(value)
-    if isinstance(value, (bool, dict, list)) or value is None:
-        raise ValueError("Document identifier must be a single scalar value")
-
-    identifier = str(value).strip()
-    if not identifier or identifier.lower() in {
-        "nan",
-        "inf",
-        "+inf",
-        "-inf",
-    }:
-        raise ValueError("Document identifier is empty or non-finite")
-    return identifier
+    return _scalar_text(value, "Document identifier must be a single scalar value",
+                        "Document identifier is empty or non-finite")
 
 
 def transform_authorization_date(value):
@@ -845,36 +603,20 @@ def _canonical_registry_rows(element_registry_dataframe, model_key, context=None
         path = _registry_path(registry_row)
         level = path.count(".") + 1
         process_order = registry_row.get("PROCESS_ORDER")
-        rows.append(
-            {
-                "element_path": path,
-                "element_type": registry_row.get("ELEMENT_TYPE"),
-                "raw": registry_row,
-                "parent_path": registry_row.get("PARENT_NODE_PATH") or None,
-                "level": level,
-                "process_order": (
-                    int(process_order)
-                    if process_order is not None
-                    else level * 1000000
-                ),
-                "is_collection": _registry_meta_bool(
-                    registry_row, "IS_COLLECTION"
-                ),
-                "instance_key_rule": (
-                    registry_row.get("INSTANCE_KEY_RULE") or None
-                ),
-                "item_path": registry_row.get("ITEM_PATH") or None,
-            }
-        )
+        rows.append({
+            "element_path": path,
+            "element_type": registry_row.get("ELEMENT_TYPE"),
+            "raw": registry_row,
+            "parent_path": registry_row.get("PARENT_NODE_PATH") or None,
+            "level": level,
+            "process_order": int(process_order) if process_order is not None else level * 1000000,
+            "is_collection": _registry_meta_bool(registry_row, "IS_COLLECTION"),
+            "instance_key_rule": registry_row.get("INSTANCE_KEY_RULE") or None,
+            "item_path": registry_row.get("ITEM_PATH") or None,
+        })
+    _metadata_registry_policy(rows, context)
+    rows.sort(key=lambda row: (row["process_order"], row["level"], row["element_path"]))
 
-    context["policy"]["registry"](rows, context)
-    rows.sort(
-        key=lambda item: (
-            item["process_order"],
-            item["level"],
-            item["element_path"],
-        )
-    )
     return rows
 
 
@@ -1103,49 +845,14 @@ def _metadata_prepare(source_df, context):
     if set(descriptive) - allowed_report_keys:
         raise ValueError("Metadata report cannot override runtime safety evidence")
     report.update(descriptive)
-    types, routes, source_types = {}, {}, {}
-    component_contract = context.get("lookups", {}).get("component_contract") or {}
-    for path, rows in context["_metadata_by_path"].items():
-        spec = plan["elements"].get(path)
-        if not spec or spec["operator"] != "references":
-            continue
-        for row in rows:
-            if row["TRANSFORM_ID"] == "skip":
-                continue
-            params = _metadata_params(row)
-            type_name = _metadata_text(params.get("reference_type"), "Reference type")
-            field = row["SOURCE_FIELD_NAME"]
-            if field in source_types and source_types[field] != type_name:
-                raise ValueError("Source reference has conflicting type declarations")
-            source_types[field] = type_name
-            binding = params.get("hydrate_lookup")
-            if not binding:
-                continue
-            contract = component_contract.get(binding)
-            if not isinstance(contract, dict):
-                raise ValueError("Reviewed reference lookup source is absent")
-            contract = dict(contract)
-            contract["description_required"] = bool(params.get("description_required", False))
-            contract["lookup_binding"] = binding
-            if type_name in types and types[type_name] != contract:
-                raise ValueError("Reference type has contradictory hydration contracts")
-            types[type_name] = contract
-            routes[field] = type_name
-    if routes:
-        sources = context.get("lookups", {}).get("component_sources")
-        if not isinstance(sources, dict):
-            raise ValueError("Reference lookup dataframes are unavailable")
-        dfs = {type_name: sources[contract["lookup_binding"]]
-               for type_name, contract in types.items()
-               if contract["lookup_binding"] in sources}
-        if set(dfs) != set(types):
-            raise ValueError("Reference lookup dataframe binding is missing")
-        context["_metadata_hydration_spec"] = {
-            "contracts": types, "routes": routes, "source_types": source_types,
-        }
+    reference_rows = [
+        row for row in plan["mappings"]
+        if plan["elements"][row["OWNER_ELEMENT_PATH"]]["operator"] == "references"
+        and row["TRANSFORM_ID"] != "skip"
+    ]
+    if reference_rows:
         context["component_hydration_lookups"] = _build_component_hydration_lookups(
-            source_df, [row for row in plan["mappings"]
-                        if row["SOURCE_FIELD_NAME"] in source_types], dfs, context,
+            source_df, reference_rows, context.get("lookups", {}).get("component_sources"), context,
         )
 
 
@@ -1554,10 +1261,6 @@ def _prepare_model_context(context, model_key, source_system, source_table):
     context["_metadata_options"] = options
     context["_metadata_by_path"] = grouped
     context["policy"] = {
-        "registry": _metadata_registry_policy, "prepare": _metadata_prepare,
-        "parse": _metadata_parse, "instances": _metadata_instances,
-        "uuid": _metadata_uuid, "payload": _metadata_payload,
-        "record_complete": _metadata_record_complete, "finish": _metadata_finish,
         "aggregate_invalid": bool(options.get("aggregate_invalid", True)),
         "allow_nan": bool(options.get("allow_nan", False)),
     }

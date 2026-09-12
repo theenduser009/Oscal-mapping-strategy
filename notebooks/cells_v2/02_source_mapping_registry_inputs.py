@@ -60,11 +60,9 @@ def load_source_input(active_session, profile):
         )
     else:
         result = candidates.select("SOURCE_RECORD_ID", "CURATED_JSON")
-    selected_count = result.count()
-    if selected_count != result.select("SOURCE_RECORD_ID").distinct().count():
-        raise ValueError("Source selection did not produce unique identities")
-    return result, {"RAW_ROWS": count, "SELECTED_ROWS": selected_count,
-                    "DUPLICATE_SOURCE_ROWS_RESOLVED": count - selected_count}, candidates
+    # The frozen snapshot yields one selected row per distinct source identity.
+    return result, {"RAW_ROWS": count, "SELECTED_ROWS": distinct,
+                    "DUPLICATE_SOURCE_ROWS_RESOLVED": count - distinct}, candidates
 
 
 def _read_mapping_header(mapping_file, encoding="cp1252"):

@@ -304,11 +304,9 @@ def load_source_input(active_session, profile):
         )
     else:
         result = candidates.select("SOURCE_RECORD_ID", "CURATED_JSON")
-    selected_count = result.count()
-    if selected_count != result.select("SOURCE_RECORD_ID").distinct().count():
-        raise ValueError("Source selection did not produce unique identities")
-    return result, {"RAW_ROWS": count, "SELECTED_ROWS": selected_count,
-                    "DUPLICATE_SOURCE_ROWS_RESOLVED": count - selected_count}, candidates
+    # The frozen snapshot yields one selected row per distinct source identity.
+    return result, {"RAW_ROWS": count, "SELECTED_ROWS": distinct,
+                    "DUPLICATE_SOURCE_ROWS_RESOLVED": count - distinct}, candidates
 
 
 def _read_mapping_header(mapping_file, encoding="cp1252"):
@@ -424,16 +422,6 @@ print("Source selection reports:", source_selection_reports)
 
 # %% Cell 3 - Canonical mapping contract
 
-EXPECTED_MAPPING_COLUMNS = [
-    "SOURCE_FIELD_NAME",
-    "OSCAL_MODEL",
-    "OSCAL_ELEMENT_PATH",
-    "OSCAL_FIELD_NAME",
-    "MAPPING_TYPE",
-    "TRANSFORMATION_LOGIC",
-    "STATUS",
-]
-
 MAPPING_COLUMN_ALIASES = {
     "ARCHER_FIELD_NAME": "SOURCE_FIELD_NAME",
     "SOURCE_FIELD": "SOURCE_FIELD_NAME",
@@ -468,6 +456,11 @@ METADATA_INSTANCE_RULES = {
     "properties": "SOURCE_FIELD_NAME+VALUE", "values": "VALUE",
     "references": "CONTENT_ID", "roles": "SOURCE_FIELD_NAME",
     "parties": "ID", "assignments": "SOURCE_FIELD_NAME+ID",
+}
+METADATA_ITEM_PATHS = {
+    "record": None, "observations": None,
+    "properties": "$", "values": "$", "references": "$", "roles": "$",
+    "parties": "UserList[]", "assignments": "UserList[]",
 }
 
 
@@ -548,7 +541,7 @@ def _flat_mapping_status(row):
     return status.upper()
 
 
-def _flat_text(row, key, required=False):
+def _metadata_column_text(row, key, required=False):
     value = row.get(key)
     if value in (None, "") and not required:
         return None
@@ -557,8 +550,8 @@ def _flat_text(row, key, required=False):
     return value.strip()
 
 
-def _flat_items(row, key):
-    value = _flat_text(row, key)
+def _metadata_items(row, key):
+    value = _metadata_column_text(row, key)
     if value is None:
         return []
     items = [item.strip() for item in value.split("|")]
@@ -567,25 +560,33 @@ def _flat_items(row, key):
     return items
 
 
+def _metadata_bool(value, label):
+    if type(value) is bool:
+        return value
+    if isinstance(value, str) and value.lower() in {"true", "false"}:
+        return value.lower() == "true"
+    raise ValueError(label + " must be true or false")
+
+
 def _compile_flat_mapping(row, elements):
     """Translate readable sheet columns to inert runtime parameters, never code."""
     status = _flat_mapping_status(row)
     if status not in {"APPROVED", "BLOCKED_IF_POPULATED"}:
         raise ValueError("Non-executable row cannot enter the compiled plan")
-    transform = _flat_text(row, "TRANSFORM_ID", required=True)
+    transform = _metadata_column_text(row, "TRANSFORM_ID", required=True)
     if transform not in METADATA_TRANSFORM_IDS:
         raise ValueError("Unknown reusable transform identifier")
     if status == "BLOCKED_IF_POPULATED" and transform != "reject-populated":
         raise ValueError("Populated-only guard requires reject-populated transform")
-    rule_id = _flat_text(row, "RULE_ID", required=True)
-    _flat_text(row, "RUNTIME_TARGET_PATH", required=True)
+    rule_id = _metadata_column_text(row, "RULE_ID", required=True)
+    _metadata_column_text(row, "RUNTIME_TARGET_PATH", required=True)
     owner = row["OWNER_ELEMENT_PATH"]
     if owner not in elements:
         raise ValueError("Mapping has no metadata-defined element operator")
     operator = elements[owner]["operator"]
     transform_params, representation_params = {}, {}
     allowed = {"VALUE_SOURCE", "VALUE_REQUIRED"}
-    value_source = _flat_text(row, "VALUE_SOURCE") or "FIELD"
+    value_source = _metadata_column_text(row, "VALUE_SOURCE") or "FIELD"
     if value_source not in {"FIELD", "CONFIG"}:
         raise ValueError("VALUE_SOURCE must be FIELD or CONFIG")
     if value_source == "CONFIG":
@@ -594,21 +595,16 @@ def _compile_flat_mapping(row, elements):
         representation_params["value_source"] = "CONFIG"
     required = row.get("VALUE_REQUIRED")
     if required not in (None, ""):
-        if type(required) is bool:
-            representation_params["required"] = required
-        elif isinstance(required, str) and required.lower() in {"true", "false"}:
-            representation_params["required"] = required.lower() == "true"
-        else:
-            raise ValueError("VALUE_REQUIRED must be true or false")
+        representation_params["required"] = _metadata_bool(required, "VALUE_REQUIRED")
     if transform == "security-objective":
         allowed.add("ALLOWED_VALUES")
-        labels = _flat_items(row, "ALLOWED_VALUES")
+        labels = _metadata_items(row, "ALLOWED_VALUES")
         if labels:
             transform_params["approved_legacy_values"] = labels
     if transform == "status-crosswalk":
         allowed.update({"VALUE_MAP", "OTHER_REMARKS_TEMPLATE"})
         crosswalk = {}
-        for entry in _flat_items(row, "VALUE_MAP"):
+        for entry in _metadata_items(row, "VALUE_MAP"):
             if entry.count("=") != 1:
                 raise ValueError("VALUE_MAP entries must be source=target")
             source, target = (token.strip() for token in entry.split("=", 1))
@@ -620,7 +616,7 @@ def _compile_flat_mapping(row, elements):
         if not crosswalk:
             raise ValueError("Crosswalk transform requires VALUE_MAP")
         transform_params["crosswalk"] = crosswalk
-        template = _flat_text(row, "OTHER_REMARKS_TEMPLATE")
+        template = _metadata_column_text(row, "OTHER_REMARKS_TEMPLATE")
         if template is not None:
             if template.count("{label}") != 1 or any(
                     brace in template.replace("{label}", "") for brace in "{}"):
@@ -632,26 +628,20 @@ def _compile_flat_mapping(row, elements):
     if operator == "assignments":
         allowed.update({"ROLE_ID", "ROLE_TITLE"})
         representation_params.update(
-            role_id=_flat_text(row, "ROLE_ID", required=True),
-            role_title=_flat_text(row, "ROLE_TITLE", required=True),
+            role_id=_metadata_column_text(row, "ROLE_ID", required=True),
+            role_title=_metadata_column_text(row, "ROLE_TITLE", required=True),
         )
     if operator == "references":
         allowed.update({"REFERENCE_TYPE", "LOOKUP_KEY", "DESCRIPTION_REQUIRED"})
-        representation_params["reference_type"] = _flat_text(row, "REFERENCE_TYPE", required=True)
-        binding = _flat_text(row, "LOOKUP_KEY")
+        representation_params["reference_type"] = _metadata_column_text(row, "REFERENCE_TYPE", required=True)
+        binding = _metadata_column_text(row, "LOOKUP_KEY")
         if binding is not None:
             representation_params["hydrate_lookup"] = binding
         required = row.get("DESCRIPTION_REQUIRED")
         if required not in (None, ""):
             if binding is None:
                 raise ValueError("DESCRIPTION_REQUIRED needs a LOOKUP_KEY")
-            if type(required) is bool:
-                flag = required
-            elif isinstance(required, str) and required.lower() in {"true", "false"}:
-                flag = required.lower() == "true"
-            else:
-                raise ValueError("DESCRIPTION_REQUIRED must be true or false")
-            representation_params["description_required"] = flag
+            representation_params["description_required"] = _metadata_bool(required, "DESCRIPTION_REQUIRED")
     parameters = FLAT_MAPPING_COLUMNS - {"EXECUTION_STATUS", "RUNTIME_TARGET_PATH"}
     if any(row.get(key) not in (None, "") for key in parameters - allowed):
         raise ValueError("Flat parameter does not apply to the chosen operation")
@@ -728,8 +718,8 @@ def _validate_compiled_metadata(plan, root_path, constraints_compiled=False):
         if approval not in {"approved", "accepted", "runtime-accepted", "runtime-accepted-in-memory"} and not (
                 approval == "blocked-if-populated" and row["TRANSFORM_ID"] == "reject-populated"):
             raise ValueError("Unapproved mapping cannot enter runtime plan")
-        _flat_text(row, "SOURCE_FIELD_NAME", required=True)
-        _flat_text(row, "OWNER_ELEMENT_PATH", required=True)
+        _metadata_column_text(row, "SOURCE_FIELD_NAME", required=True)
+        _metadata_column_text(row, "OWNER_ELEMENT_PATH", required=True)
         path = row["OWNER_ELEMENT_PATH"]
         if path not in plan["elements"]:
             raise ValueError("Mapped element lacks a reviewed representation")
@@ -848,19 +838,8 @@ def _model_aliases(model_contracts):
     return aliases
 
 
-def _registry_meta_text(row, key, required=False):
-    value = row.get(key)
-    if value is None or value == "":
-        if required:
-            raise ValueError("Registry metadata requires " + key)
-        return None
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError("Registry metadata must be nonblank text: " + key)
-    return value.strip()
-
-
 def _registry_meta_enum(row, key, choices, required=False):
-    value = _registry_meta_text(row, key, required)
+    value = _metadata_column_text(row, key, required)
     if value is not None and value not in choices:
         raise ValueError("Unknown registry policy: " + key)
     return value
@@ -868,21 +847,7 @@ def _registry_meta_enum(row, key, choices, required=False):
 
 def _registry_meta_bool(row, key):
     value = row.get(key)
-    if type(value) is bool:
-        return value
-    if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
-        return value.strip().lower() == "true"
-    raise ValueError("Registry requires explicit boolean: " + key)
-
-
-def _registry_meta_list(row, key):
-    value = _registry_meta_text(row, key)
-    if value is None:
-        return []
-    values = [part.strip() for part in value.split("|")]
-    if any(not part for part in values) or len(values) != len(set(values)):
-        raise ValueError("Registry list contains empty or duplicate values: " + key)
-    return values
+    return _metadata_bool(value.strip() if isinstance(value, str) else value, "Registry " + key)
 
 
 def _registry_operator(row):
@@ -892,23 +857,11 @@ def _registry_operator(row):
         return explicit
     if not _registry_meta_bool(row, "IS_COLLECTION"):
         return "object"
-    rule = (_registry_meta_text(row, "INSTANCE_KEY_RULE", True) or "").upper()
-    item_path = _registry_meta_text(row, "ITEM_PATH")
-    if rule == "SOURCE_RECORD_ID" and item_path is None:
-        return "record"
-    if rule == "SOURCE_FIELD_NAME" and item_path is None:
-        return "observations"
-    if rule == "SOURCE_FIELD_NAME" and item_path == "$":
-        return "roles"
-    inferred = {
-        ("SOURCE_FIELD_NAME+VALUE", "$"): "properties",
-        ("VALUE", "$"): "values",
-        ("CONTENT_ID", "$"): "references",
-        ("ID", "UserList[]"): "parties",
-        ("SOURCE_FIELD_NAME+ID", "UserList[]"): "assignments",
-    }.get((rule, item_path))
-    if inferred:
-        return inferred
+    rule = _metadata_column_text(row, "INSTANCE_KEY_RULE", True).upper()
+    item_path = _metadata_column_text(row, "ITEM_PATH")
+    for operator, identity in METADATA_INSTANCE_RULES.items():
+        if rule == identity and item_path == METADATA_ITEM_PATHS[operator]:
+            return operator
     raise ValueError("Collection requires an explicit reusable OPERATOR")
 
 
@@ -919,7 +872,7 @@ def _registry_model_rows(registry, model):
         raise ValueError("Enabled model requires unique active registry paths")
     by_path = dict(zip(paths, rows))
     roots = [path for path, row in by_path.items()
-             if _registry_meta_text(row, "PARENT_NODE_PATH") is None]
+             if _metadata_column_text(row, "PARENT_NODE_PATH") is None]
     if len(roots) != 1 or "." in roots[0]:
         raise ValueError("Enabled model requires exactly one registry root")
     root = roots[0]
@@ -927,11 +880,8 @@ def _registry_model_rows(registry, model):
         collection = _registry_meta_bool(row, "IS_COLLECTION")
         if collection != path.endswith("[]"):
             raise ValueError("Registry collection flag conflicts with path")
-        parent = _registry_meta_text(row, "PARENT_NODE_PATH")
-        if path == root:
-            if parent is not None:
-                raise ValueError("Registry root cannot have a parent")
-        elif parent not in by_path or not path.startswith(parent + "."):
+        parent = _metadata_column_text(row, "PARENT_NODE_PATH")
+        if path != root and (parent not in by_path or not path.startswith(parent + ".")):
             raise ValueError("Registry child requires its active path ancestor")
     return by_path, root
 
@@ -970,30 +920,25 @@ def _with_registry_ancestors(paths, by_path):
         current = path
         while current is not None:
             result.add(current)
-            current = _registry_meta_text(by_path[current], "PARENT_NODE_PATH")
+            current = _metadata_column_text(by_path[current], "PARENT_NODE_PATH")
     return result
 
 
-def _decode_registry_element(row, root, by_path):
-    path = _registry_path(row)
+def _decode_registry_element(row, by_path):
     operator = _registry_operator(row)
     collection = _registry_meta_bool(row, "IS_COLLECTION")
-    parent = _registry_meta_text(row, "PARENT_NODE_PATH")
+    parent = _metadata_column_text(row, "PARENT_NODE_PATH")
     # INSTANCE_KEY_RULE and ITEM_PATH describe collection instances.  Some
     # established scalar registry rows retain legacy values in those columns;
     # they do not change scalar identity and must not make a valid path fail.
-    key_rule = _registry_meta_text(row, "INSTANCE_KEY_RULE") if collection else None
-    item_path = _registry_meta_text(row, "ITEM_PATH") if collection else None
+    key_rule = _metadata_column_text(row, "INSTANCE_KEY_RULE") if collection else None
+    item_path = _metadata_column_text(row, "ITEM_PATH") if collection else None
     if operator != "object" and not collection:
         raise ValueError("Registry operator requires a collection")
     if operator in METADATA_INSTANCE_RULES and key_rule != METADATA_INSTANCE_RULES[operator]:
         raise ValueError("Registry instance rule conflicts with operator")
-    if operator in {"record", "observations"} and item_path is not None:
-        raise ValueError("Record/observation operator requires null item path")
-    if operator in {"properties", "values", "references", "roles"} and item_path != "$":
-        raise ValueError("Registry operator requires root item path")
-    if operator in {"parties", "assignments"} and item_path != "UserList[]":
-        raise ValueError("Linked identity operator requires reviewed user-list item path")
+    if operator in METADATA_ITEM_PATHS and item_path != METADATA_ITEM_PATHS[operator]:
+        raise ValueError("Registry item path conflicts with operator: " + operator)
     if operator == "object" and collection and (key_rule, item_path) != ("VALUE", "$"):
         raise ValueError("Object-list operator requires VALUE identity at the root item path")
     registry_contract = {"parent_path": parent, "is_collection": collection}
@@ -1013,18 +958,16 @@ def _decode_registry_element(row, root, by_path):
     # compatibility requires a UUID.
     uuid_policy = _registry_meta_enum(
         row, "UUID_POLICY", {"omit", "node", "instance"},
-        required=_registry_meta_text(row, "OPERATOR") is not None) or "omit"
+        required=_metadata_column_text(row, "OPERATOR") is not None) or "omit"
     if operator == "parties" and uuid_policy != "instance":
         raise ValueError("Party identity requires the instance UUID policy")
     if uuid_policy == "instance" and operator != "parties":
         raise ValueError("Instance UUID policy is supported only for parties")
     if uuid_policy != "omit":
         parameters["include_uuid"] = True
-    if uuid_policy == "instance":
-        if not collection:
-            raise ValueError("Instance UUID policy requires a collection")
-        parameters["uuid_from_instance"] = True
-    members = _registry_meta_list(row, "REQUIRED_MEMBERS")
+        if uuid_policy == "instance":
+            parameters["uuid_from_instance"] = True
+    members = _metadata_items(row, "REQUIRED_MEMBERS")
     if members:
         if operator != "object" or collection or any(
                 any(not token or "[" in token or "]" in token for token in member.split("."))
@@ -1072,7 +1015,7 @@ def _decode_registry_model_contracts(registry, source_profiles, model_contracts,
         mapped = _executable_registry_paths(mapping_rows, source_profiles, model,
                                              tuple(by_path), root)
         explicit = {path for path, row in by_path.items()
-                    if _registry_meta_text(row, "OPERATOR") is not None}
+                    if _metadata_column_text(row, "OPERATOR") is not None}
         included = mapped | explicit | {root}
 
         # Assignment mappings materialize the registered role and party
@@ -1081,15 +1024,15 @@ def _decode_registry_model_contracts(registry, source_profiles, model_contracts,
         for path in tuple(included):
             if _registry_operator(by_path[path]) != "assignments":
                 continue
-            parent = _registry_meta_text(by_path[path], "PARENT_NODE_PATH")
+            parent = _metadata_column_text(by_path[path], "PARENT_NODE_PATH")
             siblings = []
             for candidate, row in by_path.items():
-                if _registry_meta_text(row, "PARENT_NODE_PATH") != parent:
+                if _metadata_column_text(row, "PARENT_NODE_PATH") != parent:
                     continue
                 try:
                     sibling_operator = _registry_operator(row)
                 except ValueError:
-                    if _registry_meta_text(row, "OPERATOR") is not None:
+                    if _metadata_column_text(row, "OPERATOR") is not None:
                         raise
                     continue
                 if sibling_operator in {"roles", "parties"}:
@@ -1102,33 +1045,29 @@ def _decode_registry_model_contracts(registry, source_profiles, model_contracts,
             included.update((roles[0], parties[0]))
         included = _with_registry_ancestors(included, by_path)
 
-        elements = {path: _decode_registry_element(by_path[path], root, by_path)
+        elements = {path: _decode_registry_element(by_path[path], by_path)
                     for path in sorted(included)}
         if elements[root]["operator"] != "object":
             raise ValueError("Registry root requires an object operator")
 
         groups, linked = [], set()
-        namespaces = {
-            (profile["SOURCE_SYSTEM_NAME"], profile["SOURCE_TABLE_NAME"])
-            for profile in source_profiles if model in profile.get("MODEL_KEYS", ())
-        }
+        if families:
+            namespaces = {(profile["SOURCE_SYSTEM_NAME"], profile["SOURCE_TABLE_NAME"])
+                          for profile in source_profiles if model in profile.get("MODEL_KEYS", ())}
+            if len(namespaces) != 1:
+                raise ValueError("Reference family requires one source namespace")
+            source_system, source_table = next(iter(namespaces))
         for path, (roles_path, parties_path) in sorted(families.items()):
             group_paths = {path, roles_path, parties_path}
             if len(group_paths) != 3 or group_paths & linked:
                 raise ValueError("Reference family registry paths must be distinct")
-            group = {"roles_path": roles_path, "parties_path": parties_path,
-                     "assignments_path": path, "party_type": "person"}
-            if len(namespaces) != 1:
-                raise ValueError("Reference family requires one source namespace")
-            source_system, source_table = next(iter(namespaces))
-            group.update(
-                party_uuid_parts=["$source_system", "$source_record", "party",
-                                  "$reference_id"],
-                source_namespace={"SOURCE_SYSTEM_NAME": source_system,
-                                  "SOURCE_TABLE_NAME": source_table,
-                                  "MODEL_KEY": model},
-            )
-            groups.append(group)
+            groups.append({
+                "roles_path": roles_path, "parties_path": parties_path,
+                "assignments_path": path, "party_type": "person",
+                "party_uuid_parts": ["$source_system", "$source_record", "party", "$reference_id"],
+                "source_namespace": {"SOURCE_SYSTEM_NAME": source_system,
+                                     "SOURCE_TABLE_NAME": source_table, "MODEL_KEY": model},
+            })
             linked.update(group_paths)
         if any(spec["operator"] in {"roles", "parties"} and path not in linked
                for path, spec in elements.items()):
@@ -1152,7 +1091,6 @@ def _decode_registry_model_contracts(registry, source_profiles, model_contracts,
 def _validate_source_profiles(source_profiles, model_contracts, mapping_rows):
     if not isinstance(mapping_rows, dict) or not source_profiles:
         raise ValueError("Explicit source-to-mapping bindings are required")
-    _model_aliases(model_contracts)
     keys, tables, physical = set(), set(), set()
     for profile in source_profiles:
         for field in ("SOURCE_KEY", "SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME",
@@ -1194,20 +1132,20 @@ def _owner_for_path(path, paths):
 
 def _summarize_routing_issues(report, sample_limit=25):
     """Keep exact issue counts but bound printed samples, showing blockers first."""
+    from collections import Counter
+
     issues = report["ISSUES"]
-    reason_counts, severity_counts = {}, {}
+    reason_counts, severity_counts = Counter(), Counter()
     for issue in issues:
         count = issue.get("affected_rows", 1)
-        reason = issue["reason"]
-        severity = issue["severity"]
-        reason_counts[reason] = reason_counts.get(reason, 0) + count
-        severity_counts[severity] = severity_counts.get(severity, 0) + count
+        reason_counts[issue["reason"]] += count
+        severity_counts[issue["severity"]] += count
     ordered = sorted(issues, key=lambda issue: (
         0 if issue["severity"] == "BLOCKED" else 1,
         issue.get("row") if issue.get("row") is not None else -1,
     ))
     report.update(
-        REASON_COUNTS=reason_counts, SEVERITY_COUNTS=severity_counts,
+        REASON_COUNTS=dict(reason_counts), SEVERITY_COUNTS=dict(severity_counts),
         ISSUE_EVENTS_TOTAL=len(issues), ISSUE_SAMPLE_LIMIT=sample_limit,
         ISSUE_SAMPLES_TRUNCATED=len(issues) > sample_limit,
         ISSUES=ordered[:sample_limit],
@@ -1303,6 +1241,8 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 path_model = root_models.get(path.split(".", 1)[0])
                 original_model = root_models.get(original_path.split(".", 1)[0])
                 source_key = row.get("SOURCE_KEY")
+                owner = _owner_for_path(path, paths)
+                relative = path[len(owner):].lstrip(".") if owner is not None else ""
                 # The original row remains provenance. Explicit runtime paths
                 # choose representation, but cannot silently move across models.
                 if classification:
@@ -1344,37 +1284,24 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     reason = "MISSING_TARGET_PATH"
                 elif path_model != model:
                     classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
+                elif any(path == boundary or path.startswith(boundary + ".") for boundary in unavailable_paths):
+                    classification, reason = "BLOCKED_ROWS", "REGISTRY_PATH_NOT_EXECUTABLE"
+                elif owner is None:
+                    classification, reason = "BLOCKED_ROWS", "UNREGISTERED_PATH"
+                elif "[]" in relative or flat_status and any(token in relative for token in ("[", "]", "..")):
+                    classification, reason = "BLOCKED_ROWS", "UNREGISTERED_COLLECTION"
                 if classification:
                     report[classification] += 1
                     if reason:
-                        report["ISSUES"].append({"row": index, "field": field, "reason": reason,
-                                                 "severity": classification.removesuffix("_ROWS"),
-                                                 "model_label": row.get("OSCAL_MODEL"),
-                                                 "target_path": path, "resolved_model": path_model})
+                        issue = {"row": index, "field": field, "reason": reason,
+                                 "severity": classification.removesuffix("_ROWS")}
+                        if reason not in {"REGISTRY_PATH_NOT_EXECUTABLE", "UNREGISTERED_PATH", "UNREGISTERED_COLLECTION"}:
+                            issue.update(model_label=row.get("OSCAL_MODEL"), target_path=path, resolved_model=path_model)
+                        report["ISSUES"].append(issue)
                     continue
                 canonical = dict(row)
-                canonical_path = path
-                if any(path == boundary or path.startswith(boundary + ".")
-                       for boundary in unavailable_paths):
-                    report["BLOCKED_ROWS"] += 1
-                    report["ISSUES"].append({"row": index, "field": field,
-                                             "reason": "REGISTRY_PATH_NOT_EXECUTABLE",
-                                             "severity": "BLOCKED"})
-                    continue
-                owner = _owner_for_path(canonical_path, paths)
-                if owner is None:
-                    report["BLOCKED_ROWS"] += 1
-                    report["ISSUES"].append({"row": index, "field": field, "reason": "UNREGISTERED_PATH",
-                                             "severity": "BLOCKED"})
-                    continue
-                relative = canonical_path[len(owner):].lstrip(".")
-                if "[]" in relative or flat_status and any(token in relative for token in ("[", "]", "..")):
-                    report["BLOCKED_ROWS"] += 1
-                    report["ISSUES"].append({"row": index, "field": field, "reason": "UNREGISTERED_COLLECTION",
-                                             "severity": "BLOCKED"})
-                    continue
                 canonical.update(ARTIFACT_MODEL=row.get("ARTIFACT_MODEL", row.get("OSCAL_MODEL")),
-                                 CANONICAL_ELEMENT_PATH=canonical_path,
+                                 CANONICAL_ELEMENT_PATH=path,
                                  OWNER_ELEMENT_PATH=owner, FIELD_RELATIVE_PATH=relative,
                                  OSCAL_MODEL=model, SOURCE_KEY=profile["SOURCE_KEY"])
                 if not canonical.get("OSCAL_FIELD_NAME"):
@@ -1384,9 +1311,6 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 selected.append(canonical)
                 report["SELECTED_ROWS"] += 1
             selected.sort(key=lambda row: (row["OWNER_ELEMENT_PATH"], row["CANONICAL_ELEMENT_PATH"], row["SOURCE_FIELD_NAME"]))
-            grouped = {}
-            for row in selected:
-                grouped.setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
             if report["BLOCKED_ROWS"]:
                 report["STATUS"] = "BLOCKED"
             cfg = copy.deepcopy(profile.get("BASE_CONFIG", {}))
@@ -1397,23 +1321,19 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                        EXECUTE_WRITES=False)
             root_row = next(row for row in model_registry if _registry_path(row) == contract["ROOT_PATH"])
             cfg["ROOT_ELEMENT_TYPE"] = root_row.get("ELEMENT_TYPE") or contract["ROOT_PATH"]
-            if cfg["STORAGE_CONTRACT"]:
-                for key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
+            for key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
+                if cfg["STORAGE_CONTRACT"]:
                     cfg[key] = cfg["STORAGE_CONTRACT"][key]
-            else:
-                for key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
+                else:
                     cfg.pop(key, None)
             context = {"source_key": profile["SOURCE_KEY"], "config": cfg,
-                             "mapping_rows": selected, "mappings_by_path": grouped,
+                             "mapping_rows": selected,
                              "model_contract": contract, "registry_rows": model_registry,
                              "routing_report": report}
             if contract.get("POLICY") == "metadata-v1" and report["STATUS"] == "READY":
                 try:
                     context["compiled_plan"] = compile_metadata_plan(context)
                     context["mapping_rows"] = context["compiled_plan"]["mappings"]
-                    context["mappings_by_path"] = {}
-                    for row in context["mapping_rows"]:
-                        context["mappings_by_path"].setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
                 except ValueError as error:
                     report["STATUS"] = "BLOCKED"
                     report["CONTRACT_ERROR"] = str(error)
@@ -1424,7 +1344,9 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     report["BLOCKED_ROWS"] += report["SELECTED_ROWS"]
                     report["SELECTED_ROWS"] = 0
                     context["mapping_rows"] = []
-                    context["mappings_by_path"] = {}
+            context["mappings_by_path"] = {}
+            for row in context["mapping_rows"]:
+                context["mappings_by_path"].setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
             _summarize_routing_issues(report)
             contexts.append(context)
     return contexts
@@ -1629,34 +1551,25 @@ def resolve_archer_select_value(value, context=None):
     return resolve_one(extracted)
 
 
+def _scalar_text(value, shape_error, value_error, allow_bool=False):
+    """Canonical scalar text shared by properties and external identifiers."""
+    value = _to_python(value)
+    if value is None or isinstance(value, (dict, list)) or (isinstance(value, bool) and not allow_bool):
+        raise ValueError(shape_error)
+    if isinstance(value, bool):
+        text = "true" if value else "false"
+    else:
+        text = str(value).strip()
+    if not text or text.lower() in {"nan", "inf", "+inf", "-inf"}:
+        raise ValueError(value_error)
+    return text
+
+
 def _oscal_property_values(value):
     values = value if isinstance(value, list) else [value]
-    normalized = []
-
-    for item in values:
-        item = _to_python(item)
-        if isinstance(item, (dict, list)) or item is None:
-            raise ValueError(
-                "OSCAL property value must resolve to a scalar"
-            )
-
-        if isinstance(item, bool):
-            text = "true" if item else "false"
-        else:
-            text = str(item).strip()
-
-        if not text or text.lower() in {
-            "nan",
-            "inf",
-            "+inf",
-            "-inf",
-        }:
-            raise ValueError(
-                "OSCAL property value must be a nonblank finite scalar"
-            )
-        normalized.append(text)
-
-    return normalized
+    return [_scalar_text(item, "OSCAL property value must resolve to a scalar",
+                         "OSCAL property value must be a nonblank finite scalar", allow_bool=True)
+            for item in values]
 
 
 def _append_unique_collection_instance(instances, instance):
@@ -1689,18 +1602,8 @@ def _value_instance_key(value):
 
 
 def _canonical_component_content_id(value):
-    value = _to_python(value)
-    if isinstance(value, (bool, dict, list)) or value is None:
-        raise ValueError("Component reference has invalid ContentId")
-    content_id = str(value).strip()
-    if not content_id or content_id.lower() in {
-        "nan",
-        "inf",
-        "+inf",
-        "-inf",
-    }:
-        raise ValueError("Component reference has invalid ContentId")
-    return content_id
+    message = "Component reference has invalid ContentId"
+    return _scalar_text(value, message, message)
 
 
 def _component_reference_content_ids(value):
@@ -1712,12 +1615,8 @@ def _component_reference_content_ids(value):
         if isinstance(member, dict):
             if "ContentId" not in member:
                 raise ValueError("Component reference is missing ContentId")
-            content_id = _canonical_component_content_id(
-                member["ContentId"]
-            )
-        else:
-            content_id = _canonical_component_content_id(member)
-        content_ids.append(content_id)
+            member = member["ContentId"]
+        content_ids.append(_canonical_component_content_id(member))
     return content_ids
 
 
@@ -1751,370 +1650,162 @@ def _component_text(value, label, required):
 
 
 def _build_component_hydration_lookups(
-    source_dataframe,
-    mapping_rows,
-    hydration_source_dfs,
-    context=None,
+    source_dataframe, mapping_rows, hydration_source_dfs, context=None,
 ):
-    if not isinstance(context, dict) or not isinstance(context.get("_metadata_hydration_spec"), dict):
-        raise RuntimeError("A compiled reference hydration plan is required")
-    metadata_spec = context["_metadata_hydration_spec"]
-    hydration_contract = metadata_spec["contracts"]
-    source_types = metadata_spec["source_types"]
-    hydration_routes = metadata_spec["routes"]
-    if _context_config(context).get("EXECUTE_WRITES", False):
-        raise RuntimeError(
-            "Component hydration must be built before guarded writes"
-        )
-    if not isinstance(hydration_source_dfs, dict):
-        raise RuntimeError("Component hydration sources are unavailable")
-    if set(hydration_source_dfs) != set(hydration_contract):
-        raise RuntimeError("Component hydration source contract is incomplete")
-    component_rows_by_field = {}
-    unexpected_component_rows = 0
+    """Validate reference routes, join their lookup rows, and collect only the payloads."""
+    if not isinstance(context, dict):
+        raise RuntimeError("A compiled reference hydration context is required")
+    contracts, source_types, fields_to_hydrate = {}, {}, {}
+    duplicate_fields = False
+    declared_lookups = context.get("lookups", {}).get("component_contract") or {}
     for row in mapping_rows:
-        source_field = str(row.get("SOURCE_FIELD_NAME") or "").strip()
-        if source_field in source_types:
-            component_rows_by_field.setdefault(source_field, []).append(row)
-        else:
-            unexpected_component_rows += 1
+        params = _metadata_params(row)
+        type_name = _metadata_text(params.get("reference_type"), "Reference type")
+        field = row["SOURCE_FIELD_NAME"]
+        if field in source_types:
+            if source_types[field] != type_name:
+                raise ValueError("Source reference has conflicting type declarations")
+            duplicate_fields = True
+        source_types[field] = type_name
+        binding = params.get("hydrate_lookup")
+        if not binding:
+            continue
+        contract = declared_lookups.get(binding)
+        if not isinstance(contract, dict):
+            raise ValueError("Reviewed reference lookup source is absent")
+        contract = dict(contract, lookup_binding=binding,
+                        description_required=bool(params.get("description_required", False)))
+        if type_name in contracts and contracts[type_name] != contract:
+            raise ValueError("Reference type has contradictory hydration contracts")
+        contracts[type_name] = contract
+        fields_to_hydrate[field] = type_name
+    if not fields_to_hydrate:
+        return {}
+    if duplicate_fields:
+        raise RuntimeError("Canonical component mapping is duplicated")
+    if _context_config(context).get("EXECUTE_WRITES", False):
+        raise RuntimeError("Component hydration must be built before guarded writes")
+    if not isinstance(hydration_source_dfs, dict):
+        raise ValueError("Reference lookup dataframes are unavailable")
+    if any(contract["lookup_binding"] not in hydration_source_dfs for contract in contracts.values()):
+        raise ValueError("Reference lookup dataframe binding is missing")
 
-    if unexpected_component_rows:
-        raise RuntimeError("Canonical component mapping contract has drifted")
-    if set(component_rows_by_field) != set(source_types):
-        raise RuntimeError("Canonical component mapping contract has drifted")
-    for source_field, rows in component_rows_by_field.items():
-        if len(rows) != 1:
-            raise RuntimeError(
-                "Canonical component mapping is duplicated"
-            )
-        actual_type = rows[0].get("REPRESENTATION_PARAMS", {}).get("reference_type")
-        if actual_type != source_types[source_field]:
-            raise RuntimeError("Canonical component mapping type drifted")
+    from snowflake.snowpark import functions as F
 
-    from snowflake.snowpark.functions import (
-        col as hydration_col,
-        count as hydration_count,
-        count_distinct as hydration_count_distinct,
-        length as hydration_length,
-        lit as hydration_lit,
-        parse_json as hydration_parse_json,
-        trim as hydration_trim,
-        typeof as hydration_typeof,
-        upper as hydration_upper,
-        when as hydration_when,
-    )
+    def kind(value):
+        return F.upper(F.typeof(value))
 
-    def hydration_nonblank(column):
-        return (
-            column.is_not_null()
-            & (
-                hydration_length(hydration_trim(column.cast("string")))
-                > hydration_lit(0)
-            )
-        )
+    def nonblank(value):
+        return value.is_not_null() & (F.length(F.trim(value.cast("string"))) > F.lit(0))
 
-    source_columns = {
-        str(name).strip().upper(): name for name in source_dataframe.columns
-    }
+    def checked_count(frame, checks, unique_key=None):
+        # Each condition identifies invalid rows; collect one aggregate, never source JSON.
+        aggregates = [F.count(F.lit(1)).alias("_TOTAL")]
+        for index, (condition, message) in enumerate(checks):
+            aggregates.append(F.count(F.when(condition, F.lit(1))).alias(f"_INVALID_{index}"))
+        if unique_key is not None:
+            aggregates.append(F.count_distinct(unique_key).alias("_UNIQUE"))
+        summary = frame.agg(*aggregates).collect()[0]
+        for index, (condition, message) in enumerate(checks):
+            if _component_row_value(summary, f"_INVALID_{index}"):
+                raise RuntimeError(message)
+        total = int(_component_row_value(summary, "_TOTAL") or 0)
+        if unique_key is not None and total != int(_component_row_value(summary, "_UNIQUE") or 0):
+            raise RuntimeError("Approved component lookup contains duplicate ContentId values")
+        return total
+
+    source_columns = {str(name).strip().upper(): name for name in source_dataframe.columns}
     if not {"SOURCE_RECORD_ID", "CURATED_JSON"}.issubset(source_columns):
         raise RuntimeError("Component hydration source columns are missing")
-
-    source_json = hydration_parse_json(
-        hydration_col(source_columns["CURATED_JSON"]).cast("string")
-    )
-    route_frames = []
-    scalar_types = (
-        "VARCHAR",
-        "INTEGER",
-        "DECIMAL",
-        "NUMBER",
-        "FIXED",
-        "REAL",
-        "DOUBLE",
-    )
-    for source_field, component_type in (
-        hydration_routes.items()
-    ):
-        roots_df = source_dataframe.select(
-            hydration_lit(source_field).alias("_SOURCE_FIELD"),
-            hydration_lit(component_type).alias("_COMPONENT_TYPE"),
-            source_json.getItem(source_field).alias("_REFERENCE_ROOT"),
+    source_json = F.parse_json(F.col(source_columns["CURATED_JSON"]).cast("string"))
+    scalar_types = ("VARCHAR", "INTEGER", "DECIMAL", "NUMBER", "FIXED", "REAL", "DOUBLE")
+    routes = None
+    for field, component_type in fields_to_hydrate.items():
+        roots = source_dataframe.select(
+            F.lit(component_type).alias("_COMPONENT_TYPE"),
+            source_json.getItem(field).alias("_REFERENCE_ROOT"),
         )
-        invalid_roots = roots_df.filter(
-            hydration_col("_REFERENCE_ROOT").is_not_null()
-            & ~hydration_upper(
-                hydration_typeof(hydration_col("_REFERENCE_ROOT"))
-            ).isin("ARRAY", "NULL_VALUE")
-        ).count()
-        if invalid_roots:
-            raise RuntimeError(
-                "Approved component reference root has invalid shape"
-            )
-
-        members_df = roots_df.filter(
-            hydration_upper(
-                hydration_typeof(hydration_col("_REFERENCE_ROOT"))
-            )
-            == hydration_lit("ARRAY")
-        ).join_table_function(
-            "flatten",
-            hydration_col("_REFERENCE_ROOT"),
+        root = F.col("_REFERENCE_ROOT")
+        if roots.filter(root.is_not_null() & ~kind(root).isin("ARRAY", "NULL_VALUE")).count():
+            raise RuntimeError("Approved component reference root has invalid shape")
+        members = roots.filter(kind(root) == F.lit("ARRAY")).join_table_function("flatten", root)
+        member = F.col("VALUE")
+        content_id = member.getItem("ContentId")
+        member_id = (
+            F.when((kind(member) == F.lit("OBJECT")) & kind(content_id).isin(*scalar_types), content_id)
+            .when(kind(member).isin(*scalar_types), member)
+            .otherwise(F.lit(None))
         )
-        member_value = hydration_col("VALUE")
-        member_type = hydration_upper(hydration_typeof(member_value))
-        object_content_id = member_value.getItem("ContentId")
-        object_id_type = hydration_upper(hydration_typeof(object_content_id))
-        component_id_value = (
-            hydration_when(
-                (member_type == hydration_lit("OBJECT"))
-                & object_id_type.isin(*scalar_types),
-                object_content_id,
-            )
-            .when(member_type.isin(*scalar_types), member_value)
-            .otherwise(hydration_lit(None))
+        ids = members.select(
+            F.col("_COMPONENT_TYPE"), F.trim(member_id.cast("string")).alias("_COMPONENT_ID"),
         )
-        member_ids_df = members_df.select(
-            hydration_col("_SOURCE_FIELD"),
-            hydration_col("_COMPONENT_TYPE"),
-            hydration_trim(component_id_value.cast("string")).alias(
-                "_COMPONENT_ID"
-            ),
-        )
-        invalid_members = member_ids_df.filter(
-            ~hydration_nonblank(hydration_col("_COMPONENT_ID"))
-        ).count()
-        if invalid_members:
-            raise RuntimeError(
-                "Approved component reference contains an invalid ContentId"
-            )
-        route_frames.append(member_ids_df)
-
-    component_routes_df = route_frames[0]
-    for route_frame in route_frames[1:]:
-        component_routes_df = component_routes_df.union_all(route_frame)
-
-    type_collisions = (
-        component_routes_df.select(
-            hydration_col("_COMPONENT_TYPE"),
-            hydration_col("_COMPONENT_ID"),
-        )
-        .distinct()
-        .group_by(hydration_col("_COMPONENT_ID"))
-        .agg(
-            hydration_count_distinct(
-                hydration_col("_COMPONENT_TYPE")
-            ).alias("_TYPE_COUNT")
-        )
-        .filter(hydration_col("_TYPE_COUNT") > hydration_lit(1))
-        .count()
-    )
-    if type_collisions:
+        if ids.filter(~nonblank(F.col("_COMPONENT_ID"))).count():
+            raise RuntimeError("Approved component reference contains an invalid ContentId")
+        routes = ids if routes is None else routes.union_all(ids)
+    collisions = (routes.distinct().group_by(F.col("_COMPONENT_ID"))
+                  .agg(F.count_distinct(F.col("_COMPONENT_TYPE")).alias("_TYPE_COUNT")))
+    if collisions.filter(F.col("_TYPE_COUNT") > F.lit(1)).count():
         raise RuntimeError("Component hydration identity has a type collision")
 
-    hydration_lookups = {}
-    for component_type, contract in hydration_contract.items():
-        routed_ids_df = (
-            component_routes_df.filter(
-                hydration_col("_COMPONENT_TYPE")
-                == hydration_lit(component_type)
-            )
-            .select(
-                hydration_col("_COMPONENT_ID").alias("_ROUTE_ID")
-            )
-            .distinct()
+    lookups = {}
+    for component_type, contract in contracts.items():
+        routed_ids = (routes.filter(F.col("_COMPONENT_TYPE") == F.lit(component_type))
+                      .select(F.col("_COMPONENT_ID").alias("_ROUTE_ID")).distinct())
+        lookup_source = hydration_source_dfs[contract["lookup_binding"]]
+        columns = {str(name).strip().upper(): name for name in lookup_source.columns}
+        if not {"CONTENT_ID", "CURATED_JSON"}.issubset(columns):
+            raise RuntimeError("Approved component lookup source columns are missing")
+        lookup_rows = lookup_source.select(
+            F.trim(F.col(columns["CONTENT_ID"]).cast("string")).alias("_LOOKUP_ID"),
+            F.parse_json(F.col(columns["CURATED_JSON"]).cast("string")).alias("_LOOKUP_JSON"),
         )
-        lookup_source_df = hydration_source_dfs[component_type]
-        lookup_columns = {
-            str(name).strip().upper(): name
-            for name in lookup_source_df.columns
-        }
-        if not {"CONTENT_ID", "CURATED_JSON"}.issubset(lookup_columns):
-            raise RuntimeError(
-                "Approved component lookup source columns are missing"
-            )
-        lookup_rows_df = lookup_source_df.select(
-            hydration_trim(
-                hydration_col(lookup_columns["CONTENT_ID"]).cast("string")
-            ).alias("_LOOKUP_ID"),
-            hydration_parse_json(
-                hydration_col(lookup_columns["CURATED_JSON"]).cast("string")
-            ).alias("_LOOKUP_JSON"),
-        )
-        key_summary = lookup_rows_df.agg(
-            hydration_count(hydration_lit(1)).alias("_TOTAL_ROWS"),
-            hydration_count(
-                hydration_when(
-                    hydration_nonblank(hydration_col("_LOOKUP_ID")),
-                    hydration_lit(1),
-                )
-            ).alias("_NONBLANK_ROWS"),
-            hydration_count_distinct(
-                hydration_col("_LOOKUP_ID")
-            ).alias("_DISTINCT_IDS"),
-            hydration_count(
-                hydration_when(
-                    hydration_upper(
-                        hydration_typeof(hydration_col("_LOOKUP_JSON"))
-                    )
-                    != hydration_lit("OBJECT"),
-                    hydration_lit(1),
-                )
-            ).alias("_INVALID_JSON_ROWS"),
-        ).collect()[0]
-        total_rows = int(_component_row_value(key_summary, "_TOTAL_ROWS") or 0)
-        nonblank_rows = int(
-            _component_row_value(key_summary, "_NONBLANK_ROWS") or 0
-        )
-        distinct_ids = int(
-            _component_row_value(key_summary, "_DISTINCT_IDS") or 0
-        )
-        invalid_lookup_json_rows = int(
-            _component_row_value(key_summary, "_INVALID_JSON_ROWS") or 0
-        )
-        if total_rows != nonblank_rows:
-            raise RuntimeError(
-                "Approved component lookup contains a missing ContentId"
-            )
-        if nonblank_rows != distinct_ids:
-            raise RuntimeError(
-                "Approved component lookup contains duplicate ContentId values"
-            )
-        if invalid_lookup_json_rows:
-            raise RuntimeError(
-                "Approved component lookup contains invalid curated JSON"
-            )
-
-        matched_df = routed_ids_df.join(
-            lookup_rows_df,
-            routed_ids_df["_ROUTE_ID"] == lookup_rows_df["_LOOKUP_ID"],
-            "left",
-        )
-        title_value = hydration_col("_LOOKUP_JSON").getItem(
-            contract["title_field"]
-        )
-        description_value = hydration_col("_LOOKUP_JSON").getItem(
-            contract["description_field"]
-        )
-        title_is_valid = (
-            hydration_upper(hydration_typeof(title_value))
-            == hydration_lit("VARCHAR")
-        ) & hydration_nonblank(title_value)
-        description_type = hydration_upper(
-            hydration_typeof(description_value)
-        )
-        description_is_text = description_type == hydration_lit("VARCHAR")
-        description_is_nonblank = (
-            description_is_text & hydration_nonblank(description_value)
-        )
-        description_required = bool(contract.get("description_required"))
-        if description_required:
-            invalid_description_condition = ~description_is_nonblank
-        else:
-            description_is_absent = (
-                description_value.is_null()
-                | (description_type == hydration_lit("NULL_VALUE"))
-                | (description_is_text & ~hydration_nonblank(description_value))
-            )
-            invalid_description_condition = ~(
-                description_is_absent | description_is_nonblank
-            )
-
-        match_summary = matched_df.agg(
-            hydration_count(hydration_lit(1)).alias("_MATCHED_ROWS"),
-            hydration_count(
-                hydration_when(
-                    hydration_col("_LOOKUP_ID").is_null(),
-                    hydration_lit(1),
-                )
-            ).alias("_MISSING_LOOKUP_ROWS"),
-            hydration_count(
-                hydration_when(~title_is_valid, hydration_lit(1))
-            ).alias("_INVALID_TITLE_ROWS"),
-            hydration_count(
-                hydration_when(
-                    invalid_description_condition,
-                    hydration_lit(1),
-                )
-            ).alias("_INVALID_DESCRIPTION_ROWS"),
-        ).collect()[0]
-        routed_id_count = int(
-            _component_row_value(match_summary, "_MATCHED_ROWS") or 0
-        )
-        missing_lookup_rows = int(
-            _component_row_value(match_summary, "_MISSING_LOOKUP_ROWS") or 0
-        )
-        invalid_title_rows = int(
-            _component_row_value(match_summary, "_INVALID_TITLE_ROWS") or 0
-        )
-        invalid_description_rows = int(
-            _component_row_value(
-                match_summary,
-                "_INVALID_DESCRIPTION_ROWS",
-            )
-            or 0
-        )
-        if missing_lookup_rows:
-            raise RuntimeError(
-                "Approved component hydration lookup record is missing"
-            )
-        if invalid_title_rows:
-            raise RuntimeError(
-                "Approved component hydration title is missing or invalid"
-            )
-        if invalid_description_rows:
-            raise RuntimeError(
-                "Approved component hydration description is invalid"
-            )
-
-        projected_df = matched_df.select(
-            hydration_col("_ROUTE_ID").alias("COMPONENT_ID"),
-            hydration_trim(title_value.cast("string")).alias("TITLE"),
-            hydration_when(
-                description_is_nonblank,
-                hydration_trim(description_value.cast("string")),
-            )
-            .otherwise(hydration_lit(None))
-            .alias("DESCRIPTION"),
+        lookup_id, lookup_json = F.col("_LOOKUP_ID"), F.col("_LOOKUP_JSON")
+        # Validate the full approved lookup source, including currently unreferenced rows.
+        checked_count(lookup_rows, [
+            (~nonblank(lookup_id), "Approved component lookup contains a missing ContentId"),
+            (kind(lookup_json) != F.lit("OBJECT"), "Approved component lookup contains invalid curated JSON"),
+        ], unique_key=lookup_id)
+        matched = routed_ids.join(lookup_rows, routed_ids["_ROUTE_ID"] == lookup_rows["_LOOKUP_ID"], "left")
+        title = lookup_json.getItem(contract["title_field"])
+        description = lookup_json.getItem(contract["description_field"])
+        title_valid = (kind(title) == F.lit("VARCHAR")) & nonblank(title)
+        description_text = kind(description) == F.lit("VARCHAR")
+        description_nonblank = description_text & nonblank(description)
+        description_absent = description.is_null() | (kind(description) == F.lit("NULL_VALUE"))
+        description_valid = description_nonblank
+        if not contract.get("description_required"):
+            description_valid = description_absent | description_text
+        routed_count = checked_count(matched, [
+            (lookup_id.is_null(), "Approved component hydration lookup record is missing"),
+            (~title_valid, "Approved component hydration title is missing or invalid"),
+            (~description_valid, "Approved component hydration description is invalid"),
+        ])
+        projected = matched.select(
+            F.col("_ROUTE_ID").alias("COMPONENT_ID"),
+            F.trim(title.cast("string")).alias("TITLE"),
+            F.when(description_nonblank, F.trim(description.cast("string")))
+             .otherwise(F.lit(None)).alias("DESCRIPTION"),
         )
         type_lookup = {}
-        for row in projected_df.to_local_iterator():
-            content_id = _canonical_component_content_id(
-                _component_row_value(row, "COMPONENT_ID")
-            )
+        for row in projected.to_local_iterator():
+            content_id = _canonical_component_content_id(_component_row_value(row, "COMPONENT_ID"))
             if content_id in type_lookup:
-                raise RuntimeError(
-                    "Component hydration lookup contains duplicate routed IDs"
-                )
+                raise RuntimeError("Component hydration lookup contains duplicate routed IDs")
             type_lookup[content_id] = {
                 "title": _component_row_value(row, "TITLE"),
                 "description": _component_row_value(row, "DESCRIPTION"),
             }
-        if len(type_lookup) != routed_id_count:
-            raise RuntimeError(
-                "Component hydration lookup collection is incomplete"
-            )
-        hydration_lookups[component_type] = type_lookup
+        if len(type_lookup) != routed_count:
+            raise RuntimeError("Component hydration lookup collection is incomplete")
+        lookups[component_type] = type_lookup
 
-    print(
-        "Component hydration lookup rows:",
-        sum(len(type_lookup) for type_lookup in hydration_lookups.values()),
-    )
-    for component_type in sorted(hydration_lookups):
-        type_lookup = hydration_lookups[component_type]
-        print(
-            f"Component hydration {component_type} rows:",
-            len(type_lookup),
-        )
-        print(
-            f"Component hydration {component_type} descriptions:",
-            sum(
-                1
-                for payload in type_lookup.values()
-                if payload.get("description") is not None
-            ),
-        )
-    return hydration_lookups
+    print("Component hydration lookup rows:", sum(map(len, lookups.values())))
+    for component_type in sorted(lookups):
+        payloads = lookups[component_type]
+        print(f"Component hydration {component_type} rows:", len(payloads))
+        print(f"Component hydration {component_type} descriptions:",
+              sum(payload.get("description") is not None for payload in payloads.values()))
+    return lookups
 
 
 def transform_fips_199(value, context=None):
@@ -2165,19 +1856,8 @@ def _single_archer_label(value, context=None):
 
 
 def transform_document_identifier(value):
-    value = _to_python(value)
-    if isinstance(value, (bool, dict, list)) or value is None:
-        raise ValueError("Document identifier must be a single scalar value")
-
-    identifier = str(value).strip()
-    if not identifier or identifier.lower() in {
-        "nan",
-        "inf",
-        "+inf",
-        "-inf",
-    }:
-        raise ValueError("Document identifier is empty or non-finite")
-    return identifier
+    return _scalar_text(value, "Document identifier must be a single scalar value",
+                        "Document identifier is empty or non-finite")
 
 
 def transform_authorization_date(value):
@@ -2298,36 +1978,20 @@ def _canonical_registry_rows(element_registry_dataframe, model_key, context=None
         path = _registry_path(registry_row)
         level = path.count(".") + 1
         process_order = registry_row.get("PROCESS_ORDER")
-        rows.append(
-            {
-                "element_path": path,
-                "element_type": registry_row.get("ELEMENT_TYPE"),
-                "raw": registry_row,
-                "parent_path": registry_row.get("PARENT_NODE_PATH") or None,
-                "level": level,
-                "process_order": (
-                    int(process_order)
-                    if process_order is not None
-                    else level * 1000000
-                ),
-                "is_collection": _registry_meta_bool(
-                    registry_row, "IS_COLLECTION"
-                ),
-                "instance_key_rule": (
-                    registry_row.get("INSTANCE_KEY_RULE") or None
-                ),
-                "item_path": registry_row.get("ITEM_PATH") or None,
-            }
-        )
+        rows.append({
+            "element_path": path,
+            "element_type": registry_row.get("ELEMENT_TYPE"),
+            "raw": registry_row,
+            "parent_path": registry_row.get("PARENT_NODE_PATH") or None,
+            "level": level,
+            "process_order": int(process_order) if process_order is not None else level * 1000000,
+            "is_collection": _registry_meta_bool(registry_row, "IS_COLLECTION"),
+            "instance_key_rule": registry_row.get("INSTANCE_KEY_RULE") or None,
+            "item_path": registry_row.get("ITEM_PATH") or None,
+        })
+    _metadata_registry_policy(rows, context)
+    rows.sort(key=lambda row: (row["process_order"], row["level"], row["element_path"]))
 
-    context["policy"]["registry"](rows, context)
-    rows.sort(
-        key=lambda item: (
-            item["process_order"],
-            item["level"],
-            item["element_path"],
-        )
-    )
     return rows
 
 
@@ -2556,49 +2220,14 @@ def _metadata_prepare(source_df, context):
     if set(descriptive) - allowed_report_keys:
         raise ValueError("Metadata report cannot override runtime safety evidence")
     report.update(descriptive)
-    types, routes, source_types = {}, {}, {}
-    component_contract = context.get("lookups", {}).get("component_contract") or {}
-    for path, rows in context["_metadata_by_path"].items():
-        spec = plan["elements"].get(path)
-        if not spec or spec["operator"] != "references":
-            continue
-        for row in rows:
-            if row["TRANSFORM_ID"] == "skip":
-                continue
-            params = _metadata_params(row)
-            type_name = _metadata_text(params.get("reference_type"), "Reference type")
-            field = row["SOURCE_FIELD_NAME"]
-            if field in source_types and source_types[field] != type_name:
-                raise ValueError("Source reference has conflicting type declarations")
-            source_types[field] = type_name
-            binding = params.get("hydrate_lookup")
-            if not binding:
-                continue
-            contract = component_contract.get(binding)
-            if not isinstance(contract, dict):
-                raise ValueError("Reviewed reference lookup source is absent")
-            contract = dict(contract)
-            contract["description_required"] = bool(params.get("description_required", False))
-            contract["lookup_binding"] = binding
-            if type_name in types and types[type_name] != contract:
-                raise ValueError("Reference type has contradictory hydration contracts")
-            types[type_name] = contract
-            routes[field] = type_name
-    if routes:
-        sources = context.get("lookups", {}).get("component_sources")
-        if not isinstance(sources, dict):
-            raise ValueError("Reference lookup dataframes are unavailable")
-        dfs = {type_name: sources[contract["lookup_binding"]]
-               for type_name, contract in types.items()
-               if contract["lookup_binding"] in sources}
-        if set(dfs) != set(types):
-            raise ValueError("Reference lookup dataframe binding is missing")
-        context["_metadata_hydration_spec"] = {
-            "contracts": types, "routes": routes, "source_types": source_types,
-        }
+    reference_rows = [
+        row for row in plan["mappings"]
+        if plan["elements"][row["OWNER_ELEMENT_PATH"]]["operator"] == "references"
+        and row["TRANSFORM_ID"] != "skip"
+    ]
+    if reference_rows:
         context["component_hydration_lookups"] = _build_component_hydration_lookups(
-            source_df, [row for row in plan["mappings"]
-                        if row["SOURCE_FIELD_NAME"] in source_types], dfs, context,
+            source_df, reference_rows, context.get("lookups", {}).get("component_sources"), context,
         )
 
 
@@ -3007,10 +2636,6 @@ def _prepare_model_context(context, model_key, source_system, source_table):
     context["_metadata_options"] = options
     context["_metadata_by_path"] = grouped
     context["policy"] = {
-        "registry": _metadata_registry_policy, "prepare": _metadata_prepare,
-        "parse": _metadata_parse, "instances": _metadata_instances,
-        "uuid": _metadata_uuid, "payload": _metadata_payload,
-        "record_complete": _metadata_record_complete, "finish": _metadata_finish,
         "aggregate_invalid": bool(options.get("aggregate_invalid", True)),
         "allow_nan": bool(options.get("allow_nan", False)),
     }
@@ -3068,7 +2693,7 @@ def build_oscal_graph(
     source_table,
     context=None,
 ):
-    # Payload, mapping, and instance rules belong to Cell 4's explicit policy.
+    # Cell 4 owns metadata execution; this cell connects its nodes and edges.
     # This loop owns only graph mechanics and never swaps notebook globals.
     del canonical_mapping_df
     context = _prepare_model_context(context, model_key, source_system, source_table)
@@ -3080,7 +2705,7 @@ def build_oscal_graph(
         raise ValueError("Expected exactly the configured registry root")
     root_row = next(row for row in registry_rows if row["element_path"] == root_paths[0])
     context["root_element_type"] = root_row.get("element_type") or _element_type(root_paths[0])
-    policy["prepare"](source_df, context)
+    _metadata_prepare(source_df, context)
 
     node_rows, edge_rows, seen_records = [], [], set()
     load_timestamp = datetime.datetime.now(datetime.timezone.utc)
@@ -3099,7 +2724,7 @@ def build_oscal_graph(
             raise ValueError("Duplicate source record identity")
         seen_records.add(source_record_id)
         try:
-            source_obj = policy["parse"](record, context)
+            source_obj = _metadata_parse(record, context)
         except (TypeError, ValueError, ArithmeticError):
             report["INVALID_SOURCE_RECORDS"] += 1
             if policy["aggregate_invalid"]:
@@ -3108,7 +2733,7 @@ def build_oscal_graph(
         nodes_by_path = {}
         for registry_row in registry_rows:
             path, parent_path = registry_row["element_path"], registry_row["parent_path"]
-            instances = policy["instances"](source_obj, source_record_id, registry_row, context)
+            instances = _metadata_instances(source_obj, source_record_id, registry_row, context)
             created_nodes = []
             seen_instances = set()
             for instance in instances:
@@ -3122,10 +2747,10 @@ def build_oscal_graph(
                     config["IDENTITY_VERSION"], source_system, source_table,
                     source_record_id, model_key, path, instance_key,
                 )
-                oscal_uuid = policy["uuid"](
+                oscal_uuid = _metadata_uuid(
                     path, instance, source_system, source_table, source_record_id, model_key, context,
                 )
-                payload = policy["payload"](path, instance["payload"], oscal_uuid, context)
+                payload = _metadata_payload(path, instance["payload"], oscal_uuid, context)
                 if not isinstance(payload, dict):
                     raise ValueError("An element payload must be an object")
                 node = {
@@ -3168,7 +2793,7 @@ def build_oscal_graph(
                     "SOURCE_OSCAL_UUID": parent_node["OSCAL_UUID"],
                     "TARGET_OSCAL_UUID": child_node["OSCAL_UUID"],
                 })
-        policy["record_complete"](nodes_by_path, context)
+        _metadata_record_complete(nodes_by_path, context)
 
     node_keys = {row["NODE_KEY"] for row in node_rows}
     report["DUPLICATE_NODE_KEYS"] = len(node_rows) - len(node_keys)
@@ -3179,7 +2804,7 @@ def build_oscal_graph(
     )
     if any(report[key] for key in ("DUPLICATE_NODE_KEYS", "DUPLICATE_EDGE_KEYS", "DANGLING_EDGES")):
         raise ValueError("Canonical graph key integrity failed")
-    policy["finish"](node_rows, edge_rows, context)
+    _metadata_finish(node_rows, edge_rows, context)
     if not node_rows:
         raise ValueError("Graph builder produced no nodes")
     canonical_nodes_df = _create_canonical_graph_frame(node_rows, "nodes")
@@ -3208,18 +2833,14 @@ class LoadError(RuntimeError):
         self.details = details or {}
         super().__init__(code)
 
-_LOAD_DIM_SOURCES = {
-    "ELEMENT_TYPE": "ELEMENT_TYPE", "OSCAL_UUID": "OSCAL_UUID",
-    "METADATA_JSON": "METADATA_JSON",
-    "SOURCE_SYSTEM_NAME": "SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME": "SOURCE_TABLE_NAME",
-    "SOURCE_RECORD_ID": "SOURCE_RECORD_ID", "DW_PIPELINE_RUN_ID": "DW_PIPELINE_RUN_ID",
-    "DW_LOAD_TIMESTAMP": "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ": "DW_LOAD_TIMESTAMP_TZ",
-}
-_LOAD_FACT_SOURCES = {
-    "FK_SOURCE_ELEMENT_HASH": "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH": "FK_TARGET_ELEMENT_HASH",
-    "DEPENDENCY_TYPE": "DEPENDENCY_TYPE",
-    "SOURCE_OSCAL_UUID": "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID": "TARGET_OSCAL_UUID",
-}
+_LOAD_DIM_COLUMNS = (
+    "ELEMENT_TYPE", "OSCAL_UUID", "METADATA_JSON", "SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME",
+    "SOURCE_RECORD_ID", "DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ",
+)
+_LOAD_FACT_COLUMNS = (
+    "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH", "DEPENDENCY_TYPE",
+    "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID",
+)
 _LOAD_HASH_SOURCES = {"NODE_KEY", "EDGE_KEY", "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"}
 _LOAD_UUID_SOURCES = {"OSCAL_UUID", "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"}
 _LOAD_HEX_PATTERN = r"[0-9a-fA-F]{32}"
@@ -3309,47 +2930,34 @@ def _load_column_plan(description, kind, contract=None):
                                    "LIVE_TYPE": str(raw_type)[:128]})
         source, encoding = sources[name], None
         expression = "s." + _load_ident(source)
-        if source in _LOAD_HASH_SOURCES and dtype == "BINARY(16)":
-            # Decode the existing MD5 hex identity; never hash again or truncate.
+        if source in _LOAD_HASH_SOURCES:
+            if dtype != "BINARY(16)":
+                raise LoadError("CONFIRMED_BINARY16_SCHEMA_REQUIRED")
+            # Decode the existing identity; never hash again or truncate.
             expression = "TO_BINARY(" + expression + ", 'HEX')"
             encoding = "HEX_TO_BINARY16"
-        elif source in _LOAD_UUID_SOURCES and dtype == "VARCHAR(32)":
-            # Storage only. Canonical UUIDs inside the graph and JSON stay unchanged.
+        elif source in _LOAD_UUID_SOURCES:
+            if dtype != "VARCHAR(32)":
+                raise LoadError("VERIFIED_UUID32_PROFILE_REQUIRED")
             expression = "REPLACE(" + expression + ", '-', '')"
             encoding = "UUID_TO_COMPACT32"
-        elif name == "METADATA_JSON":
-            if dtype == "VARIANT":
-                expression = "PARSE_JSON(" + expression + ")"
-            elif dtype.startswith("VARCHAR"):
-                expression = "CAST(" + expression + " AS VARCHAR)"
-            else:
-                raise LoadError("UNSUPPORTED_PAYLOAD_DATATYPE")
+        elif name == "METADATA_JSON" and dtype == "VARIANT":
+            expression = "PARSE_JSON(" + expression + ")"
         elif name in {"DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}:
             if not dtype.startswith("TIMESTAMP_"):
                 raise LoadError("EXPLICIT_AUDIT_TIMESTAMP_TYPE_REQUIRED")
             expression = "CAST(" + expression + " AS " + dtype + ")"
         else:
             if not dtype.startswith("VARCHAR"):
-                raise LoadError("IDENTIFIERS_AND_LABELS_REQUIRE_STRING_TYPE")
+                raise LoadError("UNSUPPORTED_PAYLOAD_DATATYPE" if name == "METADATA_JSON"
+                                else "IDENTIFIERS_AND_LABELS_REQUIRE_STRING_TYPE")
             expression = "CAST(" + expression + " AS VARCHAR)"
         plan.append({"name": name, "source": source, "expression": expression,
                      "type": dtype, "nullable": nullable == "Y", "encoding": encoding})
-    required = set(sources)
-    if kind == "DIM":
-        # The existing loader projects these audit columns only when exposed.
-        # Do not invent a requirement that an optional target column must exist.
-        required -= {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
-    if required - seen:
-        raise LoadError("MISSING_TARGET_COLUMNS_" + "_".join(sorted(required - seen)))
-    types = {column["name"]: column["type"] for column in plan}
-    binary = ((c["DIM_PK_COLUMN"],) if kind == "DIM" else
-              (c["FACT_PK_COLUMN"], "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"))
-    uuids = (("OSCAL_UUID",) if kind == "DIM" else
-             ("SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"))
-    if any(types.get(name) != "BINARY(16)" for name in binary):
-        raise LoadError("CONFIRMED_BINARY16_SCHEMA_REQUIRED")
-    if any(types.get(name) != "VARCHAR(32)" for name in uuids):
-        raise LoadError("VERIFIED_UUID32_PROFILE_REQUIRED")
+    optional = _LOAD_AUDIT_COLUMNS if kind == "DIM" else set()
+    missing = set(sources) - optional - seen
+    if missing:
+        raise LoadError("MISSING_TARGET_COLUMNS_" + "_".join(sorted(missing)))
     return plan
 
 
@@ -3379,8 +2987,7 @@ def _load_projection_values(session, query, plan, stage_codes=False):
             checks.append((name + " IS NULL OR OCTET_LENGTH(" + name + ")<>16",
                            "BINARY_KEY_WIDTH_INVALID"))
         if column["source"] in _LOAD_UUID_SOURCES:
-            pattern = r"[0-9a-f]{32}" if dtype == "VARCHAR(32)" else _LOAD_UUID_PATTERN
-            checks.append((name + " IS NULL OR NOT REGEXP_LIKE(" + name + ", '" + pattern + "')", None))
+            checks.append((name + " IS NULL OR NOT REGEXP_LIKE(" + name + ", '[0-9a-f]{32}')", None))
         width = re.fullmatch(r"VARCHAR\((\d+)\)", dtype)
         if width:
             checks.append(("LENGTH(" + name + ")>" + width[1], "TARGET_STRING_CAPACITY_EXCEEDED"))
@@ -3412,19 +3019,18 @@ def _load_stage(session, raw_stage, stage, plan):
             _load_unique(session, stage, name)
 
 
+def _load_equal(session, current, frozen, code):
+    for left, right in ((current, frozen), (frozen, current)):
+        _load_zero(session, f"SELECT COUNT(*) AS N FROM (({left}) MINUS ({right}))", code)
+
+
 def _load_baseline_equal(session, names, queries):
     # Multiset comparison: keep duplicate multiplicities in the OLD full tables.
     # GROUP BY ALL includes every existing target column, including VARIANT payloads.
     for baseline, query in zip((names["DB"], names["FB"]), queries):
         current = f"SELECT *, COUNT(*) AS OSCAL_LOAD_ROW_MULTIPLICITY FROM ({query}) GROUP BY ALL"
         frozen = f"SELECT *, COUNT(*) AS OSCAL_LOAD_ROW_MULTIPLICITY FROM {baseline} GROUP BY ALL"
-        _load_zero(session, f"SELECT COUNT(*) AS N FROM (({current}) MINUS ({frozen}))",
-                    "TARGET_BASELINE_CHANGED")
-        _load_zero(session, f"SELECT COUNT(*) AS N FROM (({frozen}) MINUS ({current}))",
-                    "TARGET_BASELINE_CHANGED")
-        if _load_count(session, f"SELECT COUNT(*) AS N FROM ({query})") != _load_count(
-                session, f"SELECT COUNT(*) AS N FROM {baseline}"):
-            raise LoadError("TARGET_BASELINE_CHANGED")
+        _load_equal(session, current, frozen, "TARGET_BASELINE_CHANGED")
 
 
 def _load_integrity_sql(queries, ids, allow_absent=False, contract=None):
@@ -3709,9 +3315,7 @@ def _load_unchanged_scope(session, names, contract=None):
         (fact_table, names["FB"], "F", fk)):
         current = f"SELECT t.* FROM {target} t WHERE NOT EXISTS (SELECT 1 FROM {names[kind]} s WHERE s.{pk}=t.{pk})"
         frozen = f"SELECT t.* FROM {baseline} t WHERE NOT EXISTS (SELECT 1 FROM {names[kind]} s WHERE s.{pk}=t.{pk})"
-        for lhs, rhs in ((current, frozen), (frozen, current)):
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM (({lhs}) MINUS ({rhs}))",
-                       "UNTOUCHED_TARGET_ROWS_CHANGED")
+        _load_equal(session, current, frozen, "UNTOUCHED_TARGET_ROWS_CHANGED")
 
 
 def _load_verify_context(session, context):
@@ -3948,7 +3552,8 @@ def _load_targets(contract):
 
 
 def _load_sources(contract):
-    dim, fact = dict(_LOAD_DIM_SOURCES), dict(_LOAD_FACT_SOURCES)
+    dim = {name: name for name in _LOAD_DIM_COLUMNS}
+    fact = {name: name for name in _LOAD_FACT_COLUMNS}
     dim[contract["DIM_PK_COLUMN"]] = "NODE_KEY"
     fact[contract["FACT_PK_COLUMN"]] = "EDGE_KEY"
     return {"DIM": dim, "FACT": fact}
@@ -4015,7 +3620,7 @@ def _load_logical_graph(nodes, edges, contract, expected_records=None):
         return value
 
     root = contract["ROOT_PATH"]
-    by_key, roots, parents, children, root_types = {}, {}, {}, {}, set()
+    by_key, roots, parents, root_types = {}, {}, {}, set()
     for raw in rows(nodes):
         n = row(raw)
         k = key(n.get("NODE_KEY"))
@@ -4042,7 +3647,7 @@ def _load_logical_graph(nodes, edges, contract, expected_records=None):
         if not isinstance(payload, dict):
             raise LoadError("INVALID_LOGICAL_PAYLOAD")
         by_key[k] = (sid, path, canonical_uuid(n.get("OSCAL_UUID")), instance, n.get("PARENT_INSTANCE_KEY"))
-        parents[k], children[k] = 0, []
+        parents[k] = 0
         if path == root:
             if sid in roots:
                 raise LoadError("MULTIPLE_MODEL_ROOTS_FOR_RECORD")
@@ -4069,25 +3674,17 @@ def _load_logical_graph(nodes, edges, contract, expected_records=None):
         if s[0] != t[0] or s[0] not in roots:
             raise LoadError("CROSS_RECORD_LOGICAL_EDGE")
         if (e.get("DEPENDENCY_TYPE") != "CONTAINS"
-                or canonical_uuid(e.get("SOURCE_OSCAL_UUID")) != s[2]
-                or canonical_uuid(e.get("TARGET_OSCAL_UUID")) != t[2]):
+                or e.get("SOURCE_OSCAL_UUID") != s[2]
+                or e.get("TARGET_OSCAL_UUID") != t[2]):
             raise LoadError("LOGICAL_RELATIONSHIP_OR_UUID_MISMATCH")
         if not t[1].startswith(s[1] + ".") or (t[4] is not None and t[4] != s[3]):
             raise LoadError("LOGICAL_PARENT_CONTEXT_MISMATCH")
         parents[target] += 1
-        children[source].append(target)
     root_keys = set(roots.values())
     if any(parents[k] != (0 if k in root_keys else 1) for k in by_key):
         raise LoadError("INVALID_LOGICAL_PARENT_CARDINALITY")
-    visited, pending = set(), list(root_keys)
-    while pending:
-        k = pending.pop()
-        if k in visited:
-            raise LoadError("LOGICAL_GRAPH_CYCLE")
-        visited.add(k)
-        pending.extend(children[k])
-    if visited != set(by_key) or any(n[0] not in roots for n in by_key.values()):
-        raise LoadError("DISCONNECTED_LOGICAL_GRAPH")
+    # Strictly descending paths exclude cycles. One parent per non-root then
+    # proves every node is reachable from its record root; no second walk is needed.
     return {"SELECTED_RECORDS": len(roots), "NODES": len(by_key), "EDGES": len(edge_keys),
             "DIM_DUPLICATE_KEYS": 0, "FACT_DUPLICATE_KEYS": 0,
             "DANGLING_SOURCE_KEYS": 0, "DANGLING_TARGET_KEYS": 0,

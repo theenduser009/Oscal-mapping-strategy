@@ -42,7 +42,7 @@ def build_oscal_graph(
     source_table,
     context=None,
 ):
-    # Cell 4 owns metadata execution; this cell connects its nodes and edges.
+    # Payload, mapping, and instance rules belong to Cell 4's explicit policy.
     # This loop owns only graph mechanics and never swaps notebook globals.
     del canonical_mapping_df
     context = _prepare_model_context(context, model_key, source_system, source_table)
@@ -54,7 +54,7 @@ def build_oscal_graph(
         raise ValueError("Expected exactly the configured registry root")
     root_row = next(row for row in registry_rows if row["element_path"] == root_paths[0])
     context["root_element_type"] = root_row.get("element_type") or _element_type(root_paths[0])
-    _metadata_prepare(source_df, context)
+    policy["prepare"](source_df, context)
 
     node_rows, edge_rows, seen_records = [], [], set()
     load_timestamp = datetime.datetime.now(datetime.timezone.utc)
@@ -73,7 +73,7 @@ def build_oscal_graph(
             raise ValueError("Duplicate source record identity")
         seen_records.add(source_record_id)
         try:
-            source_obj = _metadata_parse(record, context)
+            source_obj = policy["parse"](record, context)
         except (TypeError, ValueError, ArithmeticError):
             report["INVALID_SOURCE_RECORDS"] += 1
             if policy["aggregate_invalid"]:
@@ -82,7 +82,7 @@ def build_oscal_graph(
         nodes_by_path = {}
         for registry_row in registry_rows:
             path, parent_path = registry_row["element_path"], registry_row["parent_path"]
-            instances = _metadata_instances(source_obj, source_record_id, registry_row, context)
+            instances = policy["instances"](source_obj, source_record_id, registry_row, context)
             created_nodes = []
             seen_instances = set()
             for instance in instances:
@@ -96,10 +96,10 @@ def build_oscal_graph(
                     config["IDENTITY_VERSION"], source_system, source_table,
                     source_record_id, model_key, path, instance_key,
                 )
-                oscal_uuid = _metadata_uuid(
+                oscal_uuid = policy["uuid"](
                     path, instance, source_system, source_table, source_record_id, model_key, context,
                 )
-                payload = _metadata_payload(path, instance["payload"], oscal_uuid, context)
+                payload = policy["payload"](path, instance["payload"], oscal_uuid, context)
                 if not isinstance(payload, dict):
                     raise ValueError("An element payload must be an object")
                 node = {
@@ -142,7 +142,7 @@ def build_oscal_graph(
                     "SOURCE_OSCAL_UUID": parent_node["OSCAL_UUID"],
                     "TARGET_OSCAL_UUID": child_node["OSCAL_UUID"],
                 })
-        _metadata_record_complete(nodes_by_path, context)
+        policy["record_complete"](nodes_by_path, context)
 
     node_keys = {row["NODE_KEY"] for row in node_rows}
     report["DUPLICATE_NODE_KEYS"] = len(node_rows) - len(node_keys)
@@ -153,7 +153,7 @@ def build_oscal_graph(
     )
     if any(report[key] for key in ("DUPLICATE_NODE_KEYS", "DUPLICATE_EDGE_KEYS", "DANGLING_EDGES")):
         raise ValueError("Canonical graph key integrity failed")
-    _metadata_finish(node_rows, edge_rows, context)
+    policy["finish"](node_rows, edge_rows, context)
     if not node_rows:
         raise ValueError("Graph builder produced no nodes")
     canonical_nodes_df = _create_canonical_graph_frame(node_rows, "nodes")

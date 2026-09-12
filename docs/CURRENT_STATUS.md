@@ -1,7 +1,35 @@
 # Current Status
 
 
-## Current action - review Cells Three and Four metadata cleanup
+## Current action - review the smaller seven-cell notebook
+
+The owner clarified that the target is a substantially easier, smaller notebook
+and supplied the complete original: **860 physical lines / 669 nonblank,
+noncomment lines**. The previous candidate consolidated responsibility without
+reducing total size. This pass removes **403 physical lines / 396 nonblank,
+noncomment lines** from that candidate: **4,262 to 3,859 physical lines**.
+Cell Four drops from 1,572 to 1,275 physical lines. The seven-cell sequence stays intact.
+
+The implementation shares scalar conversion and lookup validation, removes the
+intermediate hydration-plan object and fixed callback dispatch, consolidates
+CSV/registry parsing and routing reports, and removes redundant input counts,
+storage checks and graph traversal. Mapping CSV and registry SQL are unchanged.
+
+All **736 local tests pass**, including accepted SSP/CIA11/AR17 comparisons,
+metadata-only future models, source selection, lookup query behavior, identity,
+and guarded writes. Generated V2 cells and combined notebook are synchronized.
+Existing frozen fixtures are unchanged; a copy of the previous graph builder
+now keeps historical transformer/graph comparisons independent of current code.
+
+**Next action:** review the updated draft
+[Reduce notebook bulk and simplify metadata execution](https://github.com/theenduser009/Oscal-mapping-strategy/pull/1).
+See the [counts and verification checkpoint](checkpoints/2026-09-12-notebook-bulk-reduction.md).
+This is a review candidate, not a merged release or live Snowflake acceptance.
+No Snowflake action occurred. Normal writes remain false; the prior release's
+live preview and daily writer acceptance remain pending. No live rerun is
+requested during review. If adopted, use the matching Cells Two through Six.
+
+## Previous action - review Cells Three and Four metadata cleanup
 
 The owner authorized the first bounded simplification of V2. This candidate
 normalizes CSV/registry rows once, resolves reference families once, and puts

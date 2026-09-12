@@ -254,13 +254,15 @@ class MetadataRuntimeTests(unittest.TestCase):
         self.assertNotIn("COMPONENT_SOURCE_TYPES", ns)
         captured = []
         def query_backend(source, rows, frames, supplied_context):
-            spec = supplied_context["_metadata_hydration_spec"]
-            captured.append(spec)
-            self.assertEqual(set(frames), {"device"})
+            captured.extend(rows)
+            self.assertEqual(set(frames), {"inventory"})
+            self.assertEqual(supplied_context["lookups"]["component_contract"]["inventory"]["title_field"], "LABEL")
             return {"device": {"123": {"title": "Device", "description": "Details"}}}
         ns["_build_component_hydration_lookups"] = query_backend
         nodes, _ = build(ns, ctx, [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": {"NEW_ASSET": [123]}}])
-        self.assertEqual(captured[0]["routes"], {"NEW_ASSET": "device"})
+        self.assertEqual(captured[0]["SOURCE_FIELD_NAME"], "NEW_ASSET")
+        self.assertEqual(captured[0]["REPRESENTATION_PARAMS"]["reference_type"], "device")
+        self.assertEqual(captured[0]["REPRESENTATION_PARAMS"]["hydrate_lookup"], "inventory")
         self.assertEqual(payload_at(nodes, path)[0]["description"], "Details")
 
     def test_report_metadata_cannot_fabricate_write_success(self):
