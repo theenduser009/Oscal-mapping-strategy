@@ -92,7 +92,6 @@ class MultiModelContracts(unittest.TestCase):
                 rows = live_description(kind)
                 rows[0]["name"] = c[pk]
                 plans.append(P["_load_column_plan"](rows, kind, c))
-            P["_load_selection_schema"](plans, c)
             self.assertEqual(4, sum(x["encoding"] == "HEX_TO_BINARY16" for p in plans for x in p))
             self.assertEqual(3, sum(x["encoding"] == "UUID_TO_COMPACT32" for p in plans for x in p))
             names = dict(D="FROZEN_DIM", F="FROZEN_FACT", IDS="SELECTED_IDS", DB="BASE_DIM", FB="BASE_FACT")
@@ -116,16 +115,21 @@ class MultiModelContracts(unittest.TestCase):
         with self.assertRaises(Error):
             P["_load_contract"](config(c))
 
-    def test_legacy_adapter_requires_the_exact_ssp_config(self):
-        c = P["_load_legacy_contract"]()
-        cfg = config(c)
+    def test_storage_contract_must_be_explicit_and_verified(self):
+        for legacy_name in ("SSP_LOAD_DIM", "SSP_LOAD_FACT", "SSP_LOAD_DIM_PK",
+                            "SSP_LOAD_FACT_PK", "SSP_LOAD_SOURCE", "_load_legacy_contract"):
+            self.assertNotIn(legacy_name, P)
+        supplied = storage("SSP", "system-security-plan")
+        accepted = P["_load_contract"](config(supplied))
+        self.assertEqual(supplied, accepted)
+        with self.assertRaises(TypeError):
+            accepted["TARGET_DIM"] = "DEV.WRONG.DIM"
+        for absent in (None, dict(VERIFIED=False, TARGET_DIM="DO.NOT.QUERY_THIS")):
+            cfg = config()
+            cfg["STORAGE_CONTRACT"] = absent
+            self.assertIsNone(P["_load_contract"](cfg))
+        cfg = config()
         cfg.pop("STORAGE_CONTRACT")
-        cfg.update({k: c[k] for k in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN")})
-        self.assertEqual(c, P["_load_contract"](cfg))
-        cfg["STORAGE_CONTRACT"] = None
-        self.assertIsNone(P["_load_contract"](cfg))
-        cfg.pop("STORAGE_CONTRACT")
-        cfg["OSCAL_MODEL"] = "ASSESSMENT_RESULTS"
         self.assertIsNone(P["_load_contract"](cfg))
 
 
@@ -210,3 +214,4 @@ class TargetlessGraphPreview(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

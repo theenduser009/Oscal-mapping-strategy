@@ -98,7 +98,7 @@ class RegistryMetadataBindingTests(unittest.TestCase):
         self.assertNotRegex(self.body[:first_query], r"(?mi)^\s*(?:ALTER|UPDATE|INSERT|DELETE|TRUNCATE)\s")
 
     def test_reported_string_boundary_fails_without_parse_json(self):
-        wire = json.dumps([{"META": {"MAPPER_ENABLED": True}}])
+        wire = json.dumps([{"META": {"OPERATOR": "object"}}])
         with self.assertRaisesRegex(TypeError, "not an array"):
             simulate_flatten_binding("SELECT * FROM TABLE(FLATTEN(INPUT=>?))", wire)
         for name, template in self.templates.items():
@@ -136,3 +136,4 @@ class RegistryMetadataBindingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

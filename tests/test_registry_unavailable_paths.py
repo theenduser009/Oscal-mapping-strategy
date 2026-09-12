@@ -15,8 +15,7 @@ class RegistryUnavailablePaths(unittest.TestCase):
 
     def test_inactive_duplicate_does_not_disable_executable_path(self):
         rows = reg.annotated_registry()
-        rows.append(dict(rows[1], IS_ACTIVE=False, MAPPER_ENABLED=False,
-                         OPERATOR="irrelevant-old-value"))
+        rows.append(dict(rows[1], IS_ACTIVE=False, OPERATOR="irrelevant-old-value"))
         ns, ctx = self.compile(rows, [flat.mapping()])
         self.assertEqual("READY", ctx["routing_report"]["STATUS"])
         nodes, _ = base.build(ns, ctx, [{"SOURCE_RECORD_ID": "one",
@@ -27,7 +26,7 @@ class RegistryUnavailablePaths(unittest.TestCase):
         rows = reg.annotated_registry()
         sibling = base.SUMMARY + "-other"
         rows.append(dict(rows[1], NODE_PATH=sibling, PROCESS_ORDER=5))
-        rows[1]["MAPPER_ENABLED"] = False
+        rows[1]["IS_ACTIVE"] = False
         ns, ctx = self.compile(rows, [flat.mapping(path=sibling + ".title")])
         self.assertEqual("READY", ctx["routing_report"]["STATUS"])
         nodes, _ = base.build(ns, ctx, [{"SOURCE_RECORD_ID": "one",
@@ -40,7 +39,7 @@ class RegistryUnavailablePaths(unittest.TestCase):
                        base.SUMMARY + ".nested.title"):
             with self.subTest(target=target):
                 rows = reg.annotated_registry()
-                rows[1]["MAPPER_ENABLED"] = False
+                rows[1]["IS_ACTIVE"] = False
                 _, ctx = self.compile(rows, [flat.mapping(path=target)])
                 self.assertEqual("BLOCKED", ctx["routing_report"]["STATUS"])
                 self.assertEqual([], ctx["mapping_rows"])
@@ -50,13 +49,13 @@ class RegistryUnavailablePaths(unittest.TestCase):
     def test_other_model_inactive_same_path_does_not_disable_selected_model(self):
         rows = reg.annotated_registry()
         rows.append(dict(rows[1], OSCAL_MODEL_KEY="OTHER_MODEL",
-                         IS_ACTIVE=False, MAPPER_ENABLED=False))
+                         IS_ACTIVE=False))
         _, ctx = self.compile(rows, [flat.mapping()])
         self.assertEqual("READY", ctx["routing_report"]["STATUS"])
 
     def test_deferred_and_excluded_rows_skip_unavailable_boundary(self):
         rows = reg.annotated_registry()
-        rows[1]["MAPPER_ENABLED"] = False
+        rows[1]["IS_ACTIVE"] = False
         mappings = [flat.mapping("VALID", path=base.OBSERVATION, TRANSFORM_ID="scalar-score")]
         mappings += [flat.mapping(status, EXECUTION_STATUS=status, TRANSFORM_ID="not-executable")
                      for status in ("DEFERRED", "EXCLUDED")]
@@ -74,18 +73,21 @@ class RegistryUnavailablePaths(unittest.TestCase):
         h.setUp()
         rows = release.release_registry()
         path = "assessment-results.results[].observations[]"
-        next(r for r in rows if r["NODE_PATH"] == path)["MAPPER_ENABLED"] = False
-        with self.assertRaisesRegex(ValueError, "Report target must be an enabled registry path"):
+        next(r for r in rows if r["NODE_PATH"] == path)["IS_ACTIVE"] = False
+        with self.assertRaisesRegex(ValueError, "Report metadata requires one observation"):
             h.compile(models=("ASSESSMENT_RESULTS",), registry=rows)
 
-    def test_approved_mapping_to_unselected_collection_blocks(self):
+    def test_approved_mapping_can_activate_supported_original_registry_collection(self):
         rows = reg.annotated_registry()
-        next(r for r in rows if r["NODE_PATH"] == base.OBSERVATION)["MAPPER_ENABLED"] = False
+        observation = next(r for r in rows if r["NODE_PATH"] == base.OBSERVATION)
+        observation["OPERATOR"] = None
+        observation["UUID_POLICY"] = None
         _, ctx = self.compile(rows, [flat.mapping(path=base.OBSERVATION, TRANSFORM_ID="scalar-score")])
-        self.assertEqual("BLOCKED", ctx["routing_report"]["STATUS"])
-        self.assertEqual([], ctx["mapping_rows"])
-        self.assertIn("REGISTRY_PATH_NOT_EXECUTABLE",
-                      {i["reason"] for i in ctx["routing_report"]["ISSUES"]})
+        self.assertEqual("READY", ctx["routing_report"]["STATUS"])
+        self.assertEqual(1, len(ctx["mapping_rows"]))
+        self.assertEqual("observations", ctx["compiled_plan"]["elements"]
+                         [base.OBSERVATION]["operator"])
 
 if __name__ == "__main__":
     unittest.main()
+

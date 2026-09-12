@@ -1,6 +1,39 @@
 # Current Status
 
-## Current action - registry binding correction; live setup pending
+## Current action - compact lean release ready; verify registry in DEV
+
+The maintained mapper has been changed locally to use the mapping CSV, the
+original nine registry columns, and only three sparse registry rules:
+`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`. The other fifteen experimental
+columns are no longer read. The revised setup SQL never drops them if an earlier
+DEV attempt created them.
+
+Cell One and Cell Three are updated. Cell Four now consumes Cell Three's
+normalized registry contract instead of parsing it again. Cell Six drops its
+SSP-only compatibility constants and consolidates repeated physical projection
+helpers while retaining the public writer API, transaction, rollback, integrity,
+idempotency and read-back checks. The maintained cells, V2 pages and combined
+notebook are synchronized. All **691 local tests pass**, including the
+exact accepted SSP graph digest, all eleven CIA transforms, all seventeen
+accepted Assessment Results outputs, metadata-only third-model execution,
+routing boundaries, migration bindings, PK/FK safeguards and loader behavior.
+
+Executable LOC is 209 / 149 / 896 / 1,468 / 151 / 804 / 160 by cell, 3,837
+total. This is 119 fewer executable lines than the pre-audit lean candidate.
+Static closure found no additional unused top-level Cell Four functions; its
+remaining size is tested transformation, hydration, identity and integrity code.
+
+No Snowflake statement was run and no registry, DIM or FACT data changed. This
+is local verification, not live acceptance. Normal writes remain disabled. The
+accepted SSP DEV reload, unresolved old-versus-new SSP row difference and AR17
+in-memory-only status are unchanged.
+
+**Next action:** run the published lean three-rule registry SQL once in a fresh
+DEV worksheet and share only its aggregate result. Do not run the notebook
+before registry setup is verified.
+See the [lean runtime checkpoint](checkpoints/2026-09-12-lean-registry-runtime.md).
+
+## Previous action - registry binding correction; superseded
 
 The owner reported a Snowflake statement error at anonymous-block line 270,
 position 18: `FLATTEN` received `VARCHAR(17076)` as its `INPUT`. In the
@@ -191,9 +224,9 @@ The prior full SSP DEV reload remains committed/read-back verified: **2,813 sour
 
 Matillion raw-ID conversion, persisted SSP data, field acceptance counts and unresolved work are unchanged. [Durable handoff](PROJECT_HANDOFF.md). Historical entries below retain earlier incidents; superseded run requests are not the current action.
 
-## Active incident — Matillion raw-to-curated null field loss
+## Active incident - Matillion raw-to-curated null field loss
 
-### Latest checkpoint — owner confirms full preview passed
+### Latest checkpoint - owner confirms full preview passed
 
 On 2026-09-11 the owner explicitly confirmed the full read-only preview ran
 successfully and mapped the fields as expected. This is **owner-reported preview
@@ -255,7 +288,7 @@ returns field names and affected-record counts, SELECT only. No test run was
 performed for this new file, and Snowflake runtime acceptance remains pending.
 The earlier single-record inputs and result-scan step are not needed for this file.
 
-## Paused action — approved one-record SSP DEV write pilot
+## Paused action - approved one-record SSP DEV write pilot
 
 The owner approved testing persistence now, rather than postponing every write
 until all mappings are complete. The [separate one-record pilot](SSP_WRITE_PILOT.md)
@@ -274,7 +307,7 @@ deferred + 2 duplicate-score deferred + 2 remaining review = 45 rows**.
 The parked/deferred history below remains in force; no unchanged AR rerun is
 requested. Persistence is a distinct pending milestone, not a new mapped field.
 
-## Current direction — workflow fields and duplicate score deferred
+## Current direction - workflow fields and duplicate score deferred
 
 On September 11, the owner confirmed **skip the seven workflow audit fields for
 now**, then also directed us to **defer both Average Security Compliance Score
@@ -306,7 +339,7 @@ The field meanings and output rules remain parked. No rerun is requested.
 The blocked 34-field batch is not accepted. SSP, mapper code, registry and the
 original CSV remain unchanged.
 
-## Latest AR run — v3 blocked; no repeat run yet
+## Latest AR run - v3 blocked; no repeat run yet
 
 The [posted thirty-four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) confirms the new release ran.
 Mapping and registry contracts passed; all 2,813 source records were valid and
@@ -335,7 +368,7 @@ They are source-coverage gaps, not the cause of the blocked status; their upstre
 cause is not established. The two underscore-prefixed threshold fields each have
 one populated value. See [field-by-field candidate evidence](MAPPING_PROGRESS.md#approved-alternative-path-additions--pending-live).
 
-**Short current summary: [SSP — done and next](SSP_DONE_AND_NEXT.md).**
+**Short current summary: [SSP - done and next](SSP_DONE_AND_NEXT.md).**
 **Current direction:** SSP leftovers are parked while other Excel models are
 reviewed. The [model/path progress and clarification queue](MAPPING_PROGRESS.md#modelpath-status-and-clarification-queue)
 separates status, evidence/reason, and information needed for each scope.
@@ -384,7 +417,7 @@ remain uncoded and no SSP rerun is required for the separate AR release.
 Historical checkpoints below retain
 their original scope and do not establish completeness against the new evidence.
 
-## Resume checkpoint — preserve passed, failed and pending work
+## Resume checkpoint - preserve passed, failed and pending work
 
 Use this page, [Mapping Progress](MAPPING_PROGRESS.md), and the linked live
 checkpoints before choosing new work. Compare the code release and source scope
@@ -457,7 +490,7 @@ Result: NOT READY
 
 Missing registry branches identified were `import-profile`, `system-information`, `information-types[]`, `control-implementation`, and `implemented-requirements[]`.
 
-## Latest required-source readiness audit — EXECUTED 2026-09-09
+## Latest required-source readiness audit - EXECUTED 2026-09-09
 
 The read-only OSCAL SSP 1.2.3 required-source readiness audit was executed successfully in the live Snowflake notebook.
 
@@ -623,7 +656,7 @@ RESULT: MAPPING-BACKLOG EVIDENCE ONLY
 
 The audit never authorizes writes. Assembled OSCAL JSON schema and constraint validation remain mandatory after the minimum-contract gaps are resolved.
 
-## Latest mapping-artifact progress audit — EXECUTED 2026-09-09
+## Latest mapping-artifact progress audit - EXECUTED 2026-09-09
 
 The repository now records the filtered screenshot evidence from
 `archer_to_oscal_mapping.xlsx`. The visible filter reports 103 of 609 records
@@ -694,7 +727,7 @@ and fails closed if an existing mapped value conflicts with the configured
 version. The authoritative notebook and split Cell 5 are synchronized. This
 change has now run successfully in Snowflake.
 
-## Latest mapper rerun — EXECUTED 2026-09-09
+## Latest mapper rerun - EXECUTED 2026-09-09
 
 The user-provided
 [Cell 7 + Cell 8 checkpoint](checkpoints/2026-09-09_CELL7_CELL8_OUTPUT_CHECKPOINT.md)
@@ -741,7 +774,7 @@ document version to controlled value `1.0`, and retains OSCAL version `1.2.3`.
 The source field already generated `system-name` for all 2,813 records in the
 accepted baseline, so no fallback title is invented.
 
-## Security-impact production assembly — LIVE RERUN PASSED
+## Security-impact production assembly - LIVE RERUN PASSED
 
 The recorded source/runtime evidence separates the optional assembly states:
 
@@ -769,7 +802,7 @@ the earlier aggregate evidence. Duplicate and dangling key counts remained
 zero, pre-write validation passed, and no DIM/FACT write occurred. The 270
 complete security-impact assemblies remain the expected emitted population.
 
-## Metadata completion release — IMPLEMENTED; REGISTRY RETRY PENDING
+## Metadata completion release - IMPLEMENTED; REGISTRY RETRY PENDING
 
 The five approved responsible-party source fields already emit role
 assignments, but the prior party UUID included the source role field. That
@@ -859,10 +892,10 @@ pass, and the complete suite is green.
 
 The graph engine is no longer the primary problem. Its structural integrity remains clean. The backlog is now separated into four concrete categories:
 
-1. **Structural registry additions** — `import-profile`, `system-information`, `control-implementation`.
-2. **Collection design + instance mapping** — `information-types[]` and `implemented-requirements[]`.
-3. **Component collection/source collision + hydration design** — current `components[]` coverage is 944/2813 records and six candidate source mappings need deliberate reconciliation.
-4. **Required field sourcing/configuration** — import-profile href, component fields, plus known source-completeness gaps of 33/42/294 records.
+1. **Structural registry additions** - `import-profile`, `system-information`, `control-implementation`.
+2. **Collection design + instance mapping** - `information-types[]` and `implemented-requirements[]`.
+3. **Component collection/source collision + hydration design** - current `components[]` coverage is 944/2813 records and six candidate source mappings need deliberate reconciliation.
+4. **Required field sourcing/configuration** - import-profile href, component fields, plus known source-completeness gaps of 33/42/294 records.
 
 The Excel mapping artifact is now the primary sequencing source for that
 backlog. The minimum-contract findings remain valid final-completeness gates,
@@ -871,7 +904,7 @@ next when an earlier root-to-leaf row is still unresolved.
 
 Do not patch individual records. Do not invent required controlled values. Do not enable writes.
 
-## System-characteristics collection integrity release — RUNTIME ACCEPTED
+## System-characteristics collection integrity release - RUNTIME ACCEPTED
 
 The accepted live registry snapshot already defines the two collection
 contracts needed for this increment:
@@ -921,7 +954,7 @@ pre-write validation, and `EXECUTE_WRITES = False`. The unchanged counts are
 accepted evidence that the governed collection identities caused no data loss
 for this source population. No further system-characteristics rerun is needed.
 
-## Component source contract — EXECUTED; IDENTITY/TYPE RELEASE IMPLEMENTED
+## Component source contract - EXECUTED; IDENTITY/TYPE RELEASE IMPLEMENTED
 
 The next root-to-leaf branch is
 `system-security-plan.system-implementation.components[]`. The parent
@@ -975,7 +1008,7 @@ completed successfully with zero profiling failures and no writes. It
 reconciled 4,792 component occurrences to 1,436 distinct IDs and proved that
 all 1,436 appear in at least one candidate object. The three generic
 `ARCHER_META_CONTENT` layers match every ID but expose no recognized hydration
-fields, so they are identity evidence only—not title, description, or status
+fields, so they are identity evidence only-not title, description, or status
 sources. The interconnections-named RAW object matches 1,428 IDs and the
 software-named RAW object matches seven. The remaining one governed ID is the
 hardware reference; table-to-Excel-field ownership is not inferred from those
@@ -988,7 +1021,7 @@ Software has two possible title fields and four possible status fields for all
 seven records. Hardware has no proved type-specific source. No source, field,
 precedence, or status transformation has been approved.
 
-## Component source-routing audit — EXECUTED; ROUTES PROVED
+## Component source-routing audit - EXECUTED; ROUTES PROVED
 
 The Excel-driven routing audit completed read-only and reproduced the accepted
 baseline exactly:
@@ -1022,9 +1055,9 @@ is a reporting defect rather than proved source-shape failure: SQL `IS NOT
 NULL` also includes a VARIANT containing JSON `null`. It did not affect array
 extraction, route matching, field coverage, or graph reconciliation. The cell
 now reports JSON-null roots separately and treats only other non-array values
-as unexpected. The count reconciles exactly: 2,813 records × six fields =
+as unexpected. The count reconciles exactly: 2,813 records x six fields =
 16,878 roots; the prior source-contract audit proved 1,246 populated array
-roots; 16,878 − 1,246 = 15,632 absent JSON-null roots. No repeat run is
+roots; 16,878 - 1,246 = 15,632 absent JSON-null roots. No repeat run is
 required for the accepted routing evidence.
 
 The remaining real blockers are field-contract or source-data decisions:
@@ -1036,7 +1069,7 @@ The remaining real blockers are field-contract or source-data decisions:
   fields cover small subsets, and no status candidate was found.
 - Hardware: its one reference has no proved hydration source.
 
-## Partial component hydration — RUNTIME ACCEPTED
+## Partial component hydration - RUNTIME ACCEPTED
 
 The owner approved this evidence-backed increment:
 
@@ -1086,7 +1119,7 @@ changes payload content without changing node or edge identity.
 
 ## Immediate next action
 
-### Active implementation — Assessment Results; SSP corrections parked
+### Active implementation - Assessment Results; SSP corrections parked
 
 The owner chose to pause remaining SSP work and continue matching Assessment
 Results score mappings. The cumulative seventeen-field release is live accepted.
@@ -1098,7 +1131,7 @@ seventeen additions pending live, eleven excluded rows and recorded source gaps.
 Shared-engine consolidation remains a proposal, not completed work.
 No SSP mapper configuration, registry, DIM or FACT changes are part of this release.
 
-### Parked Excel review — two System Characteristics corrections, not coded
+### Parked Excel review - two System Characteristics corrections, not coded
 
 Model **SSP**, target `system-security-plan.system-characteristics.props[]`:
 map `HELPER_PTA_CALC` according to row 35's Calculated/custom-property Notes,
@@ -1107,7 +1140,7 @@ and reconcile `PACKAGE_TYPE` to the example property name
 excluded by its explicit do-not-map Notes. See the
 [short summary](SSP_DONE_AND_NEXT.md). No code change or notebook rerun yet.
 
-### Parked — control-count correction proposed, not coded
+### Parked - control-count correction proposed, not coded
 
 Model: **SSP**. The new Control Implementation screenshots do contain a
 detailed Option 1 example in Notes for
@@ -1126,7 +1159,7 @@ contains the observed Notes, standard-model evidence and exact decisions.
 No new mapping has been counted as complete. The existing accepted graph and
 assembly remain valid for their recorded scope.
 
-### Current checkpoint — mapped-scope SSP assembly ACCEPTED
+### Current checkpoint - mapped-scope SSP assembly ACCEPTED
 
 The newest [live result](live-snowflake-results.md) completes the date/property
 release: **70,102 nodes, 67,289 edges, zero duplicate or dangling keys,
@@ -1168,11 +1201,11 @@ The assembly step is complete. The two evidenced property corrections can move
 forward without waiting for a full workbook export; additional rows still need
 their own approved contracts and source evidence.
 
-### Previous implementation handoff — superseded by successful run above
+### Previous implementation handoff - superseded by successful run above
 
 The latest [live report](live-snowflake-results.md) inspected **54 canonical
 SSP mappings** and identified two unsupported contracts. It supplied the exact
-`ATOIATO_DATE` → `system-security-plan.system-characteristics.date-authorized`
+`ATOIATO_DATE`  `system-security-plan.system-characteristics.date-authorized`
 rule: type `Transform`, Notes `Convert timestamp to DateDatatype`.
 The second row is `RECOMMENDED_SECURITY_CATEGORY` with Notes `All Nulls`.
 These are contract counts, not populated-record counts or completed mappings.
@@ -1204,7 +1237,7 @@ model/path, implementation, live acceptance, payload proof and remaining gaps.
 sent to the manager. Daily reporting in this task is scheduled for **5 PM
 Eastern**. Keep the computer and app running for scheduled local-file work.
 
-### Previous correction — property routing (retained for context)
+### Previous correction - property routing (retained for context)
 
 The accepted component hydration run remains the baseline. The newest
 [live result](live-snowflake-results.md) is a **Cell 7 mapper failure**, not a
@@ -1233,3 +1266,4 @@ within-record parent/child keys. Snowflake transport and unrelated component
 lookup I/O are faked locally; **live acceptance is pending**, and this does not
 prove all externally loaded Excel rows are supported. See the
 [routing correction checkpoint](checkpoints/2026-09-10_ssp_property_routing_fix.md).
+

@@ -5,28 +5,30 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 **Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Accepted runs,
 cell responsibilities, unresolved gaps and the next action are recorded there.
 
-**Current release:** one mapping CSV, versioned registry metadata, and the same
-[seven V2 cells](notebooks/cells_v2/README.md). No JSON catalog upload.
-First run the [one-time DEV registry setup](docs/REGISTRY_METADATA_SETUP.md);
-live setup and the matching notebook PREVIEW remain pending.
+**Current compact lean release:** one mapping CSV, the original nine registry
+columns plus only three sparse execution rules, and the same
+[seven V2 cells](notebooks/cells_v2/README.md). No JSON catalog upload. The
+release passes all 691 local tests and its compactness audit is closed. The
+registry setup still needs live DEV verification before the notebook preview;
+follow the single current action in [current status](docs/CURRENT_STATUS.md).
 
 Normal writes stay disabled. SSP's accepted full DEV reload is not repeated;
 AR remains seventeen accepted in-memory mappings without verified storage.
 
 ## Authoritative files
 
-- [`notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`](notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py) — the complete seven-cell Snowflake/Snowpark notebook source.
-- [`notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py`](notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py) — the guarded, insert-only setup cell for the governed metadata role and party registry paths.
-- [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) — verified state, safety gate, and the single next action.
-- [`docs/MAPPING_PROGRESS.md`](docs/MAPPING_PROGRESS.md) — Archer field-to-OSCAL mapping register: implementation, live evidence, and pending gaps.
-- [Today's manager report](docs/daily/2026-09-10.md) — daily change and cumulative progress; reports are scheduled for 5 PM Eastern.
-- [`docs/ARCHITECTURE_CONTEXT.md`](docs/ARCHITECTURE_CONTEXT.md) — design guardrails that must survive future edits.
-- [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) — dated project decisions and GitHub checkpoints.
-- [`docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md`](docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md) — pinned version sources and the first-tier required SSP contract.
-- [`docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md`](docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md) — tester-facing business rules, field-to-node expectations, PK/FK checks, known gaps, and complete acceptance procedure.
-- [`notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py`](notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py) — the read-only post-Cell-7 assembler for one transient mapped-scope SSP document per Archer record.
-- [`notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py`](notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py) — the one-pass, aggregate-only diagnostic for populated Excel rows that lack an approved Cell 4 handler.
-- [`docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md`](docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md) — filtered visual evidence from the SSP mapping workbook; it is not a replacement for the complete workbook.
+- [`notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`](notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py) - the complete seven-cell Snowflake/Snowpark notebook source.
+- [`notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py`](notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py) - the guarded, insert-only setup cell for the governed metadata role and party registry paths.
+- [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) - verified state, safety gate, and the single next action.
+- [`docs/MAPPING_PROGRESS.md`](docs/MAPPING_PROGRESS.md) - Archer field-to-OSCAL mapping register: implementation, live evidence, and pending gaps.
+- [Today's manager report](docs/daily/2026-09-10.md) - daily change and cumulative progress; reports are scheduled for 5 PM Eastern.
+- [`docs/ARCHITECTURE_CONTEXT.md`](docs/ARCHITECTURE_CONTEXT.md) - design guardrails that must survive future edits.
+- [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) - dated project decisions and GitHub checkpoints.
+- [`docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md`](docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md) - pinned version sources and the first-tier required SSP contract.
+- [`docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md`](docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md) - tester-facing business rules, field-to-node expectations, PK/FK checks, known gaps, and complete acceptance procedure.
+- [`notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py`](notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py) - the read-only post-Cell-7 assembler for one transient mapped-scope SSP document per Archer record.
+- [`notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py`](notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py) - the one-pass, aggregate-only diagnostic for populated Excel rows that lack an approved Cell 4 handler.
+- [`docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md`](docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md) - filtered visual evidence from the SSP mapping workbook; it is not a replacement for the complete workbook.
 
 The earlier three-cell `ssp_props_read_only_cells.py` and its copy pages were temporary diagnostics. They have been removed to prevent them from being mistaken for the production mapper.
 
@@ -52,7 +54,7 @@ No reload rerun is needed. The old-row reduction remains unreconciled; full SSP
 completeness and the normal daily writer are not established by this milestone.
 See [current status](docs/CURRENT_STATUS.md) for the active action.
 
-## Historical checkpoints — not current run instructions
+## Historical checkpoints - not current run instructions
 
 The following entries retain earlier evidence. Their old next-step requests and
 "latest" labels do not override the dated project handoff.
@@ -141,7 +143,7 @@ screenshot-confirmed extension-property fields now use the existing `props[]`
 collection while retaining the original artifact path. Unknown transformations
 still fail; no database changes or new registry rows are needed.
 
-The subsequent report supplied the exact `ATOIATO_DATE` → `date-authorized`
+The subsequent report supplied the exact `ATOIATO_DATE`  `date-authorized`
 contract: Transform, Notes `Convert timestamp to DateDatatype`. Cell 4 now
 implements ISO timestamp/date to `YYYY-MM-DD`, retaining the source calendar
 date and leaving metadata timestamps untouched. Invalid or ambiguous formats
@@ -165,3 +167,4 @@ Additional mapping rows need approved source-to-path contracts; see the
 - [Drill into `system-characteristics` and all descendant payloads](sql/drill_down_system_characteristics.sql)
 
 - [Inspect security-impact-level and extract confidentiality, integrity, and availability](sql/drill_down_security_impact_level.sql)
+

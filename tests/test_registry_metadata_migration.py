@@ -15,18 +15,27 @@ ORACLE_PATH = ROOT / "tests/fixtures/mapper_contract_pre_registry.json"
 TABLE = "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY"
 OLD = ("OSCAL_MODEL_KEY", "NODE_PATH", "ELEMENT_TYPE", "PARENT_NODE_PATH",
        "IS_COLLECTION", "INSTANCE_KEY_RULE", "PROCESS_ORDER", "IS_ACTIVE", "ITEM_PATH")
-NEW = ("MAPPER_METADATA_VERSION", "MAPPER_ENABLED", "OPERATOR", "PARENT_INSTANCE_RULE",
-       "UUID_POLICY", "EMPTY_POLICY", "LIST_INSTANCE_RULE", "PROPERTY_NAME_RULE",
-       "ASSEMBLY_POLICY", "REQUIRED_MEMBERS", "DEFAULT_SINGLETON_POLICY",
-       "REQUIRED_RULE_IDS", "ROLES_PATH", "PARTIES_PATH", "PARTY_TYPE",
-       "PARTY_UUID_PARTS", "PARTY_UUID_SOURCE_KEY", "REPORT_TARGET_PATH")
+NEW = ("OPERATOR", "UUID_POLICY", "REQUIRED_MEMBERS")
+LEGACY_EXTRA = (
+    "MAPPER_METADATA_VERSION", "MAPPER_ENABLED", "PARENT_INSTANCE_RULE",
+    "EMPTY_POLICY", "LIST_INSTANCE_RULE", "PROPERTY_NAME_RULE", "ASSEMBLY_POLICY",
+    "DEFAULT_SINGLETON_POLICY", "REQUIRED_RULE_IDS", "ROLES_PATH", "PARTIES_PATH",
+    "PARTY_TYPE", "PARTY_UUID_PARTS", "PARTY_UUID_SOURCE_KEY", "REPORT_TARGET_PATH",
+)
 
 
 def read_seed(sql):
     section = sql.split("-- BEGIN EXPLICIT SEED:", 1)[1].split("-- END EXPLICIT SEED", 1)[0]
-    pattern = r"\('([^']+)', '([^']+)',\s*'([^']+)',\s*'([^']+)'\)"
-    return {(model, path): (json.loads(metadata), json.loads(expected))
-            for model, path, metadata, expected in re.findall(pattern, section)}
+    pattern = (r"\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*"
+               r"'([^']+)'\s*,\s*(NULL|'(?:''|[^'])*')\s*,\s*'([^']+)'\s*\)")
+    result = {}
+    for model, path, operator, uuid_policy, members, expected in re.findall(pattern, section):
+        result[model, path] = ({
+            "OPERATOR": operator,
+            "UUID_POLICY": uuid_policy,
+            "REQUIRED_MEMBERS": None if members == "NULL" else members[1:-1].replace("''", "'"),
+        }, json.loads(expected))
+    return result
 
 
 def synthetic_registry(oracle):
@@ -51,6 +60,11 @@ def synthetic_registry(oracle):
             expected = dict(contract["ELEMENTS"].get(path, {}).get("parameters", {}).get("registry_contract", {}))
             if path in collection_identity:
                 expected["instance_key_rule"], expected["item_path"] = collection_identity[path]
+            elif path.endswith("[]"):
+                # Synthetic out-of-scope rows still satisfy the original registry's
+                # structural rule that every active collection has stable identity.
+                expected.setdefault("instance_key_rule", "VALUE")
+                expected.setdefault("item_path", "$")
             rows.append({
                 "OSCAL_MODEL_KEY": model, "NODE_PATH": path,
                 "PARENT_NODE_PATH": expected.get("parent_path", path.rsplit(".", 1)[0] if "." in path else None),
@@ -69,11 +83,8 @@ def expected_metadata(row, seed):
     if key in seed:
         return copy.deepcopy(seed[key][0])
     meta = dict.fromkeys(NEW)
-    meta["MAPPER_ENABLED"] = False
     if key[0] == "SSP" and not row["IS_COLLECTION"] and "[]" not in key[1]:
-        meta.update(MAPPER_ENABLED=True, OPERATOR="object", PARENT_INSTANCE_RULE="none",
-                    UUID_POLICY="omit", EMPTY_POLICY="emit", LIST_INSTANCE_RULE="none",
-                    ASSEMBLY_POLICY="normal")
+        meta.update(OPERATOR="object", UUID_POLICY="omit")
     return meta
 
 
@@ -99,7 +110,7 @@ def simulate_guarded_update(rows, seed):
             raise ValueError("identity conflict")
     changes = 0
     for (model, path), row in active.items():
-        if model not in {"SSP", "ASSESSMENT_RESULTS"} or not expected_metadata(row, seed)["MAPPER_ENABLED"]:
+        if model not in {"SSP", "ASSESSMENT_RESULTS"} or expected_metadata(row, seed)["OPERATOR"] is None:
             continue
         root = "system-security-plan" if model == "SSP" else "assessment-results"
         parent = (row.get("PARENT_NODE_PATH") or "").strip() or None
@@ -111,7 +122,7 @@ def simulate_guarded_update(rows, seed):
             if parent is not None:
                 raise ValueError("root parent conflict")
         elif (parent is None or (model, parent) not in active
-              or not expected_metadata(active[model, parent], seed)["MAPPER_ENABLED"]
+              or expected_metadata(active[model, parent], seed)["OPERATOR"] is None
               or not path.startswith(parent + ".")):
             raise ValueError("parent path conflict")
     for row in changed:
@@ -143,15 +154,9 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
                 element = self.oracle["MODELS"][model]["ELEMENTS"][path]
                 p = element.get("parameters", {})
                 self.assertEqual(set(meta), set(NEW))
-                self.assertIs(meta["MAPPER_ENABLED"], True)
                 self.assertEqual(meta["OPERATOR"], element["operator"])
-                self.assertEqual(meta["PARENT_INSTANCE_RULE"], p.get("parent_instance_rule", "none"))
                 self.assertEqual(meta["UUID_POLICY"], "instance" if p.get("uuid_from_instance")
                                  else "node" if p.get("include_uuid") else "omit")
-                self.assertEqual(meta["EMPTY_POLICY"], "emit" if p.get("materialize_empty") else "omit")
-                self.assertEqual(meta["LIST_INSTANCE_RULE"], p.get("list_identity", "none"))
-                self.assertEqual(meta["PROPERTY_NAME_RULE"], p.get("property_name_rule"))
-                self.assertEqual(meta["ASSEMBLY_POLICY"], "complete-only" if p.get("optional_assembly") else "normal")
                 self.assertEqual(meta["REQUIRED_MEMBERS"], "|".join(p["required_members"]) if p.get("required_members") else None)
 
     def test_original_registry_contract_checks_are_not_changed(self):
@@ -172,49 +177,49 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
                          {ctx["config"]["OSCAL_MODEL"]: len(ctx["mapping_rows"]) for ctx in contexts})
         for context in contexts:
             self.assertEqual(context["routing_report"]["STATUS"], "READY", context["routing_report"])
-        required = set(self.seed["SSP", "system-security-plan"][0]["REQUIRED_RULE_IDS"].split("|"))
-        actual_rules = {row["RULE_ID"] for row in release.mapping_rows()}
-        self.assertLessEqual(required, actual_rules)
 
-    def test_root_completeness_gates_and_ar_report_are_preserved(self):
-        ssp = self.seed["SSP", "system-security-plan"][0]
-        ar = self.seed["ASSESSMENT_RESULTS", "assessment-results"][0]
-        self.assertEqual(ssp["REQUIRED_RULE_IDS"].split("|"),
-                         ["support:metadata-title", "support:oscal-version", "support:document-version"])
-        self.assertEqual(ar["REQUIRED_RULE_IDS"].split("|"),
-                         self.oracle["MODELS"]["ASSESSMENT_RESULTS"]["REQUIRED_RULE_IDS"])
-        self.assertEqual(len(ar["REQUIRED_RULE_IDS"].split("|")), 17)
-        self.assertEqual(ar["REPORT_TARGET_PATH"],
-                         self.oracle["MODELS"]["ASSESSMENT_RESULTS"]["REPORT"]["TARGET_PATH"])
-        for key, (meta, _) in self.seed.items():
-            root = self.oracle["MODELS"][key[0]]["ROOT_PATH"]
-            self.assertEqual(meta["MAPPER_METADATA_VERSION"], 1 if key[1] == root else None)
+    def test_only_three_non_derivable_runtime_fields_are_seeded(self):
+        self.assertEqual(set(NEW), {"OPERATOR", "UUID_POLICY", "REQUIRED_MEMBERS"})
+        for column in LEGACY_EXTRA:
+            with self.subTest(legacy_column=column):
+                self.assertNotIn('"' + column + '"', self.sql)
+        self.assertIn("d.x:META:OPERATOR::VARCHAR IS NOT NULL", self.sql)
+        members = self.seed[
+            "SSP", "system-security-plan.system-characteristics.security-impact-level"
+        ][0]["REQUIRED_MEMBERS"]
+        self.assertEqual(members.split("|"), [
+            "security-objective-confidentiality",
+            "security-objective-integrity",
+            "security-objective-availability",
+        ])
 
-    def test_party_identity_scope_and_uuid_parts_preserved(self):
+    def test_party_identity_is_preserved_by_original_registry_contract(self):
         group = self.oracle["MODELS"]["SSP"]["REFERENCE_GROUPS"][0]
-        meta = self.seed["SSP", group["assignments_path"]][0]
-        for name in ("roles_path", "parties_path", "party_type"):
-            self.assertEqual(meta[name.upper()], group[name])
-        self.assertEqual(meta["PARTY_UUID_PARTS"].split("|"), group["party_uuid_parts"])
-        self.assertEqual(meta["PARTY_UUID_SOURCE_KEY"], "source-one")
-        for key, (other, _) in self.seed.items():
-            if key != ("SSP", group["assignments_path"]):
-                self.assertIsNone(other["PARTY_UUID_PARTS"])
+        roles = self.seed["SSP", group["roles_path"]]
+        parties = self.seed["SSP", group["parties_path"]]
+        assignments = self.seed["SSP", group["assignments_path"]]
+        self.assertEqual(roles[0]["OPERATOR"], "roles")
+        self.assertEqual(parties[0]["OPERATOR"], "parties")
+        self.assertEqual(assignments[0]["OPERATOR"], "assignments")
+        self.assertEqual(parties[1]["instance_key_rule"], "ID")
+        self.assertEqual(assignments[1]["instance_key_rule"], "SOURCE_FIELD_NAME+ID")
+        self.assertEqual(parties[1]["item_path"], "UserList[]")
+        self.assertEqual(assignments[1]["item_path"], "UserList[]")
 
     def test_synthetic_activation_matches_old_default_and_ar_whitelist(self):
         rows = synthetic_registry(self.oracle)
         updated, count = simulate_guarded_update(rows, self.seed)
         self.assertGreater(count, 15)
         ar_enabled = {r["NODE_PATH"] for r in updated
-                      if r["OSCAL_MODEL_KEY"] == "ASSESSMENT_RESULTS" and r.get("MAPPER_ENABLED")}
+                      if r["OSCAL_MODEL_KEY"] == "ASSESSMENT_RESULTS" and r.get("OPERATOR")}
         self.assertEqual(ar_enabled, set(self.oracle["MODELS"]["ASSESSMENT_RESULTS"]["ELEMENT_PATHS"]))
         for row in updated:
             path = row["NODE_PATH"]
             if "unapproved" in path:
-                self.assertIs(row["MAPPER_ENABLED"], False)
+                self.assertIsNone(row.get("OPERATOR"))
             if path == "system-security-plan.unmapped-singleton":
-                self.assertTrue(row["MAPPER_ENABLED"])
-                self.assertEqual(row["EMPTY_POLICY"], "emit")
+                self.assertEqual(row["OPERATOR"], "object")
+                self.assertEqual(row["UUID_POLICY"], "omit")
         self.assertIn("AND POSITION('[]' IN r.NODE_PATH)=0", self.sql)
         self.assertIn("AND NOT r.IS_COLLECTION", self.sql)
 
@@ -271,7 +276,7 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
         for column in NEW:
             self.assertIn('("' + column + '" IS NULL OR "' + column + '" IS NOT DISTINCT FROM', update)
         executable = "\n".join(line for line in self.sql.splitlines() if not line.lstrip().startswith("--"))
-        self.assertNotRegex(executable, r"(?i)\b(?:DELETE|TRUNCATE|INSERT|MERGE|CREATE)\s+")
+        self.assertNotRegex(executable, r"(?i)\b(?:DELETE|TRUNCATE|INSERT|MERGE|CREATE|DROP)\s+")
         self.assertNotRegex(executable, r"(?i)\b(?:DIM_OSCAL|FACT_OSCAL|RTX_ENTERPRISESERVICES)")
 
     def test_nullable_seed_values_are_written_as_sql_null_not_text_null(self):
@@ -294,6 +299,7 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
 
     def test_sql_seed_decodes_through_actual_registry_compiler(self):
         import test_metadata_driven_contract as metadata
+        import test_registry_release as release
         ns = metadata.namespace()
         registry, _ = simulate_guarded_update(synthetic_registry(self.oracle), self.seed)
         models = copy.deepcopy(self.oracle["MODELS"])
@@ -307,7 +313,8 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
         for profile in profiles:
             profile["MODEL_KEYS"] = tuple(profile["MODEL_BINDINGS"])
         before = copy.deepcopy(registry)
-        decoded = ns["decode_registry_model_contracts"](registry, profiles, models)
+        decoded = ns["decode_registry_model_contracts"](
+            registry, profiles, models, {"source-one": release.mapping_rows()})
         self.assertEqual(registry, before)
         self.assertEqual(set(decoded["ASSESSMENT_RESULTS"]["ELEMENTS"]),
                          set(self.oracle["MODELS"]["ASSESSMENT_RESULTS"]["ELEMENT_PATHS"]))
@@ -323,8 +330,8 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
                         self.assertEqual(actual["parameters"][key], value)
         self.assertEqual(decoded["SSP"]["REFERENCE_GROUPS"],
                          self.oracle["MODELS"]["SSP"]["REFERENCE_GROUPS"])
-        self.assertEqual(decoded["ASSESSMENT_RESULTS"]["REQUIRED_RULE_IDS"],
-                         self.oracle["MODELS"]["ASSESSMENT_RESULTS"]["REQUIRED_RULE_IDS"])
+        self.assertNotIn("REQUIRED_RULE_IDS", decoded["SSP"])
+        self.assertNotIn("REQUIRED_RULE_IDS", decoded["ASSESSMENT_RESULTS"])
 
     def test_update_transaction_contains_no_ddl_and_rechecks_baseline(self):
         phase = self.sql.split("  BEGIN TRANSACTION;", 1)[1].split("  COMMIT;", 1)[0]
@@ -408,3 +415,4 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

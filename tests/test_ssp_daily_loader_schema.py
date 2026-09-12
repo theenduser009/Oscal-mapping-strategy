@@ -11,12 +11,22 @@ from tests.test_ssp_write_pilot_live_schema import live_description
 ROOT = Path(__file__).resolve().parents[1]
 P = runpy.run_path(str(ROOT / "notebooks/cells/06_validation_and_guarded_loader.py"))
 G, Error = P["_load_prepare"].__globals__, P["LoadError"]
+STORAGE = dict(
+    MODEL_KEY="SSP", ROOT_PATH="system-security-plan",
+    ROOT_ELEMENT_TYPE="system-security-plan", SOURCE_SYSTEM_NAME="ARCHER",
+    SOURCE_TABLE_NAME="ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+    RAW_TABLE="DEV.RAW.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+    TARGET_DIM="DEV.GRC.DIM_SSP", TARGET_FACT="DEV.GRC.FACT_SSP",
+    DIM_PK_COLUMN="PK_OSCAL_SSP_ELEMENT_HASH",
+    FACT_PK_COLUMN="PK_FACT_OSCAL_DEPENDENCY_HASH",
+    IDENTITY_VERSION="v1_registry_path_instance",
+    PHYSICAL_PROFILE="BINARY16_UUID32", VERIFIED=True)
 
 
 class DailySchema(unittest.TestCase):
     def test_proven_physical_storage_projection(self):
-        plans = [P["_load_column_plan"](live_description(kind), kind) for kind in ("DIM", "FACT")]
-        P["_load_selection_schema"](plans)
+        plans = [P["_load_column_plan"](live_description(kind), kind, STORAGE)
+                 for kind in ("DIM", "FACT")]
         self.assertEqual([10, 6], [len(p) for p in plans])
         self.assertEqual(4, sum(c["encoding"] == "HEX_TO_BINARY16" for p in plans for c in p))
         self.assertEqual(3, sum(c["encoding"] == "UUID_TO_COMPACT32" for p in plans for c in p))
@@ -33,12 +43,13 @@ class DailySchema(unittest.TestCase):
             else:
                 rows[0]["type"] = "BINARY(17)"
             with self.assertRaises(Error):
-                P["_load_column_plan"](rows, "DIM")
+                P["_load_column_plan"](rows, "DIM", STORAGE)
 
     def test_preview_never_calls_transaction(self):
         candidate = dict(NODES=2, EDGES=1, DIM_DUPLICATE_KEYS=0, FACT_DUPLICATE_KEYS=0,
                          DANGLING_SOURCE_KEYS=0, DANGLING_TARGET_KEYS=0)
         context = dict(candidate=candidate, records=1, scope={},
+                       contract=STORAGE,
                        changes=[dict(INSERTS=0, UPDATES=0, UNCHANGED=2),
                                 dict(INSERTS=0, UPDATES=0, UNCHANGED=1)])
         with patch.dict(G, {"session": object(), "_load_prepare": lambda *a: context,
@@ -67,7 +78,7 @@ class DailyScopeSQL(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
         self.addCleanup(self.db.close)
-        self.dk, self.fk = P["SSP_LOAD_DIM_PK"], P["SSP_LOAD_FACT_PK"]
+        self.dk, self.fk = STORAGE["DIM_PK_COLUMN"], STORAGE["FACT_PK_COLUMN"]
         for table in ("TD", "D"):
             self.db.execute(f"CREATE TABLE {table}({self.dk} TEXT,SOURCE_SYSTEM_NAME TEXT,"
                             "SOURCE_TABLE_NAME TEXT,SOURCE_RECORD_ID TEXT)")
@@ -79,14 +90,15 @@ class DailyScopeSQL(unittest.TestCase):
         for table, key, record in (("D", "new", "selected"), ("TD", "old", "selected"),
                                    ("TD", "outside", "absent")):
             self.db.execute(f"INSERT INTO {table} VALUES (?,?,?,?)",
-                            (key, "ARCHER", P["SSP_LOAD_SOURCE"], record))
+                            (key, "ARCHER", STORAGE["SOURCE_TABLE_NAME"], record))
         for row in (("old-edge", "old", "old"), ("outside-edge", "outside", "outside"),
                     ("incoming-edge", "outside", "old")):
             self.db.execute("INSERT INTO TF VALUES (?,?,?)", row)
 
     def scope(self):
-        with patch.dict(G, {"SSP_LOAD_DIM": "TD", "SSP_LOAD_FACT": "TF"}):
-            return P["_load_scope_queries"]({"D": "D", "F": "F", "IDS": "IDS"})
+        contract = dict(STORAGE, TARGET_DIM="TD", TARGET_FACT="TF")
+        with patch.dict(G, {"_load_runtime_contract": lambda value: value}):
+            return P["_load_scope_queries"]({"D": "D", "F": "F", "IDS": "IDS"}, contract)
 
     def test_obsolete_and_incoming_edges_included_absent_records_preserved(self):
         dim, fact = self.scope()
@@ -119,3 +131,4 @@ class DailyScopeSQL(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

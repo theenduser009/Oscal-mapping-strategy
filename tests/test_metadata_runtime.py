@@ -34,7 +34,7 @@ def context(rows, elements=None, groups=None):
             OBS: element("observations", parent_instance_rule="source-record",
                          include_uuid=True, property_name_rule="source-field-slug"),
         }
-    return {
+    compiled = {
         "config": {
             "SOURCE_SYSTEM_NAME": "TEST", "SOURCE_TABLE_NAME": "TABLE_A",
             "OSCAL_MODEL": "TEST_MODEL", "IDENTITY_VERSION": "v1_registry_path_instance",
@@ -46,9 +46,11 @@ def context(rows, elements=None, groups=None):
         "compiled_plan": {"version": 1, "mappings": copy.deepcopy(rows),
                           "elements": elements, "reference_groups": groups or []},
     }
+    compiled["registry_rows"] = registry_rows(compiled)
+    return compiled
 
 
-def registry(ctx, rules=None):
+def registry_rows(ctx, rules=None):
     rules = rules or {}
     rows = []
     operator_rules = {
@@ -66,7 +68,11 @@ def registry(ctx, rules=None):
             "INSTANCE_KEY_RULE": rules.get(path, operator_rules.get(spec["operator"])),
             "ITEM_PATH": None,
         })
-    return graph.Frame(rows)
+    return rows
+
+
+def registry(ctx, rules=None):
+    return graph.Frame(registry_rows(ctx, rules))
 
 
 def build(ns, ctx, data=None, reg=None):
@@ -310,9 +316,11 @@ class MetadataRuntimeTests(unittest.TestCase):
 
     def test_registry_identity_drift_blocks_even_when_mapping_is_approved(self):
         ctx = context([mapping("NEW_SCORE", OBS, transform="scalar-score")])
+        ctx["registry_rows"] = registry_rows(ctx, {OBS: "LIST_INDEX"})
         with self.assertRaisesRegex(ValueError, "source-field identity"):
-            build(graph.namespace(), ctx, reg=registry(ctx, {OBS: "LIST_INDEX"}))
+            build(graph.namespace(), ctx)
 
 
 if __name__ == "__main__":
     unittest.main()
+

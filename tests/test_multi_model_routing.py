@@ -66,13 +66,22 @@ def namespace():
 def contracts():
     return {
         "SSP": {"MODEL_KEY": "SSP", "ROOT_PATH": SSP, "POLICY": "ssp-approved-v1",
-                "MODEL_ALIASES": ("SSP", "System Security Plan", "SSP - Metadata")},
+                "MODEL_ALIASES": ("SSP", "System Security Plan", "SSP - Metadata"),
+                "ELEMENTS": {
+                    SSP: {"operator": "object", "parameters": {}},
+                    META: {"operator": "object", "parameters": {}},
+                }},
         "ASSESSMENT_RESULTS": {
             "MODEL_KEY": "ASSESSMENT_RESULTS", "ROOT_PATH": AR,
             "POLICY": "observation-scores-v2",
             "MODEL_ALIASES": ("ASSESSMENT_RESULTS", "Assessment Results", "AR"),
             "SELECTED_FIELDS": ACCEPTED_FIELDS,
             "ELEMENT_PATHS": (AR, RESULT, OBS), "STORAGE_CONTRACT": None,
+            "ELEMENTS": {
+                AR: {"operator": "object", "parameters": {}},
+                RESULT: {"operator": "record", "parameters": {}},
+                OBS: {"operator": "observations", "parameters": {}},
+            },
         },
     }
 
@@ -354,3 +363,4 @@ class MultiModelRouting(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

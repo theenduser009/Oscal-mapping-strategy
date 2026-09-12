@@ -47,8 +47,16 @@ class AdditionalReleaseTests(unittest.TestCase):
         self.assertEqual(0, len(selected),
                          "Disabled/inactive registry owner must not reroute approved children into its parent")
 
-    def test_disabled_singleton_cannot_reroute_cia_mappings(self):
-        self.assert_singleton_does_not_execute("MAPPER_ENABLED")
+    def test_null_operator_derives_scalar_owner_without_rerouting(self):
+        case = release.RegistryReleaseTests()
+        case.setUp()
+        rows = release.release_registry()
+        next(row for row in rows if row["NODE_PATH"] == CIA)["OPERATOR"] = None
+        context = case.compile(models=("SSP",), registry=rows)[0]
+        selected = [row for row in context["mapping_rows"]
+                    if row.get("CANONICAL_ELEMENT_PATH", "").startswith(CIA)]
+        self.assertTrue(selected)
+        self.assertTrue(all(row.get("OWNER_ELEMENT_PATH") == CIA for row in selected))
 
     def test_inactive_singleton_cannot_reroute_cia_mappings(self):
         self.assert_singleton_does_not_execute("IS_ACTIVE")
@@ -128,7 +136,7 @@ class AdditionalReleaseTests(unittest.TestCase):
 
 def current_parent_guard(sql, row, rows):
     """Source-bound boolean simulation of current SQL, not Snowflake execution."""
-    section = sql.split("-- Enabled paths have an enabled parent", 1)[1]
+    section = sql.split("-- Retained executable paths have a retained parent", 1)[1]
     predicate = section.split("WHERE ", 1)[1].split(";", 1)[0]
     predicate = " ".join(predicate.split())
     parent = (row.get("PARENT_NODE_PATH") or "").strip() or None
@@ -137,14 +145,14 @@ def current_parent_guard(sql, row, rows):
                        if other["OSCAL_MODEL_KEY"] == row["OSCAL_MODEL_KEY"]
                        and other["NODE_PATH"] == parent), None)
     atoms = {
-        "d.x:META:MAPPER_ENABLED::BOOLEAN": row["MAPPER_ENABLED"],
+        "d.x:META:OPERATOR::VARCHAR IS NOT NULL": bool(row.get("OPERATOR")),
         "r.IS_COLLECTION IS NULL": row.get("IS_COLLECTION") is None,
         "r.ELEMENT_TYPE IS NULL": row.get("ELEMENT_TYPE") is None,
         "r.PROCESS_ORDER IS NULL": row.get("PROCESS_ORDER") is None,
         "NULLIF(TRIM(r.PARENT_NODE_PATH),'') IS NOT NULL": parent is not None,
         "NULLIF(TRIM(r.PARENT_NODE_PATH),'') IS NULL": parent is None,
-        "COALESCE(p.x:META:MAPPER_ENABLED::BOOLEAN,FALSE)":
-            bool(parent_row and parent_row.get("MAPPER_ENABLED")),
+        "p.x:META:OPERATOR::VARCHAR IS NULL":
+            not bool(parent_row and parent_row.get("OPERATOR")),
         "r.IS_COLLECTION IS DISTINCT FROM ENDSWITH(d.x:PATH::VARCHAR,'[]')":
             row.get("IS_COLLECTION") != row["NODE_PATH"].endswith("[]"),
         "COALESCE(STARTSWITH(d.x:PATH::VARCHAR, NULLIF(TRIM(r.PARENT_NODE_PATH),'') || '.'),FALSE)":
@@ -211,7 +219,7 @@ class RegistryMigrationBoundaryTests(unittest.TestCase):
         rows = copy.deepcopy(self.rows)
         bad = copy.deepcopy(next(row for row in rows
                                  if row["NODE_PATH"] == "system-security-plan.unmapped-singleton"))
-        bad.update(NODE_PATH=None, MAPPER_ENABLED=None)
+        bad.update(NODE_PATH=None, OPERATOR=None)
         rows.append(bad)
         with self.assertRaisesRegex(ValueError, "unique active registry paths"):
             self.harness.compile(registry=rows)
@@ -229,8 +237,8 @@ class RegistryMigrationBoundaryTests(unittest.TestCase):
         self.assertNotIn(("SSP", path), self.seed)
         bad = next(row for row in rows if row["NODE_PATH"] == path)
         bad["PARENT_NODE_PATH"] = parent
-        self.assertTrue(bad["MAPPER_ENABLED"])
-        with self.assertRaisesRegex(ValueError, "included path ancestor"):
+        self.assertTrue(bad["OPERATOR"])
+        with self.assertRaisesRegex(ValueError, "path ancestor"):
             self.harness.compile(registry=rows)
         self.assertTrue(current_parent_guard(self.sql, bad, rows),
                         "Migration accepts a parent relationship rejected by the decoder")
@@ -244,3 +252,4 @@ class RegistryMigrationBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

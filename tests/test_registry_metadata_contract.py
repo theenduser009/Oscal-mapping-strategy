@@ -1,64 +1,74 @@
-"""Pure, versioned live-registry structural metadata decoding; no database access."""
+"""Lean live-registry compiler tests; no database access."""
 import copy
-from decimal import Decimal
 import unittest
 
 import test_metadata_driven_contract as base
 import test_multi_model_graph as graph
 
 
-def strict_contract():
-    return {"MODEL_KEY": base.MODEL, "POLICY": "metadata-v1",
-            "REGISTRY_METADATA_VERSION": 1, "STORAGE_CONTRACT": None}
+ORIGINAL_REGISTRY_COLUMNS = {
+    "OSCAL_MODEL_KEY", "NODE_PATH", "ELEMENT_TYPE", "PARENT_NODE_PATH",
+    "IS_COLLECTION", "INSTANCE_KEY_RULE", "PROCESS_ORDER", "IS_ACTIVE",
+    "ITEM_PATH",
+}
+LEAN_EXECUTION_COLUMNS = {"OPERATOR", "UUID_POLICY", "REQUIRED_MEMBERS"}
+RETIRED_COLUMNS = {
+    "MAPPER_METADATA_VERSION", "MAPPER_ENABLED", "PARENT_INSTANCE_RULE",
+    "EMPTY_POLICY", "LIST_INSTANCE_RULE", "PROPERTY_NAME_RULE",
+    "ASSEMBLY_POLICY", "DEFAULT_SINGLETON_POLICY", "REQUIRED_RULE_IDS",
+    "REPORT_TARGET_PATH", "ROLES_PATH", "PARTIES_PATH", "PARTY_TYPE",
+    "PARTY_UUID_PARTS", "PARTY_UUID_SOURCE_KEY",
+}
+
+
+def strict_contract(**extra):
+    contract = {
+        "MODEL_KEY": base.MODEL,
+        "POLICY": "metadata-v1",
+        "STORAGE_CONTRACT": None,
+    }
+    contract.update(extra)
+    return contract
 
 
 def annotated_registry():
-    result = []
     specs = {
-        base.ROOT_PATH: ("object", "node", "emit", None, None),
-        base.SUMMARY: ("object", "omit", "omit", None, None),
-        base.RESULT: ("record", "node", "omit", "singleton", None),
-        base.OBSERVATION: ("observations", "node", "omit", "source-record", "source-field-slug"),
+        base.ROOT_PATH: ("object", "node"),
+        base.SUMMARY: ("object", "omit"),
+        base.RESULT: ("record", "node"),
+        base.OBSERVATION: ("observations", "node"),
     }
+    rows = []
     for original in base.registry_rows():
         row = dict(original)
-        operator, uuid, empty, parent, naming = specs[row["NODE_PATH"]]
-        row.update(MAPPER_METADATA_VERSION=None, MAPPER_ENABLED=True,
-                   OPERATOR=operator, UUID_POLICY=uuid, EMPTY_POLICY=empty,
-                   LIST_INSTANCE_RULE="none", ASSEMBLY_POLICY="normal",
-                   PARENT_INSTANCE_RULE=parent, PROPERTY_NAME_RULE=naming,
-                   REQUIRED_MEMBERS=None, DEFAULT_SINGLETON_POLICY=None,
-                   REQUIRED_RULE_IDS=None, REPORT_TARGET_PATH=None,
-                   ROLES_PATH=None, PARTIES_PATH=None, PARTY_TYPE=None,
-                   PARTY_UUID_PARTS=None, PARTY_UUID_SOURCE_KEY=None)
-        if row["NODE_PATH"] == base.ROOT_PATH:
-            row.update(MAPPER_METADATA_VERSION=Decimal("1"),
-                       DEFAULT_SINGLETON_POLICY="none")
-        result.append(row)
-    return result
+        row["OPERATOR"], row["UUID_POLICY"] = specs[row["NODE_PATH"]]
+        row["REQUIRED_MEMBERS"] = None
+        rows.append(row)
+    return rows
 
 
 def reference_registry():
     rows = annotated_registry()
-    roles, parties, assignments = [base.SUMMARY + "." + item + "[]"
-                                   for item in ("roles", "parties", "assignments")]
-    for row in rows:
-        if row["NODE_PATH"] == base.SUMMARY:
-            row["EMPTY_POLICY"] = "emit"
-    for path, operator, identity, item, uuid in (
-        (roles, "roles", "SOURCE_FIELD_NAME", "$", "omit"),
-        (parties, "parties", "ID", "UserList[]", "instance"),
-        (assignments, "assignments", "SOURCE_FIELD_NAME+ID", "UserList[]", "omit"),
+    for path, operator, identity, item_path, uuid_policy in (
+        (base.SUMMARY + ".roles[]", "roles", "SOURCE_FIELD_NAME", "$", "omit"),
+        (base.SUMMARY + ".parties[]", "parties", "ID", "UserList[]", "instance"),
+        (base.SUMMARY + ".assignments[]", "assignments", "SOURCE_FIELD_NAME+ID",
+         "UserList[]", "omit"),
     ):
-        row = dict(rows[1], NODE_PATH=path, ELEMENT_TYPE=operator,
-                   PARENT_NODE_PATH=base.SUMMARY, IS_COLLECTION=True,
-                   OPERATOR=operator, INSTANCE_KEY_RULE=identity, ITEM_PATH=item,
-                   UUID_POLICY=uuid, EMPTY_POLICY="omit")
-        if operator == "assignments":
-            row.update(ROLES_PATH=roles, PARTIES_PATH=parties, PARTY_TYPE="person",
-                       PARTY_UUID_PARTS="$source_system|$source_record|party|$reference_id",
-                       PARTY_UUID_SOURCE_KEY="source-one")
-        rows.append(row)
+        rows.append({
+            "OSCAL_MODEL_KEY": base.MODEL,
+            "NODE_PATH": path,
+            "ELEMENT_TYPE": operator,
+            "PARENT_NODE_PATH": base.SUMMARY,
+            "IS_COLLECTION": True,
+            "INSTANCE_KEY_RULE": identity,
+            "PROCESS_ORDER": len(rows) + 1,
+            "IS_ACTIVE": True,
+            "ITEM_PATH": item_path,
+            "OPERATOR": operator,
+            "UUID_POLICY": uuid_policy,
+            "REQUIRED_MEMBERS": None,
+        })
     return rows
 
 
@@ -66,10 +76,15 @@ class RegistryMetadataContractTests(unittest.TestCase):
     def setUp(self):
         self.ns = base.namespace()
 
-    def decode(self, rows=None, profiles=None, models=None):
-        inputs = (annotated_registry() if rows is None else rows,
-                  [base.profile()] if profiles is None else profiles,
-                  {base.MODEL: strict_contract()} if models is None else models)
+    def decode(self, rows=None, profiles=None, models=None, mappings=None):
+        profiles = [base.profile()] if profiles is None else profiles
+        mappings = {"source-one": [base.mapping()]} if mappings is None else mappings
+        inputs = (
+            annotated_registry() if rows is None else rows,
+            profiles,
+            {base.MODEL: strict_contract()} if models is None else models,
+            mappings,
+        )
         before = copy.deepcopy(inputs)
         result = self.ns["decode_registry_model_contracts"](*inputs)
         self.assertEqual(before, inputs)
@@ -77,35 +92,120 @@ class RegistryMetadataContractTests(unittest.TestCase):
 
     def compile(self, rows=None, mappings=None, models=None):
         source = base.profile()
-        inputs = ({"source-one": [base.mapping()] if mappings is None else mappings},
-                  annotated_registry() if rows is None else rows,
-                  [source], {base.MODEL: strict_contract()} if models is None else models)
+        inputs = (
+            {"source-one": [base.mapping()] if mappings is None else mappings},
+            annotated_registry() if rows is None else rows,
+            [source],
+            {base.MODEL: strict_contract()} if models is None else models,
+        )
         before = copy.deepcopy(inputs)
         contexts = self.ns["compile_mapping_contexts"](*inputs)
         self.assertEqual(before, inputs)
         return contexts[0]
 
-    def test_decodes_structure_from_existing_registry_rows_only(self):
+    def test_original_nine_plus_only_three_sparse_rules(self):
+        allowed = ORIGINAL_REGISTRY_COLUMNS | LEAN_EXECUTION_COLUMNS
+        self.assertTrue(all(set(row) <= allowed for row in annotated_registry()))
         contract = self.decode()[base.MODEL]
         self.assertEqual(base.ROOT_PATH, contract["ROOT_PATH"])
-        self.assertEqual(set(row["NODE_PATH"] for row in annotated_registry()),
-                         set(contract["ELEMENTS"]))
-        self.assertEqual("source-record",
-                         contract["ELEMENTS"][base.OBSERVATION]["parameters"]["parent_instance_rule"])
-        self.assertEqual("SOURCE_FIELD_NAME",
-                         contract["ELEMENTS"][base.OBSERVATION]["parameters"]["registry_contract"]["instance_key_rule"])
+        self.assertEqual(
+            {row["NODE_PATH"] for row in annotated_registry()},
+            set(contract["ELEMENTS"]),
+        )
+        self.assertEqual(
+            "source-record",
+            contract["ELEMENTS"][base.OBSERVATION]["parameters"]["parent_instance_rule"],
+        )
         self.assertEqual([], contract["REFERENCE_GROUPS"])
-        self.assertEqual(None, contract["DEFAULT_ELEMENT"])
-        self.assertFalse(any("controlled_fields" in spec["parameters"]
-                             for spec in contract["ELEMENTS"].values()))
+        self.assertIsNone(contract["DEFAULT_ELEMENT"])
 
-    def test_actual_shared_builder_matches_explicit_metadata_output(self):
-        mappings = [base.mapping(), base.mapping("ZERO", path=base.OBSERVATION,
-                                                transform="scalar-score")]
-        records = [{"SOURCE_RECORD_ID": "1", "CURATED_JSON": {
-                    "NEVER_SEEN_SOURCE_FIELD": "same", "ZERO": 0}},
-                   {"SOURCE_RECORD_ID": "2", "CURATED_JSON": {
-                    "NEVER_SEEN_SOURCE_FIELD": "other", "ZERO": 2}}]
+    def test_retired_registry_columns_are_ignored(self):
+        baseline = self.decode()[base.MODEL]
+        rows = annotated_registry()
+        for index, row in enumerate(rows):
+            for column in RETIRED_COLUMNS:
+                row[column] = {"retired": index}
+        self.assertEqual(baseline, self.decode(rows)[base.MODEL])
+
+    def test_infers_mapped_owner_and_defaults_uuid_to_omit(self):
+        rows = annotated_registry()
+        summary = next(row for row in rows if row["NODE_PATH"] == base.SUMMARY)
+        summary["OPERATOR"] = None
+        summary["UUID_POLICY"] = None
+        spec = self.decode(rows)[base.MODEL]["ELEMENTS"][base.SUMMARY]
+        self.assertEqual("object", spec["operator"])
+        self.assertNotIn("include_uuid", spec["parameters"])
+
+        rows = annotated_registry()
+        rows[1]["UUID_POLICY"] = None
+        with self.assertRaises(ValueError):
+            self.decode(rows)
+
+    def test_compiled_plan_keeps_runtime_interface(self):
+        plan = self.compile()["compiled_plan"]
+        self.assertEqual(
+            {"version", "elements", "mappings", "reference_groups",
+             "options", "report", "default_element"},
+            set(plan),
+        )
+        for element in plan["elements"].values():
+            self.assertEqual({"operator", "parameters"}, set(element))
+            self.assertIn("registry_contract", element["parameters"])
+
+    def test_cell_four_consumes_cell_three_normalized_registry_rows(self):
+        context = self.compile()
+        config = context["config"]
+        self.ns["_prepare_model_context"](
+            context,
+            config["OSCAL_MODEL"],
+            config["SOURCE_SYSTEM_NAME"],
+            config["SOURCE_TABLE_NAME"],
+        )
+
+        class NormalizedRowView:
+            """Expose Cell 3's contract without raw transport iteration."""
+
+            def __init__(self, values):
+                self.values = values
+
+            def get(self, key, default=None):
+                return self.values.get(key, default)
+
+        class UnavailableTransport:
+            def collect(self):
+                raise AssertionError("Cell 4 must not reread the registry transport")
+
+        context["registry_rows"] = [
+            NormalizedRowView(row) for row in context["registry_rows"]
+        ]
+        rows = self.ns["_canonical_registry_rows"](
+            UnavailableTransport(), base.MODEL, context
+        )
+        self.assertEqual(
+            [base.ROOT_PATH, base.SUMMARY, base.RESULT, base.OBSERVATION],
+            [row["element_path"] for row in rows],
+        )
+        self.assertTrue(
+            all(row["raw"] is source
+                for row, source in zip(rows, context["registry_rows"]))
+        )
+
+    def test_explicit_programmatic_contract_stays_available(self):
+        original = base.model_contract()
+        decoded = self.decode(models={base.MODEL: original})[base.MODEL]
+        self.assertEqual(original, decoded)
+
+    def test_actual_builder_matches_explicit_metadata_output(self):
+        mappings = [
+            base.mapping(),
+            base.mapping("ZERO", path=base.OBSERVATION, transform="scalar-score"),
+        ]
+        records = [
+            {"SOURCE_RECORD_ID": "1", "CURATED_JSON": {
+                "NEVER_SEEN_SOURCE_FIELD": "same", "ZERO": 0}},
+            {"SOURCE_RECORD_ID": "2", "CURATED_JSON": {
+                "NEVER_SEEN_SOURCE_FIELD": "other", "ZERO": 2}},
+        ]
         decoded = self.compile(mappings=mappings)
         explicit = base.compile_context(self.ns, mappings)
         self.assertEqual("READY", decoded["routing_report"]["STATUS"])
@@ -115,165 +215,150 @@ class RegistryMetadataContractTests(unittest.TestCase):
             self.assertEqual(graph.business(emitted.rows), graph.business(baseline.rows))
         self.assertFalse(decoded["config"]["EXECUTE_WRITES"])
 
-    def test_explicit_programmatic_metadata_api_stays_available(self):
-        original = base.model_contract()
-        self.assertEqual(original, self.decode(models={base.MODEL: original})[base.MODEL])
-        self.assertEqual("READY", base.compile_context(self.ns, [base.mapping()])["routing_report"]["STATUS"])
-
-    def test_unselected_model_metadata_does_not_block_selected_model(self):
-        other = {"MODEL_KEY": "UNSELECTED", "POLICY": "metadata-v1",
-                 "REGISTRY_METADATA_VERSION": "unsupported"}
-        rows = annotated_registry() + [{
-            "OSCAL_MODEL_KEY": "UNSELECTED", "NODE_PATH": "unselected-document",
-            "PARENT_NODE_PATH": None, "IS_COLLECTION": False, "IS_ACTIVE": True,
-            "MAPPER_METADATA_VERSION": 99, "MAPPER_ENABLED": "invalid",
-        }]
-        models = {base.MODEL: strict_contract(), "UNSELECTED": other}
-        self.assertEqual(other, self.decode(rows, models=models)["UNSELECTED"])
-        self.assertEqual("READY", self.compile(rows=rows, models=models)["routing_report"]["STATUS"])
-
-    def test_missing_version_or_enabled_metadata_fails_without_fallback(self):
-        for key in ("MAPPER_METADATA_VERSION", "MAPPER_ENABLED", "OPERATOR",
-                    "UUID_POLICY", "EMPTY_POLICY", "LIST_INSTANCE_RULE",
-                    "ASSEMBLY_POLICY", "DEFAULT_SINGLETON_POLICY"):
-            rows = annotated_registry()
-            rows[0][key] = None
-            with self.subTest(key=key), self.assertRaises(ValueError):
-                self.decode(rows)
-        with self.assertRaises(ValueError):
-            self.decode([])
-
-    def test_version_accepts_integral_snowflake_decimal_and_rejects_unknown_types(self):
-        for value in (1, "1", Decimal("1"), Decimal("1.00")):
-            rows = annotated_registry()
-            rows[0]["MAPPER_METADATA_VERSION"] = value
-            models = {base.MODEL: dict(strict_contract(), REGISTRY_METADATA_VERSION=value)}
-            self.assertEqual(base.ROOT_PATH, self.decode(rows, models=models)[base.MODEL]["ROOT_PATH"])
-        for value in (True, False, 1.0, 2, "v1", "1.0", Decimal("NaN"), Decimal("1.1")):
-            rows = annotated_registry()
-            rows[0]["MAPPER_METADATA_VERSION"] = value
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                self.decode(rows)
-
-    def test_strict_models_reject_duplicated_structure_in_configuration(self):
-        for key, value in (("ELEMENTS", {}), ("ROOT_PATH", base.ROOT_PATH),
-                           ("REFERENCE_GROUPS", []), ("DEFAULT_ELEMENT", None),
-                           ("REQUIRED_RULE_IDS", []), ("ELEMENT_PATHS", []),
-                           ("MAPPING_RULES", []), ("PATH_RULES", []),
-                           ("EXCLUDED_FIELDS", []), ("REPORT", {"TARGET_PATH": base.RESULT})):
-            with self.subTest(key=key), self.assertRaises(ValueError):
-                self.decode(models={base.MODEL: dict(strict_contract(), **{key: value})})
-
-    def test_metadata_whitelist_excludes_disabled_paths_and_preserves_root(self):
-        rows = annotated_registry()
-        rows[1]["MAPPER_ENABLED"] = False
-        contract = self.decode(rows)[base.MODEL]
-        self.assertNotIn(base.SUMMARY, contract["ELEMENT_PATHS"])
-        for index in (0, 2):
-            rows = annotated_registry()
-            rows[index]["MAPPER_ENABLED"] = False
-            with self.subTest(index=index), self.assertRaises(ValueError):
-                self.decode(rows)
-
-    def test_report_metadata_is_validated_before_registry_target_merge(self):
-        self.assertEqual({}, self.decode(models={base.MODEL: dict(strict_contract(), REPORT=None)})
-                         [base.MODEL]["REPORT"])
-        for value in (42, ["not-an-object"], "{invalid"):
-            with self.subTest(value=value), self.assertRaises(ValueError):
-                self.decode(models={base.MODEL: dict(strict_contract(), REPORT=value)})
-
-    def test_duplicate_marker_path_or_cross_parent_is_rejected(self):
-        cases = []
-        rows = annotated_registry()
-        rows[1]["MAPPER_METADATA_VERSION"] = 1
-        cases.append(rows)
-        cases.append(annotated_registry() + [annotated_registry()[1]])
+    def test_invalid_structure_fails_closed(self):
+        cases = [annotated_registry() + [copy.deepcopy(annotated_registry()[1])]]
         rows = annotated_registry()
         rows[1]["PARENT_NODE_PATH"] = base.RESULT
         cases.append(rows)
         rows = annotated_registry()
         rows[0]["PARENT_NODE_PATH"] = base.SUMMARY
         cases.append(rows)
-        for rows in cases:
-            with self.subTest(rows=len(rows)), self.assertRaises(ValueError):
-                self.decode(rows)
-
-    def test_invalid_or_inapplicable_policy_never_silently_changes_behavior(self):
-        changes = [
-            (0, "MAPPER_ENABLED", 1), (1, "OPERATOR", "unreviewed"),
-            (1, "UUID_POLICY", "random"), (1, "UUID_POLICY", "instance"),
-            (1, "EMPTY_POLICY", "unknown"), (1, "LIST_INSTANCE_RULE", "source-field-index"),
-            (1, "ASSEMBLY_POLICY", "complete-only"), (1, "PROPERTY_NAME_RULE", "source-field-slug"),
-            (2, "INSTANCE_KEY_RULE", "VALUE"), (2, "ITEM_PATH", "$"),
-            (3, "PARENT_INSTANCE_RULE", None), (3, "PROPERTY_NAME_RULE", None),
-            (3, "IS_COLLECTION", False), (3, "EMPTY_POLICY", "emit"),
-            (1, "DEFAULT_SINGLETON_POLICY", "none"), (1, "REQUIRED_RULE_IDS", "required"),
-        ]
-        for index, key, value in changes:
-            rows = annotated_registry()
-            rows[index][key] = value
-            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
-                self.decode(rows)
-
-    def test_complete_only_assembly_and_default_singletons_are_explicit(self):
         rows = annotated_registry()
-        rows[0]["DEFAULT_SINGLETON_POLICY"] = "emit-outside-collections"
-        rows[1].update(ASSEMBLY_POLICY="complete-only", REQUIRED_MEMBERS="first|second|third")
-        contract = self.decode(rows)[base.MODEL]
-        parameters = contract["ELEMENTS"][base.SUMMARY]["parameters"]
-        self.assertEqual(["first", "second", "third"], parameters["required_members"])
-        self.assertTrue(parameters["optional_assembly"])
-        self.assertEqual("singletons-without-collection-ancestors", contract["DEFAULT_ELEMENT"]["scope"])
-        for members in ("first||third", "first|first", "items[].value", "nested..value"):
-            rows[1]["REQUIRED_MEMBERS"] = members
-            with self.subTest(members=members), self.assertRaises(ValueError):
+        rows[2]["IS_COLLECTION"] = False
+        cases.append(rows)
+        for index, rows in enumerate(cases):
+            with self.subTest(index=index), self.assertRaises(ValueError):
                 self.decode(rows)
 
-    def test_root_required_rules_and_report_target_reach_compiled_plan(self):
+    def test_only_included_collections_require_supported_identity(self):
         rows = annotated_registry()
-        rows[0].update(REQUIRED_RULE_IDS="required-one", REPORT_TARGET_PATH=base.OBSERVATION)
-        context = self.compile(rows, [base.mapping(RULE_ID="required-one")])
-        self.assertEqual("READY", context["routing_report"]["STATUS"])
-        self.assertEqual(base.OBSERVATION, context["compiled_plan"]["report"]["TARGET_PATH"])
-        self.assertEqual(["required-one"], context["model_contract"]["REQUIRED_RULE_IDS"])
-        missing = self.compile(rows, [])
-        self.assertEqual("BLOCKED", missing["routing_report"]["STATUS"])
-        rows[0]["REPORT_TARGET_PATH"] = "unregistered"
+        rows[2]["INSTANCE_KEY_RULE"] = "VALUE"
         with self.assertRaises(ValueError):
             self.decode(rows)
 
-    def test_reference_family_derives_exact_source_namespace_and_stable_uuid(self):
+        future_path = base.SUMMARY + ".future-items[]"
+        ignored = annotated_registry() + [{
+            "OSCAL_MODEL_KEY": base.MODEL,
+            "NODE_PATH": future_path,
+            "ELEMENT_TYPE": "future-item",
+            "PARENT_NODE_PATH": base.SUMMARY,
+            "IS_COLLECTION": True,
+            "INSTANCE_KEY_RULE": None,
+            "PROCESS_ORDER": 99,
+            "IS_ACTIVE": True,
+            "ITEM_PATH": None,
+            "OPERATOR": None,
+            "UUID_POLICY": None,
+            "REQUIRED_MEMBERS": None,
+        }]
+        self.assertNotIn(future_path, self.decode(ignored)[base.MODEL]["ELEMENTS"])
+
+    def test_object_list_shape_is_narrow(self):
+        path = base.SUMMARY + ".identifiers[]"
+        row = {
+            "OSCAL_MODEL_KEY": base.MODEL,
+            "NODE_PATH": path,
+            "ELEMENT_TYPE": "identifier",
+            "PARENT_NODE_PATH": base.SUMMARY,
+            "IS_COLLECTION": True,
+            "INSTANCE_KEY_RULE": "VALUE",
+            "PROCESS_ORDER": 50,
+            "IS_ACTIVE": True,
+            "ITEM_PATH": "$",
+            "OPERATOR": "object",
+            "UUID_POLICY": "omit",
+            "REQUIRED_MEMBERS": None,
+        }
+        contract = self.decode(annotated_registry() + [row])[base.MODEL]
+        self.assertTrue(contract["ELEMENTS"][path]["parameters"]["allow_list_instances"])
+        for key, value in (("INSTANCE_KEY_RULE", "ID"), ("ITEM_PATH", "items[]")):
+            changed = annotated_registry() + [dict(row, **{key: value})]
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.decode(changed)
+
+    def test_sparse_rule_validation_and_complete_only_assembly(self):
+        rows = annotated_registry()
+        rows[1]["REQUIRED_MEMBERS"] = "first|second|third"
+        parameters = self.decode(rows)[base.MODEL]["ELEMENTS"][base.SUMMARY]["parameters"]
+        self.assertEqual(["first", "second", "third"], parameters["required_members"])
+        self.assertTrue(parameters["optional_assembly"])
+        invalid = (
+            ("OPERATOR", "unknown"),
+            ("UUID_POLICY", "random"),
+            ("REQUIRED_MEMBERS", "first||third"),
+            ("REQUIRED_MEMBERS", "first|first"),
+            ("REQUIRED_MEMBERS", "items[].value"),
+        )
+        for column, value in invalid:
+            rows = annotated_registry()
+            rows[1][column] = value
+            with self.subTest(column=column, value=value), self.assertRaises(ValueError):
+                self.decode(rows)
+
+    def test_report_target_is_derived_from_observations(self):
+        models = {base.MODEL: strict_contract(REPORT={"MAPPING_RELEASE": "test"})}
+        context = self.compile(models=models)
+        self.assertEqual(
+            base.OBSERVATION,
+            context["compiled_plan"]["report"]["TARGET_PATH"],
+        )
+        with self.assertRaises(ValueError):
+            self.decode(models={base.MODEL: strict_contract(
+                REPORT={"TARGET_PATH": base.OBSERVATION})})
+
+    def test_reference_family_derives_namespace_and_stable_identity(self):
         rows = reference_registry()
         group = self.decode(rows)[base.MODEL]["REFERENCE_GROUPS"][0]
-        self.assertEqual({"SOURCE_SYSTEM_NAME": "ARCHER", "SOURCE_TABLE_NAME": "SYNTHETIC_SOURCE",
-                          "MODEL_KEY": base.MODEL}, group["source_namespace"])
-        self.assertEqual(["$source_system", "$source_record", "party", "$reference_id"],
-                         group["party_uuid_parts"])
-        config = dict(base.profile()["BASE_CONFIG"], SOURCE_SYSTEM_NAME="ARCHER",
-                      SOURCE_TABLE_NAME="SYNTHETIC_SOURCE", OSCAL_MODEL=base.MODEL)
-        actual = self.ns["_metadata_party_uuid"](group, "1", "2", {"config": config})
-        self.assertEqual(self.ns["_deterministic_uuid"]("ARCHER", "1", "party", "2"), actual)
+        self.assertEqual(
+            {"SOURCE_SYSTEM_NAME": "ARCHER",
+             "SOURCE_TABLE_NAME": "SYNTHETIC_SOURCE",
+             "MODEL_KEY": base.MODEL},
+            group["source_namespace"],
+        )
+        self.assertEqual(
+            ["$source_system", "$source_record", "party", "$reference_id"],
+            group["party_uuid_parts"],
+        )
+        config = dict(
+            base.profile()["BASE_CONFIG"],
+            SOURCE_SYSTEM_NAME="ARCHER",
+            SOURCE_TABLE_NAME="SYNTHETIC_SOURCE",
+            OSCAL_MODEL=base.MODEL,
+        )
+        actual = self.ns["_metadata_party_uuid"](
+            group, "1", "2", {"config": config})
+        self.assertEqual(
+            self.ns["_deterministic_uuid"]("ARCHER", "1", "party", "2"),
+            actual,
+        )
         other = dict(config, SOURCE_TABLE_NAME="OTHER_SOURCE")
-        separated = self.ns["_metadata_party_uuid"](group, "1", "2", {"config": other})
-        self.assertNotEqual(actual, separated)
+        self.assertNotEqual(
+            actual,
+            self.ns["_metadata_party_uuid"](
+                group, "1", "2", {"config": other}),
+        )
 
-    def test_invalid_reference_links_or_unscoped_short_identity_are_rejected(self):
-        changes = [
-            ("ROLES_PATH", "missing"), ("PARTIES_PATH", base.SUMMARY + ".roles[]"),
-            ("PARTY_TYPE", None), ("PARTY_UUID_SOURCE_KEY", "unconfigured"),
-            ("PARTY_UUID_SOURCE_KEY", None), ("PARTY_UUID_PARTS", "$secret|$reference_id"),
-            ("PARTY_UUID_PARTS", "$source_record|party"),
-        ]
-        for key, value in changes:
-            rows = reference_registry()
-            rows[-1][key] = value
-            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
-                self.decode(rows)
+    def test_reference_family_infers_siblings_and_fails_ambiguous_sources(self):
         rows = reference_registry()
-        rows[-1].update(PARTY_UUID_SOURCE_KEY=None,
-                       PARTY_UUID_PARTS="$identity_version|$source_system|$source_table|$source_record|$model|party|$reference_id")
-        self.assertNotIn("source_namespace", self.decode(rows)[base.MODEL]["REFERENCE_GROUPS"][0])
+        for operator in ("roles", "parties"):
+            row = next(item for item in rows if item["OPERATOR"] == operator)
+            row["OPERATOR"] = None
+        group = self.decode(rows)[base.MODEL]["REFERENCE_GROUPS"][0]
+        self.assertTrue(group["roles_path"].endswith(".roles[]"))
+        self.assertTrue(group["parties_path"].endswith(".parties[]"))
+
+        rows = reference_registry()
+        party = next(item for item in rows if item["OPERATOR"] == "parties")
+        party["UUID_POLICY"] = "omit"
+        with self.assertRaises(ValueError):
+            self.decode(rows)
+
+        profiles = [base.profile(), base.profile("source-two", "OTHER_SOURCE")]
+        mappings = {"source-one": [base.mapping()], "source-two": [base.mapping()]}
+        with self.assertRaises(ValueError):
+            self.decode(reference_registry(), profiles=profiles, mappings=mappings)
 
 
 if __name__ == "__main__":
     unittest.main()
+

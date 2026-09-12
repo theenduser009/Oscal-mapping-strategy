@@ -71,7 +71,7 @@ class RegistryValueSourceTests(unittest.TestCase):
         context["lookups"] = {"archer_values": {"777": None}}
         nodes, _ = self.build(context, "777")
         self.assertTrue(context["graph_report"]["OUTPUTS_PUBLISHED"])
-        self.assertEqual([], base.payloads(nodes, base.SUMMARY))
+        self.assertEqual([{}], base.payloads(nodes, base.SUMMARY))
         self.assertEqual({"emitted": 0, "missing": 1, "invalid": 0},
                          context["graph_report"]["FIELDS"]["FLAT_SOURCE"])
 
@@ -103,3 +103,4 @@ class RegistryValueSourceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

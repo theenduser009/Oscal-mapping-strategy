@@ -815,26 +815,8 @@ def build_mapping_coverage(source_dataframe, mapping_rows):
     return session.create_dataframe(output)
 
 
-def _registry_value(row, *names):
-    row_dict = row.as_dict(recursive=True) if hasattr(row, "as_dict") else dict(row)
-    normalized = {str(key).upper(): value for key, value in row_dict.items()}
-    for name in names:
-        if name.upper() in normalized and normalized[name.upper()] is not None:
-            return normalized[name.upper()]
-    return None
-
-
-def _derive_parent_path(element_path):
-    parts = element_path.split(".")
-    return ".".join(parts[:-1]) if len(parts) > 1 else None
-
-
 def _element_type(element_path):
     return element_path.split(".")[-1].replace("[]", "")
-
-
-def _registry_true(value):
-    return str(value).strip().upper() in {"TRUE", "T", "YES", "Y", "1"}
 
 
 def _canonical_uuid(value, label):
@@ -850,87 +832,43 @@ def _canonical_uuid(value, label):
 
 
 def _canonical_registry_rows(element_registry_dataframe, model_key, context=None):
+    # Cell 3 is the sole transport-normalization and registry-validation
+    # boundary. Cell 4 only adapts that compiled contract to graph row names.
+    del element_registry_dataframe, model_key
+    if not isinstance(context, dict) or "policy" not in context:
+        raise ValueError("Compiled metadata context is required for registry validation")
+    normalized_rows = context.get("registry_rows")
+    if normalized_rows is None:
+        raise ValueError("Compiled metadata context requires normalized registry rows")
+
     rows = []
-    supplied_rows = context.get("registry_rows") if context is not None else None
-    for row in (supplied_rows if supplied_rows is not None else element_registry_dataframe.collect()):
-        model = _registry_value(
-            row,
-            "OSCAL_MODEL_KEY",
-            "OSCAL_MODEL",
-            "MODEL_NAME",
-            "MODEL",
-        )
-        if model and str(model).strip().upper() != model_key.upper():
-            continue
-
-        is_active = _registry_value(row, "IS_ACTIVE", "ACTIVE")
-        if is_active is not None and str(is_active).strip().upper() in {
-            "FALSE",
-            "F",
-            "NO",
-            "N",
-            "0",
-        }:
-            continue
-
-        path = _registry_value(
-            row,
-            "NODE_PATH",
-            "OSCAL_ELEMENT_PATH",
-            "ELEMENT_PATH",
-            "JSON_PATH",
-        )
-        if not path:
-            continue
-        path = str(path).strip()
-        parent = _registry_value(
-            row,
-            "PARENT_NODE_PATH",
-            "PARENT_ELEMENT_PATH",
-            "PARENT_PATH",
-        )
-        level = _registry_value(
-            row,
-            "HIERARCHY_LEVEL",
-            "ELEMENT_LEVEL",
-            "LEVEL_NUMBER",
-        )
-        process_order = _registry_value(row, "PROCESS_ORDER")
-        is_collection = _registry_value(row, "IS_COLLECTION")
-        instance_key_rule = _registry_value(row, "INSTANCE_KEY_RULE")
-        item_path = _registry_value(row, "ITEM_PATH")
-        derived_level = path.count(".") + 1
+    for registry_row in normalized_rows:
+        path = _registry_path(registry_row)
+        level = path.count(".") + 1
+        process_order = registry_row.get("PROCESS_ORDER")
         rows.append(
             {
                 "element_path": path,
-                "element_type": _registry_value(row, "ELEMENT_TYPE"),
-                "raw": row,
-                "parent_path": str(parent).strip() if parent else _derive_parent_path(path),
-                "level": int(level) if level is not None else derived_level,
+                "element_type": registry_row.get("ELEMENT_TYPE"),
+                "raw": registry_row,
+                "parent_path": registry_row.get("PARENT_NODE_PATH") or None,
+                "level": level,
                 "process_order": (
                     int(process_order)
                     if process_order is not None
-                    else derived_level * 1000000
+                    else level * 1000000
                 ),
-                "is_collection": _registry_true(is_collection),
+                "is_collection": _registry_meta_bool(
+                    registry_row, "IS_COLLECTION"
+                ),
                 "instance_key_rule": (
-                    str(instance_key_rule).strip().upper()
-                    if instance_key_rule is not None
-                    else None
+                    registry_row.get("INSTANCE_KEY_RULE") or None
                 ),
-                "item_path": (
-                    str(item_path).strip()
-                    if item_path is not None
-                    else None
-                ),
+                "item_path": registry_row.get("ITEM_PATH") or None,
             }
         )
 
-    if not isinstance(context, dict) or "policy" not in context:
-        raise ValueError("Compiled metadata context is required for registry validation")
     context["policy"]["registry"](rows, context)
-    if len({row["element_path"] for row in rows}) != len(rows):
-        raise ValueError("Duplicate registry paths for configured OSCAL model")
     rows.sort(
         key=lambda item: (
             item["process_order"],
@@ -938,8 +876,6 @@ def _canonical_registry_rows(element_registry_dataframe, model_key, context=None
             item["element_path"],
         )
     )
-    if not rows:
-        raise ValueError("No registry paths found for configured OSCAL model")
     return rows
 
 
@@ -1689,3 +1625,4 @@ def _prepare_model_context(context, model_key, source_system, source_table):
 
 
 print("Cell 4 metadata runtime initialized")
+

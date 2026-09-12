@@ -32,8 +32,8 @@ import uuid
 
 session = get_active_session()
 
-# One selector. Field mappings live in the CSV; graph structure and identity
-# policies come from the extended registry. These are deployment settings only.
+# One selector. Field mappings live in the CSV; the existing registry supplies
+# structure and identity. Only three sparse execution rules extend it.
 SELECTED_MODELS = ("SSP", "ASSESSMENT_RESULTS")
 
 CONFIG = {
@@ -44,7 +44,7 @@ CONFIG = {
     "ARCHER_META_VALUE_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE",
     "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
     "IDENTITY_VERSION": "v1_registry_path_instance",
-    "METADATA_RELEASE": "registry-metadata-v1",
+    "METADATA_RELEASE": "lean-registry-v1",
 }
 
 SOURCE_FILES = [
@@ -104,7 +104,6 @@ MODEL_CONTRACTS = {
     "SSP": {
         "MODEL_KEY": "SSP",
         "POLICY": "metadata-v1",
-        "REGISTRY_METADATA_VERSION": 1,
         "UNREVIEWED_ROWS": "DEFER",
         "LOOKUP_GROUPS": [
             "components",
@@ -142,7 +141,6 @@ MODEL_CONTRACTS = {
     "ASSESSMENT_RESULTS": {
         "MODEL_KEY": "ASSESSMENT_RESULTS",
         "POLICY": "metadata-v1",
-        "REGISTRY_METADATA_VERSION": 1,
         "UNREVIEWED_ROWS": "DEFER",
         "LOOKUP_GROUPS": [],
         "MODEL_ALIASES": [
@@ -184,11 +182,9 @@ if not isinstance(MODEL_CONTRACTS, dict) or not MODEL_CONTRACTS:
 for _model_key, _contract in MODEL_CONTRACTS.items():
     if not isinstance(_contract, dict) or _contract.get("MODEL_KEY") != _model_key:
         raise ValueError("Invalid model deployment identity")
-    if (_contract.get("POLICY") != "metadata-v1" or
-            type(_contract.get("REGISTRY_METADATA_VERSION")) is not int or
-            _contract["REGISTRY_METADATA_VERSION"] != 1):
-        raise ValueError("Active models require registry metadata version 1")
-    if {"ROOT_PATH", "ELEMENTS", "DEFAULT_ELEMENT", "REFERENCE_GROUPS",
+    if _contract.get("POLICY") != "metadata-v1":
+        raise ValueError("Active models require the shared metadata policy")
+    if {"REGISTRY_METADATA_VERSION", "ROOT_PATH", "ELEMENTS", "DEFAULT_ELEMENT", "REFERENCE_GROUPS",
             "REQUIRED_RULE_IDS", "ELEMENT_PATHS", "MAPPING_RULES", "PATH_RULES",
             "EXCLUDED_FIELDS"} & _contract.keys():
         raise ValueError("Graph structure belongs in the registry; field rules belong in the mapping CSV")
@@ -455,7 +451,6 @@ import copy
 import json
 import math
 import re
-from decimal import Decimal
 
 
 # Engine capabilities, not source/model-specific mapping decisions.
@@ -750,8 +745,6 @@ def compile_metadata_plan(context):
     flat_ids = {row["RULE_ID"] for row in mappings if row.get("CONTRACT_SOURCE") == "flat-mapping-artifact"}
     if any(counts[rule_id] != 1 for rule_id in flat_ids):
         raise ValueError("Duplicate flat mapping RULE_ID within source/model")
-    if any(counts.get(rule_id) != 1 for rule_id in contract.get("REQUIRED_RULE_IDS", ())):
-        raise ValueError("Required reviewed mapping row is missing or duplicated")
     reference_groups = []
     for group in contract.get("REFERENCE_GROUPS", []):
         required = {group[k] for k in ("roles_path", "parties_path", "assignments_path")}
@@ -840,7 +833,7 @@ def _registry_meta_bool(row, key):
         return value
     if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
         return value.strip().lower() == "true"
-    raise ValueError("Registry metadata requires explicit boolean: " + key)
+    raise ValueError("Registry requires explicit boolean: " + key)
 
 
 def _registry_meta_list(row, key):
@@ -853,29 +846,105 @@ def _registry_meta_list(row, key):
     return values
 
 
-def _registry_meta_version(value):
-    # Snowflake NUMBER(38,0) can arrive as int or Decimal, never a boolean.
-    if type(value) is bool or isinstance(value, float):
-        return False
-    if isinstance(value, str):
-        return value.strip() == "1"
-    if isinstance(value, int):
-        return value == 1
-    return isinstance(value, Decimal) and value.is_finite() and value == Decimal(1)
+def _registry_operator(row):
+    """Resolve a reusable collection shape from the original registry contract."""
+    explicit = _registry_meta_enum(row, "OPERATOR", METADATA_OPERATORS)
+    if explicit:
+        return explicit
+    if not _registry_meta_bool(row, "IS_COLLECTION"):
+        return "object"
+    rule = (_registry_meta_text(row, "INSTANCE_KEY_RULE", True) or "").upper()
+    item_path = _registry_meta_text(row, "ITEM_PATH")
+    if rule == "SOURCE_RECORD_ID" and item_path is None:
+        return "record"
+    if rule == "SOURCE_FIELD_NAME" and item_path is None:
+        return "observations"
+    if rule == "SOURCE_FIELD_NAME" and item_path == "$":
+        return "roles"
+    inferred = {
+        ("SOURCE_FIELD_NAME+VALUE", "$"): "properties",
+        ("VALUE", "$"): "values",
+        ("CONTENT_ID", "$"): "references",
+        ("ID", "UserList[]"): "parties",
+        ("SOURCE_FIELD_NAME+ID", "UserList[]"): "assignments",
+    }.get((rule, item_path))
+    if inferred:
+        return inferred
+    raise ValueError("Collection requires an explicit reusable OPERATOR")
 
 
-def _decode_registry_element(row, root):
+def _registry_model_rows(registry, model):
+    rows = [row for row in registry if _metadata_active(row) and _registry_model(row) == model]
+    paths = [_registry_path(row) for row in rows]
+    if not paths or any(not path for path in paths) or len(paths) != len(set(paths)):
+        raise ValueError("Enabled model requires unique active registry paths")
+    by_path = dict(zip(paths, rows))
+    roots = [path for path, row in by_path.items()
+             if _registry_meta_text(row, "PARENT_NODE_PATH") is None]
+    if len(roots) != 1 or "." in roots[0]:
+        raise ValueError("Enabled model requires exactly one registry root")
+    root = roots[0]
+    for path, row in by_path.items():
+        collection = _registry_meta_bool(row, "IS_COLLECTION")
+        if collection != path.endswith("[]"):
+            raise ValueError("Registry collection flag conflicts with path")
+        parent = _registry_meta_text(row, "PARENT_NODE_PATH")
+        if path == root:
+            if parent is not None:
+                raise ValueError("Registry root cannot have a parent")
+        elif parent not in by_path or not path.startswith(parent + "."):
+            raise ValueError("Registry child requires its active path ancestor")
+    return by_path, root
+
+
+def _executable_registry_paths(mapping_rows, source_profiles, model, registry_paths, root):
+    owners = set()
+    for profile in source_profiles:
+        if model not in profile.get("MODEL_KEYS", ()):
+            continue
+        for original in mapping_rows.get(profile["SOURCE_KEY"], ()):
+            row = _meta_row(original)
+            try:
+                status = _flat_mapping_status(row)
+            except ValueError:
+                continue  # The routing report retains the invalid row as blocked.
+            executable = status in {"APPROVED", "BLOCKED_IF_POPULATED"}
+            executable = executable or (status is None and
+                                         _model_token(row.get("APPROVAL_STATUS")) == "approved")
+            if not executable:
+                continue
+            declared_source = row.get("SOURCE_KEY")
+            if declared_source and declared_source != profile["SOURCE_KEY"]:
+                continue
+            path = str((row.get("RUNTIME_TARGET_PATH") if status else
+                        row.get("OSCAL_ELEMENT_PATH")) or "").strip()
+            if not (path == root or path.startswith(root + ".")):
+                continue
+            owner = _owner_for_path(path, registry_paths)
+            if owner:
+                owners.add(owner)
+    return owners
+
+
+def _with_registry_ancestors(paths, by_path):
+    result = set(paths)
+    for path in tuple(paths):
+        current = path
+        while current is not None:
+            result.add(current)
+            current = _registry_meta_text(by_path[current], "PARENT_NODE_PATH")
+    return result
+
+
+def _decode_registry_element(row, root, by_path):
     path = _registry_path(row)
-    operator = _registry_meta_enum(row, "OPERATOR", METADATA_OPERATORS, True)
+    operator = _registry_operator(row)
     collection = _registry_meta_bool(row, "IS_COLLECTION")
-    if collection != path.endswith("[]"):
-        raise ValueError("Registry collection flag conflicts with path")
-    if operator != "object" and not collection:
-        raise ValueError("Registry operator requires a collection")
     parent = _registry_meta_text(row, "PARENT_NODE_PATH")
     key_rule = _registry_meta_text(row, "INSTANCE_KEY_RULE")
     item_path = _registry_meta_text(row, "ITEM_PATH")
-    # These are reusable operator capabilities, not source/model decisions.
+    if operator != "object" and not collection:
+        raise ValueError("Registry operator requires a collection")
     identities = {"record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
                   "properties": "SOURCE_FIELD_NAME+VALUE", "values": "VALUE",
                   "references": "CONTENT_ID", "roles": "SOURCE_FIELD_NAME",
@@ -888,165 +957,159 @@ def _decode_registry_element(row, root):
         raise ValueError("Registry operator requires root item path")
     if operator in {"parties", "assignments"} and item_path != "UserList[]":
         raise ValueError("Linked identity operator requires reviewed user-list item path")
+    if operator == "object" and collection and (key_rule, item_path) != ("VALUE", "$"):
+        raise ValueError("Object-list operator requires VALUE identity at the root item path")
+    if operator == "object" and not collection and (key_rule is not None or item_path is not None):
+        raise ValueError("Scalar object operator cannot define collection identity metadata")
     parameters = {"registry_contract": {"parent_path": parent, "is_collection": collection,
                                         "instance_key_rule": key_rule, "item_path": item_path}}
-    parent_rule = _registry_meta_enum(row, "PARENT_INSTANCE_RULE",
-                                      {"none", "singleton", "source-record"})
-    if parent_rule not in (None, "none"):
-        parameters["parent_instance_rule"] = parent_rule
-    uuid_policy = _registry_meta_enum(row, "UUID_POLICY", {"omit", "node", "instance"}, True)
+    if parent:
+        parent_operator = _registry_operator(by_path[parent])
+        if _registry_meta_bool(by_path[parent], "IS_COLLECTION"):
+            if parent_operator != "record":
+                raise ValueError("Nested collection needs a supported parent identity")
+            parameters["parent_instance_rule"] = "source-record"
+        elif operator == "record":
+            parameters["parent_instance_rule"] = "singleton"
+    # UUID injection is opt-in. The original registry remains sufficient for
+    # ordinary scalar mapping; use the sparse policy only when payload
+    # compatibility requires a UUID.
+    uuid_policy = _registry_meta_enum(
+        row, "UUID_POLICY", {"omit", "node", "instance"},
+        required=_registry_meta_text(row, "OPERATOR") is not None) or "omit"
+    if operator == "parties" and uuid_policy != "instance":
+        raise ValueError("Party identity requires the instance UUID policy")
+    if uuid_policy == "instance" and operator != "parties":
+        raise ValueError("Instance UUID policy is supported only for parties")
     if uuid_policy != "omit":
         parameters["include_uuid"] = True
     if uuid_policy == "instance":
         if not collection:
             raise ValueError("Instance UUID policy requires a collection")
         parameters["uuid_from_instance"] = True
-    empty = _registry_meta_enum(row, "EMPTY_POLICY", {"omit", "emit"}, True)
-    if empty == "emit":
-        if operator not in {"object", "record"}:
-            raise ValueError("Empty emission is not supported by this operator")
-        parameters["materialize_empty"] = True
-    list_rule = _registry_meta_enum(row, "LIST_INSTANCE_RULE", {"none", "source-field-index"}, True)
-    if list_rule == "source-field-index":
-        if not collection or operator != "object":
-            raise ValueError("List identity requires an object collection")
-        parameters.update(allow_list_instances=True, list_identity=list_rule)
-    name_rule = _registry_meta_enum(row, "PROPERTY_NAME_RULE", {"source-field-slug"})
-    if operator in {"properties", "observations"}:
-        if name_rule is None:
-            raise ValueError("Property/observation operator requires property naming metadata")
-        parameters["property_name_rule"] = name_rule
-    elif name_rule is not None:
-        raise ValueError("Property naming does not apply to this operator")
-    assembly = _registry_meta_enum(row, "ASSEMBLY_POLICY", {"normal", "complete-only"}, True)
     members = _registry_meta_list(row, "REQUIRED_MEMBERS")
-    if members or assembly == "complete-only":
-        if operator not in {"object", "record"} or not members:
-            raise ValueError("Assembly policy requires object members")
-        if any(any(not token or "[" in token or "]" in token for token in member.split("."))
-               for member in members):
-            raise ValueError("Assembly members must be relative scalar paths")
-        parameters["required_members"] = members
-        if assembly == "complete-only":
-            parameters["optional_assembly"] = True
-    if path != root and any(row.get(key) not in (None, "") for key in
-                           ("DEFAULT_SINGLETON_POLICY", "REQUIRED_RULE_IDS", "REPORT_TARGET_PATH")):
-        raise ValueError("Model-wide registry metadata belongs on its root")
+    if members:
+        if operator != "object" or collection or any(
+                any(not token or "[" in token or "]" in token for token in member.split("."))
+                for member in members):
+            raise ValueError("Required members need a scalar object assembly")
+        parameters.update(required_members=members, optional_assembly=True)
+    elif operator == "object" and not collection:
+        parameters["materialize_empty"] = True
+    if collection and operator == "object":
+        parameters.update(allow_list_instances=True, list_identity="source-field-index")
+    if operator in {"properties", "observations"}:
+        parameters["property_name_rule"] = "source-field-slug"
     return {"operator": operator, "parameters": parameters}
 
 
-def decode_registry_model_contracts(registry_rows, source_profiles, model_contracts):
-    """Decode only enabled versioned registry metadata; never infer field rules."""
+def decode_registry_model_contracts(registry_rows, source_profiles, model_contracts,
+                                    mapping_rows=None):
+    """Compile CSV mappings with the original registry plus three sparse rules."""
     result = copy.deepcopy(model_contracts)
     enabled = {model for profile in source_profiles for model in profile.get("MODEL_KEYS", ())}
-    selected = [model for model in enabled
-                if model in result and "REGISTRY_METADATA_VERSION" in result[model]]
-    if not selected:
-        return result
     registry = [_meta_row(row) for row in registry_rows]
-    active = [row for row in registry if _metadata_active(row)]
-    for model in sorted(selected):
+    mapping_rows = mapping_rows or {}
+    forbidden = {"ROOT_PATH", "ELEMENT_PATHS", "REFERENCE_GROUPS", "DEFAULT_ELEMENT",
+                 "REQUIRED_RULE_IDS", "MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS"}
+    for model in sorted(enabled):
+        if model not in result:
+            raise ValueError("Source route names an unconfigured model")
         contract = result[model]
-        if not _registry_meta_version(contract.get("REGISTRY_METADATA_VERSION")):
-            raise ValueError("Unsupported configured registry metadata version")
-        report = _metadata_object(contract.get("REPORT"), "REPORT")
-        forbidden = {"ELEMENTS", "ROOT_PATH", "ELEMENT_PATHS", "REFERENCE_GROUPS",
-                     "DEFAULT_ELEMENT", "REQUIRED_RULE_IDS", "MAPPING_RULES",
-                     "PATH_RULES", "EXCLUDED_FIELDS"}
-        if forbidden & contract.keys() or "TARGET_PATH" in report:
-            raise ValueError("Registry-owned structure cannot be duplicated in model settings")
-        if contract.get("MODEL_KEY") != model or contract.get("POLICY") != "metadata-v1":
-            raise ValueError("Versioned registry model identity is invalid")
-        rows = [row for row in active if _registry_model(row) == model]
-        paths = [_registry_path(row) for row in rows]
-        if not paths or any(not path for path in paths) or len(paths) != len(set(paths)):
-            raise ValueError("Enabled model requires unique active registry paths")
-        markers = [row for row in rows if row.get("MAPPER_METADATA_VERSION") not in (None, "")]
-        if len(markers) != 1 or not _registry_meta_version(markers[0]["MAPPER_METADATA_VERSION"]):
-            raise ValueError("Enabled model requires exactly one versioned registry root")
-        root_row = markers[0]
-        root = _registry_path(root_row)
-        if "." in root or _registry_meta_text(root_row, "PARENT_NODE_PATH") is not None:
-            raise ValueError("Registry metadata marker must identify the actual root")
-        included = { _registry_path(row): row for row in rows
-                     if _registry_meta_bool(row, "MAPPER_ENABLED") }
-        if root not in included:
-            raise ValueError("Registry root must be mapper-enabled")
-        if any(path != root and not path.startswith(root + ".") for path in included):
-            raise ValueError("Enabled registry paths must share the marked root")
-        elements = {path: _decode_registry_element(row, root) for path, row in included.items()}
+        # Explicit in-memory contracts remain a test/programmatic API; deployed
+        # contracts have no structural definitions and use the live registry.
+        if isinstance(contract.get("ELEMENTS"), dict) and contract.get("ROOT_PATH"):
+            continue
+        if forbidden & contract.keys() or contract.get("MODEL_KEY") != model or \
+                contract.get("POLICY") != "metadata-v1":
+            raise ValueError("Lean registry model identity is invalid")
+        by_path, root = _registry_model_rows(registry, model)
+        mapped = _executable_registry_paths(mapping_rows, source_profiles, model,
+                                             tuple(by_path), root)
+        explicit = {path for path, row in by_path.items()
+                    if _registry_meta_text(row, "OPERATOR") is not None}
+        included = mapped | explicit | {root}
+
+        # Assignment mappings materialize the registered role and party
+        # siblings even though those nodes are not direct CSV payload owners.
+        for path in tuple(included):
+            if _registry_operator(by_path[path]) != "assignments":
+                continue
+            parent = _registry_meta_text(by_path[path], "PARENT_NODE_PATH")
+            siblings = []
+            for candidate, row in by_path.items():
+                if _registry_meta_text(row, "PARENT_NODE_PATH") != parent:
+                    continue
+                try:
+                    sibling_operator = _registry_operator(row)
+                except ValueError:
+                    if _registry_meta_text(row, "OPERATOR") is not None:
+                        raise
+                    continue
+                if sibling_operator in {"roles", "parties"}:
+                    siblings.append((candidate, sibling_operator))
+            roles = [candidate for candidate, operator in siblings if operator == "roles"]
+            parties = [candidate for candidate, operator in siblings if operator == "parties"]
+            if len(roles) != 1 or len(parties) != 1:
+                raise ValueError("Assignment mapping requires one role and one party registry sibling")
+            included.update((roles[0], parties[0]))
+        included = _with_registry_ancestors(included, by_path)
+
+        elements = {path: _decode_registry_element(by_path[path], root, by_path)
+                    for path in sorted(included)}
         if elements[root]["operator"] != "object":
             raise ValueError("Registry root requires an object operator")
-        for path, row in included.items():
-            parent = _registry_meta_text(row, "PARENT_NODE_PATH")
-            if path != root and (parent not in included or not path.startswith(parent + ".")):
-                raise ValueError("Enabled registry child requires its included path ancestor")
-            if parent:
-                parent_spec = elements[parent]
-                parent_rule = elements[path]["parameters"].get("parent_instance_rule")
-                if _registry_meta_bool(included[parent], "IS_COLLECTION"):
-                    if parent_spec["operator"] != "record" or parent_rule != "source-record":
-                        raise ValueError("Collection parent needs a supported explicit instance binding")
-                elif parent_rule == "source-record":
-                    raise ValueError("Source-record parent binding requires a record collection")
-        default_policy = _registry_meta_enum(root_row, "DEFAULT_SINGLETON_POLICY",
-                                             {"none", "emit-outside-collections"}, True)
-        default = None if default_policy == "none" else {
-            "operator": "object", "parameters": {"materialize_empty": True},
-            "scope": "singletons-without-collection-ancestors"}
-        groups, linked_paths = [], set()
-        reference_keys = ("ROLES_PATH", "PARTIES_PATH", "PARTY_TYPE",
-                          "PARTY_UUID_PARTS", "PARTY_UUID_SOURCE_KEY")
-        tokens = {"$source_system", "$source_table", "$source_record", "$source_record_id",
-                  "$reference_id", "$model", "$identity_version"}
-        for path, row in included.items():
+
+        groups, linked = [], set()
+        namespaces = {
+            (profile["SOURCE_SYSTEM_NAME"], profile["SOURCE_TABLE_NAME"])
+            for profile in source_profiles if model in profile.get("MODEL_KEYS", ())
+        }
+        for path in sorted(included):
             if elements[path]["operator"] != "assignments":
-                if any(row.get(key) not in (None, "") for key in reference_keys):
-                    raise ValueError("Reference family metadata belongs on assignments")
                 continue
-            roles = _registry_meta_text(row, "ROLES_PATH", True)
-            parties = _registry_meta_text(row, "PARTIES_PATH", True)
-            group_paths = {roles, parties, path}
-            if len(group_paths) != 3 or not group_paths.issubset(included) or group_paths & linked_paths:
-                raise ValueError("Reference family requires distinct unshared enabled paths")
-            if elements[roles]["operator"] != "roles" or elements[parties]["operator"] != "parties":
-                raise ValueError("Reference family operators conflict")
-            if len({_registry_meta_text(included[item], "PARENT_NODE_PATH") for item in group_paths}) != 1:
-                raise ValueError("Reference family paths must have the same parent")
-            parts = _registry_meta_list(row, "PARTY_UUID_PARTS")
-            if not parts or any(part.startswith("$") and part not in tokens for part in parts):
-                raise ValueError("Reference UUID parts contain missing or unknown tokens")
-            if "$reference_id" not in parts or not {"$source_record", "$source_record_id"} & set(parts):
-                raise ValueError("Reference UUID parts must retain record and reference identity")
-            group = {"roles_path": roles, "parties_path": parties, "assignments_path": path,
-                     "party_type": _registry_meta_text(row, "PARTY_TYPE", True),
-                     "party_uuid_parts": parts}
-            source_key = _registry_meta_text(row, "PARTY_UUID_SOURCE_KEY")
-            if source_key:
-                sources = [profile for profile in source_profiles if profile.get("SOURCE_KEY") == source_key]
-                if len(sources) != 1 or model not in sources[0].get("MODEL_KEYS", ()):
-                    raise ValueError("Reference UUID source key must resolve to one enabled source")
-                source = sources[0]
-                group["source_namespace"] = {
-                    "SOURCE_SYSTEM_NAME": _registry_meta_text(source, "SOURCE_SYSTEM_NAME", True),
-                    "SOURCE_TABLE_NAME": _registry_meta_text(source, "SOURCE_TABLE_NAME", True),
-                    "MODEL_KEY": model}
-            elif not {"$source_system", "$source_table", "$model", "$identity_version"}.issubset(parts):
-                raise ValueError("Unscoped reference UUID recipe must include the full source namespace")
+            parent = _registry_meta_text(by_path[path], "PARENT_NODE_PATH")
+            roles = [candidate for candidate in included
+                     if _registry_meta_text(by_path[candidate], "PARENT_NODE_PATH") == parent
+                     and elements[candidate]["operator"] == "roles"]
+            parties = [candidate for candidate in included
+                       if _registry_meta_text(by_path[candidate], "PARENT_NODE_PATH") == parent
+                       and elements[candidate]["operator"] == "parties"]
+            if len(roles) != 1 or len(parties) != 1:
+                raise ValueError("Assignment mapping requires one role and one party registry sibling")
+            group_paths = {path, roles[0], parties[0]}
+            if len(group_paths) != 3 or group_paths & linked:
+                raise ValueError("Reference family registry paths must be distinct")
+            group = {"roles_path": roles[0], "parties_path": parties[0],
+                     "assignments_path": path, "party_type": "person"}
+            if len(namespaces) != 1:
+                raise ValueError("Reference family requires one source namespace")
+            source_system, source_table = next(iter(namespaces))
+            group.update(
+                party_uuid_parts=["$source_system", "$source_record", "party",
+                                  "$reference_id"],
+                source_namespace={"SOURCE_SYSTEM_NAME": source_system,
+                                  "SOURCE_TABLE_NAME": source_table,
+                                  "MODEL_KEY": model},
+            )
             groups.append(group)
-            linked_paths.update(group_paths)
-        if any(spec["operator"] in {"roles", "parties"} and path not in linked_paths
+            linked.update(group_paths)
+        if any(spec["operator"] in {"roles", "parties"} and path not in linked
                for path, spec in elements.items()):
-            raise ValueError("Linked identity operator lacks a reference family")
-        target = _registry_meta_text(root_row, "REPORT_TARGET_PATH")
-        if target:
-            if target not in included:
-                raise ValueError("Report target must be an enabled registry path")
-            report["TARGET_PATH"] = target
-        contract.update(ROOT_PATH=root, ELEMENTS=elements, ELEMENT_PATHS=tuple(sorted(included)),
-                        DEFAULT_ELEMENT=default, REFERENCE_GROUPS=groups,
-                        REQUIRED_RULE_IDS=_registry_meta_list(root_row, "REQUIRED_RULE_IDS"),
-                        REPORT=report)
+            raise ValueError("Linked identity operator lacks an assignment family")
+
+        report = _metadata_object(contract.get("REPORT"), "REPORT")
+        if "TARGET_PATH" in report:
+            raise ValueError("Report target is derived from executable mappings")
+        observation_paths = [path for path, spec in elements.items()
+                             if spec["operator"] == "observations"]
+        if report:
+            if len(observation_paths) != 1:
+                raise ValueError("Report metadata requires one observation registry path")
+            report["TARGET_PATH"] = observation_paths[0]
+        contract.update(ROOT_PATH=root, ELEMENTS=elements,
+                        ELEMENT_PATHS=tuple(sorted(included)), DEFAULT_ELEMENT=None,
+                        REFERENCE_GROUPS=groups, REPORT=report)
     return result
 
 
@@ -1118,7 +1181,8 @@ def _summarize_routing_issues(report, sample_limit=25):
 def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model_contracts,
                              routing_metadata=None):
     """Pure source/model routing. No data reads, globals mutation or writes."""
-    model_contracts = decode_registry_model_contracts(registry_rows, source_profiles, model_contracts)
+    model_contracts = decode_registry_model_contracts(
+        registry_rows, source_profiles, model_contracts, mapping_rows)
     _validate_source_profiles(source_profiles, model_contracts, mapping_rows)
     routing = _metadata_object(routing_metadata, "ROUTING")
     if set(routing) - {"DEFERRED_MODEL_LABELS", "DEFERRED_TARGET_PATHS"}:
@@ -2166,26 +2230,8 @@ def build_mapping_coverage(source_dataframe, mapping_rows):
     return session.create_dataframe(output)
 
 
-def _registry_value(row, *names):
-    row_dict = row.as_dict(recursive=True) if hasattr(row, "as_dict") else dict(row)
-    normalized = {str(key).upper(): value for key, value in row_dict.items()}
-    for name in names:
-        if name.upper() in normalized and normalized[name.upper()] is not None:
-            return normalized[name.upper()]
-    return None
-
-
-def _derive_parent_path(element_path):
-    parts = element_path.split(".")
-    return ".".join(parts[:-1]) if len(parts) > 1 else None
-
-
 def _element_type(element_path):
     return element_path.split(".")[-1].replace("[]", "")
-
-
-def _registry_true(value):
-    return str(value).strip().upper() in {"TRUE", "T", "YES", "Y", "1"}
 
 
 def _canonical_uuid(value, label):
@@ -2201,87 +2247,43 @@ def _canonical_uuid(value, label):
 
 
 def _canonical_registry_rows(element_registry_dataframe, model_key, context=None):
+    # Cell 3 is the sole transport-normalization and registry-validation
+    # boundary. Cell 4 only adapts that compiled contract to graph row names.
+    del element_registry_dataframe, model_key
+    if not isinstance(context, dict) or "policy" not in context:
+        raise ValueError("Compiled metadata context is required for registry validation")
+    normalized_rows = context.get("registry_rows")
+    if normalized_rows is None:
+        raise ValueError("Compiled metadata context requires normalized registry rows")
+
     rows = []
-    supplied_rows = context.get("registry_rows") if context is not None else None
-    for row in (supplied_rows if supplied_rows is not None else element_registry_dataframe.collect()):
-        model = _registry_value(
-            row,
-            "OSCAL_MODEL_KEY",
-            "OSCAL_MODEL",
-            "MODEL_NAME",
-            "MODEL",
-        )
-        if model and str(model).strip().upper() != model_key.upper():
-            continue
-
-        is_active = _registry_value(row, "IS_ACTIVE", "ACTIVE")
-        if is_active is not None and str(is_active).strip().upper() in {
-            "FALSE",
-            "F",
-            "NO",
-            "N",
-            "0",
-        }:
-            continue
-
-        path = _registry_value(
-            row,
-            "NODE_PATH",
-            "OSCAL_ELEMENT_PATH",
-            "ELEMENT_PATH",
-            "JSON_PATH",
-        )
-        if not path:
-            continue
-        path = str(path).strip()
-        parent = _registry_value(
-            row,
-            "PARENT_NODE_PATH",
-            "PARENT_ELEMENT_PATH",
-            "PARENT_PATH",
-        )
-        level = _registry_value(
-            row,
-            "HIERARCHY_LEVEL",
-            "ELEMENT_LEVEL",
-            "LEVEL_NUMBER",
-        )
-        process_order = _registry_value(row, "PROCESS_ORDER")
-        is_collection = _registry_value(row, "IS_COLLECTION")
-        instance_key_rule = _registry_value(row, "INSTANCE_KEY_RULE")
-        item_path = _registry_value(row, "ITEM_PATH")
-        derived_level = path.count(".") + 1
+    for registry_row in normalized_rows:
+        path = _registry_path(registry_row)
+        level = path.count(".") + 1
+        process_order = registry_row.get("PROCESS_ORDER")
         rows.append(
             {
                 "element_path": path,
-                "element_type": _registry_value(row, "ELEMENT_TYPE"),
-                "raw": row,
-                "parent_path": str(parent).strip() if parent else _derive_parent_path(path),
-                "level": int(level) if level is not None else derived_level,
+                "element_type": registry_row.get("ELEMENT_TYPE"),
+                "raw": registry_row,
+                "parent_path": registry_row.get("PARENT_NODE_PATH") or None,
+                "level": level,
                 "process_order": (
                     int(process_order)
                     if process_order is not None
-                    else derived_level * 1000000
+                    else level * 1000000
                 ),
-                "is_collection": _registry_true(is_collection),
+                "is_collection": _registry_meta_bool(
+                    registry_row, "IS_COLLECTION"
+                ),
                 "instance_key_rule": (
-                    str(instance_key_rule).strip().upper()
-                    if instance_key_rule is not None
-                    else None
+                    registry_row.get("INSTANCE_KEY_RULE") or None
                 ),
-                "item_path": (
-                    str(item_path).strip()
-                    if item_path is not None
-                    else None
-                ),
+                "item_path": registry_row.get("ITEM_PATH") or None,
             }
         )
 
-    if not isinstance(context, dict) or "policy" not in context:
-        raise ValueError("Compiled metadata context is required for registry validation")
     context["policy"]["registry"](rows, context)
-    if len({row["element_path"] for row in rows}) != len(rows):
-        raise ValueError("Duplicate registry paths for configured OSCAL model")
     rows.sort(
         key=lambda item: (
             item["process_order"],
@@ -2289,8 +2291,6 @@ def _canonical_registry_rows(element_registry_dataframe, model_key, context=None
             item["element_path"],
         )
     )
-    if not rows:
-        raise ValueError("No registry paths found for configured OSCAL model")
     return rows
 
 
@@ -3217,12 +3217,6 @@ import uuid
 from types import MappingProxyType
 
 OSCAL_LOAD_RELEASE = "oscal-shared-daily-upsert-v2"
-SSP_LOAD_RELEASE = OSCAL_LOAD_RELEASE
-SSP_LOAD_DIM = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT"
-SSP_LOAD_FACT = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY"
-SSP_LOAD_DIM_PK = "PK_OSCAL_SSP_ELEMENT_HASH"
-SSP_LOAD_FACT_PK = "PK_FACT_OSCAL_DEPENDENCY_HASH"
-SSP_LOAD_SOURCE = "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
 _LOAD_AUDIT_COLUMNS = {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
 
 
@@ -3233,15 +3227,15 @@ class LoadError(RuntimeError):
         super().__init__(code)
 
 _LOAD_DIM_SOURCES = {
-    SSP_LOAD_DIM_PK: "NODE_KEY", "ELEMENT_TYPE": "ELEMENT_TYPE",
-    "OSCAL_UUID": "OSCAL_UUID", "METADATA_JSON": "METADATA_JSON",
+    "ELEMENT_TYPE": "ELEMENT_TYPE", "OSCAL_UUID": "OSCAL_UUID",
+    "METADATA_JSON": "METADATA_JSON",
     "SOURCE_SYSTEM_NAME": "SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME": "SOURCE_TABLE_NAME",
     "SOURCE_RECORD_ID": "SOURCE_RECORD_ID", "DW_PIPELINE_RUN_ID": "DW_PIPELINE_RUN_ID",
     "DW_LOAD_TIMESTAMP": "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ": "DW_LOAD_TIMESTAMP_TZ",
 }
 _LOAD_FACT_SOURCES = {
-    SSP_LOAD_FACT_PK: "EDGE_KEY", "FK_SOURCE_ELEMENT_HASH": "FK_SOURCE_ELEMENT_HASH",
-    "FK_TARGET_ELEMENT_HASH": "FK_TARGET_ELEMENT_HASH", "DEPENDENCY_TYPE": "DEPENDENCY_TYPE",
+    "FK_SOURCE_ELEMENT_HASH": "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH": "FK_TARGET_ELEMENT_HASH",
+    "DEPENDENCY_TYPE": "DEPENDENCY_TYPE",
     "SOURCE_OSCAL_UUID": "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID": "TARGET_OSCAL_UUID",
 }
 _LOAD_HASH_SOURCES = {"NODE_KEY", "EDGE_KEY", "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"}
@@ -3291,20 +3285,6 @@ def _load_table(name):
     return ".".join(_load_ident(part.upper()) for part in parts)
 
 
-def _load_safe_type(value):
-    if not isinstance(value, str):
-        raise LoadError("MISSING_LIVE_COLUMN_DATATYPE")
-    value = value.strip().upper()
-    match = re.fullmatch(r"(?:VARCHAR|STRING|TEXT)(?:\(\s*([1-9][0-9]*)\s*\))?", value)
-    if match:
-        return "VARCHAR" + ("(" + str(int(match[1])) + ")" if match[1] else "")
-    if re.fullmatch(r"BINARY\(\s*16\s*\)", value):
-        return "BINARY(16)"
-    if value == "VARIANT" or re.fullmatch(r"TIMESTAMP_(?:NTZ|LTZ|TZ)(?:\([0-9]\))?", value):
-        return value
-    raise LoadError("UNSUPPORTED_LIVE_COLUMN_DATATYPE")
-
-
 def _load_column_plan(description, kind, contract=None):
     c = _load_runtime_contract(contract)
     mappings = _load_sources(c)
@@ -3332,12 +3312,19 @@ def _load_column_plan(description, kind, contract=None):
             continue
         if column_kind != "COLUMN" or entry.get("expression") not in (None, ""):
             raise LoadError("MAPPED_COLUMN_NOT_WRITABLE_" + name)
-        try:
-            dtype = _load_safe_type(entry["type"])
-        except LoadError as error:
+        raw_type = entry["type"]
+        dtype = raw_type.strip().upper() if isinstance(raw_type, str) else None
+        text = re.fullmatch(r"(?:VARCHAR|STRING|TEXT)(?:\(\s*([1-9][0-9]*)\s*\))?", dtype or "")
+        if text:
+            dtype = "VARCHAR" + ("(" + str(int(text[1])) + ")" if text[1] else "")
+        elif re.fullmatch(r"BINARY\(\s*16\s*\)", dtype or ""):
+            dtype = "BINARY(16)"
+        elif dtype != "VARIANT" and not re.fullmatch(
+                r"TIMESTAMP_(?:NTZ|LTZ|TZ)(?:\([0-9]\))?", dtype or ""):
+            code = "MISSING_LIVE_COLUMN_DATATYPE" if dtype is None else "UNSUPPORTED_LIVE_COLUMN_DATATYPE"
             # Only column metadata, never source values or full SQL, is reported.
-            raise LoadError(error.code, {"TABLE_KIND": kind, "COLUMN": name,
-                             "LIVE_TYPE": str(entry["type"])[:128]}) from None
+            raise LoadError(code, {"TABLE_KIND": kind, "COLUMN": name,
+                                   "LIVE_TYPE": str(raw_type)[:128]})
         source, encoding = sources[name], None
         expression = "s." + _load_ident(source)
         if source in _LOAD_HASH_SOURCES and dtype == "BINARY(16)":
@@ -3372,6 +3359,15 @@ def _load_column_plan(description, kind, contract=None):
         required -= {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
     if required - seen:
         raise LoadError("MISSING_TARGET_COLUMNS_" + "_".join(sorted(required - seen)))
+    types = {column["name"]: column["type"] for column in plan}
+    binary = ((c["DIM_PK_COLUMN"],) if kind == "DIM" else
+              (c["FACT_PK_COLUMN"], "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"))
+    uuids = (("OSCAL_UUID",) if kind == "DIM" else
+             ("SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"))
+    if any(types.get(name) != "BINARY(16)" for name in binary):
+        raise LoadError("CONFIRMED_BINARY16_SCHEMA_REQUIRED")
+    if any(types.get(name) != "VARCHAR(32)" for name in uuids):
+        raise LoadError("VERIFIED_UUID32_PROFILE_REQUIRED")
     return plan
 
 
@@ -3390,22 +3386,28 @@ def _load_unique(session, table, key):
                 "NULL_OR_DUPLICATE_KEYS")
 
 
-def _load_selection_schema(plans, contract=None):
-    c = _load_runtime_contract(contract)
-    dim_table, fact_table, dk, fk = _load_targets(c)
-    """Selection compares identities using the posted physical BINARY(16) schema."""
-    required = ((dk,),
-                (fk, "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"))
-    for plan, keys in zip(plans, required):
-        types = {c["name"]: c["type"] for c in plan}
-        if any(types.get(key) != "BINARY(16)" for key in keys):
-            raise LoadError("CONFIRMED_BINARY16_SCHEMA_REQUIRED")
-
-
-    for plan, columns in zip(plans, (("OSCAL_UUID",), ("SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"))):
-        types = {column["name"]: column["type"] for column in plan}
-        if any(types.get(name) != "VARCHAR(32)" for name in columns):
-            raise LoadError("VERIFIED_UUID32_PROFILE_REQUIRED")
+def _load_projection_values(session, query, plan, stage_codes=False):
+    for column in plan:
+        name, dtype = _load_ident(column["name"]), column["type"]
+        generic = "INVALID_STORED_OR_STAGED_COLUMN_" + column["name"]
+        checks = []
+        if not column["nullable"]:
+            checks.append((name + " IS NULL", "REQUIRED_TARGET_VALUE_IS_NULL"))
+        if dtype == "BINARY(16)":
+            checks.append((name + " IS NULL OR OCTET_LENGTH(" + name + ")<>16",
+                           "BINARY_KEY_WIDTH_INVALID"))
+        if column["source"] in _LOAD_UUID_SOURCES:
+            pattern = r"[0-9a-f]{32}" if dtype == "VARCHAR(32)" else _LOAD_UUID_PATTERN
+            checks.append((name + " IS NULL OR NOT REGEXP_LIKE(" + name + ", '" + pattern + "')", None))
+        width = re.fullmatch(r"VARCHAR\((\d+)\)", dtype)
+        if width:
+            checks.append(("LENGTH(" + name + ")>" + width[1], "TARGET_STRING_CAPACITY_EXCEEDED"))
+        if column["name"] == "METADATA_JSON":
+            checks.append(("NOT COALESCE(IS_OBJECT(TRY_PARSE_JSON(TO_VARCHAR(" + name +
+                           "))),FALSE)", None))
+        for condition, specific in checks:
+            _load_zero(session, f"SELECT COUNT(*) AS N FROM ({query}) WHERE {condition}",
+                       specific if stage_codes and specific else generic)
 
 
 def _load_stage(session, raw_stage, stage, plan):
@@ -3420,21 +3422,12 @@ def _load_stage(session, raw_stage, stage, plan):
                         "INVALID_STORAGE_IDENTITY_" + column["name"])
     expressions = ", ".join(c["expression"] + " AS " + _load_ident(c["name"]) for c in plan)
     _load_query(session, f"CREATE TEMPORARY TABLE {stage} AS SELECT {expressions} FROM {raw_stage} s")
+    _load_projection_values(session, "SELECT * FROM " + stage, plan, stage_codes=True)
     for column in plan:
         name = _load_ident(column["name"])
-        if column["type"] == "BINARY(16)":
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM {stage} WHERE "
-                        f"{name} IS NULL OR OCTET_LENGTH({name}) <> 16", "BINARY_KEY_WIDTH_INVALID")
         if column["source"] in {"NODE_KEY", "EDGE_KEY"}:
             # Different text casing can collapse to the same physical binary key.
             _load_unique(session, stage, name)
-        if not column["nullable"]:
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM {stage} WHERE {name} IS NULL",
-                        "REQUIRED_TARGET_VALUE_IS_NULL")
-        width = re.fullmatch(r"VARCHAR\((\d+)\)", column["type"])
-        if width:
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM {stage} WHERE LENGTH({name}) > {int(width[1])}",
-                        "TARGET_STRING_CAPACITY_EXCEEDED")
 
 
 def _load_baseline_equal(session, names, queries):
@@ -3540,24 +3533,16 @@ WHERE COALESCE(d.N,0)<>COALESCE(r.N,0)"""
     return report
 
 
-def _load_columns(columns):
+def _load_comparison(columns, left="t", right="s"):
     names = [c["name"] if isinstance(c, dict) else c for c in columns]
     for name in names:
         _load_ident(name)
     if not names or len(names) != len(set(names)):
         raise LoadError("INVALID_PROJECTION_COLUMNS")
-    return names
-
-
-def _load_business_columns(columns):
-    return [name for name in _load_columns(columns) if name not in _LOAD_AUDIT_COLUMNS]
-
-
-def _load_difference_predicate(columns, left="t", right="s"):
     if left not in ("t", "s", "b") or right not in ("t", "s", "b"):
         raise LoadError("INVALID_COMPARISON_ALIAS")
     terms = []
-    for name in _load_business_columns(columns):
+    for name in (name for name in names if name not in _LOAD_AUDIT_COLUMNS):
         lhs, rhs = left + "." + _load_ident(name), right + "." + _load_ident(name)
         if name == "METADATA_JSON":
             # Structural object comparison, not JSON key ordering.
@@ -3566,7 +3551,7 @@ def _load_difference_predicate(columns, left="t", right="s"):
         terms.append("(" + lhs + " IS DISTINCT FROM " + rhs + ")")
     if not terms:
         raise LoadError("BUSINESS_COLUMNS_REQUIRED")
-    return " OR ".join(terms)
+    return names, " OR ".join(terms)
 
 
 def _build_merge_sql(target_table, source_view, pk_column, columns, contract=None):
@@ -3575,11 +3560,10 @@ def _build_merge_sql(target_table, source_view, pk_column, columns, contract=Non
     expected_pk = {dim_table: dk, fact_table: fk}
     if expected_pk.get(target_table) != pk_column:
         raise LoadError("TARGET_OUTSIDE_APPROVED_STORAGE_CONTRACT")
-    names = _load_columns(columns)
+    names, changed = _load_comparison(columns)
     if pk_column not in names:
         raise LoadError("MISSING_PROJECTED_PRIMARY_KEY")
     _load_table(source_view)
-    changed = _load_difference_predicate(columns)
     updates = ", ".join("t." + _load_ident(n) + " = s." + _load_ident(n)
                         for n in names if n != pk_column)
     return (
@@ -3593,7 +3577,7 @@ def _build_merge_sql(target_table, source_view, pk_column, columns, contract=Non
 
 def _load_expected_changes_sql(target, stage, pk, columns):
     target_sql, stage_sql, key = _load_table(target), _load_table(stage), _load_ident(pk)
-    changed = _load_difference_predicate(columns)
+    _, changed = _load_comparison(columns)
     return f"""SELECT
  (SELECT COUNT(*) FROM {stage_sql} s WHERE NOT EXISTS
      (SELECT 1 FROM {target_sql} t WHERE t.{key}=s.{key})) AS INSERTS,
@@ -3630,27 +3614,6 @@ def _load_scope_queries(names, contract=None):
     return dim, fact
 
 
-def _load_storage_values(session, query, plan):
-    for column in plan:
-        name, dtype = _load_ident(column["name"]), column["type"]
-        where = []
-        if not column["nullable"]:
-            where.append(name + " IS NULL")
-        if dtype == "BINARY(16)":
-            where.append(name + " IS NULL OR OCTET_LENGTH(" + name + ")<>16")
-        if column["source"] in _LOAD_UUID_SOURCES:
-            pattern = r"[0-9a-f]{32}" if dtype == "VARCHAR(32)" else _LOAD_UUID_PATTERN
-            where.append(name + " IS NULL OR NOT REGEXP_LIKE(" + name + ", '" + pattern + "')")
-        width = re.fullmatch(r"VARCHAR\((\d+)\)", dtype)
-        if width:
-            where.append("LENGTH(" + name + ")>" + width[1])
-        if column["name"] == "METADATA_JSON":
-            where.append("NOT COALESCE(IS_OBJECT(TRY_PARSE_JSON(TO_VARCHAR(" + name + "))),FALSE)")
-        if where:
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM ({query}) WHERE " + " OR ".join(where),
-                       "INVALID_STORED_OR_STAGED_COLUMN_" + column["name"])
-
-
 def _load_scope_check(session, names, plans, contract=None):
     c = _load_runtime_contract(contract)
     dim_table, fact_table, dk, fk = _load_targets(c)
@@ -3668,7 +3631,7 @@ def _load_scope_check(session, names, plans, contract=None):
         conflict = " OR ".join(f"t.{_load_ident(c)} IS DISTINCT FROM s.{_load_ident(c)}" for c in ownership)
         _load_zero(session, f"SELECT COUNT(*) AS N FROM ({query}) t JOIN {names[kind]} s "
                            f"ON t.{pk}=s.{pk} WHERE {conflict}", "TARGET_IDENTITY_PROVENANCE_CONFLICT")
-        _load_storage_values(session, query, plan)
+        _load_projection_values(session, query, plan)
     report = {"OBSOLETE_DIM_ROWS": extra["D"], "OBSOLETE_FACT_ROWS": extra["F"]}
     if any(extra.values()):
         raise LoadError("OBSOLETE_TARGET_ROWS_BLOCKED", report)
@@ -3735,7 +3698,6 @@ def _load_prepare(session, nodes, edges, config):
     names = {k: prefix + "_" + k for k in ("NV", "EV", "IDS", "D", "F", "DB", "FB")}
     plans = [_load_column_plan(_load_query(session, "DESC TABLE " + target), kind, c)
              for target, kind in ((dim_table, "DIM"), (fact_table, "FACT"))]
-    _load_selection_schema(plans, c)
     records = _load_freeze(session, nodes, edges, names, c)
     expected_records = config.get("EXPECTED_SOURCE_RECORDS")
     if expected_records is not None and (
@@ -3746,8 +3708,6 @@ def _load_prepare(session, nodes, edges, config):
         _load_stage(session, names[raw], names[physical], plan)
     candidates = (f"SELECT * FROM {names['D']}", f"SELECT * FROM {names['F']}")
     candidate = _load_integrity(session, candidates, names["IDS"], records, contract=c)
-    for query, plan in zip(candidates, plans):
-        _load_storage_values(session, query, plan)
     for target, key in ((dim_table, "DB"), (fact_table, "FB")):
         _load_query(session, f"CREATE TEMPORARY TABLE {names[key]} AS SELECT * FROM {target}")
     context = {"names": names, "plans": plans, "records": records, "candidate": candidate, "contract": c, "storage_verified": True}
@@ -3787,8 +3747,8 @@ def _load_verify_context(session, context):
             raise LoadError("SAVED_BUSINESS_PAYLOAD_OR_KEYS_DIFFER", {"TABLE_KIND": kind, "COUNTS": changes})
         # Business-unchanged rows retain prior fields, including audit. Updated/new
         # rows must match every projected stage field, including current audit.
-        cols = _load_columns(plan)
-        business_same = "NOT (" + _load_difference_predicate(plan, "b", "s") + ")"
+        cols, business_changed = _load_comparison(plan, "b", "s")
+        business_same = "NOT (" + business_changed + ")"
         all_old = " OR ".join("t." + _load_ident(c) + " IS DISTINCT FROM b." + _load_ident(c) for c in cols)
         all_new = " OR ".join(
             ("TRY_PARSE_JSON(TO_VARCHAR(t." + _load_ident(c) + ")) IS DISTINCT FROM "
@@ -3838,22 +3798,21 @@ def _load_transaction(session, merges, before_write, verify, expected_changes, c
         _load_query(session, "BEGIN TRANSACTION")
     except BaseException:
         raise LoadError("BEGIN_OUTCOME_UNKNOWN") from None
-    step, pass_number, changes, checks = "PREWRITE_BASELINE", 0, [], []
+    step, pass_number, changes = "PREWRITE_BASELINE", 0, []
     try:
         before_write()
-        for pass_number in (1, 2):
-            result = []
-            for index, (step, statement) in enumerate(zip(("DIM_MERGE", "FACT_MERGE"), merges)):
-                actual = _load_dml_counts(_load_query(session, statement))
-                expected = tuple(expected_changes[index]) if pass_number == 1 else (0, 0)
-                if actual != expected:
-                    raise LoadError("UNEXPECTED_MERGE_CHANGE_COUNT",
-                                    {"EXPECTED_INSERTS": expected[0], "EXPECTED_UPDATES": expected[1],
-                                     "ACTUAL_INSERTS": actual[0], "ACTUAL_UPDATES": actual[1]})
-                result.append({"INSERTS": actual[0], "UPDATES": actual[1]})
-            changes.append({"PASS": pass_number, "DIM": result[0], "FACT": result[1]})
-            step = "READBACK_AND_INTEGRITY"
-            checks.append(verify(pass_number))
+        pass_number, result = 1, []
+        for index, (step, statement) in enumerate(zip(("DIM_MERGE", "FACT_MERGE"), merges)):
+            actual = _load_dml_counts(_load_query(session, statement))
+            expected = tuple(expected_changes[index])
+            if actual != expected:
+                raise LoadError("UNEXPECTED_MERGE_CHANGE_COUNT",
+                                {"EXPECTED_INSERTS": expected[0], "EXPECTED_UPDATES": expected[1],
+                                 "ACTUAL_INSERTS": actual[0], "ACTUAL_UPDATES": actual[1]})
+            result.append({"INSERTS": actual[0], "UPDATES": actual[1]})
+        changes.append({"PASS": pass_number, "DIM": result[0], "FACT": result[1]})
+        step = "READBACK_AND_INTEGRITY"
+        verify(pass_number)
     except BaseException as error:
         details = dict(_load_error_details(error), STEP=step, PASS=pass_number)
         try:
@@ -3865,7 +3824,7 @@ def _load_transaction(session, merges, before_write, verify, expected_changes, c
         _load_query(session, "COMMIT")
     except BaseException:
         raise LoadError("COMMIT_OUTCOME_UNKNOWN") from None
-    return {"STATUS": "COMMITTED", "CHANGE_COUNTS": changes, "VERIFIED_PASSES": len(checks)}
+    return {"STATUS": "COMMITTED", "CHANGE_COUNTS": changes, "VERIFIED_PASSES": 1}
 
 
 def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
@@ -3916,8 +3875,7 @@ def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
 
         phase = "TRANSACTION"
         transaction = _load_transaction(session, merges, before_write,
-                                        lambda number: _load_verify_context(session, context), expected,
-                                        **({"contract": c} if "contract" in context else {}))
+                                        lambda number: _load_verify_context(session, context), expected, c)
         result.update(writes_executed=True, persisted=True, transaction=transaction,
                       dim_merge_result=transaction["CHANGE_COUNTS"][0]["DIM"],
                       fact_merge_result=transaction["CHANGE_COUNTS"][0]["FACT"])
@@ -3967,29 +3925,13 @@ def verify_oscal_load(canonical_nodes_df, canonical_edges_df, config):
 
 
 
-def _load_legacy_contract():
-    # Compatibility adapter only: actual configured runs provide STORAGE_CONTRACT.
-    return MappingProxyType({
-        "MODEL_KEY": "SSP", "ROOT_PATH": "system-security-plan",
-        "ROOT_ELEMENT_TYPE": "system-security-plan", "SOURCE_SYSTEM_NAME": "ARCHER",
-        "SOURCE_TABLE_NAME": SSP_LOAD_SOURCE,
-        "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC." + SSP_LOAD_SOURCE,
-        "TARGET_DIM": SSP_LOAD_DIM, "TARGET_FACT": SSP_LOAD_FACT,
-        "DIM_PK_COLUMN": SSP_LOAD_DIM_PK, "FACT_PK_COLUMN": SSP_LOAD_FACT_PK,
-        "IDENTITY_VERSION": "v1_registry_path_instance",
-        "PHYSICAL_PROFILE": "BINARY16_UUID32", "VERIFIED": True,
-    })
-
-
 def _load_literal(value):
     if not isinstance(value, str) or not value.strip():
         raise LoadError("EMPTY_CONTRACT_VALUE")
     return "'" + value.replace("'", "''") + "'"
 
 
-def _load_runtime_contract(contract=None):
-    if contract is None:
-        return _load_legacy_contract()
+def _load_runtime_contract(contract):
     if not isinstance(contract, (dict, MappingProxyType)):
         raise LoadError("INVALID_STORAGE_CONTRACT")
     copied = dict(contract)
@@ -4024,8 +3966,7 @@ def _load_targets(contract):
 
 
 def _load_sources(contract):
-    dim = {k: v for k, v in _LOAD_DIM_SOURCES.items() if v != "NODE_KEY"}
-    fact = {k: v for k, v in _LOAD_FACT_SOURCES.items() if v != "EDGE_KEY"}
+    dim, fact = dict(_LOAD_DIM_SOURCES), dict(_LOAD_FACT_SOURCES)
     dim[contract["DIM_PK_COLUMN"]] = "NODE_KEY"
     fact[contract["FACT_PK_COLUMN"]] = "EDGE_KEY"
     return {"DIM": dim, "FACT": fact}
@@ -4033,10 +3974,6 @@ def _load_sources(contract):
 
 def _load_graph_contract(config):
     root = config.get("ROOT_PATH", config.get("MODEL_ROOT_PATH"))
-    if root is None and "STORAGE_CONTRACT" not in config:
-        legacy = _load_legacy_contract()
-        if config.get("OSCAL_MODEL") == legacy["MODEL_KEY"]:
-            root = legacy["ROOT_PATH"]
     fields = {"MODEL_KEY": config.get("OSCAL_MODEL"), "ROOT_PATH": root,
               "ROOT_ELEMENT_TYPE": config.get("ROOT_ELEMENT_TYPE"),
               "SOURCE_SYSTEM_NAME": config.get("SOURCE_SYSTEM_NAME"),
@@ -4057,21 +3994,11 @@ def _load_contract(config):
         raise LoadError("EXPLICIT_BOOLEAN_WRITE_MODE_REQUIRED")
     if config.get("OBSOLETE_ROW_POLICY", "BLOCK") != "BLOCK":
         raise LoadError("ONLY_BLOCK_OBSOLETE_POLICY_IS_APPROVED")
-    if "STORAGE_CONTRACT" in config:
-        supplied = config["STORAGE_CONTRACT"]
-        if supplied is None or (isinstance(supplied, (dict, MappingProxyType))
-                                and supplied.get("VERIFIED") is not True):
-            return None
-        contract = _load_runtime_contract(supplied)
-    else:
-        contract = _load_legacy_contract()
-        required = {"OSCAL_MODEL": contract["MODEL_KEY"], "TARGET_DIM": contract["TARGET_DIM"],
-                    "TARGET_FACT": contract["TARGET_FACT"], "DIM_PK_COLUMN": contract["DIM_PK_COLUMN"],
-                    "FACT_PK_COLUMN": contract["FACT_PK_COLUMN"], "SOURCE_SYSTEM_NAME": contract["SOURCE_SYSTEM_NAME"],
-                    "SOURCE_TABLE_NAME": contract["SOURCE_TABLE_NAME"], "RAW_TABLE": contract["RAW_TABLE"],
-                    "IDENTITY_VERSION": contract["IDENTITY_VERSION"]}
-        if any(config.get(k) != v for k, v in required.items()):
-            return None
+    supplied = config.get("STORAGE_CONTRACT")
+    if supplied is None or (isinstance(supplied, (dict, MappingProxyType))
+                            and supplied.get("VERIFIED") is not True):
+        return None
+    contract = _load_runtime_contract(supplied)
     matches = {"OSCAL_MODEL": "MODEL_KEY", "SOURCE_SYSTEM_NAME": "SOURCE_SYSTEM_NAME",
                "SOURCE_TABLE_NAME": "SOURCE_TABLE_NAME", "RAW_TABLE": "RAW_TABLE",
                "IDENTITY_VERSION": "IDENTITY_VERSION"}
@@ -4372,3 +4299,4 @@ if _default_key in MODEL_GRAPHS:
     mapping_coverage_df = _graph["coverage"]
     run_result = next(group["load"] for group in PIPELINE_REPORT["groups"]
                       if (group["source"], group["model"]) == _default_key)
+

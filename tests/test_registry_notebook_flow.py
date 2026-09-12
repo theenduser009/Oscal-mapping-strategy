@@ -1,7 +1,6 @@
 """Full released Cells One, Two and Three with real CSV and a fake Snowpark transport."""
 import contextlib
 import copy
-from decimal import Decimal
 import io
 from pathlib import Path
 import unittest
@@ -13,17 +12,13 @@ from test_model_selection import cell_namespace
 ROOT = Path(__file__).resolve().parents[1]
 CELLS = ROOT / "notebooks/cells"
 METADATA_COLUMNS = (
-    "MAPPER_METADATA_VERSION", "MAPPER_ENABLED", "OPERATOR", "PARENT_INSTANCE_RULE",
-    "UUID_POLICY", "EMPTY_POLICY", "LIST_INSTANCE_RULE", "PROPERTY_NAME_RULE",
-    "ASSEMBLY_POLICY", "REQUIRED_MEMBERS", "DEFAULT_SINGLETON_POLICY",
-    "REQUIRED_RULE_IDS", "ROLES_PATH", "PARTIES_PATH", "PARTY_TYPE",
-    "PARTY_UUID_PARTS", "PARTY_UUID_SOURCE_KEY", "REPORT_TARGET_PATH",
+    "OPERATOR", "UUID_POLICY", "REQUIRED_MEMBERS",
 )
 GUARD_RULE = "ssp:RECOMMENDED_SECURITY_CATEGORY:43"
 
 
 class NotebookFlowTests(unittest.TestCase):
-    def execute(self, models, version=1):
+    def execute(self, models):
         # Cell One executes its actual visible deployment config. Only Snowpark
         # transport symbols/session are replaced for the complete next two cells.
         namespace = cell_namespace(models)
@@ -36,8 +31,6 @@ class NotebookFlowTests(unittest.TestCase):
             # migration left their values null; no policy value is fabricated.
             for column in METADATA_COLUMNS:
                 row.setdefault(column, None)
-            if row["MAPPER_METADATA_VERSION"] is not None:
-                row["MAPPER_METADATA_VERSION"] = version
         before = copy.deepcopy(registry)
         tables = {
             source["RAW_TABLE"]: [inputs.raw("100", 1)],
@@ -73,16 +66,15 @@ class NotebookFlowTests(unittest.TestCase):
                                 for event in session.events))
         return namespace
 
-    def test_real_csv_through_complete_notebook_flow_preserves_registry_metadata(self):
+    def test_real_csv_through_complete_notebook_flow_preserves_lean_metadata(self):
         for models in (("SSP",), ("ASSESSMENT_RESULTS",),
                        ("SSP", "ASSESSMENT_RESULTS"), ("ASSESSMENT_RESULTS", "SSP")):
-            for version in (1, Decimal(1)):
-                with self.subTest(models=models, version_type=type(version).__name__):
-                    namespace = self.execute(models, version)
-                    self.assertEqual(
-                        {model: {"SSP": 47, "ASSESSMENT_RESULTS": 17}[model] for model in models},
-                        {context["config"]["OSCAL_MODEL"]: len(context["mapping_rows"])
-                         for context in namespace["MAPPING_CONTEXTS"]})
+            with self.subTest(models=models):
+                namespace = self.execute(models)
+                self.assertEqual(
+                    {model: {"SSP": 47, "ASSESSMENT_RESULTS": 17}[model] for model in models},
+                    {context["config"]["OSCAL_MODEL"]: len(context["mapping_rows"])
+                     for context in namespace["MAPPING_CONTEXTS"]})
 
     def test_original_blank_path_is_retained_and_does_not_break_canonical_sorting(self):
         namespace = self.execute(("SSP",))
@@ -103,3 +95,4 @@ class NotebookFlowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

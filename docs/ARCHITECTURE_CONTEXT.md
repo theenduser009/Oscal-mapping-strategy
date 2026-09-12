@@ -5,13 +5,15 @@
 One reusable metadata-driven ingestion template for current and future OSCAL
 models and approved source tables. Do not create a separate mapper per model.
 
-## Current registry-backed release
+## Current lean registry-backed release
 
 Field mappings, status, transforms and Notes are maintained once in
-[ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv). The existing
-registry supplies hierarchy plus versioned operator, identity and assembly
-columns after the approved [one-time setup](REGISTRY_METADATA_SETUP.md).
-There is no deployed JSON catalog or field-rule fallback.
+[ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv). The original
+nine registry columns supply hierarchy and instance identity. Only three sparse
+rules extend them: `OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`, through the
+[lean one-time setup](REGISTRY_METADATA_SETUP.md). There is no deployed JSON
+catalog or field-rule fallback. Fifteen earlier experimental columns are not
+read and are never required or dropped by the lean runtime.
 
 Cell One supplies visible source/lookup bindings, model selection and verified
 storage settings. Cell Three compiles these inputs to an inert in-memory plan.
@@ -19,17 +21,19 @@ Cell Four executes reusable transforms/operators; Cells Five through Seven keep
 the shared graph builder, guarded writer and runner. No metadata is evaluated
 as Python or SQL, and prose Notes are not executable.
 
-The three existing required metadata support values are now ordinary labelled
-CSV rows, not new field approvals. Required-mapping gates and complete-only CIA
-assembly remain in registry columns. Original SSP/AR behavior stays the parity
-baseline. Frozen historical catalogs and engines are tests only.
+The three existing required metadata support values are ordinary labelled CSV
+rows, not new field approvals. Complete-only CIA assembly uses the single
+`REQUIRED_MEMBERS` rule. The released CSV itself is regression-tested to retain
+the accepted SSP and AR rows; no hidden registry list duplicates those field
+rules. Original SSP/AR behavior stays the parity baseline. Frozen historical
+catalogs and engines are tests only.
 
 A future approved field using supported operations needs a mapping row.
 A future model also needs governed registry rows and deployment/destination
 settings. Unsupported transformation or collection identity behavior must be
 implemented once as a reusable capability; model selection does not invent it.
 
-The DEV registry extension is authorized but has not run here. Normal writes
+The revised three-column DEV registry extension has not run here. Normal writes
 remain disabled. The full DEV reload remains accepted; the daily path and AR
 persistence still require live acceptance. Earlier architecture snapshots below
 describe history, not current inputs.
@@ -174,3 +178,5 @@ Coverage must be measurable at field level:
 - Populated record count and population percentage
 
 Approved status values should distinguish completed work, in-progress work, more information required, no source data, and not applicable.
+
+

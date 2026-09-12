@@ -1,6 +1,26 @@
 # Project handoff - read this before resuming
 
-## Current action - registry binding correction; live setup pending
+## Current action - compact lean release ready; verify registry in DEV
+
+The lean runtime is implemented locally. Cell One and Cell Three now compile
+the maintained mapping CSV with the original nine registry fields plus only
+`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`. The other fifteen experimental
+registry fields are ignored, not dropped. The revised setup SQL adds, seeds,
+conflict-checks and verifies only those three columns.
+
+Exact SSP, CIA11 and AR17 parity is preserved. Multi-source routing and a
+metadata-only third model remain supported. Cell Four now relies on Cell Three's
+single normalized registry boundary; Cell Six removes SSP-only compatibility
+and repeated projection helpers while retaining guarded-write behavior. The
+source cells, V2 pages and combined notebook are synchronized; all 691 local
+tests pass. Cells Four and Six are 119 executable lines smaller in total. Writes
+remain disabled. No Snowflake execution has occurred for this lean change.
+
+**Next:** run only the published lean three-rule registry SQL and share its
+aggregate result. Do not run the notebook before registry setup is verified. See
+[the lean runtime checkpoint](checkpoints/2026-09-12-lean-registry-runtime.md).
+
+## Previous action - registry binding correction; superseded
 
 The owner reported a Snowflake statement error at anonymous-block line 270,
 position 18: `FLATTEN` received `VARCHAR(17076)` as its `INPUT`. In the
@@ -204,7 +224,7 @@ The maintained source is [notebooks/cells](../notebooks/cells/README.md); the [c
 
 A new Python cell in the same Snowflake session can reuse in-memory inputs. A new Snowflake session cannot. Rebuilding inputs may be necessary for a future authorized run, but the chat history alone does not keep dataframes or temporary snapshots alive.
 
-## Accepted evidence — preserve, do not repeat
+## Accepted evidence - preserve, do not repeat
 
 | Milestone | Verified scope | Evidence |
 | --- | --- | --- |
@@ -217,7 +237,7 @@ A new Python cell in the same Snowflake session can reuse in-memory inputs. A ne
 
 The full reload used transaction-only recovery and no permanent backup. It replaced the earlier eleven records too. Local tests supported publication; the owner-posted live report, not those tests, establishes persistence acceptance.
 
-## Row-count reduction — still unexplained
+## Row-count reduction - still unexplained
 
 | Table | Before full reload | After full reload | Fewer rows |
 | --- | ---: | ---: | ---: |
@@ -228,7 +248,7 @@ The loaded tables exactly matched the accepted new graph. That does **not** esta
 
 Next audit, when requested: compare old and new source-record/path coverage read-only, reporting only differences. The reload created temporary before-snapshots; whether the same Snowflake session remains open is not confirmed. Do not promise those snapshots survive a restart or that durable recovery exists. Leave the accepted targets unchanged while this is unresolved.
 
-## Daily SSP loading — existing code and remaining work
+## Daily SSP loading - existing code and remaining work
 
 The owner needs a repeatable daily process, not a fresh one-off cell for each run.
 
@@ -256,7 +276,7 @@ The register records **43 distinct Archer fields / 44 implemented source-to-targ
 - Metadata and all six approved component-reference routes have accepted mapped-scope evidence.
 - System-characteristics work is implemented with exceptions. PTA helper is still skipped despite Notes describing a custom property; its rule requires reconciliation. Do not confuse it with the package-type helper, which stays excluded as transient.
 - Package type's current property name differs from the Notes example; naming correction is parked.
-- Recommended security category has an “All Nulls” rule and no approved populated-value conversion. Other security-category row questions remain in the register.
+- Recommended security category has an "All Nulls" rule and no approved populated-value conversion. Other security-category row questions remain in the register.
 - Control Implementation is parked: its proposed property placement/rule has not been approved as a standard-conforming mapping. Do not invent a custom extension or redirect its path.
 - The six approved System Implementation rows stop at components[]. A separate component status mapping is not evidenced by those Excel rows.
 - Missing source descriptions, unproved hardware hydration and incomplete/absent CIA data remain explicit gaps. Generated support nodes do not add completed Excel rows.
@@ -328,7 +348,7 @@ The register records **43 distinct Archer fields / 44 implemented source-to-targ
 - Metadata and all six approved component-reference routes have accepted mapped-scope evidence.
 - System-characteristics work is implemented with exceptions. PTA helper is still skipped despite Notes describing a custom property; its rule requires reconciliation. Do not confuse it with the package-type helper, which stays excluded as transient.
 - Package type's current property name differs from the Notes example; naming correction is parked.
-- Recommended security category has an “All Nulls” rule and no approved populated-value conversion. Other security-category row questions remain in the register.
+- Recommended security category has an "All Nulls" rule and no approved populated-value conversion. Other security-category row questions remain in the register.
 - Control Implementation is parked: its proposed property placement/rule has not been approved as a standard-conforming mapping. Do not invent a custom extension or redirect its path.
 - The six approved System Implementation rows stop at components[]. A separate component status mapping is not evidenced by those Excel rows.
 - Missing source descriptions, unproved hardware hydration and incomplete/absent CIA data remain explicit gaps. Generated support nodes do not add completed Excel rows.
@@ -374,3 +394,4 @@ For future uncertain commit/readback failures: inspect first; never auto-rerun. 
 Project startup guidance is in [AGENTS.md](../AGENTS.md). Update this handoff, CURRENT_STATUS and affected field statuses after verified milestones and decisions, preserving linked historical evidence. State whether evidence is code review, local test, owner-reported output or live readback.
 
 This is durable project documentation, not a promise of unlimited conversational memory or an active Snowflake session. Work in this repository should read it before giving the next run instruction. The root instructions use the project mechanism documented in [official OpenAI documentation](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+

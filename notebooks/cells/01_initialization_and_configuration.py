@@ -20,8 +20,8 @@ import uuid
 
 session = get_active_session()
 
-# One selector. Field mappings live in the CSV; graph structure and identity
-# policies come from the extended registry. These are deployment settings only.
+# One selector. Field mappings live in the CSV; the existing registry supplies
+# structure and identity. Only three sparse execution rules extend it.
 SELECTED_MODELS = ("SSP", "ASSESSMENT_RESULTS")
 
 CONFIG = {
@@ -32,7 +32,7 @@ CONFIG = {
     "ARCHER_META_VALUE_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE",
     "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
     "IDENTITY_VERSION": "v1_registry_path_instance",
-    "METADATA_RELEASE": "registry-metadata-v1",
+    "METADATA_RELEASE": "lean-registry-v1",
 }
 
 SOURCE_FILES = [
@@ -92,7 +92,6 @@ MODEL_CONTRACTS = {
     "SSP": {
         "MODEL_KEY": "SSP",
         "POLICY": "metadata-v1",
-        "REGISTRY_METADATA_VERSION": 1,
         "UNREVIEWED_ROWS": "DEFER",
         "LOOKUP_GROUPS": [
             "components",
@@ -130,7 +129,6 @@ MODEL_CONTRACTS = {
     "ASSESSMENT_RESULTS": {
         "MODEL_KEY": "ASSESSMENT_RESULTS",
         "POLICY": "metadata-v1",
-        "REGISTRY_METADATA_VERSION": 1,
         "UNREVIEWED_ROWS": "DEFER",
         "LOOKUP_GROUPS": [],
         "MODEL_ALIASES": [
@@ -172,11 +170,9 @@ if not isinstance(MODEL_CONTRACTS, dict) or not MODEL_CONTRACTS:
 for _model_key, _contract in MODEL_CONTRACTS.items():
     if not isinstance(_contract, dict) or _contract.get("MODEL_KEY") != _model_key:
         raise ValueError("Invalid model deployment identity")
-    if (_contract.get("POLICY") != "metadata-v1" or
-            type(_contract.get("REGISTRY_METADATA_VERSION")) is not int or
-            _contract["REGISTRY_METADATA_VERSION"] != 1):
-        raise ValueError("Active models require registry metadata version 1")
-    if {"ROOT_PATH", "ELEMENTS", "DEFAULT_ELEMENT", "REFERENCE_GROUPS",
+    if _contract.get("POLICY") != "metadata-v1":
+        raise ValueError("Active models require the shared metadata policy")
+    if {"REGISTRY_METADATA_VERSION", "ROOT_PATH", "ELEMENTS", "DEFAULT_ELEMENT", "REFERENCE_GROUPS",
             "REQUIRED_RULE_IDS", "ELEMENT_PATHS", "MAPPING_RULES", "PATH_RULES",
             "EXCLUDED_FIELDS"} & _contract.keys():
         raise ValueError("Graph structure belongs in the registry; field rules belong in the mapping CSV")
@@ -232,3 +228,4 @@ print("Writes enabled:", CONFIG["EXECUTE_WRITES"])
 print("Enabled source/model routes:", [
     (profile["SOURCE_KEY"], list(profile["MODEL_KEYS"])) for profile in SOURCE_PROFILES
 ])
+

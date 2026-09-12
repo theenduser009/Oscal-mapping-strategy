@@ -181,7 +181,7 @@ class ModelSelectionTests(unittest.TestCase):
         for model, contract in namespace["MODEL_CONTRACTS"].items():
             self.assertEqual(model, contract["MODEL_KEY"])
             self.assertFalse(forbidden & contract.keys())
-            self.assertEqual(1, contract["REGISTRY_METADATA_VERSION"])
+            self.assertNotIn("REGISTRY_METADATA_VERSION", contract)
             self.assertEqual("DEFER", contract["UNREVIEWED_ROWS"])
             self.assertNotIn("TARGET_PATH", contract.get("REPORT", {}))
         defaults = deployment_value("CONFIG")
@@ -301,3 +301,4 @@ class ModelSelectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

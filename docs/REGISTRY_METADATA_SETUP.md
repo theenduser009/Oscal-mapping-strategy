@@ -1,14 +1,17 @@
 # One-time DEV registry setup, then the same seven cells
 
-The code no longer needs the JSON catalog. The registry must receive its
-approved structural metadata before this release can run. **The previous SQL
-failed in Snowflake before making registry changes. The corrected SQL still
-needs live verification.**
+The code no longer needs the JSON catalog. The lean runtime contract uses the
+existing nine registry columns plus only three sparse execution columns:
+`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`. **This revised migration has
+not been run or verified in Snowflake.**
 
-The reported block-line-270 error was a JSON binding type mismatch in the first
-dynamic conflict check, before ALTER or UPDATE. The correction binds explicit
-JSON strings and decodes them with PARSE_JSON in all four dynamic templates.
-It does not change the seven cells, metadata seeds or registry update scope.
+The reported block-line-270 attempt failed on a JSON binding type mismatch
+before ALTER or UPDATE. A later 18-column run was reported as finishing, but its
+aggregate result was not captured here; therefore some or all legacy columns
+may already exist in DEV. This migration safely ignores them. It continues to
+bind explicit JSON strings and decode them with `PARSE_JSON` in all four dynamic
+templates. The lean revision reduces only the registry execution contract; it
+does not broaden the SSP/Assessment Results scope or approve new mappings.
 See the [binding correction checkpoint](checkpoints/2026-09-12-registry-binding-correction.md).
 Local tests are not permission to enable the daily database writer.
 
@@ -30,12 +33,19 @@ actual Snowflake message; do not bypass it or change privileges automatically.
 
 ## What the migration changes
 
-- Adds 18 nullable metadata columns to the existing registry.
+- Adds only three nullable metadata columns when they do not already exist:
+  `OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`.
 - Populates only existing active SSP and Assessment Results rows.
 - Preserves the original nine columns and every existing row.
-- Keeps unimplemented collections disabled; does not approve mappings.
+- Retains explicit operators for the accepted SSP/Assessment Results paths and
+  the prior SSP singleton defaults. A null `OPERATOR` is not approval: the
+  shared engine may infer a supported shape from the original identity columns,
+  but a path is included only through approved CSV routing or explicit retained
+  metadata.
 - Updates blank values only, or leaves exact matches unchanged. Conflicting
   non-null metadata stops the run rather than being overwritten.
+- Does not drop, clear, validate or rely on any legacy columns left by an
+  earlier 18-column setup. Those columns are intentionally untouched.
 - Does not read, delete, truncate, insert into or update OSCAL DIM/FACT.
 
 Schema additions are DDL: **they auto-commit and cannot be rolled back by the
@@ -62,32 +72,30 @@ AR's target contract is still absent: a graph-validated/target-pending AR
 outcome is expected, **not an AR database write**. Live preview acceptance
 remains pending. No SSP reload, old pilot or standalone AR rerun is requested.
 
-## Registry columns: maintain structure once
+## Registry columns: lean execution contract
 
-Only relevant columns need values on each row. Root-only settings live once
-on the model root; reference-family settings live on the assignment collection.
+The original columns remain authoritative for model structure and identity:
+`OSCAL_MODEL_KEY`, `NODE_PATH`, `ELEMENT_TYPE`, `PARENT_NODE_PATH`,
+`IS_COLLECTION`, `INSTANCE_KEY_RULE`, `PROCESS_ORDER`, `IS_ACTIVE` and
+`ITEM_PATH`. Only behavior that cannot be determined safely from those columns
+or the approved mapping CSV is retained separately.
 
-| Columns | Meaning |
+| Added column | Meaning |
 | --- | --- |
-| MAPPER_METADATA_VERSION | Root marker for the supported metadata format; this release uses 1. |
-| MAPPER_ENABLED | Explicit true/false on every active row of a configured model. |
-| OPERATOR | Shared object, record, observations, properties, values, references, roles, parties or assignments behavior. |
-| PARENT_INSTANCE_RULE | none, singleton or source-record; never a guessed parent. |
-| UUID_POLICY | omit, node or instance. |
-| EMPTY_POLICY | omit or emit, within operator capabilities. |
-| LIST_INSTANCE_RULE | none or source-field-index for supported object lists. |
-| PROPERTY_NAME_RULE | source-field-slug where properties/observations require it. |
-| ASSEMBLY_POLICY / REQUIRED_MEMBERS | normal or complete-only; required scalar members separated by a vertical bar. |
-| DEFAULT_SINGLETON_POLICY | Root-level none or emit-outside-collections; preserves accepted SSP defaults. |
-| REQUIRED_RULE_IDS | Root-level required mapping-row identities separated by a vertical bar. |
-| ROLES_PATH / PARTIES_PATH | Governed companion paths for an assignment collection. |
-| PARTY_TYPE | Approved party type. |
-| PARTY_UUID_PARTS / PARTY_UUID_SOURCE_KEY | Deterministic reference identity and the existing scoped namespace. |
-| REPORT_TARGET_PATH | Optional root-level report annotation; not another mapping target. |
+| OPERATOR | Selects one shared assembler (`object`, `record`, `observations`, `properties`, `values`, `references`, `roles`, `parties` or `assignments`). Null means no explicit override; an approved CSV route may use a shape that is unambiguously derivable from the original registry identity columns. |
+| UUID_POLICY | Preserves the accepted payload UUID behavior: `omit`, deterministic node UUID, or deterministic instance UUID. |
+| REQUIRED_MEMBERS | Optional vertical-bar list for atomic assembly. The CIA security-impact object is emitted only when all three required objectives are available. |
 
-Existing NODE_PATH, PARENT_NODE_PATH, IS_COLLECTION, INSTANCE_KEY_RULE, ITEM_PATH
-and processing order stay authoritative. The seed retains the recorded
-document-ID and role/party identity contracts; it does not rewrite them.
+The executable set is approved CSV owners plus paths with retained non-null
+`OPERATOR`, closed over their registry ancestors and governed role/party
+siblings. Parent linkage, collection shape and instance identity come from the
+original registry columns. Field selection, target paths, transformations and
+provenance come from `Mapping/ARCHER_OSCAL_MAPPINGS.csv`. Empty handling,
+property naming, list positioning, role/party companion discovery and report
+annotations are shared engine conventions for the proven operators, not
+duplicated registry columns.
+The seed checks the recorded document-ID, component-reference, role, party and
+assignment identity contracts before DDL and does not rewrite them.
 
 ## Scope and maintenance
 
@@ -97,12 +105,15 @@ paths, Notes, provenance and accepted SSP/CIA/AR behavior are preserved.
 The review workbook remains a compilation snapshot, not another runtime input.
 
 A new approved field using a supported transform requires a CSV row.
-A new model requires its registry metadata and visible source/destination
-configuration, then reuses these seven cells. Genuinely unsupported operations
-need one reusable code enhancement, not a new model-specific mapper.
+A new model requires its original registry hierarchy/identity rows, mappings in
+the approved CSV, and visible source/destination configuration. Only paths that
+need a supported shared assembler receive an `OPERATOR`; `UUID_POLICY` or
+`REQUIRED_MEMBERS` are populated only when that behavior is actually required.
+Genuinely unsupported operations need one reusable code enhancement, not a new
+model-specific mapper or another policy-column expansion.
 
-The earlier 685 local tests did not exercise actual Snowflake bind transport;
-static and synthetic binding regressions are now included. None is live
-Snowflake proof. Successful registry setup, DIM/FACT writes, Matillion runs,
-daily-loader acceptance and full-model conformance remain unverified for this
-release.
+The current compact release passes 691 local tests, including static and
+synthetic bind-transport regressions. None is live Snowflake proof. Successful
+registry setup, DIM/FACT writes, Matillion runs, daily-loader acceptance and
+full-model conformance remain unverified for this release.
+

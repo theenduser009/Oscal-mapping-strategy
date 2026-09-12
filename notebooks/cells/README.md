@@ -5,13 +5,18 @@ These files are the single maintained implementation. The
 [combined notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py) are generated from them.
 
 Field rules come from the mapping CSV; structure and identity come from the
-versioned registry. Cell One contains visible deployment settings. No JSON
-catalog upload or extra daily runtime cell is required.
+original nine registry columns. Only `OPERATOR`, `UUID_POLICY` and
+`REQUIRED_MEMBERS` are active sparse registry extensions. Cell One contains
+visible deployment settings. No JSON catalog upload or extra daily runtime cell
+is required.
 
-**First complete the [one-time registry setup](../../docs/REGISTRY_METADATA_SETUP.md).**
-Then use the updated mapping CSV and all seven matching cells in one Snowflake
-session, with normal writes disabled and Cell Seven in PREVIEW. Do not mix old
-and new interfaces or rerun the accepted full DEV reload.
+The compactness audit is closed. All 691 local tests pass after removing
+duplicate registry normalization from Cell Four and SSP-only compatibility from
+Cell Six. First complete the
+[lean one-time registry setup](../../docs/REGISTRY_METADATA_SETUP.md), then use
+the updated mapping CSV and all seven matching cells in one Snowflake session,
+with normal writes disabled and Cell Seven in PREVIEW. Do not mix releases or
+rerun the accepted full DEV reload.
 
 Developers edit these files once, then use `python tools/sync_notebook_cells.py`;
 `--check` reports generated-page drift. This is a packaging tool, not a
@@ -33,7 +38,7 @@ Historical setup note (required rows were already present in accepted runs; do n
 to add only the missing `metadata.roles[]` and `metadata.parties[]` rows. Its
 registry-write flag is separate from the mapper and is `False` by default.
 
-## Historical read-only checkpoint sequence — not current run requests
+## Historical read-only checkpoint sequence - not current run requests
 
 After Cell 7 completes with writes disabled, run the separate
 [SSP scope and coverage validation](../validation/RUN_AFTER_07_ssp_scope_validation.py).
@@ -54,7 +59,7 @@ it does not print source record IDs or payload values.
 
 When security or status mappings still need a business crosswalk, run the
 [controlled-vocabulary crosswalk review](../validation/RUN_AFTER_07_ssp_crosswalk_review.py).
-It prints only lookup metadata labels and aggregate counts—never Archer IDs,
+It prints only lookup metadata labels and aggregate counts-never Archer IDs,
 source record IDs, or complete payloads.
 
 After the mapped-scope diagnostics, run the separate
@@ -169,3 +174,4 @@ their reusable `person` party objects. Cell 5 requires real `metadata.roles[]`
 and `metadata.parties[]` registry rows, uses each party payload UUID as the
 party node OSCAL UUID, and fails closed unless every role and party reference
 resolves exactly once. The four `TBD` responsible-party rows remain excluded.
+

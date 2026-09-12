@@ -1,19 +1,24 @@
 # Mapper V2 - seven copy-ready cells
 
-**Corrected release:** all 685 local tests pass, including the earlier six
-failing boundary cases. The prior testing hold is superseded; live registry
-setup and notebook preview are still pending. No new execution cells were added.
+**Compact lean release:** all 691 local tests pass. Exact accepted SSP, CIA11
+and AR17 outputs remain unchanged. The compactness audit is closed: duplicate
+registry parsing and SSP-only loader compatibility were removed without changing
+the seven-cell interface. Live registry setup and notebook preview are still
+pending. No new execution cells were added.
 
 Field mappings come from the [CSV](../../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
-Structure and identity come from the extended registry. **No JSON catalog is
-required.** These pages are generated from one maintained implementation.
+Structure and identity come from the original nine registry columns. Only
+`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS` are added as sparse execution
+rules. **No JSON catalog is required.** These pages are generated from one
+maintained implementation.
 
 ## First: one-time registry setup
 
-Run the [registry metadata SQL](../../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql)
-in a fresh Snowflake SQL worksheet and share its aggregate result. It changes
-only DEV registry metadata, not DIM/FACT. Do not run the new cells against the
-old registry. [Exact setup and preview steps](../../docs/REGISTRY_METADATA_SETUP.md).
+Run the [lean registry metadata SQL](../../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql)
+in a fresh Snowflake SQL worksheet and share its aggregate result. It adds or
+verifies only three DEV registry columns, leaves any earlier experimental
+columns untouched, and does not access DIM/FACT. Follow the
+[exact setup and preview steps](../../docs/REGISTRY_METADATA_SETUP.md).
 
 ## Then: the same seven Python cells
 
@@ -41,3 +46,4 @@ AR candidates or the accepted full DEV reload.
 Developers edit [notebooks/cells](../cells/README.md) once; run
 `python tools/sync_notebook_cells.py` to regenerate these pages and the
 [combined notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py).
+

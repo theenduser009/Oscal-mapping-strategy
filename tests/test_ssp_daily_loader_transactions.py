@@ -17,6 +17,18 @@ P = runpy.run_path(str(PATH))
 G = P["_load_transaction"].__globals__
 Error = P["LoadError"]
 PRIVATE = "private_payload_or_database_statement"
+STORAGE = dict(
+    MODEL_KEY="SSP", ROOT_PATH="system-security-plan",
+    ROOT_ELEMENT_TYPE="system-security-plan", SOURCE_SYSTEM_NAME="ARCHER",
+    SOURCE_TABLE_NAME="ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+    RAW_TABLE="DEV.RAW.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+    TARGET_DIM="DEV.GRC.DIM_SSP", TARGET_FACT="DEV.GRC.FACT_SSP",
+    DIM_PK_COLUMN="PK_OSCAL_SSP_ELEMENT_HASH",
+    FACT_PK_COLUMN="PK_FACT_OSCAL_DEPENDENCY_HASH",
+    IDENTITY_VERSION="v1_registry_path_instance",
+    PHYSICAL_PROFILE="BINARY16_UUID32", VERIFIED=True)
+DIM, FACT = STORAGE["TARGET_DIM"], STORAGE["TARGET_FACT"]
+DK, FK = STORAGE["DIM_PK_COLUMN"], STORAGE["FACT_PK_COLUMN"]
 
 
 class Session:
@@ -78,13 +90,13 @@ class Session:
 
 class DailyTransactions(unittest.TestCase):
     def setUp(self):
-        self.merges = tuple(P["_build_merge_sql"](target, stage, pk, [pk, "VALUE"])
+        self.merges = tuple(P["_build_merge_sql"](target, stage, pk, [pk, "VALUE"], STORAGE)
                             for target, stage, pk in (
-                                (P["SSP_LOAD_DIM"], "STAGE_DIM", P["SSP_LOAD_DIM_PK"]),
-                                (P["SSP_LOAD_FACT"], "STAGE_FACT", P["SSP_LOAD_FACT_PK"])))
+                                (DIM, "STAGE_DIM", DK), (FACT, "STAGE_FACT", FK)))
 
-    def run_tx(self, s, before=lambda: None, verify=lambda n: None):
-        return P["_load_transaction"](s, self.merges, before, verify, ((1, 1), (1, 1)))
+    def run_tx(self, s, before=lambda: None, verify=lambda n: None,
+               expected=((1, 1), (1, 1))):
+        return P["_load_transaction"](s, self.merges, before, verify, expected, STORAGE)
 
     def assert_clean(self, error, code):
         self.assertEqual(code, error.code)
@@ -93,9 +105,10 @@ class DailyTransactions(unittest.TestCase):
 
     def test_new_changed_unchanged_and_repeat_are_atomic(self):
         s, passes = Session(self.merges), []
+        baseline = copy.deepcopy(s.saved)
         def before():
             self.assertEqual("active", s.transaction)
-            self.assertEqual(s.original, s.pending)
+            self.assertEqual(baseline, s.pending)
         def verify(n):
             passes.append(n)
             for k in ("DIM", "FACT"):
@@ -103,16 +116,22 @@ class DailyTransactions(unittest.TestCase):
                 self.assertEqual((4, "new"), s.pending[k]["added"])
                 self.assertEqual(s.original[k]["same"], s.pending[k]["same"])
                 self.assertEqual(s.original[k]["outside"], s.pending[k]["outside"])
-        report = self.run_tx(s, before, verify)
-        self.assertEqual([1, 2], passes)
-        self.assertEqual(["TX", "BEGIN", "DIM", "FACT", "DIM", "FACT", "COMMIT"], s.events)
+        first = self.run_tx(s, before, verify)
+        baseline = copy.deepcopy(s.saved)
+        second = self.run_tx(s, before, verify, ((0, 0), (0, 0)))
+        self.assertEqual([1, 1], passes)
+        self.assertEqual(["TX", "BEGIN", "DIM", "FACT", "COMMIT"] * 2, s.events)
         self.assertEqual(s.saved, s.pending)
-        self.assertEqual({"INSERTS": 0, "UPDATES": 0}, report["CHANGE_COUNTS"][1]["DIM"])
-        self.assertEqual("COMMITTED", report["STATUS"])
+        self.assertEqual({"INSERTS": 1, "UPDATES": 1}, first["CHANGE_COUNTS"][0]["DIM"])
+        self.assertEqual({"INSERTS": 0, "UPDATES": 0}, second["CHANGE_COUNTS"][0]["DIM"])
+        self.assertEqual(1, first["VERIFIED_PASSES"])
+        self.assertEqual(1, second["VERIFIED_PASSES"])
+        self.assertEqual("COMMITTED", first["STATUS"])
+        self.assertEqual("COMMITTED", second["STATUS"])
 
     def test_failures_and_cancellation_at_each_merge_roll_back(self):
         for kind in ("DIM", "FACT"):
-            for number in (1, 2):
+            for number in (1,):
                 for when in ("sql", "collect"):
                     for fault in (RuntimeError, KeyboardInterrupt):
                         with self.subTest(kind=kind, number=number, when=when, fault=fault):
@@ -127,7 +146,7 @@ class DailyTransactions(unittest.TestCase):
     def test_before_write_and_each_verify_failure_stop_commit(self):
         def fail(*args):
             raise RuntimeError(PRIVATE)
-        for failure in (0, 1, 2):
+        for failure in (0, 1):
             s = Session(self.merges)
             def verify(n):
                 if n == failure:
@@ -139,10 +158,10 @@ class DailyTransactions(unittest.TestCase):
             if failure == 0:
                 self.assertEqual(0, s.calls["DIM"])
 
-    def test_insert_and_update_count_mismatches_on_both_passes(self):
-        for operation in range(4):
+    def test_insert_and_update_count_mismatches_on_atomic_merge(self):
+        for operation in range(2):
             for counter in (0, 1):
-                counts = [[1, 1], [1, 1], [0, 0], [0, 0]]
+                counts = [[1, 1], [1, 1]]
                 counts[operation][counter] += 1
                 s = Session(self.merges, counts=counts)
                 with self.assertRaises(Error):
@@ -174,21 +193,25 @@ class DailyTransactions(unittest.TestCase):
                     self.assertEqual(0, s.calls["ROLLBACK"])
 
     def test_wrong_target_or_destructive_statement_rejected(self):
-        for sql in ("DELETE FROM " + P["SSP_LOAD_DIM"], self.merges[0] + "; DROP TABLE T"):
+        for sql in ("DELETE FROM " + DIM, self.merges[0] + "; DROP TABLE T"):
             s = Session(self.merges)
             with self.assertRaises(Error):
                 P["_load_transaction"](s, (sql, self.merges[1]), lambda: None, lambda n: None,
-                                       ((1, 1), (1, 1)))
+                                       ((1, 1), (1, 1)), STORAGE)
             self.assertEqual([], s.events)
         with self.assertRaises(Error):
-            P["_build_merge_sql"]("PRODUCTION.DIM", "STAGE", "PK", ["PK", "VALUE"])
+            P["_build_merge_sql"]("PRODUCTION.DIM", "STAGE", "PK", ["PK", "VALUE"], STORAGE)
 
 
 class DailyBusinessSQL(unittest.TestCase):
     def setUp(self):
-        self.pk = P["SSP_LOAD_DIM_PK"]
+        self.pk = DK
         self.columns = [self.pk, "METADATA_JSON", "ELEMENT_TYPE", "SOURCE_RECORD_ID",
                         "DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"]
+        contract = dict(STORAGE, TARGET_DIM="TARGET", TARGET_FACT="OTHER")
+        with patch.dict(G, {"_load_runtime_contract": lambda value: value}):
+            self.merge_sql = P["_build_merge_sql"]("TARGET", "STAGE", self.pk,
+                                                   self.columns, contract)
         self.db = sqlite3.connect(":memory:")
         self.addCleanup(self.db.close)
         self.db.create_function("TO_VARCHAR", 1, lambda v: v)
@@ -216,8 +239,7 @@ class DailyBusinessSQL(unittest.TestCase):
                     ("new", '{"score":3}', "metadata", "r3", audit, audit, audit)]
         self.rows("STAGE", fresh("run1"))
         self.assertEqual({"INSERTS": 1, "UPDATES": 1, "UNCHANGED": 1}, self.changes())
-        sql = P["_build_merge_sql"](P["SSP_LOAD_DIM"], "STAGE", self.pk, self.columns)
-        pred = re.search(r"WHEN MATCHED AND (.*?) THEN UPDATE SET", sql).group(1)
+        pred = re.search(r"WHEN MATCHED AND (.*?) THEN UPDATE SET", self.merge_sql).group(1)
         for audit in P["_LOAD_AUDIT_COLUMNS"]:
             self.assertNotIn(audit, pred)
         keys = [r[0] for r in self.db.execute(
@@ -241,22 +263,22 @@ class DailyPostcommit(unittest.TestCase):
     def test_postcommit_readback_failure_keeps_committed_status_no_rollback_claim(self):
         context = {
             "names": {"D": "STAGE_D", "F": "STAGE_F", "DB": "OLD_D", "FB": "OLD_F"},
-            "plans": ([{"name": P["SSP_LOAD_DIM_PK"]}, {"name": "METADATA_JSON"}],
-                      [{"name": P["SSP_LOAD_FACT_PK"]}, {"name": "DEPENDENCY_TYPE"}]),
+            "plans": ([{"name": DK}, {"name": "METADATA_JSON"}],
+                      [{"name": FK}, {"name": "DEPENDENCY_TYPE"}]),
+            "contract": STORAGE,
             "records": 1, "candidate": {"NODES": 7, "EDGES": 6, "DIM_DUPLICATE_KEYS": 0,
                 "FACT_DUPLICATE_KEYS": 0, "DANGLING_SOURCE_KEYS": 0, "DANGLING_TARGET_KEYS": 0},
             "scope": {}, "changes": [{"INSERTS": 1, "UPDATES": 1}, {"INSERTS": 1, "UPDATES": 0}]}
         events, checks = [], []
-        def tx(session, merges, before, verify, expected):
+        def tx(session, merges, before, verify, expected, contract=None):
             before()
             verify(1)
-            verify(2)
             events.append("COMMIT")
             return {"STATUS": "COMMITTED", "CHANGE_COUNTS": [
                 {"DIM": {"INSERTS": 1, "UPDATES": 1}, "FACT": {"INSERTS": 1, "UPDATES": 0}}]}
         def verify(*args):
             checks.append(1)
-            if len(checks) == 3:
+            if len(checks) == 2:
                 raise Error("SAVED_VALUES_DIFFER")
             return {}
         out = io.StringIO()
@@ -274,3 +296,4 @@ class DailyPostcommit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -7,12 +7,6 @@ import uuid
 from types import MappingProxyType
 
 OSCAL_LOAD_RELEASE = "oscal-shared-daily-upsert-v2"
-SSP_LOAD_RELEASE = OSCAL_LOAD_RELEASE
-SSP_LOAD_DIM = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT"
-SSP_LOAD_FACT = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY"
-SSP_LOAD_DIM_PK = "PK_OSCAL_SSP_ELEMENT_HASH"
-SSP_LOAD_FACT_PK = "PK_FACT_OSCAL_DEPENDENCY_HASH"
-SSP_LOAD_SOURCE = "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
 _LOAD_AUDIT_COLUMNS = {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
 
 
@@ -23,15 +17,15 @@ class LoadError(RuntimeError):
         super().__init__(code)
 
 _LOAD_DIM_SOURCES = {
-    SSP_LOAD_DIM_PK: "NODE_KEY", "ELEMENT_TYPE": "ELEMENT_TYPE",
-    "OSCAL_UUID": "OSCAL_UUID", "METADATA_JSON": "METADATA_JSON",
+    "ELEMENT_TYPE": "ELEMENT_TYPE", "OSCAL_UUID": "OSCAL_UUID",
+    "METADATA_JSON": "METADATA_JSON",
     "SOURCE_SYSTEM_NAME": "SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME": "SOURCE_TABLE_NAME",
     "SOURCE_RECORD_ID": "SOURCE_RECORD_ID", "DW_PIPELINE_RUN_ID": "DW_PIPELINE_RUN_ID",
     "DW_LOAD_TIMESTAMP": "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ": "DW_LOAD_TIMESTAMP_TZ",
 }
 _LOAD_FACT_SOURCES = {
-    SSP_LOAD_FACT_PK: "EDGE_KEY", "FK_SOURCE_ELEMENT_HASH": "FK_SOURCE_ELEMENT_HASH",
-    "FK_TARGET_ELEMENT_HASH": "FK_TARGET_ELEMENT_HASH", "DEPENDENCY_TYPE": "DEPENDENCY_TYPE",
+    "FK_SOURCE_ELEMENT_HASH": "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH": "FK_TARGET_ELEMENT_HASH",
+    "DEPENDENCY_TYPE": "DEPENDENCY_TYPE",
     "SOURCE_OSCAL_UUID": "SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID": "TARGET_OSCAL_UUID",
 }
 _LOAD_HASH_SOURCES = {"NODE_KEY", "EDGE_KEY", "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"}
@@ -81,20 +75,6 @@ def _load_table(name):
     return ".".join(_load_ident(part.upper()) for part in parts)
 
 
-def _load_safe_type(value):
-    if not isinstance(value, str):
-        raise LoadError("MISSING_LIVE_COLUMN_DATATYPE")
-    value = value.strip().upper()
-    match = re.fullmatch(r"(?:VARCHAR|STRING|TEXT)(?:\(\s*([1-9][0-9]*)\s*\))?", value)
-    if match:
-        return "VARCHAR" + ("(" + str(int(match[1])) + ")" if match[1] else "")
-    if re.fullmatch(r"BINARY\(\s*16\s*\)", value):
-        return "BINARY(16)"
-    if value == "VARIANT" or re.fullmatch(r"TIMESTAMP_(?:NTZ|LTZ|TZ)(?:\([0-9]\))?", value):
-        return value
-    raise LoadError("UNSUPPORTED_LIVE_COLUMN_DATATYPE")
-
-
 def _load_column_plan(description, kind, contract=None):
     c = _load_runtime_contract(contract)
     mappings = _load_sources(c)
@@ -122,12 +102,19 @@ def _load_column_plan(description, kind, contract=None):
             continue
         if column_kind != "COLUMN" or entry.get("expression") not in (None, ""):
             raise LoadError("MAPPED_COLUMN_NOT_WRITABLE_" + name)
-        try:
-            dtype = _load_safe_type(entry["type"])
-        except LoadError as error:
+        raw_type = entry["type"]
+        dtype = raw_type.strip().upper() if isinstance(raw_type, str) else None
+        text = re.fullmatch(r"(?:VARCHAR|STRING|TEXT)(?:\(\s*([1-9][0-9]*)\s*\))?", dtype or "")
+        if text:
+            dtype = "VARCHAR" + ("(" + str(int(text[1])) + ")" if text[1] else "")
+        elif re.fullmatch(r"BINARY\(\s*16\s*\)", dtype or ""):
+            dtype = "BINARY(16)"
+        elif dtype != "VARIANT" and not re.fullmatch(
+                r"TIMESTAMP_(?:NTZ|LTZ|TZ)(?:\([0-9]\))?", dtype or ""):
+            code = "MISSING_LIVE_COLUMN_DATATYPE" if dtype is None else "UNSUPPORTED_LIVE_COLUMN_DATATYPE"
             # Only column metadata, never source values or full SQL, is reported.
-            raise LoadError(error.code, {"TABLE_KIND": kind, "COLUMN": name,
-                             "LIVE_TYPE": str(entry["type"])[:128]}) from None
+            raise LoadError(code, {"TABLE_KIND": kind, "COLUMN": name,
+                                   "LIVE_TYPE": str(raw_type)[:128]})
         source, encoding = sources[name], None
         expression = "s." + _load_ident(source)
         if source in _LOAD_HASH_SOURCES and dtype == "BINARY(16)":
@@ -162,6 +149,15 @@ def _load_column_plan(description, kind, contract=None):
         required -= {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
     if required - seen:
         raise LoadError("MISSING_TARGET_COLUMNS_" + "_".join(sorted(required - seen)))
+    types = {column["name"]: column["type"] for column in plan}
+    binary = ((c["DIM_PK_COLUMN"],) if kind == "DIM" else
+              (c["FACT_PK_COLUMN"], "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"))
+    uuids = (("OSCAL_UUID",) if kind == "DIM" else
+             ("SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"))
+    if any(types.get(name) != "BINARY(16)" for name in binary):
+        raise LoadError("CONFIRMED_BINARY16_SCHEMA_REQUIRED")
+    if any(types.get(name) != "VARCHAR(32)" for name in uuids):
+        raise LoadError("VERIFIED_UUID32_PROFILE_REQUIRED")
     return plan
 
 
@@ -180,22 +176,28 @@ def _load_unique(session, table, key):
                 "NULL_OR_DUPLICATE_KEYS")
 
 
-def _load_selection_schema(plans, contract=None):
-    c = _load_runtime_contract(contract)
-    dim_table, fact_table, dk, fk = _load_targets(c)
-    """Selection compares identities using the posted physical BINARY(16) schema."""
-    required = ((dk,),
-                (fk, "FK_SOURCE_ELEMENT_HASH", "FK_TARGET_ELEMENT_HASH"))
-    for plan, keys in zip(plans, required):
-        types = {c["name"]: c["type"] for c in plan}
-        if any(types.get(key) != "BINARY(16)" for key in keys):
-            raise LoadError("CONFIRMED_BINARY16_SCHEMA_REQUIRED")
-
-
-    for plan, columns in zip(plans, (("OSCAL_UUID",), ("SOURCE_OSCAL_UUID", "TARGET_OSCAL_UUID"))):
-        types = {column["name"]: column["type"] for column in plan}
-        if any(types.get(name) != "VARCHAR(32)" for name in columns):
-            raise LoadError("VERIFIED_UUID32_PROFILE_REQUIRED")
+def _load_projection_values(session, query, plan, stage_codes=False):
+    for column in plan:
+        name, dtype = _load_ident(column["name"]), column["type"]
+        generic = "INVALID_STORED_OR_STAGED_COLUMN_" + column["name"]
+        checks = []
+        if not column["nullable"]:
+            checks.append((name + " IS NULL", "REQUIRED_TARGET_VALUE_IS_NULL"))
+        if dtype == "BINARY(16)":
+            checks.append((name + " IS NULL OR OCTET_LENGTH(" + name + ")<>16",
+                           "BINARY_KEY_WIDTH_INVALID"))
+        if column["source"] in _LOAD_UUID_SOURCES:
+            pattern = r"[0-9a-f]{32}" if dtype == "VARCHAR(32)" else _LOAD_UUID_PATTERN
+            checks.append((name + " IS NULL OR NOT REGEXP_LIKE(" + name + ", '" + pattern + "')", None))
+        width = re.fullmatch(r"VARCHAR\((\d+)\)", dtype)
+        if width:
+            checks.append(("LENGTH(" + name + ")>" + width[1], "TARGET_STRING_CAPACITY_EXCEEDED"))
+        if column["name"] == "METADATA_JSON":
+            checks.append(("NOT COALESCE(IS_OBJECT(TRY_PARSE_JSON(TO_VARCHAR(" + name +
+                           "))),FALSE)", None))
+        for condition, specific in checks:
+            _load_zero(session, f"SELECT COUNT(*) AS N FROM ({query}) WHERE {condition}",
+                       specific if stage_codes and specific else generic)
 
 
 def _load_stage(session, raw_stage, stage, plan):
@@ -210,21 +212,12 @@ def _load_stage(session, raw_stage, stage, plan):
                         "INVALID_STORAGE_IDENTITY_" + column["name"])
     expressions = ", ".join(c["expression"] + " AS " + _load_ident(c["name"]) for c in plan)
     _load_query(session, f"CREATE TEMPORARY TABLE {stage} AS SELECT {expressions} FROM {raw_stage} s")
+    _load_projection_values(session, "SELECT * FROM " + stage, plan, stage_codes=True)
     for column in plan:
         name = _load_ident(column["name"])
-        if column["type"] == "BINARY(16)":
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM {stage} WHERE "
-                        f"{name} IS NULL OR OCTET_LENGTH({name}) <> 16", "BINARY_KEY_WIDTH_INVALID")
         if column["source"] in {"NODE_KEY", "EDGE_KEY"}:
             # Different text casing can collapse to the same physical binary key.
             _load_unique(session, stage, name)
-        if not column["nullable"]:
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM {stage} WHERE {name} IS NULL",
-                        "REQUIRED_TARGET_VALUE_IS_NULL")
-        width = re.fullmatch(r"VARCHAR\((\d+)\)", column["type"])
-        if width:
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM {stage} WHERE LENGTH({name}) > {int(width[1])}",
-                        "TARGET_STRING_CAPACITY_EXCEEDED")
 
 
 def _load_baseline_equal(session, names, queries):
@@ -330,24 +323,16 @@ WHERE COALESCE(d.N,0)<>COALESCE(r.N,0)"""
     return report
 
 
-def _load_columns(columns):
+def _load_comparison(columns, left="t", right="s"):
     names = [c["name"] if isinstance(c, dict) else c for c in columns]
     for name in names:
         _load_ident(name)
     if not names or len(names) != len(set(names)):
         raise LoadError("INVALID_PROJECTION_COLUMNS")
-    return names
-
-
-def _load_business_columns(columns):
-    return [name for name in _load_columns(columns) if name not in _LOAD_AUDIT_COLUMNS]
-
-
-def _load_difference_predicate(columns, left="t", right="s"):
     if left not in ("t", "s", "b") or right not in ("t", "s", "b"):
         raise LoadError("INVALID_COMPARISON_ALIAS")
     terms = []
-    for name in _load_business_columns(columns):
+    for name in (name for name in names if name not in _LOAD_AUDIT_COLUMNS):
         lhs, rhs = left + "." + _load_ident(name), right + "." + _load_ident(name)
         if name == "METADATA_JSON":
             # Structural object comparison, not JSON key ordering.
@@ -356,7 +341,7 @@ def _load_difference_predicate(columns, left="t", right="s"):
         terms.append("(" + lhs + " IS DISTINCT FROM " + rhs + ")")
     if not terms:
         raise LoadError("BUSINESS_COLUMNS_REQUIRED")
-    return " OR ".join(terms)
+    return names, " OR ".join(terms)
 
 
 def _build_merge_sql(target_table, source_view, pk_column, columns, contract=None):
@@ -365,11 +350,10 @@ def _build_merge_sql(target_table, source_view, pk_column, columns, contract=Non
     expected_pk = {dim_table: dk, fact_table: fk}
     if expected_pk.get(target_table) != pk_column:
         raise LoadError("TARGET_OUTSIDE_APPROVED_STORAGE_CONTRACT")
-    names = _load_columns(columns)
+    names, changed = _load_comparison(columns)
     if pk_column not in names:
         raise LoadError("MISSING_PROJECTED_PRIMARY_KEY")
     _load_table(source_view)
-    changed = _load_difference_predicate(columns)
     updates = ", ".join("t." + _load_ident(n) + " = s." + _load_ident(n)
                         for n in names if n != pk_column)
     return (
@@ -383,7 +367,7 @@ def _build_merge_sql(target_table, source_view, pk_column, columns, contract=Non
 
 def _load_expected_changes_sql(target, stage, pk, columns):
     target_sql, stage_sql, key = _load_table(target), _load_table(stage), _load_ident(pk)
-    changed = _load_difference_predicate(columns)
+    _, changed = _load_comparison(columns)
     return f"""SELECT
  (SELECT COUNT(*) FROM {stage_sql} s WHERE NOT EXISTS
      (SELECT 1 FROM {target_sql} t WHERE t.{key}=s.{key})) AS INSERTS,
@@ -420,27 +404,6 @@ def _load_scope_queries(names, contract=None):
     return dim, fact
 
 
-def _load_storage_values(session, query, plan):
-    for column in plan:
-        name, dtype = _load_ident(column["name"]), column["type"]
-        where = []
-        if not column["nullable"]:
-            where.append(name + " IS NULL")
-        if dtype == "BINARY(16)":
-            where.append(name + " IS NULL OR OCTET_LENGTH(" + name + ")<>16")
-        if column["source"] in _LOAD_UUID_SOURCES:
-            pattern = r"[0-9a-f]{32}" if dtype == "VARCHAR(32)" else _LOAD_UUID_PATTERN
-            where.append(name + " IS NULL OR NOT REGEXP_LIKE(" + name + ", '" + pattern + "')")
-        width = re.fullmatch(r"VARCHAR\((\d+)\)", dtype)
-        if width:
-            where.append("LENGTH(" + name + ")>" + width[1])
-        if column["name"] == "METADATA_JSON":
-            where.append("NOT COALESCE(IS_OBJECT(TRY_PARSE_JSON(TO_VARCHAR(" + name + "))),FALSE)")
-        if where:
-            _load_zero(session, f"SELECT COUNT(*) AS N FROM ({query}) WHERE " + " OR ".join(where),
-                       "INVALID_STORED_OR_STAGED_COLUMN_" + column["name"])
-
-
 def _load_scope_check(session, names, plans, contract=None):
     c = _load_runtime_contract(contract)
     dim_table, fact_table, dk, fk = _load_targets(c)
@@ -458,7 +421,7 @@ def _load_scope_check(session, names, plans, contract=None):
         conflict = " OR ".join(f"t.{_load_ident(c)} IS DISTINCT FROM s.{_load_ident(c)}" for c in ownership)
         _load_zero(session, f"SELECT COUNT(*) AS N FROM ({query}) t JOIN {names[kind]} s "
                            f"ON t.{pk}=s.{pk} WHERE {conflict}", "TARGET_IDENTITY_PROVENANCE_CONFLICT")
-        _load_storage_values(session, query, plan)
+        _load_projection_values(session, query, plan)
     report = {"OBSOLETE_DIM_ROWS": extra["D"], "OBSOLETE_FACT_ROWS": extra["F"]}
     if any(extra.values()):
         raise LoadError("OBSOLETE_TARGET_ROWS_BLOCKED", report)
@@ -525,7 +488,6 @@ def _load_prepare(session, nodes, edges, config):
     names = {k: prefix + "_" + k for k in ("NV", "EV", "IDS", "D", "F", "DB", "FB")}
     plans = [_load_column_plan(_load_query(session, "DESC TABLE " + target), kind, c)
              for target, kind in ((dim_table, "DIM"), (fact_table, "FACT"))]
-    _load_selection_schema(plans, c)
     records = _load_freeze(session, nodes, edges, names, c)
     expected_records = config.get("EXPECTED_SOURCE_RECORDS")
     if expected_records is not None and (
@@ -536,8 +498,6 @@ def _load_prepare(session, nodes, edges, config):
         _load_stage(session, names[raw], names[physical], plan)
     candidates = (f"SELECT * FROM {names['D']}", f"SELECT * FROM {names['F']}")
     candidate = _load_integrity(session, candidates, names["IDS"], records, contract=c)
-    for query, plan in zip(candidates, plans):
-        _load_storage_values(session, query, plan)
     for target, key in ((dim_table, "DB"), (fact_table, "FB")):
         _load_query(session, f"CREATE TEMPORARY TABLE {names[key]} AS SELECT * FROM {target}")
     context = {"names": names, "plans": plans, "records": records, "candidate": candidate, "contract": c, "storage_verified": True}
@@ -577,8 +537,8 @@ def _load_verify_context(session, context):
             raise LoadError("SAVED_BUSINESS_PAYLOAD_OR_KEYS_DIFFER", {"TABLE_KIND": kind, "COUNTS": changes})
         # Business-unchanged rows retain prior fields, including audit. Updated/new
         # rows must match every projected stage field, including current audit.
-        cols = _load_columns(plan)
-        business_same = "NOT (" + _load_difference_predicate(plan, "b", "s") + ")"
+        cols, business_changed = _load_comparison(plan, "b", "s")
+        business_same = "NOT (" + business_changed + ")"
         all_old = " OR ".join("t." + _load_ident(c) + " IS DISTINCT FROM b." + _load_ident(c) for c in cols)
         all_new = " OR ".join(
             ("TRY_PARSE_JSON(TO_VARCHAR(t." + _load_ident(c) + ")) IS DISTINCT FROM "
@@ -628,22 +588,21 @@ def _load_transaction(session, merges, before_write, verify, expected_changes, c
         _load_query(session, "BEGIN TRANSACTION")
     except BaseException:
         raise LoadError("BEGIN_OUTCOME_UNKNOWN") from None
-    step, pass_number, changes, checks = "PREWRITE_BASELINE", 0, [], []
+    step, pass_number, changes = "PREWRITE_BASELINE", 0, []
     try:
         before_write()
-        for pass_number in (1, 2):
-            result = []
-            for index, (step, statement) in enumerate(zip(("DIM_MERGE", "FACT_MERGE"), merges)):
-                actual = _load_dml_counts(_load_query(session, statement))
-                expected = tuple(expected_changes[index]) if pass_number == 1 else (0, 0)
-                if actual != expected:
-                    raise LoadError("UNEXPECTED_MERGE_CHANGE_COUNT",
-                                    {"EXPECTED_INSERTS": expected[0], "EXPECTED_UPDATES": expected[1],
-                                     "ACTUAL_INSERTS": actual[0], "ACTUAL_UPDATES": actual[1]})
-                result.append({"INSERTS": actual[0], "UPDATES": actual[1]})
-            changes.append({"PASS": pass_number, "DIM": result[0], "FACT": result[1]})
-            step = "READBACK_AND_INTEGRITY"
-            checks.append(verify(pass_number))
+        pass_number, result = 1, []
+        for index, (step, statement) in enumerate(zip(("DIM_MERGE", "FACT_MERGE"), merges)):
+            actual = _load_dml_counts(_load_query(session, statement))
+            expected = tuple(expected_changes[index])
+            if actual != expected:
+                raise LoadError("UNEXPECTED_MERGE_CHANGE_COUNT",
+                                {"EXPECTED_INSERTS": expected[0], "EXPECTED_UPDATES": expected[1],
+                                 "ACTUAL_INSERTS": actual[0], "ACTUAL_UPDATES": actual[1]})
+            result.append({"INSERTS": actual[0], "UPDATES": actual[1]})
+        changes.append({"PASS": pass_number, "DIM": result[0], "FACT": result[1]})
+        step = "READBACK_AND_INTEGRITY"
+        verify(pass_number)
     except BaseException as error:
         details = dict(_load_error_details(error), STEP=step, PASS=pass_number)
         try:
@@ -655,7 +614,7 @@ def _load_transaction(session, merges, before_write, verify, expected_changes, c
         _load_query(session, "COMMIT")
     except BaseException:
         raise LoadError("COMMIT_OUTCOME_UNKNOWN") from None
-    return {"STATUS": "COMMITTED", "CHANGE_COUNTS": changes, "VERIFIED_PASSES": len(checks)}
+    return {"STATUS": "COMMITTED", "CHANGE_COUNTS": changes, "VERIFIED_PASSES": 1}
 
 
 def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
@@ -706,8 +665,7 @@ def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
 
         phase = "TRANSACTION"
         transaction = _load_transaction(session, merges, before_write,
-                                        lambda number: _load_verify_context(session, context), expected,
-                                        **({"contract": c} if "contract" in context else {}))
+                                        lambda number: _load_verify_context(session, context), expected, c)
         result.update(writes_executed=True, persisted=True, transaction=transaction,
                       dim_merge_result=transaction["CHANGE_COUNTS"][0]["DIM"],
                       fact_merge_result=transaction["CHANGE_COUNTS"][0]["FACT"])
@@ -757,29 +715,13 @@ def verify_oscal_load(canonical_nodes_df, canonical_edges_df, config):
 
 
 
-def _load_legacy_contract():
-    # Compatibility adapter only: actual configured runs provide STORAGE_CONTRACT.
-    return MappingProxyType({
-        "MODEL_KEY": "SSP", "ROOT_PATH": "system-security-plan",
-        "ROOT_ELEMENT_TYPE": "system-security-plan", "SOURCE_SYSTEM_NAME": "ARCHER",
-        "SOURCE_TABLE_NAME": SSP_LOAD_SOURCE,
-        "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC." + SSP_LOAD_SOURCE,
-        "TARGET_DIM": SSP_LOAD_DIM, "TARGET_FACT": SSP_LOAD_FACT,
-        "DIM_PK_COLUMN": SSP_LOAD_DIM_PK, "FACT_PK_COLUMN": SSP_LOAD_FACT_PK,
-        "IDENTITY_VERSION": "v1_registry_path_instance",
-        "PHYSICAL_PROFILE": "BINARY16_UUID32", "VERIFIED": True,
-    })
-
-
 def _load_literal(value):
     if not isinstance(value, str) or not value.strip():
         raise LoadError("EMPTY_CONTRACT_VALUE")
     return "'" + value.replace("'", "''") + "'"
 
 
-def _load_runtime_contract(contract=None):
-    if contract is None:
-        return _load_legacy_contract()
+def _load_runtime_contract(contract):
     if not isinstance(contract, (dict, MappingProxyType)):
         raise LoadError("INVALID_STORAGE_CONTRACT")
     copied = dict(contract)
@@ -814,8 +756,7 @@ def _load_targets(contract):
 
 
 def _load_sources(contract):
-    dim = {k: v for k, v in _LOAD_DIM_SOURCES.items() if v != "NODE_KEY"}
-    fact = {k: v for k, v in _LOAD_FACT_SOURCES.items() if v != "EDGE_KEY"}
+    dim, fact = dict(_LOAD_DIM_SOURCES), dict(_LOAD_FACT_SOURCES)
     dim[contract["DIM_PK_COLUMN"]] = "NODE_KEY"
     fact[contract["FACT_PK_COLUMN"]] = "EDGE_KEY"
     return {"DIM": dim, "FACT": fact}
@@ -823,10 +764,6 @@ def _load_sources(contract):
 
 def _load_graph_contract(config):
     root = config.get("ROOT_PATH", config.get("MODEL_ROOT_PATH"))
-    if root is None and "STORAGE_CONTRACT" not in config:
-        legacy = _load_legacy_contract()
-        if config.get("OSCAL_MODEL") == legacy["MODEL_KEY"]:
-            root = legacy["ROOT_PATH"]
     fields = {"MODEL_KEY": config.get("OSCAL_MODEL"), "ROOT_PATH": root,
               "ROOT_ELEMENT_TYPE": config.get("ROOT_ELEMENT_TYPE"),
               "SOURCE_SYSTEM_NAME": config.get("SOURCE_SYSTEM_NAME"),
@@ -847,21 +784,11 @@ def _load_contract(config):
         raise LoadError("EXPLICIT_BOOLEAN_WRITE_MODE_REQUIRED")
     if config.get("OBSOLETE_ROW_POLICY", "BLOCK") != "BLOCK":
         raise LoadError("ONLY_BLOCK_OBSOLETE_POLICY_IS_APPROVED")
-    if "STORAGE_CONTRACT" in config:
-        supplied = config["STORAGE_CONTRACT"]
-        if supplied is None or (isinstance(supplied, (dict, MappingProxyType))
-                                and supplied.get("VERIFIED") is not True):
-            return None
-        contract = _load_runtime_contract(supplied)
-    else:
-        contract = _load_legacy_contract()
-        required = {"OSCAL_MODEL": contract["MODEL_KEY"], "TARGET_DIM": contract["TARGET_DIM"],
-                    "TARGET_FACT": contract["TARGET_FACT"], "DIM_PK_COLUMN": contract["DIM_PK_COLUMN"],
-                    "FACT_PK_COLUMN": contract["FACT_PK_COLUMN"], "SOURCE_SYSTEM_NAME": contract["SOURCE_SYSTEM_NAME"],
-                    "SOURCE_TABLE_NAME": contract["SOURCE_TABLE_NAME"], "RAW_TABLE": contract["RAW_TABLE"],
-                    "IDENTITY_VERSION": contract["IDENTITY_VERSION"]}
-        if any(config.get(k) != v for k, v in required.items()):
-            return None
+    supplied = config.get("STORAGE_CONTRACT")
+    if supplied is None or (isinstance(supplied, (dict, MappingProxyType))
+                            and supplied.get("VERIFIED") is not True):
+        return None
+    contract = _load_runtime_contract(supplied)
     matches = {"OSCAL_MODEL": "MODEL_KEY", "SOURCE_SYSTEM_NAME": "SOURCE_SYSTEM_NAME",
                "SOURCE_TABLE_NAME": "SOURCE_TABLE_NAME", "RAW_TABLE": "RAW_TABLE",
                "IDENTITY_VERSION": "IDENTITY_VERSION"}
@@ -977,3 +904,4 @@ def _load_logical_graph(nodes, edges, contract, expected_records=None):
 
 validate_and_load_oscal._oscal_loader_release = "oscal-shared-daily-upsert-v2"
 print("Cell 6 validation and loader initialized; execution remains in Cell 7")
+

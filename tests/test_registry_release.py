@@ -18,6 +18,13 @@ ROOT = Path(__file__).resolve().parents[1]
 MAPPING = ROOT / 'Mapping/ARCHER_OSCAL_MAPPINGS.csv'
 OLD = ROOT / 'tests/fixtures/mapper_contract_pre_registry.json'
 SUPPORT = ('support:metadata-title', 'support:oscal-version', 'support:document-version')
+REMOVED_REGISTRY_COLUMNS = {
+    'MAPPER_METADATA_VERSION', 'MAPPER_ENABLED', 'PARENT_INSTANCE_RULE',
+    'EMPTY_POLICY', 'LIST_INSTANCE_RULE', 'PROPERTY_NAME_RULE',
+    'ASSEMBLY_POLICY', 'DEFAULT_SINGLETON_POLICY', 'REQUIRED_RULE_IDS',
+    'REPORT_TARGET_PATH', 'ROLES_PATH', 'PARTIES_PATH', 'PARTY_TYPE',
+    'PARTY_UUID_PARTS', 'PARTY_UUID_SOURCE_KEY',
+}
 
 
 def mapping_rows():
@@ -36,6 +43,8 @@ def release_registry(original=None):
                 'assignments': ('SOURCE_FIELD_NAME+ID', 'UserList[]')}
     for original_row in originals:
         row = dict(original_row)
+        for column in REMOVED_REGISTRY_COLUMNS:
+            row.pop(column, None)
         path = row['NODE_PATH']
         model = row.get('OSCAL_MODEL_KEY') or next(
             key for key, value in old['MODELS'].items() if path.startswith(value['ROOT_PATH']))
@@ -46,34 +55,17 @@ def release_registry(original=None):
             spec = contract['DEFAULT_ELEMENT']
         if contract.get('ELEMENT_PATHS') and path not in contract['ELEMENT_PATHS']:
             spec = None
-        row.update(MAPPER_METADATA_VERSION=None, MAPPER_ENABLED=spec is not None,
-                   DEFAULT_SINGLETON_POLICY=None, REQUIRED_RULE_IDS=None,
-                   REPORT_TARGET_PATH=None, ROLES_PATH=None, PARTIES_PATH=None,
-                   PARTY_TYPE=None, PARTY_UUID_PARTS=None, PARTY_UUID_SOURCE_KEY=None)
+        row.update(OPERATOR=None, UUID_POLICY=None, REQUIRED_MEMBERS=None)
         if spec is not None:
             params, operator = spec.get('parameters', {}), spec['operator']
             if operator in recorded and row.get('INSTANCE_KEY_RULE') is None:
                 row['INSTANCE_KEY_RULE'], row['ITEM_PATH'] = recorded[operator]
-            row.update(OPERATOR=operator, PARENT_INSTANCE_RULE=params.get('parent_instance_rule'),
+            if path.endswith('.document-ids[]') and row.get('INSTANCE_KEY_RULE') is None:
+                row['INSTANCE_KEY_RULE'], row['ITEM_PATH'] = 'VALUE', '$'
+            row.update(OPERATOR=operator,
                        UUID_POLICY=('instance' if params.get('uuid_from_instance') else
                                     'node' if params.get('include_uuid') else 'omit'),
-                       EMPTY_POLICY='emit' if params.get('materialize_empty') else 'omit',
-                       LIST_INSTANCE_RULE=params.get('list_identity', 'none'),
-                       PROPERTY_NAME_RULE=params.get('property_name_rule'),
-                       ASSEMBLY_POLICY='complete-only' if params.get('optional_assembly') else 'normal',
                        REQUIRED_MEMBERS='|'.join(params.get('required_members', ())) or None)
-            group = next((group for group in contract.get('REFERENCE_GROUPS', ())
-                          if group['assignments_path'] == path), None)
-            if group:
-                row.update(ROLES_PATH=group['roles_path'], PARTIES_PATH=group['parties_path'],
-                           PARTY_TYPE=group['party_type'], PARTY_UUID_PARTS='|'.join(group['party_uuid_parts']),
-                           PARTY_UUID_SOURCE_KEY='source-one')
-        if path == contract['ROOT_PATH']:
-            required = contract.get('REQUIRED_RULE_IDS', ()) or SUPPORT
-            row.update(MAPPER_METADATA_VERSION=1,
-                       DEFAULT_SINGLETON_POLICY='emit-outside-collections' if contract.get('DEFAULT_ELEMENT') else 'none',
-                       REQUIRED_RULE_IDS='|'.join(required),
-                       REPORT_TARGET_PATH=contract.get('REPORT', {}).get('TARGET_PATH'))
         rows.append(row)
     return rows
 
@@ -151,16 +143,18 @@ class RegistryReleaseTests(unittest.TestCase):
         self.assertEqual((20, 19), (len(nodes.rows), len(edges.rows)))
         self.assertEqual([], metadata.payloads(nodes, nested['NODE_PATH']))
 
-    def test_required_support_row_removal_blocks_before_graph(self):
+    def test_csv_is_mapping_authority_without_hidden_required_rule_lists(self):
         for rule in SUPPORT:
-            contexts = self.compile([row for row in mapping_rows() if row['RULE_ID'] != rule], ('SSP',))
-            self.assertEqual('BLOCKED', contexts[0]['routing_report']['STATUS'])
-            self.assertFalse(contexts[0]['mapping_rows'])
-
-    def test_ar17_required_row_removal_still_blocks(self):
-        context = self.compile([row for row in mapping_rows() if row['RULE_ID'] != 'ar17:PATCH_SCORE'],
-                               ('ASSESSMENT_RESULTS',))[0]
-        self.assertEqual('BLOCKED', context['routing_report']['STATUS'])
+            context = self.compile(
+                [row for row in mapping_rows() if row['RULE_ID'] != rule], ('SSP',))[0]
+            self.assertEqual('READY', context['routing_report']['STATUS'])
+            self.assertNotIn(rule, {row['RULE_ID'] for row in context['mapping_rows']})
+        rule = 'ar17:PATCH_SCORE'
+        context = self.compile(
+            [row for row in mapping_rows() if row['RULE_ID'] != rule],
+            ('ASSESSMENT_RESULTS',))[0]
+        self.assertEqual('READY', context['routing_report']['STATUS'])
+        self.assertNotIn(rule, {row['RULE_ID'] for row in context['mapping_rows']})
 
     def test_config_value_does_not_read_same_named_source_field(self):
         row = {'SOURCE_FIELD_NAME': 'PIN', 'TRANSFORM_ID': 'text',
@@ -178,10 +172,17 @@ class RegistryReleaseTests(unittest.TestCase):
             self.assertNotIn('mapper_contract.v1.json', text)
             self.assertNotIn('_load_mapper_catalog', text)
 
-    def test_missing_registry_extension_fails_before_any_graph_build(self):
-        original = previous._registry_for_release(json.loads(previous.OLD_CATALOG_PATH.read_text(encoding='utf-8')))
-        with self.assertRaisesRegex(ValueError, 'versioned registry root'):
-            self.compile(registry=original)
+    def test_release_registry_uses_only_original_nine_plus_three_lean_columns(self):
+        registry = release_registry()
+        allowed = {
+            'OSCAL_MODEL_KEY', 'NODE_PATH', 'ELEMENT_TYPE', 'PARENT_NODE_PATH',
+            'IS_COLLECTION', 'INSTANCE_KEY_RULE', 'PROCESS_ORDER', 'IS_ACTIVE',
+            'ITEM_PATH', 'OPERATOR', 'UUID_POLICY', 'REQUIRED_MEMBERS',
+        }
+        self.assertTrue(all(set(row) <= allowed for row in registry))
+        contexts = self.compile(registry=registry)
+        self.assertTrue(all(context['routing_report']['STATUS'] == 'READY'
+                            for context in contexts))
 
     def test_exact_ar17_standalone_outputs_use_current_inputs(self):
         old_ns = graph.namespace(legacy=True)
@@ -208,3 +209,4 @@ class RegistryReleaseTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

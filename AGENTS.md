@@ -12,15 +12,16 @@
 - Current code is JSON-free. Mapping/ARCHER_OSCAL_MAPPINGS.csv maintains the
   147 reviewed occurrences, existing guard and three existing support rules.
   These support rows are not new Excel approvals. Cell One holds deployment
-  settings; the extended registry holds operators, hierarchy, identity and
-  required/assembly policies. No field-specific execution branch or duplicate
-  catalog is allowed.
-- The owner approved the one-time DEV registry metadata extension, not DIM/FACT
-  writes. sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql is prepared; live setup
-  and the matching seven-cell PREVIEW are still pending. Read
-  docs/REGISTRY_METADATA_SETUP.md for the exact current action. DDL additions
-  auto-commit; the metadata UPDATE uses a separate transaction. Do not claim
-  all setup is rollbackable or live-executed.
+  settings; the original nine registry columns own hierarchy and identity.
+  Only OPERATOR, UUID_POLICY and REQUIRED_MEMBERS are active sparse execution
+  extensions. No field-specific execution branch or duplicate catalog is
+  allowed.
+- The earlier eighteen-column registry design is superseded. The lean setup SQL
+  adds or verifies only the three active extension columns and never drops any
+  legacy DEV columns. It has not been live-verified. The compactness audit is
+  closed with 691 tests passing; do not advise a notebook run until the coherent
+  release is published and the registry setup is live-verified. Normal DIM/FACT
+  writes remain disabled.
 - The deployed JSON file is retired. Historical settings and mappings are
   frozen under tests/fixtures for independent parity only, never uploaded or
   loaded in production. Required title/version and AR17 gates remain preserved.
@@ -65,13 +66,3 @@ After a material accepted run, failure, user decision or change of next action, 
 
 These files provide project continuity; they do not preserve a Snowflake session or guarantee memory in unrelated chats. No mapper/database change is authorized merely by reading them.
 
-
-## Lean mapper comparison context
-
-When the owner asks why the current seven-cell mapper is much larger than the
-earlier compact implementation, read
-[docs/CODEX_LEAN_MAPPER_CONTEXT.md](docs/CODEX_LEAN_MAPPER_CONTEXT.md). Treat the
-earlier mapper as a simplicity baseline, not as authority to remove required
-metadata dispatch, identity, validation or persistence contracts. Start with a
-read-only per-cell comparison; do not refactor or enable writes unless the owner
-separately authorizes that change.
