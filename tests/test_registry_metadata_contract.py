@@ -190,10 +190,12 @@ class RegistryMetadataContractTests(unittest.TestCase):
                 for row, source in zip(rows, context["registry_rows"]))
         )
 
-    def test_explicit_programmatic_contract_stays_available(self):
+    def test_model_settings_cannot_bypass_registry_structure(self):
         original = base.model_contract()
-        decoded = self.decode(models={base.MODEL: original})[base.MODEL]
-        self.assertEqual(original, decoded)
+        original.update(ROOT_PATH=base.ROOT_PATH, ELEMENTS={
+            base.ROOT_PATH: {"operator": "object", "parameters": {"materialize_empty": True}}})
+        with self.assertRaises(ValueError):
+            self.decode(models={base.MODEL: original})
 
     def test_actual_builder_matches_explicit_metadata_output(self):
         mappings = [
@@ -339,10 +341,7 @@ class RegistryMetadataContractTests(unittest.TestCase):
              "MODEL_KEY": base.MODEL},
             group["source_namespace"],
         )
-        self.assertEqual(
-            ["$source_system", "$source_record", "party", "$reference_id"],
-            group["party_uuid_parts"],
-        )
+        self.assertNotIn("party_uuid_parts", group)
         config = dict(
             base.profile()["BASE_CONFIG"],
             SOURCE_SYSTEM_NAME="ARCHER",

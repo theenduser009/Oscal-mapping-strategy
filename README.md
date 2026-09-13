@@ -5,15 +5,49 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 **Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Accepted runs,
 cell responsibilities, unresolved gaps and the next action are recorded there.
 
-**Current compact lean release:** one mapping CSV, the original nine registry
-columns plus only three sparse execution rules, and the same
-[seven V2 cells](notebooks/cells_v2/README.md). No JSON catalog upload. The
-release passes all 697 local tests and its compactness audit is closed. The
-registry setup still needs live DEV verification before the notebook preview;
-follow the single current action in [current status](docs/CURRENT_STATUS.md).
+**Live SSP preview accepted:** 2,813 records, 70,102 nodes and 67,289 edges;
+validation, pre-write and storage checks passed with no target writes. DIM
+proposes 1,994 updates, zero inserts and 68,108 unchanged rows; all 67,289 FACT
+rows are unchanged. See the [live checkpoint](docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
+The [live value review](docs/checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+resolved all 36 impact-node changes as `low` to `Low` and matched all 1,958
+removed sensitivity members to direct source text after diagnostic trimming.
+The correction restores the documented `SECURITY_CATEGORY` Direct CSV mapping
+and lowercases FIPS lookup labels. The prior release passed
+[185 CI tests](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34761907759).
+Local regression tests for the CSV restoration pass; corrected live preview
+acceptance remains pending.
+
+**Next:** upload the updated CSV, replace [Cell Two](notebooks/cells/02_source_mapping_registry_inputs.py),
+and run all seven cells in PREVIEW with existing Cell One deployment settings
+and `EXECUTE_WRITES = False`. Cell One creates a new run ID. Do not repeat
+registry setup, cleanup, diagnostics or the full reload. Require the new report;
+raw whitespace, the other 855 sensitivity records or source/target changes
+mean zero updates are not guaranteed. COMMIT is not approved.
+
+**Current lean rebuild:** 1,838 lines across the same
+[seven cells](notebooks/cells_v2/README.md), down from 3,700. One mapping CSV and
+the original nine registry columns plus three execution columns drive the
+mapper. Alternate metadata formats, cached plans and repeated validations have
+been removed. The earlier expanded audit fixed eleven reproduced gaps and NumPy
+integer compatibility. [GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34758711257)
+passed all 158 tests, including eight installed Snowpark checks and complete
+seven-cell executions. See the [full validation record](docs/checkpoints/2026-09-13-full-validation.md).
+
+Run release tests with `python -m unittest discover -s tests/lean -v` and verify
+generated files with `python tools/sync_notebook_cells.py --check`.
+[Test instructions](tests/lean/README.md) distinguish local tests, installed
+Snowpark API checks and live Snowflake evidence. Daily COMMIT and committed
+readback acceptance remain pending; follow
+[current status](docs/CURRENT_STATUS.md).
 
 Normal writes stay disabled. SSP's accepted full DEV reload is not repeated;
 AR remains seventeen accepted in-memory mappings without verified storage.
+The completed review compared retained `MODEL_GRAPHS` with the current target;
+matching counts did not prove the old baseline was unchanged. Its trimmed
+source comparison did not establish raw-whitespace equality. Passing
+mapped-scope tests does not establish full OSCAL
+document conformance.
 
 ## Authoritative files
 
@@ -42,11 +76,11 @@ The committed notebook always starts with:
 
 Cell 6 already defines graph validation and insert/update MERGE loading; Cell 7
 orchestrates the normal notebook. The updated daily writer defaults to PREVIEW,
-uses an explicit Cell 7 mode for approved SSP DEV commits, and is not yet
-live-accepted. Clean in-memory keys alone are not permission to enable it.
+uses an explicit Cell 7 mode for approved SSP DEV commits. Its live PREVIEW is
+accepted; daily COMMIT and committed readback remain pending.
 The separate DEV persistence cells have their own explicitly scoped modes.
 
-## Latest verified checkpoint
+## Accepted full DEV reload - historical write evidence
 
 The [full SSP DEV reload](docs/SSP_FULL_DEV_RELOAD_2026-09-11.md) committed and
 verified **2,813 records, 70,102 DIM elements and 67,289 FACT dependencies**.
@@ -122,7 +156,7 @@ The same release makes the optional `security-impact-level` branch atomic:
 only payloads containing all three confidentiality, integrity, and
 availability objectives are emitted. Missing values are never invented.
 
-## Immediate next action
+## Historical mapped-scope follow-up
 
 The component hydration and hardened mapper release is accepted. Cell 4
 enforces the Excel-defined mapping contracts: the four approved SSP

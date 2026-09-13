@@ -54,20 +54,8 @@ def profile(source="source-one", table="SYNTHETIC_SOURCE"):
 
 def model_contract():
     return {
-        "MODEL_KEY": MODEL, "ROOT_PATH": ROOT_PATH, "POLICY": "metadata-v1",
+        "MODEL_KEY": MODEL, "POLICY": "metadata-v1",
         "STORAGE_CONTRACT": None,
-        "ELEMENTS": {
-            ROOT_PATH: {"operator": "object", "parameters": {
-                "materialize_empty": True, "include_uuid": True}},
-            SUMMARY: {"operator": "object", "parameters": {}},
-            RESULT: {"operator": "record", "parameters": {
-                "parent_instance_rule": "singleton", "include_uuid": True,
-                "registry_contract": {"instance_key_rule": "SOURCE_RECORD_ID", "item_path": None}}},
-            OBSERVATION: {"operator": "observations", "parameters": {
-                "parent_instance_rule": "source-record", "include_uuid": True,
-                "property_name_rule": "source-field-slug",
-                "registry_contract": {"instance_key_rule": "SOURCE_FIELD_NAME", "item_path": None}}},
-        },
     }
 
 
@@ -76,6 +64,8 @@ def registry_rows():
         "OSCAL_MODEL_KEY": MODEL, "NODE_PATH": path, "PARENT_NODE_PATH": parent,
         "ELEMENT_TYPE": kind, "IS_COLLECTION": path.endswith("[]"), "IS_ACTIVE": True,
         "INSTANCE_KEY_RULE": rule, "ITEM_PATH": None, "PROCESS_ORDER": index,
+        "OPERATOR": {ROOT_PATH: "object", SUMMARY: "object", RESULT: "record", OBSERVATION: "observations"}[path],
+        "UUID_POLICY": "omit" if path == SUMMARY else "node", "REQUIRED_MEMBERS": None,
     } for index, (path, parent, kind, rule) in enumerate((
         (ROOT_PATH, None, "synthetic-document", None),
         (SUMMARY, ROOT_PATH, "summary", None),
@@ -286,6 +276,8 @@ class MetadataDrivenContractTests(unittest.TestCase):
                 "FIELD_ONE": "first", "FIELD_TWO": "second"}}])
 
     def test_partial_executable_metadata_cannot_silently_use_legacy_catalog_approval(self):
+        from test_model_selection import cell_namespace
+        from test_registry_release import release_registry
         catalog = json.loads(STRUCTURAL_CATALOG.read_text(encoding="utf-8"))
         original, _, registry, _ = legacy_graph.ssp_fixture(legacy_graph.namespace(legacy=True))
         source = copy.deepcopy(catalog["SOURCES"][0])
@@ -293,7 +285,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
         source["BASE_CONFIG"] = copy.deepcopy(original["config"])
         baseline = next(row for row in original["mapping_rows"]
                         if row["SOURCE_FIELD_NAME"] == "TRACKING_ID")
-        registry_data = [dict(row, OSCAL_MODEL_KEY="SSP") for row in registry.collect()]
+        registry_data = release_registry([dict(row, OSCAL_MODEL_KEY="SSP") for row in registry.collect()])
         for explicit_metadata in (
             {"TRANSFORM_ID": "identifier"},
             {"APPROVAL_STATUS": "", "TRANSFORM_ID": "unknown-transform"},
@@ -307,7 +299,7 @@ class MetadataDrivenContractTests(unittest.TestCase):
                     self.ns["_compile_flat_mapping"](
                         row, catalog["MODELS"]["SSP"]["ELEMENTS"])
                 contexts = self.ns["compile_mapping_contexts"](
-                    {source["SOURCE_KEY"]: [row]}, registry_data, [source], catalog["MODELS"])
+                    {source["SOURCE_KEY"]: [row]}, registry_data, [source], cell_namespace(("SSP",))["MODEL_CONTRACTS"])
                 context = contexts[0]
                 self.assertEqual(context["routing_report"]["STATUS"], "BLOCKED")
                 self.assertEqual(context["routing_report"]["SELECTED_ROWS"], 0)
@@ -316,12 +308,14 @@ class MetadataDrivenContractTests(unittest.TestCase):
 
     def catalog_context(self, original, registry):
         """Run current flat mappings; the frozen fixture supplies only oracle scope."""
+        from test_model_selection import cell_namespace
+        from test_registry_release import release_registry, mapping_rows, SUPPORT
         catalog = json.loads(STRUCTURAL_CATALOG.read_text(encoding="utf-8"))
         model = original["config"]["OSCAL_MODEL"]
         source = copy.deepcopy(catalog["SOURCES"][0])
         source["MODEL_KEYS"] = (model,)
         source["BASE_CONFIG"] = copy.deepcopy(original["config"])
-        registry_data = [dict(row, OSCAL_MODEL_KEY=model) for row in registry.collect()]
+        registry_data = release_registry([dict(row, OSCAL_MODEL_KEY=model) for row in registry.collect()])
         paths = [row["NODE_PATH"] for row in registry_data]
         wanted = {(row["SOURCE_FIELD_NAME"], row["OWNER_ELEMENT_PATH"])
                   for row in original["mapping_rows"]}
@@ -341,12 +335,15 @@ class MetadataDrivenContractTests(unittest.TestCase):
                 found.append(pair)
         self.assertEqual(wanted, set(found), "Every oracle mapping needs its current flat row")
         self.assertEqual(len(wanted), len(found), "Do not duplicate an oracle mapping")
+        # Former controlled fields now use their maintained CSV support rows.
+        support = [row for row in mapping_rows() if row["RULE_ID"] in SUPPORT] if model == "SSP" else []
+        rows.extend(support)
         context = self.ns["compile_mapping_contexts"](
-            {source["SOURCE_KEY"]: rows}, registry_data, [source], catalog["MODELS"],
+            {source["SOURCE_KEY"]: rows}, registry_data, [source], cell_namespace((model,))["MODEL_CONTRACTS"],
             routing_metadata=catalog.get("ROUTING", {}))[0]
         context["lookups"] = copy.deepcopy(original["lookups"])
         self.assert_ready(context)
-        self.assertEqual(len(wanted), len(context["mapping_rows"]))
+        self.assertEqual(len(wanted) + len(support), len(context["mapping_rows"]))
         self.assertTrue(all(row["CONTRACT_SOURCE"] == "flat-mapping-artifact"
                             for row in context["mapping_rows"]))
         return context

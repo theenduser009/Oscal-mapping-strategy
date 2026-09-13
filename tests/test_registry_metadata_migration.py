@@ -328,8 +328,12 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
                         if key in {"controlled_fields", "registry_contract"}:
                             continue  # Required support rows replace controlled fields; old keys are preflighted.
                         self.assertEqual(actual["parameters"][key], value)
-        self.assertEqual(decoded["SSP"]["REFERENCE_GROUPS"],
-                         self.oracle["MODELS"]["SSP"]["REFERENCE_GROUPS"])
+        reference_groups = copy.deepcopy(self.oracle["MODELS"]["SSP"]["REFERENCE_GROUPS"])
+        for group in reference_groups:
+            # This accepted recipe is now fixed code, rather than interpreted tokens.
+            self.assertEqual(["$source_system", "$source_record", "party", "$reference_id"],
+                             group.pop("party_uuid_parts"))
+        self.assertEqual(decoded["SSP"]["REFERENCE_GROUPS"], reference_groups)
         self.assertNotIn("REQUIRED_RULE_IDS", decoded["SSP"])
         self.assertNotIn("REQUIRED_RULE_IDS", decoded["ASSESSMENT_RESULTS"])
 

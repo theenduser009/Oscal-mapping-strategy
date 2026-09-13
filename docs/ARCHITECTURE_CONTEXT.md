@@ -33,10 +33,23 @@ A future model also needs governed registry rows and deployment/destination
 settings. Unsupported transformation or collection identity behavior must be
 implemented once as a reusable capability; model selection does not invent it.
 
-The revised three-column DEV registry extension has not run here. Normal writes
-remain disabled. The full DEV reload remains accepted; the daily path and AR
-persistence still require live acceptance. Earlier architecture snapshots below
-describe history, not current inputs.
+The [live SSP value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+proves the reviewed impact changes are lookup casing and the 1,958 sensitivity
+removals correspond to populated direct source text after diagnostic trimming.
+The documented `SECURITY_CATEGORY` to
+`system-security-plan.system-characteristics.security-sensitivity-level` Direct
+CSV row is restored through the existing transform; no runtime branch is added.
+Cell Two separately lowercases FIPS lookup labels. This preserves raw Direct
+source values; it does not infer sensitivity from CIA or recommended category.
+
+SSP and AR mapped graphs are committed and verified; see the current checkpoints.
+The next scope is [POA&M references](POAM_NEXT_RUN.md) from the same Source One.
+One reviewed POAMS row uses the references operator without REFERENCE_TYPE,
+which produces UUID-only nodes. A type is still required for hydrated mappings.
+Existing package-scoped identity and the shared loader remain unchanged.
+The seven cells total 1,855 lines; compiled-plan release lean-csv-registry-v2
+requires matching Cells Three and Four. POA&M live registry, destination binding
+and preview remain pending. This is not a complete OSCAL POA&M document.
 
 ### Earlier metadata-engine migration - September 11 (superseded where noted above)
 
@@ -163,7 +176,7 @@ Only Source One SSP and accepted AR17 are configured. Rejected/candidate/deferre
 
 ## Known limitation
 
-Nested collection-to-collection paths require explicit parent-instance context. The consolidated graph builder fails closed when multiple possible parent instances exist and no unique parent-instance key is available. This protects all model routes. The accepted AR results/observations hierarchy now supplies explicit parent-instance context; additional AR paths and POA&M remain unimplemented until their contracts are approved.
+Nested collection-to-collection paths require explicit parent-instance context. The consolidated graph builder fails closed when multiple possible parent instances exist and no unique parent-instance key is available. This protects all model routes. The accepted AR results/observations hierarchy now supplies explicit parent-instance context; additional nested AR/POA&M item-detail paths still require approved contracts. The direct POA&M root-to-item reference graph is implemented; its live preview and persistence remain pending.
 
 ## Sprint completion evidence
 
@@ -178,5 +191,3 @@ Coverage must be measurable at field level:
 - Populated record count and population percentage
 
 Approved status values should distinguish completed work, in-progress work, more information required, no source data, and not applicable.
-
-

@@ -15,7 +15,7 @@ CATALOG = ROOT / "tests/fixtures/mapper_contract_pre_registry.json"
 OLD_CATALOG = ROOT / "tests/fixtures/mapper_contract_pre_flat.json"
 MAPPING = ROOT / "tests/fixtures/mappings_pre_registry.csv"
 BUILDER = ROOT / "notebooks/cells/05_registry_graph_builder.py"
-RETIRED_KEYS = ("MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS")
+RETIRED_KEYS = ("MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS", "ELEMENTS", "DEFAULT_ELEMENT")
 RETIRED_FUNCTIONS = ("_metadata_rule_candidates", "_metadata_rule_matches", "_apply_mapping_path_rules")
 
 
@@ -76,6 +76,8 @@ class RetiredCatalogInputTests(unittest.TestCase):
         self.assertFalse(context["config"]["EXECUTE_WRITES"])
 
     def test_existing_flat_populated_value_guard_still_stops_graph_publication(self):
+        from test_model_selection import cell_namespace
+        from test_registry_release import release_registry
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
         old = json.loads(OLD_CATALOG.read_text(encoding="utf-8"))
         with MAPPING.open(encoding="utf-8-sig", newline="") as handle:
@@ -85,7 +87,8 @@ class RetiredCatalogInputTests(unittest.TestCase):
         source["MODEL_KEYS"] = ("SSP",)
         source["BASE_CONFIG"] = dict(catalog["CONFIG_DEFAULTS"], RUN_ID="flat-guard-test")
         context = self.ns["compile_mapping_contexts"](
-            {source["SOURCE_KEY"]: [guard]}, _registry_for_release(old), [source], catalog["MODELS"],
+            {source["SOURCE_KEY"]: [guard]}, release_registry(_registry_for_release(old)),
+            [source], cell_namespace(("SSP",))["MODEL_CONTRACTS"],
             routing_metadata=catalog.get("ROUTING", {}))[0]
         self.assertEqual("READY", context["routing_report"]["STATUS"])
         self.assertEqual("BLOCKED_IF_POPULATED", context["mapping_rows"][0]["APPROVAL_STATUS"])

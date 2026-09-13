@@ -7,6 +7,48 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
+## Active scope - POA&M reference mapping implemented; live preview pending
+
+The owner confirmed POAMS in the same Source One CURATED_JSON, Reference to
+plan-of-action-and-milestones.poam-items[]. Do not ask for a second source table
+for this scoped mapping. Follow docs/POAM_NEXT_RUN.md and its single read-only
+SQL next action. POAM is configured for graph-only preview; the actual destination
+names are not yet bound. The UUID-only item nodes use standard package-scoped
+identities; no titles/descriptions or external-document UUID resolution are
+invented. Compiled-plan release is lean-csv-registry-v2 in matching Cells 3/4.
+The POAM registry update touches only its existing root/item execution metadata
+and item ITEM_PATH; it is prepared, not live accepted. No whole-registry reset.
+Keep screenshots/private values outside GitHub. SSP and AR acceptance stands.
+
+## Accepted AR scope
+
+The owner selected AR next, followed by POA&M and remaining model work by
+Monday. Follow docs/AR_NEXT_RUN.md. The CSV now enables 30 AR fields: 17
+previously live accepted plus 13 owner-approved additions. The current AR graph
+has now been inserted and verified; per-field populated coverage remains separate. Preserve the 15 deferred rows, including threshold-name conflicts,
+two parked shape rejections and prior workflow/score deferrals. No new
+runtime or registry rules are needed for the 13 additions. AR now has its own
+owner-confirmed storage binding with the same physical definition as SSP.
+SSP's no-change COMMIT and readback are accepted; do not repeat them as a
+prerequisite for AR. System implementation is part of SSP, with six accepted
+component-reference mappings and partial hydration. Do not claim full models
+complete from partial field coverage.
+
+## Latest shared AR COMMIT accepted
+
+The owner-posted AR COMMIT is COMMITTED_AND_VERIFIED for 2,813 records,
+73,189 DIM inserts and 70,376 FACT inserts. All validation/write/commit flags
+passed and committed readback matched every inserted row; cleanup is REMOVED.
+See docs/checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md.
+The prior AR schema mismatch is superseded by this successful storage run.
+AR tables are now populated. Do not rerun sql/ddl, recreate tables, reset the
+registry or request another unchanged run. Retain the accepted SSP checkpoint.
+Advance the owner's next POA&M work without adding a separate runtime engine.
+Thirty AR metadata rows remain enabled and fifteen deferred. Aggregate graph
+persistence does not establish every field's populated coverage or full OSCAL
+conformance. Continue using relevant private screenshot excerpts alongside
+synthetic tests without publishing source values.
+
 ## Non-negotiable metadata-driven architecture
 
 - Current code is JSON-free. Mapping/ARCHER_OSCAL_MAPPINGS.csv maintains the
@@ -18,11 +60,35 @@
   allowed.
 - The earlier eighteen-column registry design is superseded. The lean setup SQL
   adds or verifies only the three active extension columns and never drops any
-  legacy DEV columns. It has not been live-verified. The compactness audit is
-  closed with 697 tests passing. The owner approved the exact fifteen-column DEV
-  cleanup; run only the guarded cleanup SQL before further registry verification.
-  Do not advise a notebook run until the registry setup is live-verified. Normal
-  DIM/FACT writes remain disabled.
+  legacy DEV columns. Registry setup and cleanup must not be repeated: the
+  owner posted an accepted live SSP PREVIEW, recorded in
+  docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md.
+  The completed live value reconciliation is recorded in
+  docs/checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md: all 36 impact
+  nodes are case-only low-to-Low changes, and 1,958 removed sensitivity members
+  match direct SECURITY_CATEGORY text after diagnostic trimming. The documented
+  Direct CSV mapping and corrected lowercase FIPS lookup are implemented. The
+  corrected live SSP PREVIEW is accepted in
+  docs/checkpoints/2026-09-13-ssp-preview-no-target-changes.md, posted in main
+  commit 9d08e8978cbb5894239b688743880b75accadeea: 2,813 source records,
+  70,102 nodes and 67,289 edges, with zero DIM/FACT inserts or updates. All
+  validation/storage checks passed; that preview's write/commit flags are false.
+  The subsequent live SSP COMMIT is accepted in
+  docs/checkpoints/2026-09-13-ssp-commit-completed-and-verified.md, posted in main
+  commit a53c16aff842cde044f7bda2efb64a2198ac3117. It reports
+  COMMITTED_AND_VERIFIED for the same counts, with target DML attempted and
+  writes/persisted/committed true. Expected changes and committed readback both
+  show zero inserts/updates; all rows are unchanged and cleanup is REMOVED.
+  This accepts the live no-change commit and readback, superseding the earlier
+  daily-COMMIT-pending status. It does not prove changed-row persistence.
+  Retain this accepted checkpoint; do not repeat an unchanged run, diagnostics,
+  registry work or the full reload. Use the existing seven cells for the next
+  intended SSP run and record changed-row counts/readback when source changes
+  arrive. Keep shared EXECUTE_WRITES false; Cell Seven selects PREVIEW/COMMIT.
+  Direct sensitivity preserves source text; CIA mappings normalize recognized
+  low/moderate/high values but retain explicitly approved legacy strings.
+  Changed-row acceptance, AR storage, deployment/scheduling and full OSCAL/FIPS
+  conformance remain separate. Run tests/lean, not the retired private-API suite.
 - The deployed JSON file is retired. Historical settings and mappings are
   frozen under tests/fixtures for independent parity only, never uploaded or
   loaded in production. Required title/version and AR17 gates remain preserved.
@@ -45,10 +111,22 @@
 
 - Matillion converts raw field-ID JSON to the Archer RAW table's CURATED_JSON column. The OSCAL notebook reads that column; it does not perform that upstream conversion.
 - Cells 1-5 configure/read/normalize/transform/build. Cell 6 already defines validation, insert/update MERGE loading, and load verification. Cell 7 orchestrates them. Do not say the notebook has no loader.
-- Normal Cells 1-7 runs used writes disabled. The separate full DEV reload was accepted; the existing Cells 6-7 daily persistence path is not yet end-to-end accepted.
+- The live SSP no-change COMMIT and post-commit readback are accepted: 2,813 records, 70,102 nodes and 67,289 edges. Changed-row acceptance is separate; PREVIEW_COMPLETE alone is not a write.
 - User notebook cell numbers after seven are session-local. Identify a separate cell by its file and purpose, not by assuming every Cell 8 is the same program.
 - Registry governs hierarchy and identity. Excel/CSV source field, model, exact element path, mapping type and Notes govern field mappings. Registry presence is not proof of complete mapping.
 - Separate implemented, candidate-only, runtime-accepted in memory, persisted/read-back verified, deferred, blocked, and full OSCAL conformance. Do not turn one status into another.
+
+## Owner-provided example testing
+
+For relevant mapping changes, include tests using readable examples from the
+owner's Google Drive screenshots alongside synthetic regression tests. The
+private local transcriptions are in the workspace's private/curated-json
+folder outside this repository. Exercise only explicitly transcribed values;
+never fill omitted screenshot rows or claim a complete dataset was executed.
+If the relevant example is absent or unreadable, state that test gap.
+Keep screenshots, source values and detailed results out of GitHub and release
+packages; publish only aggregate outcomes. Use synthetic source-record IDs
+when isolating a source excerpt.
 
 ## Work and communication rules
 
@@ -66,4 +144,3 @@
 After a material accepted run, failure, user decision or change of next action, update PROJECT_HANDOFF and the current-action section of CURRENT_STATUS; update the mapping register when field statuses change. Link the exact evidence and preserve historical reports. Record what changed, what is accepted, what is pending/deferred, why, and the single next action. Verify remote publication before saying a change is on GitHub.
 
 These files provide project continuity; they do not preserve a Snowflake session or guarantee memory in unrelated chats. No mapper/database change is authorized merely by reading them.
-

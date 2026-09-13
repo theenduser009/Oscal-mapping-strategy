@@ -1,7 +1,600 @@
 # Current Status
 
+## Current action - POA&M reference mapping implemented; live preview pending
 
-## Current action - CSV-only Cell Three release for preview
+The owner confirmed Source One's POAMS field and the reviewed Reference mapping
+to plan-of-action-and-milestones.poam-items[]. No second Archer table is needed.
+The CSV now enables this one row. The same seven cells produce package-scoped
+UUID-only reference nodes and root-to-item links; no item details are invented.
+The runtime is 1,855 lines, six more than the AR binding baseline. SSP and AR
+mapped outputs remain unchanged in regression tests.
+
+Eleven focused POA&M tests pass. [CI passed all 205 tests with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34773274346)
+on code commit ad41b4fabe569ddc4d1d32c9e2192f572f4f7cad, including the real
+Snowpark POA&M VARIANT graph test. Generated cells also match.
+The readable private screenshot's empty-reference case is covered; populated
+POAMS examples and live persistence remain unverified. Reference graph
+acceptance does not establish complete POA&M document conformance.
+
+**Next action:** run [READ_ONLY_POAM_INPUTS.sql](../notebooks/validation/READ_ONLY_POAM_INPUTS.sql)
+as SQL in Snowflake and post its three result grids: destination columns,
+existing registry rows and aggregate reference shapes. Then follow
+[POA&M next run](POAM_NEXT_RUN.md). The two-row registry metadata update is
+prepared; it is not a registry reset or a live execution claim. Actual POA&M
+destination names remain unbound. Retain accepted SSP/AR commits and do not
+repeat them or rerun the historical AR replacement DDL.
+
+## Accepted checkpoint - AR insert and committed readback
+
+The [owner-posted AR COMMIT](checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md)
+from main commit 823570de2c62e5e91cbfbad888befb040030fc87 reports
+COMMITTED_AND_VERIFIED for ASSESSMENT_RESULTS: 2,813 source records,
+73,189 DIM inserts and 70,376 FACT inserts, with zero updates/unchanged rows.
+Validation, pre-write validation and storage verification passed. Target DML,
+writes, persisted and committed flags are true. Post-commit verification reports
+zero remaining inserts/updates and all 73,189 DIM / 70,376 FACT rows unchanged;
+temporary cleanup is REMOVED. This accepts changed-row persistence and committed
+readback for the posted AR graph, superseding the schema-failure/load-pending state.
+
+The AR DIM is now populated. The empty-table replacement in sql/ddl is historical
+and must not be rerun. No further schema repair, registry reset, unchanged
+preview, repeated COMMIT or SSP reload is requested. Existing table/key, UUID,
+audit and hierarchy checks remain enforced by the shared seven-cell loader.
+
+This is aggregate graph persistence evidence, not full AR/OSCAL conformance or
+populated-value coverage of every enabled field. Thirty AR rows remain enabled
+in metadata and fifteen remain deferred; this report supplies no new field-level
+approval. Readback proves no remaining differences in the committed batch; it
+is not evidence of a separately executed repeat COMMIT.
+
+**Next action:** advance the owner's next selected POA&M scope using the existing
+mapping register and registry contracts, retaining the specific AR deferrals
+for later decisions. Preserve this successful AR checkpoint and the accepted
+SSP checkpoint; do not repeat accepted loads as a prerequisite for POA&M.
+
+## Previous action - apply the owner-requested empty AR DIM replacement
+
+The owner explicitly confirmed that the AR DIM is completely empty/truncated
+and requested updated DDL. No additional row-count query is needed for this
+agreed empty-table repair. See [the owner confirmation](checkpoints/2026-09-13-ar-empty-dim-replacement.md)
+and [the replacement SQL](../sql/ddl).
+
+The DDL fixes all six verified AR DIM differences in one replacement, uses
+AR's own primary-key name, and retains the ten-column SSP physical contract.
+FACT already matches. The runtime loader, mappings and registry are unchanged.
+COPY GRANTS retains privileges except ownership. This is a one-time repair of
+the owner-confirmed empty table, not a reusable daily-load script.
+
+**Next action:** run the SQL once in Snowflake outside an active transaction,
+then rerun Cell Seven in PREVIEW using the already-built AR contexts. Require
+PREVIEW_PASSED_NO_TARGET_DML with storage/pre-write validation true. Then run
+the authorized Cell Seven COMMIT and capture COMMITTED_AND_VERIFIED plus counts
+and readback. Rerun Cells One through Seven only if earlier inputs/selection or
+session contexts changed. No additional SSP run or registry reset is needed.
+No replacement or load has been executed from this workstation. Published DDL
+and earlier CI success are not live DDL/write acceptance.
+
+## Previous action - correct the six verified AR DIM schema differences
+
+The [complete owner-posted DESC evidence](checkpoints/2026-09-13-assessment-results-vs-ssp-target-schema-evidence.md)
+from main commit 781049f78085ba016e7004161b78aac74f4cdd8f resolves the earlier
+missing-definition request. FACT matches the shared physical contract.
+AR DIM differs from SSP in six places: ELEMENT_TYPE VARCHAR(32) -> (64),
+SOURCE_TABLE_NAME VARCHAR(50) -> (128), SOURCE_RECORD_ID VARCHAR(32) -> (128),
+DW_PIPELINE_RUN_ID VARCHAR(50) -> (64), DW_LOAD_TIMESTAMP NTZ -> TZ(9), and
+missing DW_LOAD_TIMESTAMP_TZ TZ(9). Full AR key names/types are correct.
+Adding only the missing column is insufficient. No loader rewrite is required.
+
+**Next action:** obtain the one-row result of this read-only Snowflake query:
+
+~~~sql
+SELECT COUNT(*) AS ROW_COUNT,
+       COUNT(DW_LOAD_TIMESTAMP) AS POPULATED_TIMESTAMPS
+FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT;
+~~~
+
+Then prepare the smallest owner-authorized schema correction, preserving any
+existing rows. Do not assume AR is empty because this pipeline has not yet
+written successfully. VARCHAR widening and adding a nullable timestamp column
+are supported. Direct ALTER COLUMN from TIMESTAMP_NTZ to TIMESTAMP_TZ is not a
+supported type change; see [Snowflake ALTER COLUMN](https://docs.snowflake.com/en/sql-reference/sql/alter-table-column).
+If populated NTZ timestamps need conversion, establish their timezone semantics
+rather than assuming UTC. Adding a nullable column leaves historical values
+null; unchanged mapper rows preserve their audit values, so a no-op run is not
+a backfill. The existing CREATE TABLE IF NOT EXISTS script changes no existing
+table. No blind DROP/replace, FACT changes, registry reset or notebook rerun is
+needed for this diagnostic. The previous AR failure made no target writes.
+
+## Previous action - inspect AR schema mismatch before changing tables
+
+The [posted AR PREVIEW failure](checkpoints/2026-09-13-assessment-results-target-schema-mismatch.md)
+from main commit 85ce0594d5d8fc94987c6b689e896167da8ad67e confirms AR is now
+selected. It reports FAILED_BEFORE_COMMIT, TARGET_SCHEMA_MISMATCH in PREPARATION,
+and false writes/persisted/committed/target_dml_attempted/commit_attempted.
+No AR target DML was attempted. The empty groups list reflects the failure
+before the route preview completed, not absence of an AR model selection.
+
+Earlier AR graph-only preview did not inspect destinations. The newly bound
+route now checks exact table columns, types/widths and nullability. The posted
+failure does not preserve the specific differing columns. Earlier evidence
+showed an NTZ timestamp and omitted the second timestamp, but current actual
+column definitions must be inspected before declaring the complete cause.
+The CREATE TABLE IF NOT EXISTS script does not repair an existing table.
+
+**Next action:** run these read-only SQL statements in Snowflake and post both
+result grids (column names, full types, nullability and expressions):
+
+~~~sql
+DESC TABLE RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT;
+DESC TABLE RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY;
+~~~
+
+Use those definitions to prepare the smallest correction matching the owner's
+shared SSP standard. No new model-specific timestamp rules, registry reset,
+unchanged notebook rerun or blind table recreation is required for diagnosis.
+Preserve existing data. Code's 193-test CI and private excerpt checks remain
+valid; they are not proof that these live destination schemas match.
+
+## Previous action - select AR; the latest posted COMMIT ran SSP only
+
+The [latest owner-posted report](checkpoints/2026-09-13-ssp-commit-reverification.md)
+from main commit 2a9e7512f405c802dbdc4d790c43ffcbec0cb998 contains a single SSP
+group. It reports COMMITTED_AND_VERIFIED for 2,813 records, 70,102 nodes and
+67,289 edges, with zero DIM/FACT inserts or updates and successful readback.
+This is SSP re-verification, not an AR load attempt or AR loader failure.
+
+**Next action:** in the published Cell One that includes AR's storage binding,
+set SELECTED_MODELS = ("ASSESSMENT_RESULTS",), keep shared EXECUTE_WRITES false,
+and set Cell Seven OSCAL_LOAD_MODE = "COMMIT". Run Cells One through Seven in
+order so SOURCE_PROFILES, SOURCE_INPUTS and MAPPING_CONTEXTS are rebuilt for AR.
+Changing only the selector without rerunning the earlier cells leaves old
+contexts in memory. The report must name ASSESSMENT_RESULTS and finish
+COMMITTED_AND_VERIFIED with actual DIM/FACT changes and committed readback.
+The existing loader checks the live AR schema before any target DML; reconcile
+actual schema mismatches with the owner's shared SSP definition if reported.
+No registry reset or additional SSP run is needed.
+
+AR code remains tested (193 CI tests, no skips; four private screenshot excerpt
+checks). No new code change or test rerun is needed to diagnose this posted
+SSP-only selection. AR persistence remains pending its actual run report.
+
+## Previous action - load AR using the shared SSP table definition
+
+The owner confirmed that all model tables use SSP's physical rules; only table
+and primary-key names differ. The full AR pair and key names are now posted.
+See [the owner decision and binding](checkpoints/2026-09-13-ar-shared-ssp-storage-contract.md)
+and [DIM/FACT evidence](checkpoints/2026-09-13-assessment-results-dim-fact-target-evidence.md).
+The earlier NTZ/second-timestamp difference is a schema mistake to reconcile,
+not a reason to add a separate loader rule. No names need to be resubmitted.
+
+Cell One now configures the AR destination using the same BINARY16_UUID32
+contract as SSP. The existing loader checks the actual schema before any DML;
+configuration VERIFIED does not claim that this live check has already passed.
+No loader/transform/registry changes are needed. The seven cells total 1,849
+lines. AR mapping scope remains 30 enabled rows and 15 deferred rows.
+
+The accepted shared AR graph preview remains 2,813 records, 73,189 nodes and
+70,376 edges. AR target writes/readback are not yet accepted. Four exact private
+screenshot scalar examples passed again locally (12 nodes, 8 edges, no writes).
+Private values and transcriptions remain outside GitHub and release files.
+[GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34769427830) passed all
+193 tests with zero skips, including AR write/readback and schema-rejection tests.
+
+**Next action:** follow [AR next run](AR_NEXT_RUN.md). Match AR's tables to the
+[shared target definition](../sql/CREATE_ASSESSMENT_RESULTS_TABLES.sql), replacing
+no existing data. Replace Cell One, select AR only, keep shared EXECUTE_WRITES
+false and set Cell Seven to COMMIT. This authorized load first performs the
+existing previews and live schema checks, then merges and verifies readback.
+Success is COMMITTED_AND_VERIFIED with actual DIM/FACT counts. Stop on schema
+mismatch; inspect unknown commit outcomes before any retry. No registry reset,
+SSP rerun, new CSV change or separate AR engine is needed for this binding.
+
+## Previous action - complete the selected AR destination definition
+
+The [owner-posted table definition](checkpoints/2026-09-13-assessment-results-target-table-selection.md)
+selects `ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT`.
+The abbreviated `DIM_OSCAL_AR_ELEMENT` is not the selected destination.
+This is table-definition evidence, not a failed mapping run.
+
+The post shows a BINARY primary key, but its full name is truncated; BINARY/TEXT
+lengths and the FACT definition are not supplied. The visible
+`DW_LOAD_TIMESTAMP` is `TIMESTAMP_NTZ`, whereas the current shared loader
+expects `TIMESTAMP_TZ`. A second timezone audit column is not shown; absence
+is not established from a partial screenshot.
+
+**Next action:** obtain the untruncated key/column definitions and matching
+FACT destination, then adapt the existing storage binding/projection to the
+verified physical schema. Do not invent key names, assume column lengths,
+change tables to fit the loader, or reuse the SSP destination. The accepted
+AR graph preview remains valid evidence and needs no unchanged rerun for this
+metadata collection step.
+
+## Previous action - bind the AR destination after accepted graph preview
+
+The owner posted the [shared Assessment Results preview](checkpoints/2026-09-13-assessment-results-preview-target-contract-pending.md)
+in main commit `5c8ef0cbdc5bec29b1f88d1be2e5ea1ae802faeb`.
+It reports `PREVIEW_COMPLETE` and graph validation passed for 2,813 source
+records, 73,189 nodes and 70,376 edges. The AR load status is
+`MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING`; storage verification and
+pre-write validation are false, and no writes, persistence or commit occurred.
+
+This accepts the posted shared-AR graph preview. The report does not include
+Cell Three's selected-field count or per-field coverage, so it does not by
+itself establish populated-value acceptance for every newly enabled field.
+AR DIM/FACT names and physical column definitions are still unverified;
+Cell One correctly has no AR storage contract.
+
+**Next action:** obtain the result rows from the already supplied
+[destination-column query](../notebooks/validation/READ_ONLY_OSCAL_DESTINATION_COLUMNS.sql).
+The owner saved the SQL itself on main; that is not its output.
+Use actual table/key/UUID/column definitions to configure the existing writer.
+Do not repeat the accepted AR graph preview merely to discover table names,
+or substitute SSP destinations. Preserve the AR30 mapping scope and deferrals
+in [AR next run](AR_NEXT_RUN.md); target-aware preview follows verified binding.
+
+## Previous action - AR30 preview and destination verification
+
+The owner chose to advance Assessment Results next, then POA&M and remaining
+model work. The [accepted SSP COMMIT](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
+remains the DEV baseline: 2,813 records, 70,102 elements and 67,289 relationships,
+with zero inserts/updates and successful committed readback. No unchanged SSP
+rerun is requested.
+
+The maintained CSV now enables 30 AR fields: the 17 previously live-accepted
+fields plus 13 conflict-free additions from the earlier owner-approved
+observation/inline-property batch. Only execution metadata changes; the seven
+runtime cells remain 1,838 lines and registry/identity rules are unchanged.
+The new 13 are implemented and tested locally, not live accepted or persisted.
+The remaining 15 AR rows retain their specific deferrals. Historical threshold
+source-name differences are not silently aliased.
+
+The owner requires relevant screenshot examples in future mapping tests,
+alongside synthetic regressions. Four exact transcribed AR scalar excerpts
+have now passed local mapping and graph validation in separate synthetic
+record contexts: three zero examples and one nonzero example were preserved.
+The resulting 12 nodes and 8 parent-child edges validated, with no target
+writes. This is an excerpt check, not execution of the complete screenshot
+dataset. Real values and detailed transcriptions remain private.
+
+**Next action:** follow [AR next run](AR_NEXT_RUN.md): upload the updated CSV,
+select AR only in Cell One, keep shared writes false and Cell Seven in PREVIEW,
+then run the same seven cells. Require READY/30 selected AR rows and the complete
+pipeline report. Supply the [destination-column query](../notebooks/validation/READ_ONLY_OSCAL_DESTINATION_COLUMNS.sql)
+result so the existing writer can be bound to verified AR tables. No registry
+reset, separate AR runtime, old candidate rerun or SSP reload is needed.
+
+System implementation is part of SSP: its six accepted component-reference
+mappings are implemented with partial hydration. Full SSP, AR, POA&M and other
+model completion are not established by this increment. The Monday target
+does not waive unresolved source identity, reference or storage decisions.
+Earlier instructions below are historical where superseded.
+
+## Accepted checkpoint - SSP COMMIT and readback for an unchanged batch
+
+The owner posted the [live SSP COMMIT report](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
+in main commit `a53c16aff842cde044f7bda2efb64a2198ac3117`.
+Both pipeline and SSP group report `COMMITTED_AND_VERIFIED` for
+2,813 source records, 70,102 DIM elements and 67,289 FACT relationships.
+Validation, pre-write validation and storage verification passed.
+Target DML was attempted; writes executed, persisted and committed are true.
+Expected changes and post-commit verification both report zero inserts and
+zero updates, with all 70,102 DIM / 67,289 FACT rows unchanged. Temporary
+cleanup is `REMOVED`.
+
+This accepts the live commit path, unchanged-row preservation and committed
+readback for this batch. It supersedes the earlier daily-COMMIT-pending status.
+It does not demonstrate persistence of newly inserted or updated rows with
+this release. No mapping or registry changes were needed; CIA normalization
+and Direct sensitivity behavior remain as previously documented.
+
+**Next action:** retain this accepted commit checkpoint. No repeat of the
+unchanged run, registry setup/cleanup or full DEV reload is needed. Use the
+existing seven-cell writer for the next intended SSP run; record actual
+insert/update counts and successful committed readback when legitimate source
+changes arrive. Changed-row persistence acceptance, AR storage, daily
+deployment/scheduling and full OSCAL conformance remain separate milestones.
+An unknown commit outcome or failed post-commit readback requires inspection,
+not an automatic retry. Prior instructions below are historical.
+
+## Previous checkpoint - corrected SSP PREVIEW accepted with no target changes
+
+The owner posted the [corrected live SSP preview](checkpoints/2026-09-13-ssp-preview-no-target-changes.md)
+in main commit `9d08e8978cbb5894239b688743880b75accadeea`.
+It reports `PREVIEW_COMPLETE` for 2,813 source records, 70,102 nodes and
+67,289 edges. DIM has 0 inserts, 0 updates and 70,102 unchanged rows;
+FACT has 0 inserts, 0 updates and 67,289 unchanged rows. Validation,
+pre-write validation and storage verification passed. Writes executed,
+persisted, committed, target DML attempted and commit attempted are all false;
+temporary cleanup is `REMOVED`.
+
+This accepts the corrected SSP preview against that target snapshot: the
+previously explained 1,994 proposed updates are gone. It does not prove future
+runs will be unchanged. The Direct `SECURITY_CATEGORY` mapping preserves source
+text; it does not derive a FIPS rating. CIA mappings normalize recognized
+low/moderate/high values and still permit explicitly approved legacy strings.
+This checkpoint does not establish full FIPS normalization or OSCAL conformance.
+
+**Next action:** retain this accepted preview as the baseline; do not repeat
+registry setup/cleanup, the full DEV reload or an unchanged preview. Daily
+write/readback, AR persistence and full OSCAL conformance remain separate
+pending milestones. No daily COMMIT has been executed or approved by this
+preview. Keep normal writes disabled until the daily write/readback step is
+explicitly ready and authorized. The prior run instructions below are history.
+
+## Previous action - corrected SSP PREVIEW (now accepted)
+
+The [live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+resolves the reviewed differences. All 36 impact nodes match their frozen
+source transformations; each objective changes stored `low` to candidate `Low`,
+and the lowercase lookup comparison reports `CASE_NORMALIZATION_NEEDED`.
+All 1,958 removed sensitivity members match populated direct `SECURITY_CATEGORY`
+text after the diagnostic strips source whitespace. This does not prove the
+raw strings have no surrounding whitespace. There were no anomalies or writes.
+
+The correction combines the one-line Cell Two lowercase lookup fix with
+restoration of the documented Direct CSV mapping from `SECURITY_CATEGORY` to
+`system-security-plan.system-characteristics.security-sensitivity-level`.
+It uses the existing direct transform and adds no runtime code; the seven
+cells remain 1,838 lines. The prior FIPS/review release passed
+[185 CI tests](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34761907759).
+Local regression tests for the CSV restoration pass; corrected live PREVIEW
+acceptance remains pending.
+
+**Next action:** upload the updated [mapping CSV](../Mapping/ARCHER_OSCAL_MAPPINGS.csv),
+replace [Cell Two](../notebooks/cells/02_source_mapping_registry_inputs.py), and
+run **Cells One through Seven** for a fresh PREVIEW. Keep existing Cell One
+deployment settings and `EXECUTE_WRITES = False`; Cell One supplies a new
+`RUN_ID`, and Cell Seven stays in `PREVIEW`. Record the actual aggregate report.
+Do not repeat the diagnostic, registry setup/cleanup or full DEV reload.
+
+With unchanged source and target, these fixes should remove the 1,994 explained
+differences. Zero updates are not guaranteed: raw whitespace, the other 855
+sensitivity records or source/target changes can affect the new result.
+Daily COMMIT and committed readback remain pending and COMMIT is not approved.
+AR storage and full OSCAL conformance remain separate unresolved work.
+
+## Previous action - reconcile the reviewed SSP field changes
+
+Historical analysis follows; the completed value reconciliation and corrected
+PREVIEW instruction above supersede its open questions and rerun restrictions.
+
+The owner posted the [completed live read-only review](checkpoints/2026-09-13-ssp-read-only-dim-review.md):
+`READ_ONLY_REVIEW_COMPLETE`, 70,102 candidate nodes across 2,813 source records,
+with 0 inserts, 1,994 updates and 68,108 unchanged rows. All four anomaly counts
+are zero and target DML was not attempted. The helper now has live execution
+evidence; neither browser recovery nor repeating the preview is needed to read
+this posted outcome.
+
+The changes affect 1,986 distinct records:
+
+- 1,958 system-characteristics nodes remove `security-sensitivity-level`.
+- 36 security-impact-level nodes change all three confidentiality, integrity
+  and availability objectives.
+
+The first change has a concrete mapping cause: `SECURITY_CATEGORY` is
+`DEFERRED` in the current CSV and the frozen pre-rebuild CSV. Cell Three excludes
+that row and Cell Four builds fresh payloads from executable mappings.
+Consequently the sensitivity member is omitted, regardless of populated source
+data. The mapping register records that Direct row as parked for reconciliation;
+it does not establish approval to remove existing stored values. Cell Six
+replaces the complete `METADATA_JSON` on update, so those omissions would become
+stored-field removals if committed.
+
+The 36 impact-node changes are identified, but the aggregate report contains
+no old/new values. It cannot establish whether those changes are only approved
+normalization or a source/value difference. This still needs value-level evidence.
+
+**Next action:** reconcile the parked sensitivity mapping with the stored values
+and inspect the before/after impact values. Keep normal writes disabled.
+Do not rerun the accepted registry setup, cleanup, full reload or seven-cell
+preview. The report compares the retained candidate with the current target;
+the removed historical preview snapshot is not reconstructed by matching counts.
+Daily COMMIT/readback, AR storage and full OSCAL conformance remain pending.
+The seven runtime cells are unchanged; the published review release passed
+[171 tests without skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34760685348).
+
+## Previous action - prepare review of 1,994 proposed SSP updates
+
+The owner's live `oscal-lean-daily-v3.1` SSP run is accepted at
+`PREVIEW_COMPLETE`: **2,813 source records, 70,102 nodes and 67,289 edges**.
+Validation, pre-write and storage checks passed for `source-one` / `SSP`.
+See the [accepted live preview](checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
+
+| Target | Proposed inserts | Proposed updates | Unchanged |
+| --- | ---: | ---: | ---: |
+| DIM | 0 | 1,994 | 68,108 |
+| FACT | 0 | 0 | 67,289 |
+
+Writes executed, persisted, committed and target DML are all **false**.
+Temporary cleanup reports `REMOVED`. Do not repeat registry setup, cleanup,
+the seven-cell pipeline or the accepted full DEV reload.
+
+**Next action:** review the 1,994 proposed DIM updates with
+[READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py](../notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py).
+The helper includes twelve unit tests and an installed Snowpark join test;
+live execution is pending. It must
+compare the accepted candidate still in `MODEL_GRAPHS` with the **current**
+target because the preview's temporary snapshots were removed. Matching counts
+alone cannot prove that the historical target baseline is unchanged.
+
+No direct database connector is available here, and browser startup is blocked
+by a missing runtime path. The owner's posted report supplies the live evidence.
+Daily COMMIT and committed readback remain pending; normal writes stay false,
+AR storage is unverified, and full OSCAL conformance remains separate work.
+The helper does not change the seven runtime cells or their 1,838-line size.
+
+## Previous action - expanded validation of the lean rebuild
+
+Historical source-validation evidence follows; its deployment next action is
+superseded by the accepted preview and update review above.
+
+The owner requested a substantial simplification across all seven cells. The
+maintained source is now **1,838 lines, down from 3,700 (50.3% fewer)**.
+Alternate metadata formats, cached plans and duplicate validation/reporting
+were removed; accepted mapping scope and identities remain unchanged.
+
+The expanded audit fixed eleven reproduced input, graph and persistence gaps,
+plus NumPy integer compatibility in source coverage. The local run reports
+**150 tests**, with two Snowpark test classes skipped because the package is
+unavailable. Coverage includes exact SSP/AR17 output, 1,403 transformation
+comparisons, metadata-only third-model execution, source/lookup handling and
+transaction failures. The previous 769-test private-API suite is historical
+evidence, not validation of the new runtime.
+See the [full validation checkpoint](checkpoints/2026-09-13-full-validation.md) and
+[release test instructions](../tests/lean/README.md).
+
+The rebuild is published in [draft PR #1](https://github.com/theenduser009/Oscal-mapping-strategy/pull/1).
+**All 158 tests pass** in [GitHub CI #10](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34758711257)
+for code commit [ae90082b](https://github.com/theenduser009/Oscal-mapping-strategy/commit/ae90082bc89029f6731872e1d89253c178f087e5).
+This includes five installed Snowpark API tests and three complete seven-cell
+executions, without skips. The tested code tree is unchanged by documentation updates.
+The notebook integration tests use an explicit SQLite/MERGE adapter for SQL and
+target writes; they do not establish live Snowflake acceptance.
+
+**Next action:** perform live registry
+verification and daily preview/MERGE/rollback/readback acceptance when the
+intended Snowflake environment is available. No live database action occurred
+here. Approved mapped-scope validation does not establish full-document OSCAL
+schema or constraint conformance; unapproved fields remain separate work.
+Normal writes remain false, the default model is SSP, and AR has no verified
+destination. The unresolved historical SSP row-count reduction is unchanged.
+No additional owner permission is needed for scoped code work.
+
+## Previous action - eight-hour delivery candidate
+
+Publication verified: commit [df7cf761](https://github.com/theenduser009/Oscal-mapping-strategy/commit/df7cf761e85227ed6e5689011447187999b361dc)
+contains the tested source; [GitHub Mapper checks #2](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34737812206)
+passed. The published tree matched the local tested index. Main remains unchanged.
+
+The owner authorized continued changes while away and requested tested code on
+GitHub within eight hours. All **769 local tests pass**; **2,209 metadata** and
+**729 linked-identity differential cases** match supported behavior. Generated
+notebooks are synchronized. GitHub CI passed for this tested source.
+
+The current cells contain **3,700 physical / 3,263 nonblank, noncomment lines**,
+159 physical lines below this task's start and 562 below the earlier 4,262-line
+draft. The larger simplification target remains unmet. Do not call this a major
+lean rewrite or production acceptance.
+
+Fixed malformed CSV row loss, quoted source bindings, stale party data after a
+failed build, and incorrect commit/failure attribution. Removed repeated registry
+validation, repeated identity scans and the unused mapping upload. Conflicting
+latest source payloads now block instead of selecting a JSON-hash winner; equal
+latest duplicates still collapse after configured technical ordering.
+
+**Next action:** continue meaningful remaining simplification from this tested checkpoint, and perform live acceptance
+in the intended Snowflake environment before enabling writes. The deadline check
+is scheduled for September 13 at 08:04 America/New_York. See the
+[eight-hour delivery checkpoint](checkpoints/2026-09-13-eight-hour-delivery.md).
+
+No Snowflake connection was available and no database action occurred. Registry
+setup and daily persistence/readback acceptance remain pending; normal writes
+stay false and AR has no verified destination. Historical SSP/AR evidence and
+the unresolved old/new SSP row difference are unchanged.
+
+## Previous action - review the tested seven-cell candidate
+
+All **749 local tests pass**, and **2,209 differential cases** match the supported
+CSV/registry behavior. An independent review found no blocking issue after the
+cached-plan upgrade fix. Generated split and combined cells are synchronized.
+
+The current notebook has **3,720 physical / 3,290 nonblank, noncomment lines**:
+139 / 126 fewer than the start of this task, and 542 physical lines below the
+earlier 4,262-line draft. Mapping is still 905 lines and transforms 1,207 lines.
+The larger lean-rewrite target is not met; do not inflate the size improvement.
+
+Removed duplicate runtime state and obsolete catalog/default/controlled-field
+execution. Those retired options now reject explicitly. Versioned cached plans
+and matching-cell checks prevent silent loss after an upgrade. Accepted SSP/CIA11/
+AR17 outputs and metadata-only future-model behavior remain covered; frozen
+historical engines and expected outputs are unchanged.
+
+**Next action:** review the tested candidate and decide the remaining simplification
+scope, then run live acceptance in the intended Snowflake environment before writes.
+See the [tested candidate checkpoint](checkpoints/2026-09-13-tested-seven-cell-candidate.md).
+No Snowflake connection was available and no database action occurred. Normal
+writes stay false, daily persistence/readback acceptance remains pending, and AR
+has no verified destination. Historical SSP/AR evidence and the unresolved old/new
+SSP row difference remain unchanged.
+
+## Previous action - tested cleanup across all seven cells
+
+The owner authorized continued simplification across all seven cells while away
+and asked for full testing. The current draft removes duplicate runtime state,
+reads each mapping CSV once, builds registry reference groups directly, shares
+loader result setup and simplifies the runner. All **739 local tests pass**;
+**2,209 differential mapping cases** match the prior behavior. Generated cells
+are synchronized. A pinned GitHub workflow checks the same suite and packaging.
+
+This pass is modest: **3,859 to 3,817 total lines** (42 fewer), with **3,383
+nonblank/noncomment lines**. Mapping remains 939 lines and transformations
+1,270 lines. The owner's larger readability/size target is not yet met; do not
+present this cleanup as the requested lean rewrite or production certification.
+
+**Next action:** continue the larger simplification from the tested draft,
+then perform live Snowflake verification before enabling writes. See the
+[verification checkpoint](checkpoints/2026-09-12-seven-cell-cleanup-and-testing.md).
+No live Snowflake connection is available here and no database action occurred.
+Normal writes remain false, the daily writer's live acceptance is pending,
+and the Assessment Results destination remains unverified. Historical accepted
+SSP/AR results and the unresolved old/new SSP row difference are unchanged.
+
+## Previous action - review the smaller seven-cell notebook
+
+The owner clarified that the target is a substantially easier, smaller notebook
+and supplied the complete original: **860 physical lines / 669 nonblank,
+noncomment lines**. The previous candidate consolidated responsibility without
+reducing total size. This pass removes **403 physical lines / 396 nonblank,
+noncomment lines** from that candidate: **4,262 to 3,859 physical lines**.
+Cell Four drops from 1,572 to 1,275 physical lines. The seven-cell sequence stays intact.
+
+The implementation shares scalar conversion and lookup validation, removes the
+intermediate hydration-plan object and fixed callback dispatch, consolidates
+CSV/registry parsing and routing reports, and removes redundant input counts,
+storage checks and graph traversal. Mapping CSV and registry SQL are unchanged.
+
+All **736 local tests pass**, including accepted SSP/CIA11/AR17 comparisons,
+metadata-only future models, source selection, lookup query behavior, identity,
+and guarded writes. Generated V2 cells and combined notebook are synchronized.
+Existing frozen fixtures are unchanged; a copy of the previous graph builder
+now keeps historical transformer/graph comparisons independent of current code.
+
+**Next action:** review the updated draft
+[Reduce notebook bulk and simplify metadata execution](https://github.com/theenduser009/Oscal-mapping-strategy/pull/1).
+See the [counts and verification checkpoint](checkpoints/2026-09-12-notebook-bulk-reduction.md).
+This is a review candidate, not a merged release or live Snowflake acceptance.
+No Snowflake action occurred. Normal writes remain false; the prior release's
+live preview and daily writer acceptance remain pending. No live rerun is
+requested during review. If adopted, use the matching Cells Two through Six.
+
+## Previous action - review Cells Three and Four metadata cleanup
+
+The owner authorized the first bounded simplification of V2. This candidate
+normalizes CSV/registry rows once, resolves reference families once, and puts
+compiled-plan validation and operator identity rules in one shared location.
+Unchanged compiled plans skip repeated constraint compilation; edited or
+independently supplied plans still validate before source rows are read.
+
+All **720 local tests pass**, with no failures, errors or skips. The twenty new
+tests cover preparation reuse, reference-family rejection, changed plans,
+required/enum enforcement, provenance compatibility and metadata-only edits.
+Existing SSP/CIA11/AR17 parity, future-model, identity and guarded-write checks
+remain green. Maintained cells, generated V2 pages and the combined notebook
+are synchronized. Frozen fixtures, mappings, registry SQL and Cells One, Two,
+Five, Six and Seven are unchanged.
+
+**Next action:** review the candidate on `simplify-metadata-boundary` before
+adopting it. See the [implementation and validation checkpoint](checkpoints/2026-09-12-metadata-boundary-simplification.md).
+This is a review candidate, not a merged release or live Snowflake acceptance.
+No notebook or SQL was executed against Snowflake; normal writes remain false.
+The prior release's live preview and daily writer acceptance remain pending.
+No registry cleanup, DEV reload or unchanged preview rerun is requested here.
+
+The cleanup removes repeated work and rule ownership; it does not materially
+reduce total notebook length or complete the other audit suggestions. If
+adopted, Cells Three and Four must be replaced together.
+
+## Previous action - CSV-only Cell Three release for preview
 
 Cell Three now uses one flat CSV compiler for executable mappings. The unused
 programmatic-format compiler is removed; required CSV rule IDs still undergo
@@ -1333,4 +1926,3 @@ within-record parent/child keys. Snowflake transport and unrelated component
 lookup I/O are faked locally; **live acceptance is pending**, and this does not
 prove all externally loaded Excel rows are supported. See the
 [routing correction checkpoint](checkpoints/2026-09-10_ssp_property_routing_fix.md).
-

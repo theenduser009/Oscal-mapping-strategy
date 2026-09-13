@@ -1,9 +1,33 @@
-# One-time DEV registry setup, then the same seven cells
+# Registry prerequisites and seven-cell deployment
+
+## Current state - corrected SSP PREVIEW after value reconciliation
+
+The owner's [live SSP preview](checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md)
+passed validation, pre-write and storage checks for 2,813 records, 70,102 nodes
+and 67,289 edges. No target writes occurred. The
+[live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+explains the 36 impact-node case changes and matches 1,958 removed sensitivity
+members to populated direct source text after diagnostic trimming.
+
+**Next:** upload the revised mapping CSV, replace corrected Cell Two, and run
+Cells One through Seven in PREVIEW with existing Cell One deployment settings
+and `EXECUTE_WRITES = False`. Cell One creates a fresh run ID. This run applies
+the Direct `SECURITY_CATEGORY` restoration and lowercase FIPS lookup fix.
+Require the actual new report; source whitespace, the other 855 records and
+source/target changes prevent a guaranteed zero-update result.
+
+**Do not repeat registry setup, cleanup, diagnostics or the full DEV reload.**
+The deployment procedures below are historical reference. Daily COMMIT and
+committed readback remain pending; COMMIT is not approved. AR storage is
+unverified and full OSCAL conformance remains separate work.
+
+## Historical registry deployment context
 
 The code no longer needs the JSON catalog. The lean runtime contract uses the
 existing nine registry columns plus only three sparse execution columns:
-`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`. **This revised migration has
-not been run or verified in Snowflake.**
+`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`. The following notes record the
+earlier preparation sequence; the accepted preview supersedes its pending-run
+instructions.
 
 The reported block-line-270 attempt failed on a JSON binding type mismatch
 before ALTER or UPDATE. A later 18-column run was reported as finishing, but its
@@ -13,17 +37,20 @@ bind explicit JSON strings and decode them with `PARSE_JSON` in all four dynamic
 templates. The lean revision reduces only the registry execution contract; it
 does not broaden the SSP/Assessment Results scope or approve new mappings.
 See the [binding correction checkpoint](checkpoints/2026-09-12-registry-binding-correction.md).
-Local tests are not permission to enable the daily database writer.
+The new seven-cell implementation uses this same registry contract. Its local
+tests do not establish that the registry migration or daily writer succeeded
+in the intended Snowflake environment.
 
-## Your next step: remove retired columns first
+## Historical DEV cleanup prerequisite
 
 Because the earlier experimental setup created additional DEV columns, first
-run [CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql](../sql/registry/CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql)
-in a fresh worksheet. It removes only the fifteen retired columns and returns
-`STATUS = REGISTRY_UNUSED_COLUMNS_REMOVED`. Then share that one result; do not
-run the notebook yet.
+the owner already authorized
+[CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql](../sql/registry/CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql).
+The scoped cleanup removes only the fifteen retired columns and returns
+`STATUS = REGISTRY_UNUSED_COLUMNS_REMOVED`. This was an earlier prerequisite;
+the current accepted preview does not call for another cleanup or verification.
 
-## Lean registry metadata verification
+## Historical lean registry metadata verification procedure
 
 Open [EXTEND_OSCAL_MAPPER_METADATA.sql](../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql),
 copy the whole file into a **fresh Snowflake SQL worksheet**, and run it with
@@ -34,10 +61,10 @@ It targets only `RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY`.
 The role needs SELECT, ALTER and UPDATE access plus database/schema usage.
 This does not create permanent backup tables or need access to DIM/FACT.
 
-Share the aggregate result showing `STATUS = REGISTRY_METADATA_VERIFIED`
+Record the aggregate result showing `STATUS = REGISTRY_METADATA_VERIFIED`
 and `ORIGINAL_COLUMNS_UNCHANGED = true`, including numeric `UPDATED_ROWS`.
-Stop on any error and share the
-actual Snowflake message; do not bypass it or change privileges automatically.
+An error leaves this prerequisite incomplete; retain the actual Snowflake
+message for diagnosis. The notebook preview follows successful verification.
 
 ## What the migration changes
 
@@ -63,7 +90,7 @@ An uncertain commit/rollback outcome requires inspection, not an automatic
 retry. A successful setup can be rerun without changing matching metadata,
 but is a one-time deployment action, not a daily Matillion step.
 
-## After setup is verified: preview
+## Historical seven-cell deployment procedure
 
 1. Replace the notebook Files copy of
    [ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
@@ -72,13 +99,27 @@ but is a one-time deployment action, not a daily Matillion step.
    [V2 pages](../notebooks/cells_v2/README.md). Do not mix releases.
 3. Keep `CONFIG["EXECUTE_WRITES"] = False` in Cell One and
    `OSCAL_LOAD_MODE = "PREVIEW"` in Cell Seven.
-4. Run Cells One through Seven in order in the same session. Share only the
+4. Run Cells One through Seven in order in the same session. Record only the
    aggregate `OSCAL_PIPELINE_REPORT`; keep source IDs and payloads private.
 
-The shipped selection previews SSP and the seventeen accepted AR fields.
-AR's target contract is still absent: a graph-validated/target-pending AR
-outcome is expected, **not an AR database write**. Live preview acceptance
-remains pending. No SSP reload, old pilot or standalone AR rerun is requested.
+The shipped selector is `SELECTED_MODELS = ("SSP",)`. To preview the seventeen
+accepted AR fields as well, use `("SSP", "ASSESSMENT_RESULTS")`; for AR alone,
+use `("ASSESSMENT_RESULTS",)`. AR has no verified destination. Its expected load
+status is `MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING`, with writes false.
+
+Cell Seven calls `run_oscal_pipeline(SOURCE_INPUTS, MAPPING_CONTEXTS,
+OSCAL_LOAD_MODE)` and publishes `MODEL_GRAPHS` and `PIPELINE_REPORT`. A completed
+preview reports `PREVIEW_COMPLETE`; the SSP group reports
+`PREVIEW_PASSED_NO_TARGET_DML`. The report contains per-route validation,
+change counts and write status. The former field-report and cached-plan APIs
+are not part of this release.
+
+This release's live preview is accepted; daily COMMIT and committed readback
+remain pending. Keep the shared `CONFIG["EXECUTE_WRITES"]` false. Cell Seven's
+`OSCAL_LOAD_MODE` controls any later COMMIT through per-run configuration;
+every selected route must have a verified destination. The daily writer requires
+a single writer, a successful intended-environment preview and committed
+readback verification. It does not delete obsolete rows; those rows block a load.
 
 ## Registry columns: lean execution contract
 
@@ -99,9 +140,9 @@ The executable set is approved CSV owners plus paths with retained non-null
 siblings. Parent linkage, collection shape and instance identity come from the
 original registry columns. Field selection, target paths, transformations and
 provenance come from `Mapping/ARCHER_OSCAL_MAPPINGS.csv`. Empty handling,
-property naming, list positioning, role/party companion discovery and report
-annotations are shared engine conventions for the proven operators, not
-duplicated registry columns.
+property naming and role/party companion discovery are shared engine conventions
+for the supported operators. Arbitrary list-position identities, JSON policy
+catalogs and custom runtime plans are retired.
 The seed checks the recorded document-ID, component-reference, role, party and
 assignment identity contracts before DDL and does not rewrite them.
 
@@ -120,8 +161,10 @@ need a supported shared assembler receive an `OPERATOR`; `UUID_POLICY` or
 Genuinely unsupported operations need one reusable code enhancement, not a new
 model-specific mapper or another policy-column expansion.
 
-The current compact release passes 697 local tests, including static and
-synthetic bind-transport regressions. None is live Snowflake proof. Successful
-registry setup, DIM/FACT writes, Matillion runs, daily-loader acceptance and
-full-model conformance remain unverified for this release.
+The [release test guide](../tests/lean/README.md) distinguishes synthetic tests,
+the installed Snowpark package's local emulator, and live Snowflake acceptance.
+Successful registry setup, daily DIM/FACT writes and readback, Matillion runs,
+and full-model conformance remain unverified for this release. The previously
+accepted full DEV reload is historical evidence; it does not establish this
+daily loader's acceptance.
 

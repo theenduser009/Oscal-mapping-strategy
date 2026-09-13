@@ -1,4 +1,22 @@
-# SSP — done and next
+# SSP - done and next
+
+Updated September 13, 2026. The agreed SSP mapping subset has passed DEV COMMIT
+and post-commit readback: 2,813 records, 70,102 elements and 67,289 relationships.
+The latest commit inserted/updated zero rows because stored values already
+matched the candidate. [Accepted report](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md).
+
+- Metadata and the accepted System Characteristics mappings are included.
+  Recognized CIA values normalize to low/moderate/high; direct sensitivity
+  preserves source text.
+- System Implementation's six component-reference mappings are included.
+  Software and interconnection hydration is partial; this is part of SSP.
+- Full SSP is not complete: PTA/property-name corrections, Control
+  Implementation, remaining hydration and full conformance are separate.
+- The owner selected [Assessment Results next](AR_NEXT_RUN.md), followed by
+  POA&M and remaining model work. No unchanged SSP rerun is a prerequisite.
+
+## Historical September 10 scope detail
+
 
 Updated: 2026-09-10. Our scope follows the Excel Archer field, OSCAL path,
 mapping type and Notes. This is the short summary; the

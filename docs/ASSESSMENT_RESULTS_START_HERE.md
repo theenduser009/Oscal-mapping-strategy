@@ -1,4 +1,17 @@
-# Assessment Results — score mapping
+# Assessment Results - score mapping
+
+Current run: [AR30 in the existing seven-cell mapper](AR_NEXT_RUN.md).
+The maintained CSV enables 17 previously live-accepted fields plus 13 additional
+owner-approved fields. The additions are pending live acceptance; 15 AR rows
+remain deferred for source-name, shape, reference or earlier owner decisions.
+AR storage still needs verified destination columns. Do not run the old
+standalone 34-field candidate or repeat the old diagnostics below.
+
+## Historical approvals and live evidence
+
+The dated material below preserves the original field decisions and evidence.
+The current run instructions and current inventory are in AR_NEXT_RUN.md.
+
 
 Active source: Source One, Archer Authorization Package `CURATED_JSON`.
 SSP is parked and preserved. All seventeen selected observation-score mappings

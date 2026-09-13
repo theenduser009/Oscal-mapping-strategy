@@ -103,17 +103,22 @@ class FlatMappingReleaseTests(unittest.TestCase):
 
     def compile(self, rows=None, models=("SSP", "ASSESSMENT_RESULTS"), registry=None,
                 base_config=None):
+        from test_model_selection import cell_namespace
+        from test_registry_release import release_registry, mapping_rows, SUPPORT
         source = copy.deepcopy(self.catalog["SOURCES"][0])
         source["MODEL_KEYS"] = models
         source["BASE_CONFIG"] = copy.deepcopy(
             self.catalog["CONFIG_DEFAULTS"] if base_config is None else base_config)
         source["BASE_CONFIG"]["RUN_ID"] = "flat-migration-regression"
         artifact = copy.deepcopy(self.rows if rows is None else rows)
-        registry = copy.deepcopy(_registry_for_release(self.old_catalog)
-                                 if registry is None else registry)
+        registry = release_registry(_registry_for_release(self.old_catalog)
+                                    if registry is None else registry)
+        if base_config is not None and "SSP" in models:
+            # Graph parity includes the same required values, now explicit CSV rows.
+            artifact.extend(row for row in mapping_rows() if row["RULE_ID"] in SUPPORT)
         arguments = (
             {source["SOURCE_KEY"]: artifact}, registry, [source],
-            copy.deepcopy(self.catalog["MODELS"]),
+            copy.deepcopy(cell_namespace(models)["MODEL_CONTRACTS"]),
         )
         before = copy.deepcopy(arguments)
         result = self.ns["compile_mapping_contexts"](

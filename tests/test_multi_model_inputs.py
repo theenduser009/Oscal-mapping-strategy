@@ -4,10 +4,10 @@ from collections import Counter
 import copy
 import csv
 from contextlib import redirect_stdout
-import hashlib
 import io
 import json
 from pathlib import Path
+import re
 from types import SimpleNamespace
 import unittest
 from unittest.mock import mock_open, patch
@@ -31,10 +31,11 @@ class Expr:
     def __eq__(self, other):
         return Expr("eq", self, other)
     def over(self, window):
-        return Expr("row-number", window)
+        return Expr(self.op, window)
     def eval(self, row):
         if self.op == "col":
-            return row[self.args[0]]
+            name = self.args[0]
+            return row[name[1:-1].replace('""', '"') if name.startswith('"') and name.endswith('"') else name]
         if self.op == "literal":
             return self.args[0]
         if self.op == "cast":
@@ -44,10 +45,6 @@ class Expr:
             return self.args[0].eval(row) is not None
         if self.op == "eq":
             return self.args[0].eval(row) == self.args[1].eval(row)
-        if self.op == "json":
-            return json.dumps(self.args[0].eval(row), sort_keys=True)
-        if self.op == "sha2":
-            return hashlib.sha256(self.args[0].eval(row).encode()).hexdigest()
         raise AssertionError("Unexpected fake expression operation")
 
 
@@ -71,7 +68,9 @@ class Frame:
     def __init__(self, owner, table, rows, columns=None, snapshot=None):
         self.owner, self.table = owner, table
         self.rows = copy.deepcopy(rows)
-        self.columns = list(columns if columns is not None else (rows[0] if rows else []))
+        self.columns = list(columns) if columns is not None else [
+            name if re.fullmatch(r"[A-Z_][A-Z0-9_$]*", name) else '"' + name.replace('"', '""') + '"'
+            for name in (rows[0] if rows else [])]
         self.snapshot = snapshot
 
     def child(self, rows, columns=None):
@@ -119,7 +118,7 @@ class Frame:
 
     def with_column(self, name, expression):
         self.owner.events.append(("rank", self.table))
-        if expression.op != "row-number":
+        if expression.op != "dense-rank":
             raise AssertionError("Unexpected generated source column")
         window = expression.args[0]
         groups = {}
@@ -129,7 +128,13 @@ class Frame:
         for rows in groups.values():
             ordered = sorted(rows, key=lambda row: tuple(
                 (expr.eval(row) is not None, expr.eval(row)) for expr in window.order), reverse=True)
-            ranked.extend({**row, name: index} for index, row in enumerate(ordered, 1))
+            previous, rank = None, 0
+            for row in ordered:
+                ordering = tuple(expr.eval(row) for expr in window.order)
+                if ordering != previous:
+                    rank += 1
+                    previous = ordering
+                ranked.append({**row, name: rank})
         return self.child(ranked, [*self.columns, name])
 
     def drop(self, *names):
@@ -150,7 +155,7 @@ class Session:
         self.events.append(("table", name))
         return self.tables[name]
     def create_dataframe(self, frame):
-        return Frame(self, "mapping-view", frame.to_dict("records"))
+        raise AssertionError("Mapping metadata must stay local; no Snowflake upload")
     def sql(self, statement):
         if statement != "SELECT CURRENT_TRANSACTION() AS TX":
             raise AssertionError("Only the read-only transaction-state query is allowed")
@@ -163,8 +168,7 @@ class Session:
 def namespace():
     tree = ast.parse(CELL.read_text(encoding="utf-8"))
     ns = {"csv": csv, "pd": pd, "Window": Window, "col": lambda name: Expr("col", name),
-          "lit": lambda value: Expr("literal", value), "row_number": lambda: Expr("row-number"),
-          "to_json": lambda expr: Expr("json", expr), "sha2": lambda expr, bits: Expr("sha2", expr, bits)}
+          "lit": lambda value: Expr("literal", value), "dense_rank": lambda: Expr("dense-rank")}
     exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n, ast.FunctionDef)],
                            type_ignores=[]), str(CELL), "exec"), ns)
     return ns
@@ -189,8 +193,6 @@ def raw(identity, value, **extra):
 class MultiModelInputs(unittest.TestCase):
     def setUp(self):
         self.ns = namespace()
-        self.real_header_reader = self.ns["_read_mapping_header"]
-        self.ns["_read_mapping_header"] = lambda filename, encoding="cp1252": ["SOURCE_FIELD_NAME"]
 
     def test_source_is_cached_once_before_counts_and_snapshot_is_retained(self):
         session = Session({"RAW_ONE": [raw("a", 1), raw("b", 2)]})
@@ -236,6 +238,7 @@ class MultiModelInputs(unittest.TestCase):
 
     def test_configured_identity_and_json_columns_are_used(self):
         session = Session({"RAW_ONE": [{"Source Id": 42, "Payload": {"x": 1}}]})
+        session.tables["RAW_ONE"].columns = ['"Source Id"', '"Payload"']
         selected = profile()
         selected.update(CONTENT_ID_COLUMN="Source Id", CURATED_JSON_COLUMN="Payload")
         result, _, _ = self.ns["load_source_input"](session, selected)
@@ -259,33 +262,25 @@ class MultiModelInputs(unittest.TestCase):
 
     def test_duplicate_source_columns_fail_before_snapshot(self):
         session = Session({"RAW_ONE": [raw("a", 1)]})
-        session.tables["RAW_ONE"].columns += [" content_id "]
+        session.tables["RAW_ONE"].columns += ['"CONTENT_ID"']
         with self.assertRaisesRegex(ValueError, "Duplicate normalized source column"):
             self.ns["load_source_input"](session, profile())
         self.assertEqual({}, dict(session.cache_calls))
 
     def test_mapping_source_column_selects_only_explicit_binding(self):
-        original = pd.DataFrame([
-            {"Source Table": "SOURCE_ONE", "Archer Field Name": "ONE"},
-            {"Source Table": "SOURCE_TWO", "Archer Field Name": "TWO"},
-            {"Source Table": None, "Archer Field Name": "UNBOUND"},
-        ])
-        before = original.copy(deep=True)
+        text = "Source Table,Archer Field Name\nSOURCE_ONE,ONE\nSOURCE_TWO,TWO\n,UNBOUND\n"
         selected = profile()
         selected["MAPPING_SOURCE_COLUMN"] = "Source Table"
-        with patch.object(pd, "read_csv", return_value=original.copy(deep=True)) as read:
+        with patch("builtins.open", mock_open(read_data=text)) as opened:
             frame = self.ns["load_mapping_rows"](selected)
         self.assertEqual(["ONE"], frame["ARCHER FIELD NAME"].tolist())
-        read.assert_called_once_with("one.csv", encoding="cp1252", dtype=str,
-                                     keep_default_na=False)
-        pd.testing.assert_frame_equal(before, original)
+        opened.assert_called_once_with("one.csv", encoding="cp1252", newline="")
 
     def test_live_flat_mapping_file_keeps_utf8_notes_and_source_binding(self):
-        from test_model_selection import cell_namespace
+        from tests.test_model_selection import cell_namespace
         selected = copy.deepcopy(cell_namespace()["SOURCE_PROFILES"][0])
         selected["MAPPING_FILE"] = str(ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv")
-        with patch.dict(self.ns, {"_read_mapping_header": self.real_header_reader}):
-            actual = self.ns["load_mapping_rows"](selected)
+        actual = self.ns["load_mapping_rows"](selected)
         with open(selected["MAPPING_FILE"], encoding="utf-8", newline="") as handle:
             expected = list(csv.DictReader(handle))
         self.assertEqual(len(actual), len(expected))
@@ -294,30 +289,31 @@ class MultiModelInputs(unittest.TestCase):
         self.assertEqual(set(actual["SOURCE_KEY"]), {"source-one"})
 
     def test_csv_literal_na_and_unicode_are_not_lost(self):
-        text = 'SOURCE_FIELD_NAME,NOTES\nN/A,"Keep nulls - do not drop"\n'
+        text = ('SOURCE_FIELD_NAME,NOTES\r\nN/A,"Café — first line, quoted comma\nsecond line"\r\n'
+                'null,\r\nNaN,""\r\n0,false\r\n')
         selected = profile()
         selected["MAPPING_ENCODING"] = "utf-8-sig"
-        read_csv = pd.read_csv
-        with patch.object(pd, "read_csv", side_effect=lambda filename, **kwargs: read_csv(io.StringIO(text), **kwargs)):
+        with patch("builtins.open", mock_open(read_data=text)) as opened:
             actual = self.ns["load_mapping_rows"](selected)
-        self.assertEqual(actual.iloc[0]["SOURCE_FIELD_NAME"], "N/A")
-        self.assertEqual(actual.iloc[0]["NOTES"], "Keep nulls - do not drop")
+        opened.assert_called_once_with("one.csv", encoding="utf-8-sig", newline="")
+        self.assertEqual(actual["SOURCE_FIELD_NAME"].tolist(), ["N/A", "null", "NaN", "0"])
+        self.assertEqual(actual["NOTES"].tolist(),
+                         ["Café — first line, quoted comma\nsecond line", None, None, "false"])
 
     def test_explicit_mapping_source_value_does_not_default_to_another_source(self):
         selected = profile()
         selected.update(MAPPING_SOURCE_COLUMN="BINDING", MAPPING_SOURCE_VALUE="approved-one")
-        data = pd.DataFrame([{"BINDING": " approved-one ", "FIELD": "A"},
-                             {"BINDING": "SOURCE_ONE", "FIELD": "B"}])
-        with patch.object(pd, "read_csv", return_value=data):
+        text = "BINDING,FIELD\n approved-one ,A\nSOURCE_ONE,B\n"
+        with patch("builtins.open", mock_open(read_data=text)):
             self.assertEqual(["A"], self.ns["load_mapping_rows"](selected)["FIELD"].tolist())
 
     def test_mapping_header_collision_or_missing_binding_fails(self):
         cases = [
-            (pd.DataFrame([["a", "b"]], columns=["FIELD", " field "]), profile()),
-            (pd.DataFrame([{"FIELD": "A"}]), {**profile(), "MAPPING_SOURCE_COLUMN": "MISSING"}),
+            ("FIELD, field \na,b\n", profile()),
+            ("FIELD\nA\n", {**profile(), "MAPPING_SOURCE_COLUMN": "MISSING"}),
         ]
-        for data, selected in cases:
-            with self.subTest(columns=list(data.columns)), patch.object(pd, "read_csv", return_value=data):
+        for text, selected in cases:
+            with self.subTest(header=text.splitlines()[0]), patch("builtins.open", mock_open(read_data=text)):
                 with self.assertRaises(ValueError):
                     self.ns["load_mapping_rows"](selected)
 
@@ -325,12 +321,10 @@ class MultiModelInputs(unittest.TestCase):
         for text in ("FIELD,FIELD\none,two\n", '"Field"," FIELD "\none,two\n'):
             with self.subTest(header=text.splitlines()[0]):
                 opened = mock_open(read_data=text)
-                with patch.dict(self.ns, {"_read_mapping_header": self.real_header_reader}), \
-                        patch("builtins.open", opened), patch.object(pd, "read_csv") as read:
+                with patch("builtins.open", opened):
                     with self.assertRaisesRegex(ValueError, "Duplicate normalized mapping columns"):
                         self.ns["load_mapping_rows"](profile())
                 opened.assert_called_once_with("one.csv", encoding="cp1252", newline="")
-                read.assert_not_called()
 
     def test_component_lookup_is_selected_by_contract_group_not_model_name(self):
         tables = {"VALUES": [{"SELECT_VALUE_ID": 1, "SELECT_VALUE_NAME": "High"}],
@@ -344,6 +338,81 @@ class MultiModelInputs(unittest.TestCase):
         self.assertEqual({"1": "High"}, lookups["fips_values"])
         self.assertIn("software", lookups["component_sources"])
         self.assertEqual(1, session.cache_calls["LOOKUP_ONE"])
+
+    def test_csv_blank_lines_and_missing_trailing_cells_preserve_column_alignment(self):
+        text = 'FIELD,NOTES,STATUS\n  \nA\nB,"two, words",APPROVED\n'
+        with patch("builtins.open", mock_open(read_data=text)):
+            frame = self.ns["load_mapping_rows"](profile())
+        self.assertEqual(frame.to_dict("records"), [
+            {"FIELD": "A", "NOTES": None, "STATUS": None},
+            {"FIELD": "B", "NOTES": "two, words", "STATUS": "APPROVED"},
+        ])
+        with patch("builtins.open", mock_open(read_data='A,B\nx,y,z\n')):
+            with self.assertRaisesRegex(ValueError, "more values than header"):
+                self.ns["load_mapping_rows"](profile())
+
+    def test_malformed_csv_cannot_swallow_later_mapping_rows(self):
+        cases = [
+            'FIELD,NOTES\nFIRST,"unclosed note\nSECOND,valid note\n',
+            'FIELD,NOTES\nFIRST,"closed note"garbage\nSECOND,valid note\n',
+        ]
+        for text in cases:
+            with self.subTest(text=text), patch("builtins.open", mock_open(read_data=text)):
+                with self.assertRaises(csv.Error):
+                    self.ns["load_mapping_rows"](profile())
+
+    def test_latest_conflicting_payloads_fail_regardless_of_input_order(self):
+        rows = [raw("same", {"a": 0, "b": 1}, UPDATED=2),
+                raw("same", {"a": 1, "b": 0}, UPDATED=2)]
+        for ordered in (rows, list(reversed(rows))):
+            session = Session({"RAW_ONE": ordered})
+            with self.subTest(order=ordered), self.assertRaisesRegex(ValueError, "Conflicting source payloads"):
+                self.ns["load_source_input"](session, profile())
+
+    def test_identical_latest_payloads_collapse_independent_of_object_key_order(self):
+        rows = [raw("same", {"a": 1, "b": 2}, UPDATED=2),
+                raw("same", {"b": 2, "a": 1}, UPDATED=2)]
+        session = Session({"RAW_ONE": rows})
+        result, report, _ = self.ns["load_source_input"](session, profile())
+        self.assertEqual([{"SOURCE_RECORD_ID": "same", "CURATED_JSON": {"value": {"a": 1, "b": 2}}}], result.rows)
+        self.assertEqual(1, report["DUPLICATE_SOURCE_ROWS_RESOLVED"])
+
+    def test_null_payload_is_not_discarded_when_detecting_latest_conflicts(self):
+        rows = [dict(raw("same", 1, UPDATED=2), CURATED_JSON=None), raw("same", 1, UPDATED=2)]
+        with self.assertRaisesRegex(ValueError, "Conflicting source payloads"):
+            self.ns["load_source_input"](Session({"RAW_ONE": rows}), profile())
+        rows[1]["CURATED_JSON"] = None
+        result, _, _ = self.ns["load_source_input"](Session({"RAW_ONE": rows}), profile())
+        self.assertEqual([{"SOURCE_RECORD_ID": "same", "CURATED_JSON": None}], result.rows)
+
+    def test_conflicting_obsolete_versions_do_not_block_a_unique_latest_row(self):
+        rows = [raw("same", "older-a", UPDATED=1), raw("same", "older-b", UPDATED=1),
+                raw("same", "latest", UPDATED=2)]
+        result, _, _ = self.ns["load_source_input"](Session({"RAW_ONE": rows}), profile())
+        self.assertEqual("latest", result.rows[0]["CURATED_JSON"]["value"])
+
+    def test_quoted_recency_columns_keep_priority_and_nulls_last(self):
+        rows = [raw("same", "first", **{"Updated At": None, "Sequence": 99}),
+                raw("same", "second", **{"Updated At": 2, "Sequence": None}),
+                raw("same", "chosen", **{"Updated At": 2, "Sequence": 1})]
+        selected = {**profile(), "SOURCE_ORDER_CANDIDATES": ("Updated At", "Sequence")}
+        result, _, _ = self.ns["load_source_input"](Session({"RAW_ONE": rows}), selected)
+        self.assertEqual("chosen", result.rows[0]["CURATED_JSON"]["value"])
+        self.assertEqual({"SOURCE_RECORD_ID", "CURATED_JSON"}, set(result.columns))
+
+    def test_quoted_case_distinct_identifiers_are_resolved_exactly(self):
+        session = Session({"RAW_ONE": [{"CONTENT_ID": "upper", "content_id": "lower", "CURATED_JSON": {}}]})
+        for configured, expected in (("CONTENT_ID", "upper"), ("content_id", "lower"), ('"content_id"', "lower")):
+            with self.subTest(configured=configured):
+                selected = {**profile(), "CONTENT_ID_COLUMN": configured}
+                result, _, _ = self.ns["load_source_input"](session, selected)
+                self.assertEqual(expected, result.rows[0]["SOURCE_RECORD_ID"])
+
+    def test_embedded_quotes_in_identifiers_are_preserved(self):
+        session = Session({"RAW_ONE": [{'Id"Key': "one", 'Json"Payload': {}}]})
+        selected = {**profile(), "CONTENT_ID_COLUMN": '"Id""Key"', "CURATED_JSON_COLUMN": 'Json"Payload'}
+        result, _, _ = self.ns["load_source_input"](session, selected)
+        self.assertEqual([{"SOURCE_RECORD_ID": "one", "CURATED_JSON": {}}], result.rows)
 
     def test_ssp_name_alone_does_not_trigger_component_lookup(self):
         session = Session({"VALUES": [{"SELECT_VALUE_ID": 1, "SELECT_VALUE_NAME": "custom"}]})
@@ -367,9 +436,10 @@ class MultiModelInputs(unittest.TestCase):
         start = next(index for index, node in enumerate(tree.body)
                      if isinstance(node, ast.Assign) and any(
                          isinstance(target, ast.Name) and target.id == "SOURCE_INPUTS" for target in node.targets))
-        artifact = pd.DataFrame([{"SOURCE_FIELD_NAME": "SYNTHETIC_FIELD"}])
-        with patch.object(pd, "read_csv", side_effect=lambda *a, **k: artifact.copy(deep=True)), redirect_stdout(io.StringIO()):
+        artifact = "SOURCE_FIELD_NAME\nSYNTHETIC_FIELD\n"
+        with patch("builtins.open", mock_open(read_data=artifact)) as opened, redirect_stdout(io.StringIO()):
             exec(compile(ast.Module(body=tree.body[start:], type_ignores=[]), str(CELL), "exec"), ns)
+        self.assertEqual(["one.csv", "two.csv"], [call.args[0] for call in opened.call_args_list])
         self.assertEqual({"one", "two"}, set(ns["SOURCE_INPUTS"]))
         self.assertEqual({"RAW_ONE": 1, "RAW_TWO": 1}, dict(session.cache_calls))
         for selected in profiles:
@@ -380,6 +450,7 @@ class MultiModelInputs(unittest.TestCase):
             self.assertEqual(1, sum(event == ("table", selected["RAW_TABLE"]) for event in session.events))
             self.assertEqual(key, entry["source_df"].rows[0]["CURATED_JSON"]["value"])
         self.assertIs(ns["source_df"], ns["SOURCE_INPUTS"]["one"]["source_df"])
+        self.assertIsNone(ns["mapping_df"])
 
 
 if __name__ == "__main__":

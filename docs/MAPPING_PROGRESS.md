@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-11, end-of-day reconciliation after the accepted full SSP DEV reload and publication of the updated Cells 6-7 daily path. Owner: Source One mapping implementation team.
+Last updated: 2026-09-13, POA&M reference mapping implemented; AR and SSP committed readback accepted. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -10,7 +10,189 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
-## Current action — daily SSP preview in existing Cells 6 and 7
+## Current action - POA&M reference mapping implemented; live preview pending
+
+The owner confirmed Source One's POAMS field and the reviewed Reference mapping
+to plan-of-action-and-milestones.poam-items[]. No second Archer table is needed.
+The CSV now enables this one row. The same seven cells produce package-scoped
+UUID-only reference nodes and root-to-item links; no item details are invented.
+The runtime is 1,855 lines, six more than the AR binding baseline. SSP and AR
+mapped outputs remain unchanged in regression tests.
+
+Eleven focused POA&M tests pass. [CI passed all 205 tests with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34773274346)
+on code commit ad41b4fabe569ddc4d1d32c9e2192f572f4f7cad, including the real
+Snowpark POA&M VARIANT graph test. Generated cells also match.
+The readable private screenshot's empty-reference case is covered; populated
+POAMS examples and live persistence remain unverified. Reference graph
+acceptance does not establish complete POA&M document conformance.
+
+**Next action:** run [READ_ONLY_POAM_INPUTS.sql](../notebooks/validation/READ_ONLY_POAM_INPUTS.sql)
+as SQL in Snowflake and post its three result grids: destination columns,
+existing registry rows and aggregate reference shapes. Then follow
+[POA&M next run](POAM_NEXT_RUN.md). The two-row registry metadata update is
+prepared; it is not a registry reset or a live execution claim. Actual POA&M
+destination names remain unbound. Retain accepted SSP/AR commits and do not
+repeat them or rerun the historical AR replacement DDL.
+
+## Accepted checkpoint - AR insert and committed readback
+
+The [owner-posted AR COMMIT](checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md)
+from main commit 823570de2c62e5e91cbfbad888befb040030fc87 reports
+COMMITTED_AND_VERIFIED for ASSESSMENT_RESULTS: 2,813 source records,
+73,189 DIM inserts and 70,376 FACT inserts, with zero updates/unchanged rows.
+Validation, pre-write validation and storage verification passed. Target DML,
+writes, persisted and committed flags are true. Post-commit verification reports
+zero remaining inserts/updates and all 73,189 DIM / 70,376 FACT rows unchanged;
+temporary cleanup is REMOVED. This accepts changed-row persistence and committed
+readback for the posted AR graph, superseding the schema-failure/load-pending state.
+
+The AR DIM is now populated. The empty-table replacement in sql/ddl is historical
+and must not be rerun. No further schema repair, registry reset, unchanged
+preview, repeated COMMIT or SSP reload is requested. Existing table/key, UUID,
+audit and hierarchy checks remain enforced by the shared seven-cell loader.
+
+This is aggregate graph persistence evidence, not full AR/OSCAL conformance or
+populated-value coverage of every enabled field. Thirty AR rows remain enabled
+in metadata and fifteen remain deferred; this report supplies no new field-level
+approval. Readback proves no remaining differences in the committed batch; it
+is not evidence of a separately executed repeat COMMIT.
+
+**Next action:** advance the owner's next selected POA&M scope using the existing
+mapping register and registry contracts, retaining the specific AR deferrals
+for later decisions. Preserve this successful AR checkpoint and the accepted
+SSP checkpoint; do not repeat accepted loads as a prerequisite for POA&M.
+
+## Previous action - bind the AR destination after accepted graph preview
+
+The owner posted the [shared Assessment Results preview](checkpoints/2026-09-13-assessment-results-preview-target-contract-pending.md)
+in main commit `5c8ef0cbdc5bec29b1f88d1be2e5ea1ae802faeb`.
+It reports `PREVIEW_COMPLETE` and graph validation passed for 2,813 source
+records, 73,189 nodes and 70,376 edges. The AR load status is
+`MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING`; storage verification and
+pre-write validation are false, and no writes, persistence or commit occurred.
+
+This accepts the posted shared-AR graph preview. The report does not include
+Cell Three's selected-field count or per-field coverage, so it does not by
+itself establish populated-value acceptance for every newly enabled field.
+AR DIM/FACT names and physical column definitions are still unverified;
+Cell One correctly has no AR storage contract.
+
+**Next action:** obtain the result rows from the already supplied
+[destination-column query](../notebooks/validation/READ_ONLY_OSCAL_DESTINATION_COLUMNS.sql).
+The owner saved the SQL itself on main; that is not its output.
+Use actual table/key/UUID/column definitions to configure the existing writer.
+Do not repeat the accepted AR graph preview merely to discover table names,
+or substitute SSP destinations. Preserve the AR30 mapping scope and deferrals
+in [AR next run](AR_NEXT_RUN.md); target-aware preview follows verified binding.
+
+## Previous action - AR30 preview and destination verification
+
+The owner chose to advance Assessment Results next, then POA&M and remaining
+model work. The [accepted SSP COMMIT](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
+remains the DEV baseline: 2,813 records, 70,102 elements and 67,289 relationships,
+with zero inserts/updates and successful committed readback. No unchanged SSP
+rerun is requested.
+
+The maintained CSV now enables 30 AR fields: the 17 previously live-accepted
+fields plus 13 conflict-free additions from the earlier owner-approved
+observation/inline-property batch. Only execution metadata changes; the seven
+runtime cells remain 1,838 lines and registry/identity rules are unchanged.
+The new 13 are implemented and tested locally, not live accepted or persisted.
+The remaining 15 AR rows retain their specific deferrals. Historical threshold
+source-name differences are not silently aliased.
+
+**Next action:** follow [AR next run](AR_NEXT_RUN.md): upload the updated CSV,
+select AR only in Cell One, keep shared writes false and Cell Seven in PREVIEW,
+then run the same seven cells. Require READY/30 selected AR rows and the complete
+pipeline report. Supply the [destination-column query](../notebooks/validation/READ_ONLY_OSCAL_DESTINATION_COLUMNS.sql)
+result so the existing writer can be bound to verified AR tables. No registry
+reset, separate AR runtime, old candidate rerun or SSP reload is needed.
+
+System implementation is part of SSP: its six accepted component-reference
+mappings are implemented with partial hydration. Full SSP, AR, POA&M and other
+model completion are not established by this increment. The Monday target
+does not waive unresolved source identity, reference or storage decisions.
+Earlier instructions below are historical where superseded.
+
+## Accepted checkpoint - SSP COMMIT and readback for an unchanged batch
+
+The owner posted the [live SSP COMMIT report](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
+in main commit `a53c16aff842cde044f7bda2efb64a2198ac3117`.
+Both pipeline and SSP group report `COMMITTED_AND_VERIFIED` for
+2,813 source records, 70,102 DIM elements and 67,289 FACT relationships.
+Validation, pre-write validation and storage verification passed.
+Target DML was attempted; writes executed, persisted and committed are true.
+Expected changes and post-commit verification both report zero inserts and
+zero updates, with all 70,102 DIM / 67,289 FACT rows unchanged. Temporary
+cleanup is `REMOVED`.
+
+This accepts the live commit path, unchanged-row preservation and committed
+readback for this batch. It supersedes the earlier daily-COMMIT-pending status.
+It does not demonstrate persistence of newly inserted or updated rows with
+this release. No mapping or registry changes were needed; CIA normalization
+and Direct sensitivity behavior remain as previously documented.
+
+**Next action:** retain this accepted commit checkpoint. No repeat of the
+unchanged run, registry setup/cleanup or full DEV reload is needed. Use the
+existing seven-cell writer for the next intended SSP run; record actual
+insert/update counts and successful committed readback when legitimate source
+changes arrive. Changed-row persistence acceptance, AR storage, daily
+deployment/scheduling and full OSCAL conformance remain separate milestones.
+An unknown commit outcome or failed post-commit readback requires inspection,
+not an automatic retry. Prior instructions below are historical.
+
+## Previous checkpoint - corrected SSP PREVIEW accepted with no target changes
+
+The [owner-posted corrected preview](checkpoints/2026-09-13-ssp-preview-no-target-changes.md),
+from main commit `9d08e8978cbb5894239b688743880b75accadeea`, reports
+`PREVIEW_COMPLETE`: 2,813 source records, 70,102 nodes and 67,289 edges.
+DIM has 0 inserts, 0 updates and 70,102 unchanged rows; FACT has 0 inserts,
+0 updates and 67,289 unchanged rows. Validation, pre-write validation and
+storage verification passed. No writes, persistence, commit or target DML
+were attempted or executed; temporary cleanup is `REMOVED`.
+
+The corrected mapped SSP graph matches the current target snapshot. This
+accepts the Direct sensitivity restoration and lowercase CIA lookup correction
+in this preview; it does not add mapping approvals. Compilation remains
+48 SSP executable rows, including guard/support rows, and 17 AR rows. Direct
+`SECURITY_CATEGORY` preserves source text without deriving a FIPS rating.
+CIA mappings normalize recognized low/moderate/high values but continue to
+permit explicitly approved legacy strings. Full FIPS normalization and full
+OSCAL conformance are not established by equal node payloads.
+
+Retain this accepted baseline. Do not repeat an unchanged preview, registry
+setup/cleanup, diagnostics or the full DEV reload. Daily write/readback,
+AR persistence and full conformance remain separate pending milestones;
+no daily COMMIT has been executed or approved by this preview. Historical
+instructions and counts below remain dated evidence.
+
+## Previous action — corrected SSP PREVIEW (now accepted)
+
+The [live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+proves all 36 impact-node changes are `low` to `Low`, with matching source
+transformations and a lowercase correction needed. The 1,958 removed sensitivity
+members match populated direct `SECURITY_CATEGORY` text after diagnostic
+trimming; raw-whitespace equality and the other 855 records are not established.
+There were no anomalies or writes.
+
+The existing Direct mapping to
+`system-security-plan.system-characteristics.security-sensitivity-level` is
+restored in the CSV using the existing transform. Its corrected live preview
+is pending; local regression tests pass. Compilation now selects 48 SSP
+executable rows, including existing guard/support rows, and 17 AR rows.
+This is not full OSCAL conformance
+or evidence for a CIA/recommended-category fallback. Historical business-register
+totals below remain dated evidence; they are not silently recounted as completed
+or live-verified mappings.
+
+Upload the updated CSV, replace corrected Cell Two and run Cells One through
+Seven in PREVIEW, keeping existing Cell One settings and `EXECUTE_WRITES = False`.
+Cell One creates a new run ID. Require the actual report: the 1,994 explained
+differences should be removed on identical inputs, but zero updates are not
+guaranteed. Do not repeat diagnostics, registry work or the full DEV reload.
+Daily COMMIT/readback and AR storage remain pending; COMMIT is not approved.
+
+## Historical September 11 action — daily SSP preview in existing Cells 6 and 7
 
 **Today's report:** [September 11 manager summary](daily/2026-09-11.md).
 Latest status below supersedes the historical pilot instructions and earlier
@@ -118,7 +300,7 @@ is complete and matched both rejected counts. The owner parked those two fields
 and directed work to the remaining eleven, as detailed above.
 Rejection does not prove defective source data.
 
-## Current position
+## Historical mapping inventory and AR acceptance
 
 - [September 10 end-of-day report](daily/2026-09-10.md): accepted SSP hydration,
   date/property release and mapped-scope assembly are separated from AR planning.
@@ -226,7 +408,7 @@ No business question and no field-level test evidence are different things.
 | SSP | `system-security-plan.system-characteristics.props[]` | `PACKAGE_TYPE_HELPER_CALC` | Intentionally excluded | Notes explicitly say transient calculation field — do not map. | None; exclusion is not a completed mapping. |
 | SSP | `system-security-plan.system-characteristics.security-impact-level` | Eleven CIA source-to-member mappings below | Done in complete-only assembly scope | Conversion and omission of incomplete CIA assemblies accepted [E6, E7, E13]. | Missing objectives are source gaps; no invented defaults or precedence. |
 | SSP | `system-security-plan.system-characteristics.security-impact-level` | `RECOMMENDED_SECURITY_CATEGORY` | Deferred | All Nulls does not define a populated-value rule [E12]. | Approved destination and transform/value policy. |
-| SSP | `system-security-plan.system-characteristics.security-sensitivity-level` | `SECURITY_CATEGORY` | Review pending; parked | Clearer screenshot shows Direct row absent from prior register; implementation not reconciled. | Engineering must compare this exact row with canonical output before claiming completion. |
+| SSP | `system-security-plan.system-characteristics.security-sensitivity-level` | `SECURITY_CATEGORY` | Direct restoration accepted in corrected live PREVIEW | Documented Direct row restored through the existing CSV transform. The [corrected preview](checkpoints/2026-09-13-ssp-preview-no-target-changes.md) has zero DIM/FACT inserts or updates across all 2,813 records. Earlier [value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md) explains the 1,958 previous removals. | Direct source preservation is not a derived FIPS rating. Daily write/readback and full conformance remain pending; no COMMIT approval follows from this preview. |
 | SSP | `system-security-plan.system-implementation.components[]` | Six Reference fields below | Done in agreed reference scope | Identity/type and approved partial hydration accepted [E4, E9]. Some input/hydration gaps remain. | None for current reference scope. Extra hydration requires separate source proof; no unlisted component-status mapping. |
 | SSP | **Unconfirmed**; Notes propose `system-security-plan.control-implementation.props[]` | Control-count candidate and other blank-target control rows | Deferred; parked | Notes placement conflicts with pinned standard; alternative not approved. | Owner-approved target, source count versus calculation, property name/value policy and namespace; see [proposal](checkpoints/2026-09-10_ssp_control_count_mapping_proposal.md). |
 
@@ -246,7 +428,7 @@ security-impact path above. Their exact source-field grouping is retained below.
 | Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Deferred by owner, 2026-09-11; not implemented | Notes make audit-trail inclusion conditional [E15]; the owner chose to skip these for now. | Reopen only on an explicit audit-trail inclusion decision; retain separate property name/value rules. |
 | Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
 | Profile | `profile.imports[]` | `BASELINE_RECOMMENDATION` | Review pending | Conditional import example in Notes does not supply an approved import reference. | Baseline-to-URI mapping, intended import structure and selection rule; reconcile Extension Property label with target. |
-| POA&M | `plan-of-action-and-milestones.poam-items[]` | `POAMS` | Review pending | New CSV confirms Reference target and linking Notes [E15]; no handler accepted. | Reference shape, identity and parent relationship. |
+| POA&M | `plan-of-action-and-milestones.poam-items[]` | `POAMS` | Reference graph implemented; live preview pending | Owner confirmed same Source One and Reference row [E15]. UUID-only package-scoped nodes and root links; no item-detail hydration. | Verify current registry, populated source shapes and POA&M destinations; see [next run](POAM_NEXT_RUN.md). |
 | Assessment Plan | **Full paths/Notes still to reconcile** | Request, approval and preassessment-review fields | Review pending | Separate model rows visible; no accepted implementation release. | Exact targets/Notes, task grouping, property/value rules and source shape. |
 
 The new [CSV transcription](transcribed_mapping_rows.csv) [E15] contains 51 records,

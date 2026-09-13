@@ -218,8 +218,8 @@ class PropertyCanonicalRoutingTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             graph = helpers["_context_config"].__globals__
             graph.update(helpers)
-            exec(compile((CELLS / "05_registry_graph_builder.py").read_text(encoding="utf-8"),
-                         str(CELLS / "05_registry_graph_builder.py"), "exec"), graph)
+            graph_path = LEGACY_CELL_4_PATH.with_name("legacy_cell5_pre_direct_dispatch.py")
+            exec(compile(graph_path.read_text(encoding="utf-8"), str(graph_path), "exec"), graph)
         source = Frame([{"SOURCE_RECORD_ID": record, "CURATED_JSON": {
             "ACRONYM": "Example", "INFORMATION_SYSTEM_TYPE": {"ValuesListIds": ["101", "101"]},
             "ATOIATO_DATE": "2026-09-10T23:50:00-12:00",

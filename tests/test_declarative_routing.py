@@ -32,9 +32,8 @@ def namespace():
 def contracts():
     return {
         model: {
-            "MODEL_KEY": model, "ROOT_PATH": root, "POLICY": "metadata-v1",
+            "MODEL_KEY": model, "POLICY": "metadata-v1",
             "STORAGE_CONTRACT": None, "UNREVIEWED_ROWS": "DEFER",
-            "ELEMENTS": {root: {"operator": "object", "parameters": {"materialize_empty": True}}},
         }
         for model, root in (("SSP", SSP), ("ASSESSMENT_RESULTS", AR))
     }
@@ -43,7 +42,9 @@ def contracts():
 def registry():
     return [
         {"OSCAL_MODEL_KEY": model, "NODE_PATH": root, "IS_COLLECTION": False,
-         "PARENT_NODE_PATH": None, "IS_ACTIVE": True, "ELEMENT_TYPE": root}
+         "PARENT_NODE_PATH": None, "IS_ACTIVE": True, "ELEMENT_TYPE": root,
+         "INSTANCE_KEY_RULE": None, "ITEM_PATH": None, "PROCESS_ORDER": 1,
+         "OPERATOR": "object", "UUID_POLICY": "omit", "REQUIRED_MEMBERS": None}
         for model, root in (
             ("SSP", SSP), ("ASSESSMENT_RESULTS", AR), ("POAM", POAM),
             ("FUTURE_MODEL", FUTURE))
@@ -157,9 +158,8 @@ class DeclarativeRouting(unittest.TestCase):
     def test_future_model_requires_metadata_only_and_keeps_selected_field_validation(self):
         models = contracts()
         models["FUTURE_MODEL"] = {
-            "MODEL_KEY": "FUTURE_MODEL", "ROOT_PATH": FUTURE, "POLICY": "metadata-v1",
+            "MODEL_KEY": "FUTURE_MODEL", "POLICY": "metadata-v1",
             "STORAGE_CONTRACT": None,
-            "ELEMENTS": {FUTURE: {"operator": "object", "parameters": {}}},
         }
         rows = [
             mapping(field="BRAND_NEW_FIELD", model="FUTURE_MODEL", root=FUTURE),

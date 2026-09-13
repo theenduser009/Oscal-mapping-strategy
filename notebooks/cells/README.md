@@ -10,18 +10,18 @@ original nine registry columns. Only `OPERATOR`, `UUID_POLICY` and
 visible deployment settings. No JSON catalog upload or extra daily runtime cell
 is required.
 
-The compactness audit is closed. All 697 local tests pass after removing
-duplicate registry normalization from Cell Four and SSP-only compatibility from
-Cell Six. First complete the
-[lean one-time registry setup](../../docs/REGISTRY_METADATA_SETUP.md), then use
-the updated mapping CSV and all seven matching cells in one Snowflake session,
-with normal writes disabled and Cell Seven in PREVIEW. Do not mix releases or
-rerun the accepted full DEV reload.
+The runtime totals 1,855 lines across seven cells. SSP and AR mapped graphs
+are committed and verified. Current work is the
+[POA&M reference mapping](../../docs/POAM_NEXT_RUN.md) from the same Source One.
+Use that guide's read-only SQL next action before registry preparation and
+PREVIEW. POAM's actual destinations are not yet bound. No SSP/AR rerun is needed.
 
 Developers edit these files once, then use `python tools/sync_notebook_cells.py`;
 `--check` reports generated-page drift. This is a packaging tool, not a
 Snowflake execution step. Historical diagnostics below are not current run
-requests.
+requests. Those diagnostics reference historical notebook globals and are not
+part of the lean release interface. Use `MODEL_GRAPHS` and `PIPELINE_REPORT` for
+this release; do not upload old diagnostic cells as additional mapper steps.
 
 ## Run order
 
@@ -90,7 +90,7 @@ OSCAL version and SSP document version `1.0` without changing timestamps.
 
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
-## Current post-revision checkpoint
+## Historical post-revision checkpoints
 
 Pinned run `20260908T220830Z` passed graph and pre-write validation with
 51,500 nodes, 48,687 edges, zero duplicate/dangling keys, and no writes. The
@@ -174,4 +174,3 @@ their reusable `person` party objects. Cell 5 requires real `metadata.roles[]`
 and `metadata.parties[]` registry rows, uses each party payload UUID as the
 party node OSCAL UUID, and fails closed unless every role and party reference
 resolves exactly once. The four `TBD` responsible-party rows remain excluded.
-
