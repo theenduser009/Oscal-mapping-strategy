@@ -12,8 +12,8 @@ is required.
 
 The lean rebuild contains 1,838 lines across seven cells, down from 3,700.
 The [release suite](../../tests/lean/README.md) checks accepted output, source
-selection, transforms, links and transaction failures. The expanded audit fixed
-eleven reproduced gaps and NumPy integer compatibility. All 158 tests pass in
+selection, transforms, links and transaction failures. The earlier expanded audit fixed
+eleven reproduced gaps and NumPy integer compatibility. All 158 tests passed in
 [GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34758711257),
 including eight installed Snowpark checks and complete seven-cell executions. See the
 [full validation record](../../docs/checkpoints/2026-09-13-full-validation.md).
@@ -21,17 +21,24 @@ including eight installed Snowpark checks and complete seven-cell executions. Se
 The [live SSP preview](../../docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md)
 is accepted: 2,813 records, 70,102 nodes and 67,289 edges, with all validation
 gates passed and no target writes. DIM proposes 1,994 updates; FACT is unchanged.
-Registry setup, cleanup and the seven-cell pipeline must not be repeated.
+The [live value reconciliation](../../docs/checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+resolved the 36 impact nodes as case-only differences and matched 1,958 removed
+sensitivity members to direct source text after diagnostic trimming. The
+documented Direct `SECURITY_CATEGORY` CSV mapping is restored; Cell Two's FIPS
+lookup now lowercases controlled labels. The prior release passed
+[185 CI tests](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34761907759).
+Local regression tests for the restoration pass; corrected live preview
+acceptance remains pending.
 
-The initial read-only review passed. Next is its extended
-[value reconciliation](../validation/SSP_PREVIEW_UPDATE_REVIEW.md), which still
-needs live execution. The Cell Two FIPS lookup now normalizes casing; the
-retained graph has not been rebuilt with that correction. The review compares the
-existing `MODEL_GRAPHS` candidate with the current target because preview
-snapshots were removed. Equal counts cannot prove the historical baseline is
-unchanged. This separate helper does not add a runtime cell. Daily COMMIT and
-committed readback remain pending; AR has no verified destination, normal
-writes stay disabled, and full-document OSCAL conformance is separate work.
+Upload the revised CSV, replace [Cell Two](02_source_mapping_registry_inputs.py),
+and run **all seven cells** in PREVIEW. Keep existing Cell One deployment
+settings and `EXECUTE_WRITES = False`; rerunning Cell One creates a fresh run ID.
+This corrected preview is necessary after the mapping/lookup changes.
+Do not repeat registry setup, cleanup, diagnostics or the full reload. The
+actual report must establish the new counts; whitespace, the other 855
+sensitivity records or source/target changes can leave differences.
+Daily COMMIT/readback remains pending and COMMIT is not approved. AR storage
+and full-document OSCAL conformance remain separate work.
 
 Developers edit these files once, then use `python tools/sync_notebook_cells.py`;
 `--check` reports generated-page drift. This is a packaging tool, not a

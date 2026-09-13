@@ -9,20 +9,29 @@ cell responsibilities, unresolved gaps and the next action are recorded there.
 validation, pre-write and storage checks passed with no target writes. DIM
 proposes 1,994 updates, zero inserts and 68,108 unchanged rows; all 67,289 FACT
 rows are unchanged. See the [live checkpoint](docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
-The initial read-only review passed and identified 1,958 sensitivity-member
-removals and 36 changed impact nodes. A one-line FIPS lookup correction now
-normalizes letter case. Next, run the extended
-[value review](notebooks/validation/SSP_PREVIEW_UPDATE_REVIEW.md) in the retained
-session. Its live result and a later corrected preview remain pending. Do not
-repeat registry setup, cleanup or replace the accepted session before review.
+The [live value review](docs/checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+resolved all 36 impact-node changes as `low` to `Low` and matched all 1,958
+removed sensitivity members to direct source text after diagnostic trimming.
+The correction restores the documented `SECURITY_CATEGORY` Direct CSV mapping
+and lowercases FIPS lookup labels. The prior release passed
+[185 CI tests](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34761907759).
+Local regression tests for the CSV restoration pass; corrected live preview
+acceptance remains pending.
+
+**Next:** upload the updated CSV, replace [Cell Two](notebooks/cells/02_source_mapping_registry_inputs.py),
+and run all seven cells in PREVIEW with existing Cell One deployment settings
+and `EXECUTE_WRITES = False`. Cell One creates a new run ID. Do not repeat
+registry setup, cleanup, diagnostics or the full reload. Require the new report;
+raw whitespace, the other 855 sensitivity records or source/target changes
+mean zero updates are not guaranteed. COMMIT is not approved.
 
 **Current lean rebuild:** 1,838 lines across the same
 [seven cells](notebooks/cells_v2/README.md), down from 3,700. One mapping CSV and
 the original nine registry columns plus three execution columns drive the
 mapper. Alternate metadata formats, cached plans and repeated validations have
-been removed. The expanded audit fixed eleven reproduced gaps and NumPy
+been removed. The earlier expanded audit fixed eleven reproduced gaps and NumPy
 integer compatibility. [GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34758711257)
-passes all 158 tests, including eight installed Snowpark checks and complete
+passed all 158 tests, including eight installed Snowpark checks and complete
 seven-cell executions. See the [full validation record](docs/checkpoints/2026-09-13-full-validation.md).
 
 Run release tests with `python -m unittest discover -s tests/lean -v` and verify
@@ -34,9 +43,10 @@ readback acceptance remain pending; follow
 
 Normal writes stay disabled. SSP's accepted full DEV reload is not repeated;
 AR remains seventeen accepted in-memory mappings without verified storage.
-Preview snapshots were removed. The review compares existing `MODEL_GRAPHS`
-with the current target; matching counts do not prove the old baseline is
-unchanged. Passing mapped-scope tests does not establish full OSCAL
+The completed review compared retained `MODEL_GRAPHS` with the current target;
+matching counts did not prove the old baseline was unchanged. Its trimmed
+source comparison did not establish raw-whitespace equality. Passing
+mapped-scope tests does not establish full OSCAL
 document conformance.
 
 ## Authoritative files

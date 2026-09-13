@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-11, end-of-day reconciliation after the accepted full SSP DEV reload and publication of the updated Cells 6-7 daily path. Owner: Source One mapping implementation team.
+Last updated: 2026-09-13, live SSP value reconciliation and Direct sensitivity mapping restoration. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -10,7 +10,33 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
-## Current action — daily SSP preview in existing Cells 6 and 7
+## Current action — corrected SSP PREVIEW
+
+The [live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+proves all 36 impact-node changes are `low` to `Low`, with matching source
+transformations and a lowercase correction needed. The 1,958 removed sensitivity
+members match populated direct `SECURITY_CATEGORY` text after diagnostic
+trimming; raw-whitespace equality and the other 855 records are not established.
+There were no anomalies or writes.
+
+The existing Direct mapping to
+`system-security-plan.system-characteristics.security-sensitivity-level` is
+restored in the CSV using the existing transform. Its corrected live preview
+is pending; local regression tests pass. Compilation now selects 48 SSP
+executable rows, including existing guard/support rows, and 17 AR rows.
+This is not full OSCAL conformance
+or evidence for a CIA/recommended-category fallback. Historical business-register
+totals below remain dated evidence; they are not silently recounted as completed
+or live-verified mappings.
+
+Upload the updated CSV, replace corrected Cell Two and run Cells One through
+Seven in PREVIEW, keeping existing Cell One settings and `EXECUTE_WRITES = False`.
+Cell One creates a new run ID. Require the actual report: the 1,994 explained
+differences should be removed on identical inputs, but zero updates are not
+guaranteed. Do not repeat diagnostics, registry work or the full DEV reload.
+Daily COMMIT/readback and AR storage remain pending; COMMIT is not approved.
+
+## Historical September 11 action — daily SSP preview in existing Cells 6 and 7
 
 **Today's report:** [September 11 manager summary](daily/2026-09-11.md).
 Latest status below supersedes the historical pilot instructions and earlier
@@ -118,7 +144,7 @@ is complete and matched both rejected counts. The owner parked those two fields
 and directed work to the remaining eleven, as detailed above.
 Rejection does not prove defective source data.
 
-## Current position
+## Historical mapping inventory and AR acceptance
 
 - [September 10 end-of-day report](daily/2026-09-10.md): accepted SSP hydration,
   date/property release and mapped-scope assembly are separated from AR planning.
@@ -226,7 +252,7 @@ No business question and no field-level test evidence are different things.
 | SSP | `system-security-plan.system-characteristics.props[]` | `PACKAGE_TYPE_HELPER_CALC` | Intentionally excluded | Notes explicitly say transient calculation field — do not map. | None; exclusion is not a completed mapping. |
 | SSP | `system-security-plan.system-characteristics.security-impact-level` | Eleven CIA source-to-member mappings below | Done in complete-only assembly scope | Conversion and omission of incomplete CIA assemblies accepted [E6, E7, E13]. | Missing objectives are source gaps; no invented defaults or precedence. |
 | SSP | `system-security-plan.system-characteristics.security-impact-level` | `RECOMMENDED_SECURITY_CATEGORY` | Deferred | All Nulls does not define a populated-value rule [E12]. | Approved destination and transform/value policy. |
-| SSP | `system-security-plan.system-characteristics.security-sensitivity-level` | `SECURITY_CATEGORY` | Review pending; parked | Clearer screenshot shows Direct row absent from prior register; implementation not reconciled. | Engineering must compare this exact row with canonical output before claiming completion. |
+| SSP | `system-security-plan.system-characteristics.security-sensitivity-level` | `SECURITY_CATEGORY` | Direct restoration implemented; corrected live PREVIEW pending | Documented Direct row restored through the existing CSV transform. [Live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md) matches 1,958 removed stored members to populated source text after diagnostic trimming. | Verify the corrected preview; direct output preserves raw values, so whitespace and the other 855 records remain to be checked. No COMMIT approval or full conformance claim. |
 | SSP | `system-security-plan.system-implementation.components[]` | Six Reference fields below | Done in agreed reference scope | Identity/type and approved partial hydration accepted [E4, E9]. Some input/hydration gaps remain. | None for current reference scope. Extra hydration requires separate source proof; no unlisted component-status mapping. |
 | SSP | **Unconfirmed**; Notes propose `system-security-plan.control-implementation.props[]` | Control-count candidate and other blank-target control rows | Deferred; parked | Notes placement conflicts with pinned standard; alternative not approved. | Owner-approved target, source count versus calculation, property name/value policy and namespace; see [proposal](checkpoints/2026-09-10_ssp_control_count_mapping_proposal.md). |
 

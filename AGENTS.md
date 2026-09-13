@@ -21,13 +21,16 @@
   legacy DEV columns. Registry setup and cleanup must not be repeated: the
   owner posted an accepted live SSP PREVIEW, recorded in
   docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md.
-  The initial read-only comparison is live-accepted. A one-line FIPS lookup
-  casing correction and extended value reconciliation follow; see
-  docs/checkpoints/2026-09-13-fips-value-reconciliation.md. Keep the accepted
-  session intact for the extended review of its 1,994 proposed updates using
-  notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py. Compare the
-  existing MODEL_GRAPHS candidate with the current target; removed preview
-  snapshots cannot prove an unchanged historical baseline through counts alone.
+  The completed live value reconciliation is recorded in
+  docs/checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md: all 36 impact
+  nodes are case-only low-to-Low changes, and 1,958 removed sensitivity members
+  match direct SECURITY_CATEGORY text after diagnostic trimming. Restore that
+  documented Direct CSV mapping and use the corrected lowercase FIPS lookup.
+  Next, upload the updated CSV, replace Cell Two and run all seven cells in
+  PREVIEW with existing Cell One settings and EXECUTE_WRITES false. Cell One
+  must run to create a fresh RUN_ID. Do not repeat diagnostics or the full reload.
+  Require the actual new report; trimming and the other 855 sensitivity records
+  mean zero updates cannot be promised. No COMMIT is done or approved.
   Run tests/lean, not the retired engine's private-API suite. Normal DIM/FACT
   writes remain disabled; daily COMMIT/readback and AR storage remain pending.
 - The deployed JSON file is retired. Historical settings and mappings are

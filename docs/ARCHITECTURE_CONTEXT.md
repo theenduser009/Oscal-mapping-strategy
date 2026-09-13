@@ -33,9 +33,21 @@ A future model also needs governed registry rows and deployment/destination
 settings. Unsupported transformation or collection identity behavior must be
 implemented once as a reusable capability; model selection does not invent it.
 
-The revised three-column DEV registry extension has not run here. Normal writes
-remain disabled. The full DEV reload remains accepted; the daily path and AR
-persistence still require live acceptance. Earlier architecture snapshots below
+The [live SSP value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+proves the reviewed impact changes are lookup casing and the 1,958 sensitivity
+removals correspond to populated direct source text after diagnostic trimming.
+The documented `SECURITY_CATEGORY` to
+`system-security-plan.system-characteristics.security-sensitivity-level` Direct
+CSV row is restored through the existing transform; no runtime branch is added.
+Cell Two separately lowercases FIPS lookup labels. This preserves raw Direct
+source values; it does not infer sensitivity from CIA or recommended category.
+
+Upload the revised CSV, replace Cell Two and run all seven cells for a new
+PREVIEW, preserving Cell One deployment settings and disabled writes. Cell One
+creates the new run ID. Actual output must resolve any remaining whitespace,
+unreviewed-record or changed-source differences. Do not repeat registry work,
+diagnostics or the accepted full reload. Daily COMMIT/readback and AR storage
+remain pending; COMMIT is not approved. Earlier architecture snapshots below
 describe history, not current inputs.
 
 ### Earlier metadata-engine migration - September 11 (superseded where noted above)

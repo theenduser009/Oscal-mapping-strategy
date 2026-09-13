@@ -1,22 +1,25 @@
 # Registry prerequisites and seven-cell deployment
 
-## Current state - live SSP preview accepted
+## Current state - corrected SSP PREVIEW after value reconciliation
 
 The owner's [live SSP preview](checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md)
 passed validation, pre-write and storage checks for 2,813 records, 70,102 nodes
-and 67,289 edges. No target writes occurred. **Do not repeat registry setup,
-cleanup or the seven-cell pipeline.** The deployment instructions below are
-historical reference, not the current next action.
+and 67,289 edges. No target writes occurred. The
+[live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+explains the 36 impact-node case changes and matches 1,958 removed sensitivity
+members to populated direct source text after diagnostic trimming.
 
-The initial read-only review passed. Next is value reconciliation of those updates using
-[READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py](../notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py),
-whose extended value report still needs live execution. A one-line FIPS lookup
-casing correction awaits a later corrected preview. The accepted
-candidate remains in `MODEL_GRAPHS`; preview temporary snapshots report
-`REMOVED`. Comparison must use the current target, and matching counts cannot
-prove the historical baseline is unchanged. Daily COMMIT and committed
-readback remain pending. Normal writes stay false, AR storage is unverified,
-and full OSCAL conformance remains separate work.
+**Next:** upload the revised mapping CSV, replace corrected Cell Two, and run
+Cells One through Seven in PREVIEW with existing Cell One deployment settings
+and `EXECUTE_WRITES = False`. Cell One creates a fresh run ID. This run applies
+the Direct `SECURITY_CATEGORY` restoration and lowercase FIPS lookup fix.
+Require the actual new report; source whitespace, the other 855 records and
+source/target changes prevent a guaranteed zero-update result.
+
+**Do not repeat registry setup, cleanup, diagnostics or the full DEV reload.**
+The deployment procedures below are historical reference. Daily COMMIT and
+committed readback remain pending; COMMIT is not approved. AR storage is
+unverified and full OSCAL conformance remains separate work.
 
 ## Historical registry deployment context
 

@@ -1,25 +1,41 @@
 # Project handoff - read this before resuming
 
-## Current action - FIPS source/value reconciliation
+## Current action - corrected SSP PREVIEW
 
-The owner requested reconciliation against the existing FIPS mapping.
-A one-line Cell Two correction now normalizes lookup labels to lowercase
-`low`, `moderate`, or `high`; it adds no runtime lines. The
-[reconciliation checkpoint](checkpoints/2026-09-13-fips-value-reconciliation.md)
-records the exact change, tests and remaining live boundary.
+The [live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
+resolves the reviewed differences. All 36 impact nodes match their frozen
+source transformations; each objective changes stored `low` to candidate `Low`,
+and the lowercase lookup comparison reports `CASE_NORMALIZATION_NEEDED`.
+All 1,958 removed sensitivity members match populated direct `SECURITY_CATEGORY`
+text after the diagnostic strips source whitespace. This does not prove the
+raw strings have no surrounding whitespace. There were no anomalies or writes.
 
-**Next action:** run the extended read-only review cell in the retained accepted
-session and share its `VALUE_RECONCILIATION` output. Keep `MODEL_GRAPHS`,
-`PIPELINE_REPORT` and `SOURCE_INPUTS` intact. Do not rerun Cell Two or the
-pipeline before that comparison. The extension checks accepted and lowercase
-lookup behavior without modifying the source, candidate or target.
+The correction combines the one-line Cell Two lowercase lookup fix with
+restoration of the documented Direct CSV mapping from `SECURITY_CATEGORY` to
+`system-security-plan.system-characteristics.security-sensitivity-level`.
+It uses the existing direct transform and adds no runtime code; the seven
+cells remain 1,838 lines. The prior FIPS/review release passed
+[185 CI tests](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34761907759).
+Local regression tests for the CSV restoration pass; corrected live PREVIEW
+acceptance remains pending.
 
-The initial live comparison below is accepted. The extended value comparison
-and a later preview of corrected output remain pending; normal writes stay
-disabled. The sensitivity mapping remains deferred until its source/stored
-values are reconciled. No new mapping rule or severity inference is approved.
+**Next action:** upload the updated [mapping CSV](../Mapping/ARCHER_OSCAL_MAPPINGS.csv),
+replace [Cell Two](../notebooks/cells/02_source_mapping_registry_inputs.py), and
+run **Cells One through Seven** for a fresh PREVIEW. Keep existing Cell One
+deployment settings and `EXECUTE_WRITES = False`; Cell One supplies a new
+`RUN_ID`, and Cell Seven stays in `PREVIEW`. Record the actual aggregate report.
+Do not repeat the diagnostic, registry setup/cleanup or full DEV reload.
+
+With unchanged source and target, these fixes should remove the 1,994 explained
+differences. Zero updates are not guaranteed: raw whitespace, the other 855
+sensitivity records or source/target changes can affect the new result.
+Daily COMMIT and committed readback remain pending and COMMIT is not approved.
+AR storage and full OSCAL conformance remain separate unresolved work.
 
 ## Previous action - reconcile the reviewed SSP field changes
+
+Historical analysis follows; the completed value reconciliation and corrected
+PREVIEW instruction above supersede its open questions and rerun restrictions.
 
 The owner posted the [completed live read-only review](checkpoints/2026-09-13-ssp-read-only-dim-review.md):
 `READ_ONLY_REVIEW_COMPLETE`, 70,102 candidate nodes across 2,813 source records,

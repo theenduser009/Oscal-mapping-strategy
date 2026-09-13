@@ -1,5 +1,13 @@
 # Review the accepted SSP preview's proposed updates
 
+**Completed:** the owner posted the
+[live value reconciliation](../../docs/checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md).
+It confirms 36 case-only impact changes and matching populated source labels
+for all 1,958 sensitivity removals. The lowercase lookup fix and restored Direct
+mapping now require one corrected PREVIEW. Follow the
+[restoration checkpoint](../../docs/checkpoints/2026-09-13-ssp-direct-sensitivity-restoration.md);
+do not repeat this diagnostic. The instructions below describe the completed run.
+
 Use [READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py](READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py)
 in **one new Python cell in the same Snowflake notebook session** as the
 [accepted preview](../../docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).

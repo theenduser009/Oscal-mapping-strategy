@@ -85,6 +85,41 @@ class LeanAcceptanceTests(unittest.TestCase):
         self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", result["status"])
         self.assertFalse(result["writes_executed"])
 
+    def test_restored_sensitivity_preserves_source_text_without_changing_graph_identity(self):
+        old, records = self.ssp()
+        context = self.compile(config=old["config"])[0]
+        context["lookups"] = old["lookups"]
+        baseline_nodes, baseline_edges = build(self.ns, context, records)
+        baseline = {node["NODE_KEY"]: json.loads(node["METADATA_JSON"]) for node in baseline_nodes.rows}
+        for value in ("low", "Low", "fips-199-low", "Legacy LOE A + DFARS", " Low "):
+            with self.subTest(value=value):
+                source = copy.deepcopy(records)
+                source[0]["CURATED_JSON"]["SECURITY_CATEGORY"] = value
+                original = copy.deepcopy(source)
+                nodes, edges = build(self.ns, context, source)
+                actual = {node["NODE_KEY"]: json.loads(node["METADATA_JSON"]) for node in nodes.rows}
+                characteristics = next(node for node in nodes.rows
+                                       if node["ELEMENT_PATH"] == "system-security-plan.system-characteristics")
+                self.assertEqual(value, actual[characteristics["NODE_KEY"]].pop("security-sensitivity-level"))
+                self.assertEqual(baseline, actual)
+                self.assertEqual([(node["NODE_KEY"], node["OSCAL_UUID"]) for node in baseline_nodes.rows],
+                                 [(node["NODE_KEY"], node["OSCAL_UUID"]) for node in nodes.rows])
+                self.assertEqual(business(baseline_edges), business(edges))
+                self.assertEqual(original, source)
+
+    def test_restored_sensitivity_omits_absent_null_or_empty_source_without_fallback(self):
+        old, records = self.ssp()
+        context = self.compile(config=old["config"])[0]
+        context["lookups"] = old["lookups"]
+        for additions in ({}, {"SECURITY_CATEGORY": None}, {"SECURITY_CATEGORY": ""}):
+            with self.subTest(additions=additions):
+                source = copy.deepcopy(records)
+                source[0]["CURATED_JSON"].update(additions)
+                nodes, _ = build(self.ns, context, source)
+                payload = next(json.loads(node["METADATA_JSON"]) for node in nodes.rows
+                               if node["ELEMENT_PATH"] == "system-security-plan.system-characteristics")
+                self.assertNotIn("security-sensitivity-level", payload)
+
     def test_identity_and_links_survive_record_order_and_run_id_changes(self):
         context, records = self.ssp()
         records.append(dict(copy.deepcopy(records[0]), SOURCE_RECORD_ID="101"))

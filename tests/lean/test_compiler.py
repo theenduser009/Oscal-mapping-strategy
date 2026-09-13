@@ -21,7 +21,7 @@ class LeanCompilerTests(unittest.TestCase):
         self.assertEqual(original, args or self.args)
         return result
 
-    def test_actual_csv_accepted_semantics_match_frozen_contracts(self):
+    def test_actual_csv_preserves_frozen_contracts_and_exact_restored_sensitivity_rule(self):
         frozen = json.loads((ROOT / 'tests/fixtures/mapper_contract_pre_flat.json').read_text(encoding='utf-8'))
         candidate = self.compile()
         compiled = sorted([
@@ -30,8 +30,10 @@ class LeanCompilerTests(unittest.TestCase):
              row['REPRESENTATION_PARAMS'], row['APPROVAL_STATUS'], {}]
             for ctx in candidate for row in ctx['mapping_rows'] if row['RULE_ID'] not in fixtures.SUPPORT
         ], key=lambda row: tuple(row[:3]))
-        self.assertEqual(_frozen_semantics(frozen), compiled)
-        self.assertEqual({'SSP':47, 'ASSESSMENT_RESULTS':17},
+        restored = ['SSP', 'SECURITY_CATEGORY', 'system-security-plan.system-characteristics',
+                    'object', 'direct', {}, {'target': 'security-sensitivity-level'}, 'APPROVED', {}]
+        self.assertEqual(sorted([*_frozen_semantics(frozen), restored], key=lambda row: tuple(row[:3])), compiled)
+        self.assertEqual({'SSP':48, 'ASSESSMENT_RESULTS':17},
                          {ctx['config']['OSCAL_MODEL']: len(ctx['mapping_rows']) for ctx in candidate})
         for context in candidate:
             report = context['routing_report']

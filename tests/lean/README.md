@@ -26,6 +26,9 @@ never fills missing functions from an older active mapper.
   collection identity, parent relationships and pipeline failure reporting.
 - Accepted SSP and AR17 outputs against frozen independent evidence, including
   precision, source isolation and metadata-only new-field/third-model execution.
+- The restored Direct `SECURITY_CATEGORY` mapping is checked separately for
+  source-text preservation, absent/null/empty-string omission and unchanged
+  graph keys, UUIDs and edges. All earlier 1,403 transform cases remain intact.
 - Batched component hydration, selected lookup validation and retained partial
   component behavior.
 - Loader preview, insert/update/unchanged behavior, rollback, unknown commit

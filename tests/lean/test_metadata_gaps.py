@@ -76,7 +76,7 @@ class CsvRegistryIntegrationTests(unittest.TestCase):
         rows = self.ns["load_mapping_rows"](self.profile)
         self.assertEqual(151, len(rows))
         contexts = self.compile(rows)
-        self.assertEqual({"SSP": 47, "ASSESSMENT_RESULTS": 17},
+        self.assertEqual({"SSP": 48, "ASSESSMENT_RESULTS": 17},
                          {context["config"]["OSCAL_MODEL"]: len(context["mapping_rows"]) for context in contexts})
         selected = {row["RULE_ID"]: row for context in contexts for row in context["mapping_rows"]}
         for rule in ("support:metadata-title", "support:oscal-version", "support:document-version"):

@@ -158,13 +158,14 @@ class NotebookEndToEndTests(unittest.TestCase):
         ns = self.run_notebook()
         self.assertEqual("PREVIEW_COMPLETE", ns["PIPELINE_REPORT"]["status"])
         self.assertFalse(ns["PIPELINE_REPORT"]["writes_executed"])
-        self.assertEqual(47, len(ns["MAPPING_CONTEXTS"][0]["mapping_rows"]))
+        self.assertEqual(48, len(ns["MAPPING_CONTEXTS"][0]["mapping_rows"]))
         dim = self.contract["TARGET_DIM"]
         self.assertEqual([], self.session.query("SELECT * FROM " + dim))
         graph = ns["MODEL_GRAPHS"][("source-one", "SSP")]
         payloads = [json.loads(row["METADATA_JSON"]) for row in graph["nodes"].collect()]
         self.assertTrue(any(payload.get("title") == "Tool" for payload in payloads))
         self.assertTrue(any(payload.get("state") == "operational" for payload in payloads))
+        self.assertTrue(any(payload.get("security-sensitivity-level") == self.source["SECURITY_CATEGORY"] for payload in payloads))
         self.assertTrue(any(payload.get("party-uuids") for payload in payloads))
         with self.notebook_transport():
             _, first = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
@@ -179,7 +180,7 @@ class NotebookEndToEndTests(unittest.TestCase):
     def test_both_models_preview_then_ar_destination_blocks_all_commits(self):
         ns = self.run_notebook(("SSP", "ASSESSMENT_RESULTS"))
         self.assertEqual(2, len(ns["MODEL_GRAPHS"]))
-        self.assertEqual([47, 17], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
+        self.assertEqual([48, 17], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
         self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", ns["PIPELINE_REPORT"]["groups"][1]["load"]["status"])
         self.session.events.clear()
         with self.notebook_transport(), self.assertRaises(ns["PipelineError"]):

@@ -1,5 +1,11 @@
 # FIPS value reconciliation after the live SSP review
 
+**Follow-up:** the owner posted the
+[completed live value report](2026-09-13-ssp-read-only-value-reconciliation.md).
+The case-only impact changes and populated sensitivity source values are now
+confirmed. The [direct-restoration checkpoint](2026-09-13-ssp-direct-sensitivity-restoration.md)
+supersedes the next-action instructions below.
+
 The owner confirmed that the existing FIPS conversion to `low`, `moderate`
 and `high` should be retained, and requested work on the remaining ingestion
 differences. The [posted live review](2026-09-13-ssp-read-only-dim-review.md)
