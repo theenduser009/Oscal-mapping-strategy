@@ -88,6 +88,18 @@ complete from partial field coverage.
 - Registry governs hierarchy and identity. Excel/CSV source field, model, exact element path, mapping type and Notes govern field mappings. Registry presence is not proof of complete mapping.
 - Separate implemented, candidate-only, runtime-accepted in memory, persisted/read-back verified, deferred, blocked, and full OSCAL conformance. Do not turn one status into another.
 
+## Owner-provided example testing
+
+For relevant mapping changes, include tests using readable examples from the
+owner's Google Drive screenshots alongside synthetic regression tests. The
+private local transcriptions are in the workspace's private/curated-json
+folder outside this repository. Exercise only explicitly transcribed values;
+never fill omitted screenshot rows or claim a complete dataset was executed.
+If the relevant example is absent or unreadable, state that test gap.
+Keep screenshots, source values and detailed results out of GitHub and release
+packages; publish only aggregate outcomes. Use synthetic source-record IDs
+when isolating a source excerpt.
+
 ## Work and communication rules
 
 - Preserve accepted mappings and user changes. Inspect existing functions before building another loader or diagnostic.

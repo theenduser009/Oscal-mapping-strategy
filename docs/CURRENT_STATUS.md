@@ -16,6 +16,14 @@ The new 13 are implemented and tested locally, not live accepted or persisted.
 The remaining 15 AR rows retain their specific deferrals. Historical threshold
 source-name differences are not silently aliased.
 
+The owner requires relevant screenshot examples in future mapping tests,
+alongside synthetic regressions. Four exact transcribed AR scalar excerpts
+have now passed local mapping and graph validation in separate synthetic
+record contexts: three zero examples and one nonzero example were preserved.
+The resulting 12 nodes and 8 parent-child edges validated, with no target
+writes. This is an excerpt check, not execution of the complete screenshot
+dataset. Real values and detailed transcriptions remain private.
+
 **Next action:** follow [AR next run](AR_NEXT_RUN.md): upload the updated CSV,
 select AR only in Cell One, keep shared writes false and Cell Seven in PREVIEW,
 then run the same seven cells. Require READY/30 selected AR rows and the complete
