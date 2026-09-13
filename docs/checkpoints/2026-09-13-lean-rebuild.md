@@ -41,6 +41,20 @@ its destination contract is still absent.
 
 ## Validation
 
+The initial rebuild was published as
+[a28059de](https://github.com/theenduser009/Oscal-mapping-strategy/commit/a28059de728533f12faf6b553dd261b068ac0e98).
+[GitHub checks #4](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34738888719)
+passed all 105 tests, including all five installed Snowpark smoke cases, in
+4.820 seconds. The published Git tree matched the local tested index.
+
+The final compiler review added three regressions: collection metadata cannot
+silently suppress document IDs through an unsupported atomic-assembly rule;
+malformed repeated path separators reject; and an invalid SSP target does not
+block an independently selected AR route. These fixes do not add runtime lines.
+The final local suite passes 103 tests (5.383 seconds), with only the absent
+Snowpark class skipped. CI adds those five package cases; current checks are
+attached to [PR #1](https://github.com/theenduser009/Oscal-mapping-strategy/pull/1).
+
 The new [release suite](../../tests/lean/README.md) exercises fresh cell
 definitions. The older private-API suite belongs to the retired engine and is
 retained as historical evidence; its former 769-test pass is not claimed for

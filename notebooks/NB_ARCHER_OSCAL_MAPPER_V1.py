@@ -436,7 +436,7 @@ def _registry_elements(rows, selected, profile, model):
             parameters["uuid_from_instance"] = True
         members = _metadata_items(row, "REQUIRED_MEMBERS")
         if members:
-            if operator != "object" or any(not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", member) for member in members):
+            if operator != "object" or collection or any(not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", member) for member in members):
                 raise ValueError("REQUIRED_MEMBERS requires scalar object member paths")
             parameters.update(required_members=members, optional_assembly=True)
         elif operator == "object" and not collection:
@@ -543,7 +543,7 @@ def _mapping_route(row, profile, model, paths, inactive, aliases, roots, routing
     elif status in {"DEFERRED", "EXCLUDED"}:
         reason, severity = "EXPLICIT_" + status, status
     elif label_model and owner_model and label_model != owner_model or (
-            status and roots.get(original.split(".", 1)[0]) not in {None, owner_model}):
+            status and owner_model and roots.get(original.split(".", 1)[0]) not in {None, owner_model}):
         reason = "MODEL_PATH_CONFLICT"
     elif label in routing["labels"] or path in routing["paths"]:
         reason, severity = "PLACEHOLDER_MAPPING", "DEFERRED"
@@ -561,7 +561,7 @@ def _mapping_route(row, profile, model, paths, inactive, aliases, roots, routing
     elif any(path == boundary or path.startswith(boundary + ".") for boundary in inactive):
         reason = "REGISTRY_PATH_NOT_EXECUTABLE"
     owner = _owner_for_path(path, paths)
-    relative = path[len(owner):].lstrip(".") if owner else ""
+    relative = path[len(owner):].removeprefix(".") if owner else ""
     if not reason and (owner is None or any(token in relative for token in ("[", "]", ".."))):
         reason = "UNREGISTERED_COLLECTION"
     if reason:

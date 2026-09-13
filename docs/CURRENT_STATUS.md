@@ -15,9 +15,16 @@ private-API suite is historical evidence, not validation of the new runtime.
 See the [lean rebuild checkpoint](checkpoints/2026-09-13-lean-rebuild.md) and
 [release test instructions](../tests/lean/README.md).
 
-**Next action:** verify publication and CI for the lean rebuild in draft PR #1,
-then perform live registry/preview and daily-loader acceptance when the intended
-Snowflake environment is available. No live database action occurred here.
+The rebuild is published in [draft PR #1](https://github.com/theenduser009/Oscal-mapping-strategy/pull/1).
+[Initial rebuild CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34738888719)
+passed all 105 tests, including five installed Snowpark API checks. A final
+compiler review added three regressions and small fixes with no runtime growth;
+103 local tests pass, with package checks required again in CI.
+
+**Next action:** perform live registry/preview and daily-loader acceptance when
+the intended Snowflake environment is available. Do not resume another general
+cleanup cycle: this requested lean rebuild is complete. No live database action
+occurred here.
 Normal writes remain false, the default model is SSP, and AR has no verified
 destination. No additional owner permission is needed for scoped code work.
 

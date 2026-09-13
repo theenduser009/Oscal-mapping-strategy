@@ -124,6 +124,30 @@ class LeanCompilerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.compile(args)
 
+    def test_required_members_cannot_silently_suppress_document_id_collection(self):
+        registry = copy.deepcopy(self.args[1])
+        row = next(row for row in registry if row['NODE_PATH'] == 'system-security-plan.metadata.document-ids[]')
+        row['REQUIRED_MEMBERS'] = 'scheme'
+        with self.assertRaisesRegex(ValueError, 'scalar object'):
+            self.compile((self.args[0], registry, *self.args[2:]))
+
+    def test_doubled_separator_cannot_move_a_field_to_an_ancestor_payload(self):
+        for path in (base.ROOT_PATH + '..summary.title', base.SUMMARY + '..title'):
+            args = ({'source-one':[base.mapping(RUNTIME_TARGET_PATH=path)]}, base.registry_rows(),
+                    [base.profile()], {base.MODEL:base.model_contract()})
+            with self.subTest(path=path):
+                context = self.compile(args)[0]
+                self.assertEqual('BLOCKED', context['routing_report']['STATUS'])
+                self.assertEqual([], context['mapping_rows'])
+
+    def test_missing_ssp_target_does_not_block_an_ar_only_route(self):
+        self.args[0]['source-one'][1]['RUNTIME_TARGET_PATH'] = ''
+        profiles = [dict(self.args[2][0], MODEL_KEYS=('ASSESSMENT_RESULTS',))]
+        context = self.compile((self.args[0], self.args[1], profiles, *self.args[3:]))[0]
+        self.assertEqual('ASSESSMENT_RESULTS', context['config']['OSCAL_MODEL'])
+        self.assertEqual('READY', context['routing_report']['STATUS'])
+        self.assertEqual(17, len(context['mapping_rows']))
+
     def test_missing_status_cannot_keep_runtime_metadata(self):
         self.args[0]['source-one'][1]['EXECUTION_STATUS'] = ''
         self.assertEqual('BLOCKED', self.compile()[0]['routing_report']['STATUS'])
