@@ -24,13 +24,19 @@
   The completed live value reconciliation is recorded in
   docs/checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md: all 36 impact
   nodes are case-only low-to-Low changes, and 1,958 removed sensitivity members
-  match direct SECURITY_CATEGORY text after diagnostic trimming. Restore that
-  documented Direct CSV mapping and use the corrected lowercase FIPS lookup.
-  Next, upload the updated CSV, replace Cell Two and run all seven cells in
-  PREVIEW with existing Cell One settings and EXECUTE_WRITES false. Cell One
-  must run to create a fresh RUN_ID. Do not repeat diagnostics or the full reload.
-  Require the actual new report; trimming and the other 855 sensitivity records
-  mean zero updates cannot be promised. No COMMIT is done or approved.
+  match direct SECURITY_CATEGORY text after diagnostic trimming. The documented
+  Direct CSV mapping and corrected lowercase FIPS lookup are implemented. The
+  corrected live SSP PREVIEW is accepted in
+  docs/checkpoints/2026-09-13-ssp-preview-no-target-changes.md, posted in main
+  commit 9d08e8978cbb5894239b688743880b75accadeea: 2,813 source records,
+  70,102 nodes and 67,289 edges, with zero DIM/FACT inserts or updates. All
+  validation/storage checks passed; writes, persistence, commit and target DML
+  flags are false. Retain that snapshot as the baseline. Do not repeat an
+  unchanged preview, diagnostics, registry work or the full reload. Direct
+  sensitivity preserves source text; CIA mappings normalize recognized
+  low/moderate/high values but retain explicitly approved legacy strings.
+  This is not full FIPS normalization or OSCAL conformance. Daily write/readback
+  remains a separate pending milestone; no daily COMMIT is done or approved.
   Run tests/lean, not the retired engine's private-API suite. Normal DIM/FACT
   writes remain disabled; daily COMMIT/readback and AR storage remain pending.
 - The deployed JSON file is retired. Historical settings and mappings are

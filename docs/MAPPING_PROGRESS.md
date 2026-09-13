@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-13, live SSP value reconciliation and Direct sensitivity mapping restoration. Owner: Source One mapping implementation team.
+Last updated: 2026-09-13, corrected live SSP PREVIEW accepted with no target changes. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -10,7 +10,32 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
-## Current action — corrected SSP PREVIEW
+## Current status — corrected SSP PREVIEW accepted with no target changes
+
+The [owner-posted corrected preview](checkpoints/2026-09-13-ssp-preview-no-target-changes.md),
+from main commit `9d08e8978cbb5894239b688743880b75accadeea`, reports
+`PREVIEW_COMPLETE`: 2,813 source records, 70,102 nodes and 67,289 edges.
+DIM has 0 inserts, 0 updates and 70,102 unchanged rows; FACT has 0 inserts,
+0 updates and 67,289 unchanged rows. Validation, pre-write validation and
+storage verification passed. No writes, persistence, commit or target DML
+were attempted or executed; temporary cleanup is `REMOVED`.
+
+The corrected mapped SSP graph matches the current target snapshot. This
+accepts the Direct sensitivity restoration and lowercase CIA lookup correction
+in this preview; it does not add mapping approvals. Compilation remains
+48 SSP executable rows, including guard/support rows, and 17 AR rows. Direct
+`SECURITY_CATEGORY` preserves source text without deriving a FIPS rating.
+CIA mappings normalize recognized low/moderate/high values but continue to
+permit explicitly approved legacy strings. Full FIPS normalization and full
+OSCAL conformance are not established by equal node payloads.
+
+Retain this accepted baseline. Do not repeat an unchanged preview, registry
+setup/cleanup, diagnostics or the full DEV reload. Daily write/readback,
+AR persistence and full conformance remain separate pending milestones;
+no daily COMMIT has been executed or approved by this preview. Historical
+instructions and counts below remain dated evidence.
+
+## Previous action — corrected SSP PREVIEW (now accepted)
 
 The [live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
 proves all 36 impact-node changes are `low` to `Low`, with matching source
@@ -252,7 +277,7 @@ No business question and no field-level test evidence are different things.
 | SSP | `system-security-plan.system-characteristics.props[]` | `PACKAGE_TYPE_HELPER_CALC` | Intentionally excluded | Notes explicitly say transient calculation field — do not map. | None; exclusion is not a completed mapping. |
 | SSP | `system-security-plan.system-characteristics.security-impact-level` | Eleven CIA source-to-member mappings below | Done in complete-only assembly scope | Conversion and omission of incomplete CIA assemblies accepted [E6, E7, E13]. | Missing objectives are source gaps; no invented defaults or precedence. |
 | SSP | `system-security-plan.system-characteristics.security-impact-level` | `RECOMMENDED_SECURITY_CATEGORY` | Deferred | All Nulls does not define a populated-value rule [E12]. | Approved destination and transform/value policy. |
-| SSP | `system-security-plan.system-characteristics.security-sensitivity-level` | `SECURITY_CATEGORY` | Direct restoration implemented; corrected live PREVIEW pending | Documented Direct row restored through the existing CSV transform. [Live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md) matches 1,958 removed stored members to populated source text after diagnostic trimming. | Verify the corrected preview; direct output preserves raw values, so whitespace and the other 855 records remain to be checked. No COMMIT approval or full conformance claim. |
+| SSP | `system-security-plan.system-characteristics.security-sensitivity-level` | `SECURITY_CATEGORY` | Direct restoration accepted in corrected live PREVIEW | Documented Direct row restored through the existing CSV transform. The [corrected preview](checkpoints/2026-09-13-ssp-preview-no-target-changes.md) has zero DIM/FACT inserts or updates across all 2,813 records. Earlier [value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md) explains the 1,958 previous removals. | Direct source preservation is not a derived FIPS rating. Daily write/readback and full conformance remain pending; no COMMIT approval follows from this preview. |
 | SSP | `system-security-plan.system-implementation.components[]` | Six Reference fields below | Done in agreed reference scope | Identity/type and approved partial hydration accepted [E4, E9]. Some input/hydration gaps remain. | None for current reference scope. Extra hydration requires separate source proof; no unlisted component-status mapping. |
 | SSP | **Unconfirmed**; Notes propose `system-security-plan.control-implementation.props[]` | Control-count candidate and other blank-target control rows | Deferred; parked | Notes placement conflicts with pinned standard; alternative not approved. | Owner-approved target, source count versus calculation, property name/value policy and namespace; see [proposal](checkpoints/2026-09-10_ssp_control_count_mapping_proposal.md). |
 

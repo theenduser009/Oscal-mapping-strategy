@@ -1,6 +1,31 @@
 # Current Status
 
-## Current action - corrected SSP PREVIEW
+## Current status - corrected SSP PREVIEW accepted with no target changes
+
+The owner posted the [corrected live SSP preview](checkpoints/2026-09-13-ssp-preview-no-target-changes.md)
+in main commit `9d08e8978cbb5894239b688743880b75accadeea`.
+It reports `PREVIEW_COMPLETE` for 2,813 source records, 70,102 nodes and
+67,289 edges. DIM has 0 inserts, 0 updates and 70,102 unchanged rows;
+FACT has 0 inserts, 0 updates and 67,289 unchanged rows. Validation,
+pre-write validation and storage verification passed. Writes executed,
+persisted, committed, target DML attempted and commit attempted are all false;
+temporary cleanup is `REMOVED`.
+
+This accepts the corrected SSP preview against that target snapshot: the
+previously explained 1,994 proposed updates are gone. It does not prove future
+runs will be unchanged. The Direct `SECURITY_CATEGORY` mapping preserves source
+text; it does not derive a FIPS rating. CIA mappings normalize recognized
+low/moderate/high values and still permit explicitly approved legacy strings.
+This checkpoint does not establish full FIPS normalization or OSCAL conformance.
+
+**Next action:** retain this accepted preview as the baseline; do not repeat
+registry setup/cleanup, the full DEV reload or an unchanged preview. Daily
+write/readback, AR persistence and full OSCAL conformance remain separate
+pending milestones. No daily COMMIT has been executed or approved by this
+preview. Keep normal writes disabled until the daily write/readback step is
+explicitly ready and authorized. The prior run instructions below are history.
+
+## Previous action - corrected SSP PREVIEW (now accepted)
 
 The [live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
 resolves the reviewed differences. All 36 impact nodes match their frozen
