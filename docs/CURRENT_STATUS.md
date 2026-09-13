@@ -1,6 +1,44 @@
 # Current Status
 
-## Current action - POA&M storage bound using the SSP/AR naming pattern
+## Current action - AR32 CSV extension; POAM preview accepted
+
+The owner requested the additional Assessment Results mappings discussed in the
+other chat. Comparing its [main-branch change](https://github.com/theenduser009/Oscal-mapping-strategy/commit/a9d32fb9bdecedf0003bab5a648394baaf840b94)
+with this branch found only two additional fields:
+
+| Source One Archer field | Runtime OSCAL target | Transform |
+| --- | --- | --- |
+| CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD | assessment-results.results[].observations[] | scalar-score |
+| CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD | assessment-results.results[].observations[] | scalar-score |
+
+Only the five execution cells on those two existing CSV rows change. Their exact
+unprefixed source names and original spreadsheet columns remain intact. There
+is no fallback to underscored names, no threshold calculation and no PCT-field
+substitution. Existing ar30 rule IDs, SSP sensitivity and POAMS remain intact.
+AR now has 32 enabled rows and 13 deferred rows. Each executable row selects one
+full RUNTIME_TARGET_PATH; original alternative wording is provenance only.
+The seven runtime cells, registry and database definitions are unchanged.
+
+Local checks ran 194 tests with no failures and three unavailable-Snowpark
+class skips. The new regression preserves all AR30 keys and business payloads,
+checks zero and exact names, and rejects non-scalar values. Full installed-
+Snowpark CI is pending on this publication. Private transcriptions do not
+contain these two threshold fields; their populated-source coverage is unverified.
+
+The [new POAM live preview](https://github.com/theenduser009/Oscal-mapping-strategy/blob/f5677398faf9da2c9919e6fa29d0db0264816d4e/docs/checkpoints/2026-09-13-poam-preview-complete.md)
+supersedes its earlier schema mismatch: 2,813 source records, 2,821 DIM inserts,
+8 FACT inserts, zero updates, all graph/storage/pre-write checks passed and
+temporary cleanup REMOVED. No target DML or commit was attempted in that report.
+The owner was given the Cell Seven COMMIT step; its outcome remains unverified.
+Retain the accepted SSP and AR committed-readback evidence.
+
+**Next action:** follow [AR_NEXT_RUN.md](AR_NEXT_RUN.md): upload this branch's
+updated CSV, select AR and run the existing seven cells in PREVIEW. Require
+READY with 32 selected rows and PREVIEW_PASSED_NO_TARGET_DML. Review the new
+field coverage and proposed changes before the expanded AR COMMIT.
+Do not replace the CSV wholesale from main or rerun accepted setup/load work.
+
+## Previous action - POA&M storage bound using the SSP/AR naming pattern
 
 The owner confirmed that POA&M uses the same physical tables and key rules as
 SSP/AR, with model-specific names. Cell One binds DIM_OSCAL_POAM_ELEMENT and

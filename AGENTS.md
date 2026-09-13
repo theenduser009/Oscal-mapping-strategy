@@ -7,36 +7,33 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
-## Active scope - POA&M reference mapping implemented; live preview pending
+## Active scope - AR32 metadata extension; POAM preview accepted
 
-The owner confirmed POAMS in the same Source One CURATED_JSON, Reference to
-plan-of-action-and-milestones.poam-items[]. Do not ask for a second source table
-for this scoped mapping. The owner also confirmed the SSP/AR table layout and POAM naming pattern.
-Cell One now binds DIM_OSCAL_POAM_ELEMENT / FACT_OSCAL_POAM_DEPENDENCY and
-PK_DIM_OSCAL_POAM_ELEMENT_HASH / PK_FACT_OSCAL_POAM_DEPENDENCY_HASH in the same
-DEV curated schema. Follow docs/POAM_NEXT_RUN.md: missing-table DDL, scoped
-self-checking POAM registry update, then target-aware PREVIEW. Do not ask for
-the table names again. The discovery SQL is optional diagnosis; actual live
-schema checks still precede target DML. The UUID-only item nodes use standard package-scoped
-identities; no titles/descriptions or external-document UUID resolution are
-invented. Compiled-plan release is lean-csv-registry-v2 in matching Cells 3/4.
-The POAM registry update touches only its existing root/item execution metadata
-and item ITEM_PATH; it is prepared, not live accepted. No whole-registry reset.
-Keep screenshots/private values outside GitHub. SSP and AR acceptance stands.
+The owner requested the remaining AR mapping changes discussed in the other
+chat. Enable the exact unprefixed CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD and
+CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD fields as scalar-score observations at
+assessment-results.results[].observations[]. This supersedes only the previous
+source-name deferral for those two rows. Preserve the existing 30 AR rows and
+their IDs, SSP sensitivity, and the POAMS reference mapping. Thirty-two AR
+rows are enabled and thirteen remain deferred. Original spreadsheet path/Notes
+are provenance; approved RUNTIME_TARGET_PATH contains one exact full path.
+No runtime, registry or table changes accompany this extension.
+Follow docs/AR_NEXT_RUN.md for a fresh AR32 preview; added-field live coverage
+is not accepted from synthetic tests or the previous aggregate AR load.
+Relevant private excerpts do not contain the new exact threshold fields;
+report that gap and never invent values or publish private source data.
 
-## Accepted AR scope
+The owner-posted POAM preview is accepted in main commit
+f5677398faf9da2c9919e6fa29d0db0264816d4e: 2,813 source records, 2,821 DIM
+inserts, eight FACT inserts, no updates, all validation/storage checks passed,
+and no target writes or commit. The owner was given the Cell Seven COMMIT step;
+its actual outcome remains pending verification. Do not repeat registry or
+schema setup, ask table names again, or claim POAM persisted without the report.
+Keep the same Source One POAMS reference scope and package-scoped UUIDs.
 
-The owner selected AR next, followed by POA&M and remaining model work by
-Monday. Follow docs/AR_NEXT_RUN.md. The CSV now enables 30 AR fields: 17
-previously live accepted plus 13 owner-approved additions. The current AR graph
-has now been inserted and verified; per-field populated coverage remains separate. Preserve the 15 deferred rows, including threshold-name conflicts,
-two parked shape rejections and prior workflow/score deferrals. No new
-runtime or registry rules are needed for the 13 additions. AR now has its own
-owner-confirmed storage binding with the same physical definition as SSP.
-SSP's no-change COMMIT and readback are accepted; do not repeat them as a
-prerequisite for AR. System implementation is part of SSP, with six accepted
-component-reference mappings and partial hydration. Do not claim full models
-complete from partial field coverage.
+The existing SSP and AR mapped-graph COMMIT/readback acceptance stands.
+AR tables are populated; no replacement DDL or unchanged rerun is requested.
+This material update is CSV-only; all seven runtime cells remain unchanged.
 
 ## Latest shared AR COMMIT accepted
 

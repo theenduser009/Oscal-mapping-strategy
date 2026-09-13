@@ -50,7 +50,12 @@ Existing package-scoped identity and the shared loader remain unchanged.
 The seven cells total 1,865 lines; compiled-plan release lean-csv-registry-v2
 requires matching Cells Three and Four. POA&M now has the owner-confirmed
 SSP/AR storage layout with POAM table and PK names. Its live registry preparation
-and target-aware preview remain pending. This is not a complete OSCAL POA&M document.
+and target-aware preview are accepted in the posted 2,821-node / 8-edge preview.
+POAM committed readback is still pending. This is not a complete OSCAL POA&M document.
+
+The AR32 increment adds two exact-name threshold mappings through CSV metadata
+only. Existing AR30 rule IDs, graph identity, registry and runtime are preserved.
+The new populated-field preview is pending; see [AR next run](AR_NEXT_RUN.md).
 
 ### Earlier metadata-engine migration - September 11 (superseded where noted above)
 

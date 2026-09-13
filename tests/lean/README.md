@@ -33,7 +33,9 @@ never fills missing functions from an older active mapper.
   standalone oracle, including decimal precision, zero/false, null omission,
   parent links and preservation of the original AR17 identities. Original
   CSV source names, paths, Notes and provenance remain unchanged; parked
-  reference/multi-value fields, workflow rows and name conflicts stay deferred.
+  reference/multi-value fields and workflow rows stay deferred. The two exact-name
+  AR threshold additions are checked separately for zero preservation, unchanged
+  AR30 keys/payloads and no fallback to underscore-prefixed names.
 - Batched component hydration, selected lookup validation and retained partial
   component behavior.
 - Loader preview, insert/update/unchanged behavior, rollback, unknown commit

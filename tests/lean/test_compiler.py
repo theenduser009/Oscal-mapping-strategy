@@ -7,7 +7,7 @@ import test_registry_release as fixtures
 import test_metadata_driven_contract as base
 from test_flat_mapping_release import _frozen_semantics
 from test_registry_first_routing import posted_rows
-from test_ar30_extension import AR_ADDITIONS, OBSERVATION_PATH
+from test_ar30_extension import AR_ADDITIONS, AR_THRESHOLD_ADDITIONS, OBSERVATION_PATH
 
 
 class LeanCompilerTests(unittest.TestCase):
@@ -34,10 +34,10 @@ class LeanCompilerTests(unittest.TestCase):
         restored = ['SSP', 'SECURITY_CATEGORY', 'system-security-plan.system-characteristics',
                     'object', 'direct', {}, {'target': 'security-sensitivity-level'}, 'APPROVED', {}]
         additions = [['ASSESSMENT_RESULTS', field, OBSERVATION_PATH, 'observations',
-                      'scalar-score', {}, {}, 'APPROVED', {}] for field in AR_ADDITIONS]
+                      'scalar-score', {}, {}, 'APPROVED', {}] for field in (*AR_ADDITIONS, *AR_THRESHOLD_ADDITIONS)]
         self.assertEqual(sorted([*_frozen_semantics(frozen), restored, *additions],
                                 key=lambda row: tuple(row[:3])), compiled)
-        self.assertEqual({'SSP':48, 'ASSESSMENT_RESULTS':30},
+        self.assertEqual({'SSP':48, 'ASSESSMENT_RESULTS':32},
                          {ctx['config']['OSCAL_MODEL']: len(ctx['mapping_rows']) for ctx in candidate})
         for context in candidate:
             report = context['routing_report']
@@ -152,7 +152,7 @@ class LeanCompilerTests(unittest.TestCase):
         context = self.compile((self.args[0], self.args[1], profiles, *self.args[3:]))[0]
         self.assertEqual('ASSESSMENT_RESULTS', context['config']['OSCAL_MODEL'])
         self.assertEqual('READY', context['routing_report']['STATUS'])
-        self.assertEqual(30, len(context['mapping_rows']))
+        self.assertEqual(32, len(context['mapping_rows']))
 
     def test_missing_status_cannot_keep_runtime_metadata(self):
         self.args[0]['source-one'][1]['EXECUTION_STATUS'] = ''

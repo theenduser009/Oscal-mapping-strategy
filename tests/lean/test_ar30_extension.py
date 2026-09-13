@@ -19,6 +19,10 @@ AR_ADDITIONS = (
     "BASELINE_CONTROL_RISK_SCORE", "RISK_ASSESSMENT", "INITIAL_RISK_ASSESSMENT",
 )
 
+AR_THRESHOLD_ADDITIONS = (
+    "CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD", "CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD",
+)
+
 
 class AR30ExtensionTests(unittest.TestCase):
     def setUp(self):
@@ -52,15 +56,20 @@ class AR30ExtensionTests(unittest.TestCase):
                              {key: actual_by_id[row["ORIGINAL_ROW_ID"]][key] for key in original_columns})
         accepted = {row["SOURCE_FIELD_NAME"] for row in self.old["mapping_rows"]}
         selected = {row["SOURCE_FIELD_NAME"] for row in self.context["mapping_rows"]}
-        self.assertEqual(accepted | set(AR_ADDITIONS), selected)
-        self.assertEqual(30, len(self.context["mapping_rows"]))
+        self.assertEqual(accepted | set(AR_ADDITIONS) | set(AR_THRESHOLD_ADDITIONS), selected)
+        self.assertEqual(32, len(self.context["mapping_rows"]))
         additions = [row for row in self.context["mapping_rows"] if row["SOURCE_FIELD_NAME"] in AR_ADDITIONS]
         self.assertEqual({"scalar-score"}, {row["TRANSFORM_ID"] for row in additions})
         self.assertEqual({OBSERVATION_PATH}, {row["OWNER_ELEMENT_PATH"] for row in additions})
         self.assertEqual({"ar30:" + field for field in AR_ADDITIONS}, {row["RULE_ID"] for row in additions})
+        thresholds = [row for row in self.context["mapping_rows"]
+                      if row["SOURCE_FIELD_NAME"] in AR_THRESHOLD_ADDITIONS]
+        self.assertEqual({"ar-alt:" + field for field in AR_THRESHOLD_ADDITIONS},
+                         {row["RULE_ID"] for row in thresholds})
+        self.assertEqual({("scalar-score", OBSERVATION_PATH)},
+                         {(row["TRANSFORM_ID"], row["OWNER_ELEMENT_PATH"]) for row in thresholds})
         deferred = {"RISK_ACCEPTANCE_RBDS", "RISK_ASSESSMENT_REPORT", "TOTAL_PACKAGE_INHERENT_RISK",
-                    "FINDINGS", "AVG_SECURITY_COMPLIANCE_SCORE", "AVG_SECURITY_COMPLIANCE_REPORTING_SCORE",
-                    "CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD", "CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD"}
+                    "FINDINGS", "AVG_SECURITY_COMPLIANCE_SCORE", "AVG_SECURITY_COMPLIANCE_REPORTING_SCORE"}
         self.assertEqual(deferred, {row["SOURCE_FIELD_NAME"] for row in self.rows
                                    if row["SOURCE_FIELD_NAME"] in deferred and row["EXECUTION_STATUS"] == "DEFERRED"})
 
@@ -97,11 +106,40 @@ class AR30ExtensionTests(unittest.TestCase):
         self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", result["status"])
         self.assertFalse(result["writes_executed"])
 
+    def test_two_thresholds_preserve_ar30_graph_and_use_exact_source_names(self):
+        previous = self.compile([row for row in self.rows
+                                 if row["SOURCE_FIELD_NAME"] not in AR_THRESHOLD_ADDITIONS])
+        source = {row["SOURCE_FIELD_NAME"]: 1 for row in previous["mapping_rows"]}
+        source.update(CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD=0,
+                      CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD=7.25,
+                      _CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD=99,
+                      _CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD=88)
+        records = [{"SOURCE_RECORD_ID": "synthetic-thresholds", "CURATED_JSON": source}]
+        old_nodes, old_edges = build(self.ns, previous, records)
+        nodes, edges = build(self.ns, self.context, records)
+        old_keys = {row["NODE_KEY"] for row in old_nodes.rows}
+        old_edge_keys = {row["EDGE_KEY"] for row in old_edges.rows}
+        self.assertEqual((34, 33), (len(nodes.rows), len(edges.rows)))
+        self.assertEqual(business(old_nodes), [row for row in business(nodes) if row["NODE_KEY"] in old_keys])
+        self.assertEqual(business(old_edges), [row for row in business(edges) if row["EDGE_KEY"] in old_edge_keys])
+        additions = {row["INSTANCE_KEY"]: json.loads(row["METADATA_JSON"])["props"]
+                     for row in nodes.rows if row["NODE_KEY"] not in old_keys}
+        self.assertEqual({
+            "CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD": [
+                {"name": "current-average-device-risk-threshold", "value": "0"}],
+            "CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD": [
+                {"name": "current-highest-device-risk-threshold", "value": "7.25"}],
+        }, additions)
+        self.ns["_load_graph"](nodes, edges, self.context["config"])
+        aliases_only = {key: value for key, value in source.items() if key.startswith("_")}
+        nodes, edges = build(self.ns, self.context, [
+            {"SOURCE_RECORD_ID": "synthetic-thresholds", "CURATED_JSON": aliases_only}])
+        self.assertEqual((2, 1), (len(nodes.rows), len(edges.rows)))
+
     def test_absent_values_and_parked_fields_do_not_create_observations(self):
         for value in (None, "", []):
-            source = {field: value for field in AR_ADDITIONS}
-            source.update(RISK_ACCEPTANCE_RBDS={"ContentId": 1}, RISK_ASSESSMENT_REPORT=[1, 2],
-                          CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD=5, CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD=6)
+            source = {field: value for field in (*AR_ADDITIONS, *AR_THRESHOLD_ADDITIONS)}
+            source.update(RISK_ACCEPTANCE_RBDS={"ContentId": 1}, RISK_ASSESSMENT_REPORT=[1, 2])
             source["_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD"] = 7
             source["_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD"] = 8
             with self.subTest(value=value):
@@ -110,7 +148,7 @@ class AR30ExtensionTests(unittest.TestCase):
                 self.assertFalse(any(row["ELEMENT_PATH"] == OBSERVATION_PATH for row in nodes.rows))
 
     def test_populated_non_scalar_additions_fail_without_partial_graph(self):
-        for field in AR_ADDITIONS:
+        for field in (*AR_ADDITIONS, *AR_THRESHOLD_ADDITIONS):
             for value in ([1, 2], {"unexpected": 1}):
                 with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                     build(self.ns, self.context, [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": {field: value}}])

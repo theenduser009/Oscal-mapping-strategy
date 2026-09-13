@@ -1,5 +1,17 @@
 # POA&M reference mapping
 
+## Accepted live preview
+
+The [posted preview](https://github.com/theenduser009/Oscal-mapping-strategy/blob/f5677398faf9da2c9919e6fa29d0db0264816d4e/docs/checkpoints/2026-09-13-poam-preview-complete.md)
+passed graph, storage and pre-write checks for 2,813 sources, 2,821 DIM inserts
+and eight FACT inserts, with no updates or target writes. This supersedes the
+schema mismatch. Registry/schema preparation below is completed background;
+do not repeat it for this session. The owner was given the Cell Seven COMMIT
+step; committed readback remains pending evidence.
+
+The next selected mapping change is the [AR32 CSV extension](AR_NEXT_RUN.md).
+
+
 The owner confirmed the existing Source One worksheet row:
 
 | Archer field | Source | OSCAL path | Mapping type |

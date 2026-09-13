@@ -183,7 +183,7 @@ class NotebookEndToEndTests(unittest.TestCase):
     def test_both_models_preview_and_explicitly_targetless_ar_blocks_all_commits(self):
         ns = self.run_notebook(("SSP", "ASSESSMENT_RESULTS"))
         self.assertEqual(2, len(ns["MODEL_GRAPHS"]))
-        self.assertEqual([48, 30], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
+        self.assertEqual([48, 32], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
         self.assertTrue(all(group["load"]["storage_verified"] for group in ns["PIPELINE_REPORT"]["groups"]))
         ns["MAPPING_CONTEXTS"][1]["config"]["STORAGE_CONTRACT"] = None
         with self.notebook_transport():
@@ -201,13 +201,13 @@ class NotebookEndToEndTests(unittest.TestCase):
         dim, fact = contract["TARGET_DIM"], contract["TARGET_FACT"]
         pk = contract["DIM_PK_COLUMN"]
         self.assertEqual("PREVIEW_PASSED_NO_TARGET_DML", ns["PIPELINE_REPORT"]["groups"][0]["load"]["status"])
-        self.assertEqual((32, 31), tuple(ns["PIPELINE_REPORT"]["groups"][0]["load"][key] for key in ("nodes", "edges")))
+        self.assertEqual((34, 33), tuple(ns["PIPELINE_REPORT"]["groups"][0]["load"][key] for key in ("nodes", "edges")))
         self.assertEqual([], self.session.query("SELECT * FROM " + dim))
         with self.notebook_transport():
             _, inserted = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
         self.assertEqual("COMMITTED_AND_VERIFIED", inserted["status"])
-        self.assertEqual(32, inserted["groups"][0]["load"]["expected_changes"]["D"]["INSERTS"])
-        self.assertEqual(31, inserted["groups"][0]["load"]["expected_changes"]["F"]["INSERTS"])
+        self.assertEqual(34, inserted["groups"][0]["load"]["expected_changes"]["D"]["INSERTS"])
+        self.assertEqual(33, inserted["groups"][0]["load"]["expected_changes"]["F"]["INSERTS"])
         saved = {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)}
         saved_edges = self.session.query("SELECT * FROM " + fact)
         self.assertTrue(all(isinstance(key, bytes) and len(key) == 16 for key in saved))
@@ -225,7 +225,7 @@ class NotebookEndToEndTests(unittest.TestCase):
         with self.notebook_transport():
             _, changed = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
         self.assertEqual("COMMITTED_AND_VERIFIED", changed["status"])
-        self.assertEqual({"INSERTS": 0, "UPDATES": 1, "UNCHANGED": 31}, changed["groups"][0]["load"]["expected_changes"]["D"])
+        self.assertEqual({"INSERTS": 0, "UPDATES": 1, "UNCHANGED": 33}, changed["groups"][0]["load"]["expected_changes"]["D"])
         saved_changed = {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)}
         self.assertEqual(set(saved), set(saved_changed))
         self.assertEqual(saved_edges, self.session.query("SELECT * FROM " + fact))
@@ -237,7 +237,7 @@ class NotebookEndToEndTests(unittest.TestCase):
         with self.notebook_transport():
             _, repeated = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
         self.assertEqual("COMMITTED_AND_VERIFIED", repeated["status"])
-        self.assertEqual({"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 32}, repeated["groups"][0]["load"]["verification"]["DIM"])
+        self.assertEqual({"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 34}, repeated["groups"][0]["load"]["verification"]["DIM"])
         self.assertEqual(saved_changed, {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)})
         self.assertEqual(saved_edges, self.session.query("SELECT * FROM " + fact))
         for table in (self.contract["TARGET_DIM"], self.contract["TARGET_FACT"]):
