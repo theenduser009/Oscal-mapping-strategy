@@ -39,7 +39,7 @@ SOURCE_FILES = [{
     "CONTENT_ID_COLUMN": "CONTENT_ID", "CURATED_JSON_COLUMN": "CURATED_JSON",
     "MAPPING_FILE": "ARCHER_OSCAL_MAPPINGS.csv", "MAPPING_ENCODING": "utf-8-sig",
     "MAPPING_SOURCE_COLUMN": "SOURCE_KEY", "MAPPING_SOURCE_VALUE": "source-one",
-    "MODEL_BINDINGS": ("SSP", "ASSESSMENT_RESULTS"),
+    "MODEL_BINDINGS": ("SSP", "ASSESSMENT_RESULTS", "POAM"),
     "SOURCE_ORDER_CANDIDATES": (
         "DW_LOAD_TIMESTAMP_TZ", "DW_LOAD_TIMESTAMP", "UPDATED_DATE",
         "LAST_UPDATED_DATE", "MODIFIED_DATE", "CREATE_DATE",
@@ -56,6 +56,12 @@ SOURCE_FILES = [{
     },
 }]
 MODEL_CONTRACTS = {
+    "POAM": {
+        "MODEL_KEY": "POAM", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
+        "MODEL_ALIASES": ("POA&M", "Plan of Action and Milestones"), "LOOKUP_GROUPS": (),
+        "RUNTIME_OPTIONS": {"parse_decimal": False, "null_source_as_empty": True},
+        "STORAGE_CONTRACT": None,
+    },
     "SSP": {
         "MODEL_KEY": "SSP", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
         "MODEL_ALIASES": ("System Security Plan", "SSP - Metadata", "SSP - System Characteristics",
@@ -274,7 +280,7 @@ import math
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v1"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v2"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -521,7 +527,7 @@ def _compile_mapping(row, elements):
                               role_title=_metadata_column_text(row, "ROLE_TITLE", True))
     if operator == "references":
         allowed.update(("REFERENCE_TYPE", "LOOKUP_KEY", "DESCRIPTION_REQUIRED"))
-        representation["reference_type"] = _metadata_column_text(row, "REFERENCE_TYPE", True)
+        representation["reference_type"] = _metadata_column_text(row, "REFERENCE_TYPE", required=bool(row.get("LOOKUP_KEY")))
         if row.get("LOOKUP_KEY"):
             representation["hydrate_lookup"] = _metadata_column_text(row, "LOOKUP_KEY")
         if row.get("DESCRIPTION_REQUIRED") not in (None, ""):
@@ -561,7 +567,7 @@ def _mapping_route(row, profile, model, paths, inactive, aliases, roots, routing
         reason = "MODEL_PATH_CONFLICT"
     elif label in routing["labels"] or path in routing["paths"]:
         reason, severity = "PLACEHOLDER_MAPPING", "DEFERRED"
-    elif owner_model and owner_model != model or not path and label_model and label_model != model:
+    elif owner_model and owner_model != model or owner_model is None and label_model and label_model != model:
         reason, severity = "OTHER_MODEL", "EXCLUDED"
     elif any(row.get(key) not in (None, "") for key in (
             "TRANSFORM_PARAMS", "REPRESENTATION_PARAMS", "REPRESENTATION", "VALUE_CONSTRAINTS", "APPROVAL_STATUS")):
@@ -1139,7 +1145,7 @@ def _metadata_reference_instances(source_obj, source_id, rows, parameters, conte
                 references[identifier] = params
     result = []
     for identifier, params in sorted(references.items()):
-        payload = {"type": params["reference_type"]}
+        payload = {"type": params["reference_type"]} if params["reference_type"] else {}
         if params.get("hydrate_lookup"):
             hydrated = context["component_hydration_lookups"][params["reference_type"]][identifier]
             payload["title"] = hydrated["title"]
@@ -1255,7 +1261,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v1":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v2":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     if (config["OSCAL_MODEL"], config["SOURCE_SYSTEM_NAME"], config["SOURCE_TABLE_NAME"]) != (model_key, source_system, source_table):

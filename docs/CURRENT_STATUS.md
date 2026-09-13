@@ -1,6 +1,29 @@
 # Current Status
 
-## Current action - AR insert and committed readback accepted
+## Current action - POA&M reference mapping implemented; live preview pending
+
+The owner confirmed Source One's POAMS field and the reviewed Reference mapping
+to plan-of-action-and-milestones.poam-items[]. No second Archer table is needed.
+The CSV now enables this one row. The same seven cells produce package-scoped
+UUID-only reference nodes and root-to-item links; no item details are invented.
+The runtime is 1,855 lines, six more than the AR binding baseline. SSP and AR
+mapped outputs remain unchanged in regression tests.
+
+Eleven focused POA&M tests pass. The full local suite passes 193 tests with
+three Snowpark-dependent classes skipped; CI with Snowpark remains pending.
+The readable private screenshot's empty-reference case is covered; populated
+POAMS examples and live persistence remain unverified. Reference graph
+acceptance does not establish complete POA&M document conformance.
+
+**Next action:** run [READ_ONLY_POAM_INPUTS.sql](../notebooks/validation/READ_ONLY_POAM_INPUTS.sql)
+as SQL in Snowflake and post its three result grids: destination columns,
+existing registry rows and aggregate reference shapes. Then follow
+[POA&M next run](POAM_NEXT_RUN.md). The two-row registry metadata update is
+prepared; it is not a registry reset or a live execution claim. Actual POA&M
+destination names remain unbound. Retain accepted SSP/AR commits and do not
+repeat them or rerun the historical AR replacement DDL.
+
+## Accepted checkpoint - AR insert and committed readback
 
 The [owner-posted AR COMMIT](checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md)
 from main commit 823570de2c62e5e91cbfbad888befb040030fc87 reports

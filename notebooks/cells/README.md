@@ -10,16 +10,11 @@ original nine registry columns. Only `OPERATOR`, `UUID_POLICY` and
 visible deployment settings. No JSON catalog upload or extra daily runtime cell
 is required.
 
-The runtime remains 1,838 lines across seven cells. The
-[accepted SSP commit](../../docs/checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
-verified 70,102 elements and 67,289 relationships with no row changes.
-
-Current work is [AR30 preview and destination verification](../../docs/AR_NEXT_RUN.md).
-Upload the updated CSV, select AR only in Cell One, keep shared writes false
-and Cell Seven in PREVIEW, then run the existing seven cells in order.
-The CSV adds 13 approved fields to AR's accepted 17 without changing runtime
-or registry rules. AR storage is still unverified. No registry setup, cleanup,
-old AR candidate or accepted SSP rerun is needed.
+The runtime totals 1,855 lines across seven cells. SSP and AR mapped graphs
+are committed and verified. Current work is the
+[POA&M reference mapping](../../docs/POAM_NEXT_RUN.md) from the same Source One.
+Use that guide's read-only SQL next action before registry preparation and
+PREVIEW. POAM's actual destinations are not yet bound. No SSP/AR rerun is needed.
 
 Developers edit these files once, then use `python tools/sync_notebook_cells.py`;
 `--check` reports generated-page drift. This is a packaging tool, not a

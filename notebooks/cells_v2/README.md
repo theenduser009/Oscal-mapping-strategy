@@ -11,10 +11,11 @@ catalog or test fixtures are uploaded to the notebook.
 
 ## Setup and run
 
-Registry setup/cleanup and the SSP no-change commit/readback are accepted.
-The next run is [AR30 preview](../../docs/AR_NEXT_RUN.md). Upload the updated
-mapping CSV, select AR only and run the same matching Python cells in order.
-No registry reset or replacement runtime is needed for this metadata-only batch.
+SSP and AR mapped graphs are committed and verified. Current work is
+[POA&M references](../../docs/POAM_NEXT_RUN.md) from the same Source One.
+Follow that guide's read-only SQL next action before preparing POAM registry
+metadata and running PREVIEW. Actual POAM destinations remain unbound.
+No SSP/AR reload or whole-registry reset is needed.
 
 1. [Configuration](01_initialization_and_configuration.py)
 2. [Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)

@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-13, AR insert/committed readback and SSP COMMIT/readback accepted. Owner: Source One mapping implementation team.
+Last updated: 2026-09-13, POA&M reference mapping implemented; AR and SSP committed readback accepted. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -10,7 +10,30 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
-## Current action - AR insert and committed readback accepted
+## Current action - POA&M reference mapping implemented; live preview pending
+
+The owner confirmed Source One's POAMS field and the reviewed Reference mapping
+to plan-of-action-and-milestones.poam-items[]. No second Archer table is needed.
+The CSV now enables this one row. The same seven cells produce package-scoped
+UUID-only reference nodes and root-to-item links; no item details are invented.
+The runtime is 1,855 lines, six more than the AR binding baseline. SSP and AR
+mapped outputs remain unchanged in regression tests.
+
+Eleven focused POA&M tests pass. The full local suite passes 193 tests with
+three Snowpark-dependent classes skipped; CI with Snowpark remains pending.
+The readable private screenshot's empty-reference case is covered; populated
+POAMS examples and live persistence remain unverified. Reference graph
+acceptance does not establish complete POA&M document conformance.
+
+**Next action:** run [READ_ONLY_POAM_INPUTS.sql](../notebooks/validation/READ_ONLY_POAM_INPUTS.sql)
+as SQL in Snowflake and post its three result grids: destination columns,
+existing registry rows and aggregate reference shapes. Then follow
+[POA&M next run](POAM_NEXT_RUN.md). The two-row registry metadata update is
+prepared; it is not a registry reset or a live execution claim. Actual POA&M
+destination names remain unbound. Retain accepted SSP/AR commits and do not
+repeat them or rerun the historical AR replacement DDL.
+
+## Accepted checkpoint - AR insert and committed readback
 
 The [owner-posted AR COMMIT](checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md)
 from main commit 823570de2c62e5e91cbfbad888befb040030fc87 reports
@@ -404,7 +427,7 @@ security-impact path above. Their exact source-field grouping is retained below.
 | Extension Properties label; Assessment Results destination | `assessment-results.results[].props[]` | Seven workflow audit fields | Deferred by owner, 2026-09-11; not implemented | Notes make audit-trail inclusion conditional [E15]; the owner chose to skip these for now. | Reopen only on an explicit audit-trail inclusion decision; retain separate property name/value rules. |
 | Assessment Results | `assessment-results.results[].findings[]` | `FINDINGS` | Review pending | Reference target visible; lookup and result-parent association not established. | Reference shape, finding identity, source/lookup and parent-result relationship. |
 | Profile | `profile.imports[]` | `BASELINE_RECOMMENDATION` | Review pending | Conditional import example in Notes does not supply an approved import reference. | Baseline-to-URI mapping, intended import structure and selection rule; reconcile Extension Property label with target. |
-| POA&M | `plan-of-action-and-milestones.poam-items[]` | `POAMS` | Review pending | New CSV confirms Reference target and linking Notes [E15]; no handler accepted. | Reference shape, identity and parent relationship. |
+| POA&M | `plan-of-action-and-milestones.poam-items[]` | `POAMS` | Reference graph implemented; live preview pending | Owner confirmed same Source One and Reference row [E15]. UUID-only package-scoped nodes and root links; no item-detail hydration. | Verify current registry, populated source shapes and POA&M destinations; see [next run](POAM_NEXT_RUN.md). |
 | Assessment Plan | **Full paths/Notes still to reconcile** | Request, approval and preassessment-review fields | Review pending | Separate model rows visible; no accepted implementation release. | Exact targets/Notes, task grouping, property/value rules and source shape. |
 
 The new [CSV transcription](transcribed_mapping_rows.csv) [E15] contains 51 records,

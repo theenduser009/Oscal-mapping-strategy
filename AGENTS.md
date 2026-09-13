@@ -7,7 +7,20 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
-## Active scope - AR mapped graph persisted; POA&M next
+## Active scope - POA&M reference mapping implemented; live preview pending
+
+The owner confirmed POAMS in the same Source One CURATED_JSON, Reference to
+plan-of-action-and-milestones.poam-items[]. Do not ask for a second source table
+for this scoped mapping. Follow docs/POAM_NEXT_RUN.md and its single read-only
+SQL next action. POAM is configured for graph-only preview; the actual destination
+names are not yet bound. The UUID-only item nodes use standard package-scoped
+identities; no titles/descriptions or external-document UUID resolution are
+invented. Compiled-plan release is lean-csv-registry-v2 in matching Cells 3/4.
+The POAM registry update touches only its existing root/item execution metadata
+and item ITEM_PATH; it is prepared, not live accepted. No whole-registry reset.
+Keep screenshots/private values outside GitHub. SSP and AR acceptance stands.
+
+## Accepted AR scope
 
 The owner selected AR next, followed by POA&M and remaining model work by
 Monday. Follow docs/AR_NEXT_RUN.md. The CSV now enables 30 AR fields: 17

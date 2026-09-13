@@ -27,7 +27,7 @@ SOURCE_FILES = [{
     "CONTENT_ID_COLUMN": "CONTENT_ID", "CURATED_JSON_COLUMN": "CURATED_JSON",
     "MAPPING_FILE": "ARCHER_OSCAL_MAPPINGS.csv", "MAPPING_ENCODING": "utf-8-sig",
     "MAPPING_SOURCE_COLUMN": "SOURCE_KEY", "MAPPING_SOURCE_VALUE": "source-one",
-    "MODEL_BINDINGS": ("SSP", "ASSESSMENT_RESULTS"),
+    "MODEL_BINDINGS": ("SSP", "ASSESSMENT_RESULTS", "POAM"),
     "SOURCE_ORDER_CANDIDATES": (
         "DW_LOAD_TIMESTAMP_TZ", "DW_LOAD_TIMESTAMP", "UPDATED_DATE",
         "LAST_UPDATED_DATE", "MODIFIED_DATE", "CREATE_DATE",
@@ -44,6 +44,12 @@ SOURCE_FILES = [{
     },
 }]
 MODEL_CONTRACTS = {
+    "POAM": {
+        "MODEL_KEY": "POAM", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
+        "MODEL_ALIASES": ("POA&M", "Plan of Action and Milestones"), "LOOKUP_GROUPS": (),
+        "RUNTIME_OPTIONS": {"parse_decimal": False, "null_source_as_empty": True},
+        "STORAGE_CONTRACT": None,
+    },
     "SSP": {
         "MODEL_KEY": "SSP", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
         "MODEL_ALIASES": ("System Security Plan", "SSP - Metadata", "SSP - System Characteristics",

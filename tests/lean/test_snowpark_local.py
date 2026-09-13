@@ -114,6 +114,34 @@ class SnowparkLocalSmokeTests(unittest.TestCase):
         self.assertIsInstance(fields["NODE_KEY"], self.types.StringType)
         self.assertEqual(self.types.TimestampTimeZone.TZ, fields["DW_LOAD_TIMESTAMP_TZ"].tz)
 
+    def test_poam_variant_references_build_real_snowpark_graph(self):
+        from test_poam_references import poam_registry, ROOT_PATH, ITEM_PATH
+        from test_registry_release import mapping_rows, release_registry
+        profiles = [dict(self.ns["SOURCE_PROFILES"][0], MODEL_KEYS=("POAM",))]
+        context = self.ns["compile_mapping_contexts"](
+            {"source-one": mapping_rows()}, release_registry() + poam_registry(), profiles,
+            self.ns["MODEL_CONTRACTS"], self.ns["ROUTING_METADATA"])[0]
+        context["lookups"] = {}
+        source = self.session.create_dataframe([
+            ("synthetic-package", {"POAMS": [101, {"ContentId": 102, "LevelId": 9}, 101]}),
+            ("empty-package", {"POAMS": None}),
+        ], schema=self.types.StructType([
+            self.types.StructField("SOURCE_RECORD_ID", self.types.StringType()),
+            self.types.StructField("CURATED_JSON", self.types.VariantType()),
+        ]))
+        config = context["config"]
+        nodes, edges = self.ns["build_oscal_graph"](source, None, None, "POAM",
+            config["SOURCE_SYSTEM_NAME"], config["SOURCE_TABLE_NAME"], context=context)
+        actual = nodes.collect()
+        self.assertEqual((4, 2), (len(actual), edges.count()))
+        self.assertEqual(2, sum(row["ELEMENT_PATH"] == ROOT_PATH for row in actual))
+        for row in actual:
+            if row["ELEMENT_PATH"] == ITEM_PATH:
+                self.assertEqual({"uuid": row["OSCAL_UUID"]}, json.loads(row["METADATA_JSON"]))
+        report = self.ns["validate_and_load_oscal"](nodes, edges, config)
+        self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", report["status"])
+        self.assertFalse(report["writes_executed"])
+
     def test_empty_edge_frame_retains_the_full_transport_schema(self):
         frame = self.ns["_create_canonical_graph_frame"]([], "edges")
         self.assertEqual([], frame.collect())

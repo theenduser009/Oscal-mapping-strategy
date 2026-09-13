@@ -429,7 +429,7 @@ def _metadata_reference_instances(source_obj, source_id, rows, parameters, conte
                 references[identifier] = params
     result = []
     for identifier, params in sorted(references.items()):
-        payload = {"type": params["reference_type"]}
+        payload = {"type": params["reference_type"]} if params["reference_type"] else {}
         if params.get("hydrate_lookup"):
             hydrated = context["component_hydration_lookups"][params["reference_type"]][identifier]
             payload["title"] = hydrated["title"]
@@ -545,7 +545,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v1":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v2":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     if (config["OSCAL_MODEL"], config["SOURCE_SYSTEM_NAME"], config["SOURCE_TABLE_NAME"]) != (model_key, source_system, source_table):

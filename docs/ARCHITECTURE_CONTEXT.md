@@ -42,14 +42,14 @@ CSV row is restored through the existing transform; no runtime branch is added.
 Cell Two separately lowercases FIPS lookup labels. This preserves raw Direct
 source values; it does not infer sensitivity from CIA or recommended category.
 
-The [live SSP COMMIT and readback](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
-are accepted for an unchanged batch. The active work is [AR30 preview and
-destination verification](AR_NEXT_RUN.md): 13 additional approved AR rows use
-the existing scalar-score transform and observations operator. The CSV now
-selects 48 SSP rows and 30 AR rows; the original AR17 remains the live-accepted
-in-memory baseline. Runtime cells and registry rules are unchanged.
-Do not repeat registry work, the accepted SSP run or the historical AR
-candidate. AR persistence requires verified AR destination metadata.
+SSP and AR mapped graphs are committed and verified; see the current checkpoints.
+The next scope is [POA&M references](POAM_NEXT_RUN.md) from the same Source One.
+One reviewed POAMS row uses the references operator without REFERENCE_TYPE,
+which produces UUID-only nodes. A type is still required for hydrated mappings.
+Existing package-scoped identity and the shared loader remain unchanged.
+The seven cells total 1,855 lines; compiled-plan release lean-csv-registry-v2
+requires matching Cells Three and Four. POA&M live registry, destination binding
+and preview remain pending. This is not a complete OSCAL POA&M document.
 
 ### Earlier metadata-engine migration - September 11 (superseded where noted above)
 
@@ -176,7 +176,7 @@ Only Source One SSP and accepted AR17 are configured. Rejected/candidate/deferre
 
 ## Known limitation
 
-Nested collection-to-collection paths require explicit parent-instance context. The consolidated graph builder fails closed when multiple possible parent instances exist and no unique parent-instance key is available. This protects all model routes. The accepted AR results/observations hierarchy now supplies explicit parent-instance context; additional AR paths and POA&M remain unimplemented until their contracts are approved.
+Nested collection-to-collection paths require explicit parent-instance context. The consolidated graph builder fails closed when multiple possible parent instances exist and no unique parent-instance key is available. This protects all model routes. The accepted AR results/observations hierarchy now supplies explicit parent-instance context; additional nested AR/POA&M item-detail paths still require approved contracts. The direct POA&M root-to-item reference graph is implemented; its live preview and persistence remain pending.
 
 ## Sprint completion evidence
 

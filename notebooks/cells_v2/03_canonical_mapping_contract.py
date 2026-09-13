@@ -5,7 +5,7 @@ import math
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v1"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v2"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -252,7 +252,7 @@ def _compile_mapping(row, elements):
                               role_title=_metadata_column_text(row, "ROLE_TITLE", True))
     if operator == "references":
         allowed.update(("REFERENCE_TYPE", "LOOKUP_KEY", "DESCRIPTION_REQUIRED"))
-        representation["reference_type"] = _metadata_column_text(row, "REFERENCE_TYPE", True)
+        representation["reference_type"] = _metadata_column_text(row, "REFERENCE_TYPE", required=bool(row.get("LOOKUP_KEY")))
         if row.get("LOOKUP_KEY"):
             representation["hydrate_lookup"] = _metadata_column_text(row, "LOOKUP_KEY")
         if row.get("DESCRIPTION_REQUIRED") not in (None, ""):
@@ -292,7 +292,7 @@ def _mapping_route(row, profile, model, paths, inactive, aliases, roots, routing
         reason = "MODEL_PATH_CONFLICT"
     elif label in routing["labels"] or path in routing["paths"]:
         reason, severity = "PLACEHOLDER_MAPPING", "DEFERRED"
-    elif owner_model and owner_model != model or not path and label_model and label_model != model:
+    elif owner_model and owner_model != model or owner_model is None and label_model and label_model != model:
         reason, severity = "OTHER_MODEL", "EXCLUDED"
     elif any(row.get(key) not in (None, "") for key in (
             "TRANSFORM_PARAMS", "REPRESENTATION_PARAMS", "REPRESENTATION", "VALUE_CONSTRAINTS", "APPROVAL_STATUS")):
