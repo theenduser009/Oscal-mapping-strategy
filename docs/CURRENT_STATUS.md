@@ -1,6 +1,27 @@
 # Current Status
 
-## Current action - eight-hour delivery candidate
+## Current action - seven-cell lean rebuild
+
+The owner requested a substantial simplification across all seven cells. The
+maintained source is now **1,802 lines, down from 3,700 (51.3% fewer)**.
+Alternate metadata formats, cached plans and duplicate validation/reporting
+were removed; accepted mapping scope and identities remain unchanged.
+
+The new release suite passes locally, including exact SSP/AR17 output, 1,403
+transformation comparisons, metadata-only third-model execution, source/lookup
+handling and transaction-failure tests. Installed Snowpark smoke is mandatory
+in GitHub CI; the local machine lacks that package. The previous 769-test
+private-API suite is historical evidence, not validation of the new runtime.
+See the [lean rebuild checkpoint](checkpoints/2026-09-13-lean-rebuild.md) and
+[release test instructions](../tests/lean/README.md).
+
+**Next action:** verify publication and CI for the lean rebuild in draft PR #1,
+then perform live registry/preview and daily-loader acceptance when the intended
+Snowflake environment is available. No live database action occurred here.
+Normal writes remain false, the default model is SSP, and AR has no verified
+destination. No additional owner permission is needed for scoped code work.
+
+## Previous action - eight-hour delivery candidate
 
 Publication verified: commit [df7cf761](https://github.com/theenduser009/Oscal-mapping-strategy/commit/df7cf761e85227ed6e5689011447187999b361dc)
 contains the tested source; [GitHub Mapper checks #2](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34737812206)

@@ -1,8 +1,4 @@
-# %% Cell 2 - Source, mapping, registry, and Archer value inputs
-
-import csv
-import pandas as pd
-
+# %% Cell 2 - Read source and metadata once
 
 def _normalized_columns(columns):
     result = {}
@@ -77,35 +73,28 @@ def load_source_input(active_session, profile):
 
 
 def load_mapping_rows(profile):
-    """Read the artifact once, preserving literal text and its real header."""
-    encoding = profile.get("MAPPING_ENCODING", "cp1252")
-    with open(profile["MAPPING_FILE"], encoding=encoding, newline="") as handle:
+    with open(profile["MAPPING_FILE"], encoding=profile.get("MAPPING_ENCODING", "utf-8-sig"), newline="") as handle:
         reader = csv.reader(handle, strict=True)
         header = next((row for row in reader if row and any(v.strip() for v in row)), None)
         if header is None:
             raise ValueError("Mapping CSV header is missing")
         header = [name.strip().upper() for name in header]
-        if len(header) != len(set(header)):
-            raise ValueError("Duplicate normalized mapping columns")
-        records = []
-        for row in reader:
-            if not row or not any(value.strip() for value in row):
-                continue
-            if len(row) > len(header):
-                raise ValueError("Mapping CSV row has more values than header columns")
-            records.append(dict(zip(header, row)))
-        frame = pd.DataFrame(records, columns=header, dtype=object).replace("", None)
-    frame = frame.where(lambda data: data.notna(), None)
-    source_column = profile.get("MAPPING_SOURCE_COLUMN")
-    if source_column:
-        source_column = source_column.upper()
-        if source_column not in frame.columns:
+        if not all(header) or len(header) != len(set(header)):
+            raise ValueError("Mapping CSV columns must be nonblank and unique")
+        binding = profile.get("MAPPING_SOURCE_COLUMN", "").upper()
+        if binding and binding not in header:
             raise ValueError("Mapping source binding column is missing")
-        binding = profile.get("MAPPING_SOURCE_VALUE", profile["SOURCE_TABLE_NAME"])
-        frame = frame[frame[source_column].map(
-            lambda value: str(value or "").strip() == binding
-        )].copy()
-    return frame
+        rows = []
+        for values in reader:
+            if not values or not any(value.strip() for value in values):
+                continue
+            if len(values) > len(header):
+                raise ValueError("Mapping CSV row has more values than header columns")
+            row = dict.fromkeys(header)
+            row.update((key, value or None) for key, value in zip(header, values))
+            if not binding or str(row[binding] or "").strip() == profile.get("MAPPING_SOURCE_VALUE", profile["SOURCE_TABLE_NAME"]):
+                rows.append(row)
+    return rows
 
 
 def load_source_lookups(active_session, profile, model_contracts, shared_config):
@@ -144,39 +133,17 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             "component_contract": profile.get("LOOKUP_CONTRACTS", {})}
 
 
-# Each source is selected once for this workflow; model routes reuse that
-# source-local snapshot. Sources are never unioned or deduplicated together.
-SOURCE_INPUTS = {}
-MAPPING_INPUTS = {}
-MAPPING_FRAMES = {}
-source_selection_reports = {}
-for source_profile in SOURCE_PROFILES:
-    source_key = source_profile["SOURCE_KEY"]
-    if source_key in SOURCE_INPUTS:
-        raise ValueError("Duplicate configured source key")
-    frame, selection, snapshot = load_source_input(session, source_profile)
-    artifact = load_mapping_rows(source_profile)
-    SOURCE_INPUTS[source_key] = {
-        "source_df": frame,
-        "snapshot": snapshot,
-        "lookups": load_source_lookups(session, source_profile, MODEL_CONTRACTS, CONFIG),
+SOURCE_INPUTS, MAPPING_INPUTS = {}, {}
+for profile in SOURCE_PROFILES:
+    key = profile["SOURCE_KEY"]
+    if key in SOURCE_INPUTS:
+        raise ValueError("Duplicate source binding")
+    frame, counts, snapshot = load_source_input(session, profile)
+    MAPPING_INPUTS[key] = load_mapping_rows(profile)
+    SOURCE_INPUTS[key] = {
+        "source_df": frame, "snapshot": snapshot, "selection": counts,
+        "lookups": load_source_lookups(session, profile, MODEL_CONTRACTS, CONFIG),
     }
-    MAPPING_FRAMES[source_key] = artifact
-    MAPPING_INPUTS[source_key] = artifact.to_dict(orient="records")
-    source_selection_reports[source_key] = selection
-element_registry_df = session.table(CONFIG["ELEMENT_REGISTRY_TABLE"])
-REGISTRY_INPUT_ROWS = [row.as_dict(recursive=True) for row in element_registry_df.collect()]
-
-# Compatibility aliases for historical read-only diagnostics. Cell 7 does not
-# use these aliases to choose a model or cross source boundaries.
-_default_source_key = SOURCE_PROFILES[0]["SOURCE_KEY"]
-source_df = SOURCE_INPUTS[_default_source_key]["source_df"]
-mapping_artifact_pdf = MAPPING_FRAMES[_default_source_key]
-mapping_df = None  # Mapping execution uses MAPPING_INPUTS; no temporary upload.
-ARCHER_VALUE_LOOKUP = SOURCE_INPUTS[_default_source_key]["lookups"]["archer_values"]
-FIPS_199_VALUE_LOOKUP = SOURCE_INPUTS[_default_source_key]["lookups"]["fips_values"]
-COMPONENT_HYDRATION_SOURCE_DFS = SOURCE_INPUTS[_default_source_key]["lookups"]["component_sources"]
-COMPONENT_HYDRATION_SOURCE_CONTRACT = SOURCE_PROFILES[0].get("LOOKUP_CONTRACTS", {})
-selected_source_count = source_selection_reports[_default_source_key]["SELECTED_ROWS"]
-source_row_count = source_selection_reports[_default_source_key]["RAW_ROWS"]
-print("Source selection reports:", source_selection_reports)
+REGISTRY_INPUT_ROWS = [row.as_dict(recursive=True) for row in
+                       session.table(CONFIG["ELEMENT_REGISTRY_TABLE"]).collect()]
+print("Sources:", {key: value["selection"] for key, value in SOURCE_INPUTS.items()})
