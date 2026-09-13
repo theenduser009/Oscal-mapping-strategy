@@ -1,7 +1,8 @@
 """Execute every statement in all seven cells with installed Snowpark APIs.
 
 Source, lookup, registry and graph frames use the real local emulator. Its
-unsupported SQL/target-write boundary uses the existing SQLite/MERGE adapter.
+unsupported SQL/target-write boundary uses the existing SQLite/MERGE adapter;
+the unsupported TRIM function uses Snowflake's documented mock.patch hook.
 This checks notebook wiring and full mapped flow, not live Snowflake SQL.
 """
 import ast
@@ -56,7 +57,8 @@ class NotebookSession(storage.Session):
         for table_key, pk_key, fields in (("TARGET_DIM", "DIM_PK_COLUMN", storage.P["_DIM_FIELDS"]),
                                           ("TARGET_FACT", "FACT_PK_COLUMN", storage.P["_FACT_FIELDS"])):
             table, pk = contract[table_key], contract[pk_key]
-            self.schema[table] = [dict(name=name, type=dtype, kind="COLUMN", expression=None)
+            self.schema[table] = [dict(name=name, type=dtype, kind="COLUMN", expression=None,
+                                      **{"null?": "N" if table_key == "TARGET_FACT" or name == pk else "Y"})
                                   for name, dtype in {pk: "BINARY(16)", **fields}.items()]
             self.query(f"CREATE TABLE {table} ({', '.join(row['name'] for row in self.schema[table])})")
 
@@ -72,6 +74,14 @@ class NotebookEndToEndTests(unittest.TestCase):
     def setUpClass(cls):
         # This gate fails in CI if the required package is missing.
         snowpark_smoke.SnowparkLocalSmokeTests.setUpClass()
+        from snowflake.snowpark.mock import ColumnEmulator, patch as snowpark_patch
+
+        @snowpark_patch(snowpark_smoke.SnowparkLocalSmokeTests.functions.trim)
+        def local_trim(column):
+            # Snowflake's default TRIM removes spaces, not arbitrary whitespace.
+            result = ColumnEmulator(data=[None if value is None else value.strip(" ") for value in column], index=column.index)
+            result.sf_type = column.sf_type
+            return result
 
     def setUp(self):
         self.smoke = snowpark_smoke.SnowparkLocalSmokeTests()
