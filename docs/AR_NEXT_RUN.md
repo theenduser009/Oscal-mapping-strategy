@@ -12,7 +12,7 @@ Use the existing seven cells on simplify-metadata-boundary and the updated
 
 Both fields use their exact unprefixed Excel names. A populated scalar creates
 one observation with one named inline property. Zero is preserved, empty values
-are omitted, and non-scalar values fail. No threshold is calculated and no
+are omitted, and multiple values or unsupported objects fail. No threshold is calculated and no
 underscore/PCT aliases are added. Original path wording and Notes remain
 unchanged; RUNTIME_TARGET_PATH selects the one executable destination.
 
@@ -50,7 +50,10 @@ write and retain the committed readback report.
 Local checks ran 194 tests without failures; three Snowpark classes were
 unavailable locally. The new regression proves exactly two added observations,
 unchanged AR30 keys/payloads, preserved zero and no underscore aliasing.
-Installed-Snowpark CI is pending on publication. Saved private excerpts do not
+[CI passed all 207 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34789244811)
+on code commit 2e215d3867e4a0e0f3881d451fbe3c4e9212b097, including AR
+insert/update/readback and POAM isolation. CI uses installed Snowpark and an
+explicit relational SQL adapter; it is not a live Snowflake write. Saved private excerpts do not
 contain these two threshold fields, so their populated-source coverage remains
 a live verification gap.
 

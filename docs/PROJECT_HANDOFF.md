@@ -21,8 +21,10 @@ The seven runtime cells, registry and database definitions are unchanged.
 
 Local checks ran 194 tests with no failures and three unavailable-Snowpark
 class skips. The new regression preserves all AR30 keys and business payloads,
-checks zero and exact names, and rejects non-scalar values. Full installed-
-Snowpark CI is pending on this publication. Private transcriptions do not
+checks zero and exact names, and rejects multiple values and unsupported objects. [CI passed all 207 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34789244811)
+on code commit 2e215d3867e4a0e0f3881d451fbe3c4e9212b097, including the seven-cell
+AR insert/update/readback and POAM isolation checks. Snowpark is installed in CI;
+SQL writes use the explicit local relational adapter, not a live Snowflake account. Private transcriptions do not
 contain these two threshold fields; their populated-source coverage is unverified.
 
 The [new POAM live preview](https://github.com/theenduser009/Oscal-mapping-strategy/blob/f5677398faf9da2c9919e6fa29d0db0264816d4e/docs/checkpoints/2026-09-13-poam-preview-complete.md)
