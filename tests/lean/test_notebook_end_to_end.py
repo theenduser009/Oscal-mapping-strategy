@@ -77,9 +77,11 @@ class NotebookEndToEndTests(unittest.TestCase):
         from snowflake.snowpark.mock import ColumnEmulator, patch as snowpark_patch
 
         @snowpark_patch(snowpark_smoke.SnowparkLocalSmokeTests.functions.trim)
-        def local_trim(column):
+        def local_trim(column, characters=None):
             # Snowflake's default TRIM removes spaces, not arbitrary whitespace.
-            result = ColumnEmulator(data=[None if value is None else value.strip(" ") for value in column], index=column.index)
+            chars = characters if isinstance(characters, ColumnEmulator) else [characters or " "] * len(column)
+            result = ColumnEmulator(data=[None if value is None or trim is None else value.strip(trim) if trim else value
+                                          for value, trim in zip(column, chars)], index=column.index)
             result.sf_type = column.sf_type
             return result
 
