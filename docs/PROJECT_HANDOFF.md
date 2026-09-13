@@ -1,6 +1,43 @@
 # Project handoff - read this before resuming
 
-## Current action - review 1,994 proposed SSP updates
+## Current action - reconcile the reviewed SSP field changes
+
+The owner posted the [completed live read-only review](checkpoints/2026-09-13-ssp-read-only-dim-review.md):
+`READ_ONLY_REVIEW_COMPLETE`, 70,102 candidate nodes across 2,813 source records,
+with 0 inserts, 1,994 updates and 68,108 unchanged rows. All four anomaly counts
+are zero and target DML was not attempted. The helper now has live execution
+evidence; neither browser recovery nor repeating the preview is needed to read
+this posted outcome.
+
+The changes affect 1,986 distinct records:
+
+- 1,958 system-characteristics nodes remove `security-sensitivity-level`.
+- 36 security-impact-level nodes change all three confidentiality, integrity
+  and availability objectives.
+
+The first change has a concrete mapping cause: `SECURITY_CATEGORY` is
+`DEFERRED` in the current CSV and the frozen pre-rebuild CSV. Cell Three excludes
+that row and Cell Four builds fresh payloads from executable mappings.
+Consequently the sensitivity member is omitted, regardless of populated source
+data. The mapping register records that Direct row as parked for reconciliation;
+it does not establish approval to remove existing stored values. Cell Six
+replaces the complete `METADATA_JSON` on update, so those omissions would become
+stored-field removals if committed.
+
+The 36 impact-node changes are identified, but the aggregate report contains
+no old/new values. It cannot establish whether those changes are only approved
+normalization or a source/value difference. This still needs value-level evidence.
+
+**Next action:** reconcile the parked sensitivity mapping with the stored values
+and inspect the before/after impact values. Keep normal writes disabled.
+Do not rerun the accepted registry setup, cleanup, full reload or seven-cell
+preview. The report compares the retained candidate with the current target;
+the removed historical preview snapshot is not reconstructed by matching counts.
+Daily COMMIT/readback, AR storage and full OSCAL conformance remain pending.
+The seven runtime cells are unchanged; the published review release passed
+[171 tests without skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34760685348).
+
+## Previous action - prepare review of 1,994 proposed SSP updates
 
 The owner's live `oscal-lean-daily-v3.1` SSP run is accepted at
 `PREVIEW_COMPLETE`: **2,813 source records, 70,102 nodes and 67,289 edges**.
