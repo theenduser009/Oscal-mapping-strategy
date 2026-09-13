@@ -1,6 +1,33 @@
 # Project handoff - read this before resuming
 
-## Current status - corrected SSP PREVIEW accepted with no target changes
+## Current status - SSP COMMIT and readback accepted for an unchanged batch
+
+The owner posted the [live SSP COMMIT report](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
+in main commit `a53c16aff842cde044f7bda2efb64a2198ac3117`.
+Both pipeline and SSP group report `COMMITTED_AND_VERIFIED` for
+2,813 source records, 70,102 DIM elements and 67,289 FACT relationships.
+Validation, pre-write validation and storage verification passed.
+Target DML was attempted; writes executed, persisted and committed are true.
+Expected changes and post-commit verification both report zero inserts and
+zero updates, with all 70,102 DIM / 67,289 FACT rows unchanged. Temporary
+cleanup is `REMOVED`.
+
+This accepts the live commit path, unchanged-row preservation and committed
+readback for this batch. It supersedes the earlier daily-COMMIT-pending status.
+It does not demonstrate persistence of newly inserted or updated rows with
+this release. No mapping or registry changes were needed; CIA normalization
+and Direct sensitivity behavior remain as previously documented.
+
+**Next action:** retain this accepted commit checkpoint. No repeat of the
+unchanged run, registry setup/cleanup or full DEV reload is needed. Use the
+existing seven-cell writer for the next intended SSP run; record actual
+insert/update counts and successful committed readback when legitimate source
+changes arrive. Changed-row persistence acceptance, AR storage, daily
+deployment/scheduling and full OSCAL conformance remain separate milestones.
+An unknown commit outcome or failed post-commit readback requires inspection,
+not an automatic retry. Prior instructions below are historical.
+
+## Previous checkpoint - corrected SSP PREVIEW accepted with no target changes
 
 The owner posted the [corrected live SSP preview](checkpoints/2026-09-13-ssp-preview-no-target-changes.md)
 in main commit `9d08e8978cbb5894239b688743880b75accadeea`.

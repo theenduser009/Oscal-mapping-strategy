@@ -30,15 +30,23 @@
   docs/checkpoints/2026-09-13-ssp-preview-no-target-changes.md, posted in main
   commit 9d08e8978cbb5894239b688743880b75accadeea: 2,813 source records,
   70,102 nodes and 67,289 edges, with zero DIM/FACT inserts or updates. All
-  validation/storage checks passed; writes, persistence, commit and target DML
-  flags are false. Retain that snapshot as the baseline. Do not repeat an
-  unchanged preview, diagnostics, registry work or the full reload. Direct
-  sensitivity preserves source text; CIA mappings normalize recognized
+  validation/storage checks passed; that preview's write/commit flags are false.
+  The subsequent live SSP COMMIT is accepted in
+  docs/checkpoints/2026-09-13-ssp-commit-completed-and-verified.md, posted in main
+  commit a53c16aff842cde044f7bda2efb64a2198ac3117. It reports
+  COMMITTED_AND_VERIFIED for the same counts, with target DML attempted and
+  writes/persisted/committed true. Expected changes and committed readback both
+  show zero inserts/updates; all rows are unchanged and cleanup is REMOVED.
+  This accepts the live no-change commit and readback, superseding the earlier
+  daily-COMMIT-pending status. It does not prove changed-row persistence.
+  Retain this accepted checkpoint; do not repeat an unchanged run, diagnostics,
+  registry work or the full reload. Use the existing seven cells for the next
+  intended SSP run and record changed-row counts/readback when source changes
+  arrive. Keep shared EXECUTE_WRITES false; Cell Seven selects PREVIEW/COMMIT.
+  Direct sensitivity preserves source text; CIA mappings normalize recognized
   low/moderate/high values but retain explicitly approved legacy strings.
-  This is not full FIPS normalization or OSCAL conformance. Daily write/readback
-  remains a separate pending milestone; no daily COMMIT is done or approved.
-  Run tests/lean, not the retired engine's private-API suite. Normal DIM/FACT
-  writes remain disabled; daily COMMIT/readback and AR storage remain pending.
+  Changed-row acceptance, AR storage, deployment/scheduling and full OSCAL/FIPS
+  conformance remain separate. Run tests/lean, not the retired private-API suite.
 - The deployed JSON file is retired. Historical settings and mappings are
   frozen under tests/fixtures for independent parity only, never uploaded or
   loaded in production. Required title/version and AR17 gates remain preserved.
