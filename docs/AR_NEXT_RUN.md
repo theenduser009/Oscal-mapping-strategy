@@ -18,8 +18,10 @@ RISK_ASSESSMENT and fourteen other resolved alternatives now show
 alternative mappings stay DEFERRED with blank path cells. The old alternatives
 are retained in EXECUTION_NOTE; no new columns or mapping choices are introduced.
 A regression checks clean paths, note provenance and identical graph output.
-Local checks ran 195 tests with three unavailable-Snowpark class skips; CI for
-this cleanup is pending.
+Local checks ran 195 tests with three unavailable-Snowpark class skips.
+[CI passed all 208 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34790204914)
+on commit 1a028da39aecbd7ce3dc10e826bd0d79fdff5b60, including the clean-path
+acceptance test and unchanged graph/routing check.
 
 Both fields use their exact unprefixed Excel names. A populated scalar creates
 one observation with one named inline property. Zero is preserved, empty values

@@ -17,7 +17,9 @@ contains "or". Source fields, Notes, runtime targets, transforms, statuses,
 rule IDs, registry and seven cells are unchanged. The new acceptance test
 checks those visible paths, retained alternatives, and identical compiled
 routing and graph output. Local checks ran 195 tests without failures, with
-three unavailable-Snowpark class skips. CI for this cleanup is pending.
+three unavailable-Snowpark class skips. [CI passed all 208 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34790204914)
+on commit 1a028da39aecbd7ce3dc10e826bd0d79fdff5b60, including the new visible-path
+acceptance and unchanged graph/routing check. No runtime code changed.
 
 The owner requested the additional Assessment Results mappings discussed in the
 other chat. Comparing its [main-branch change](https://github.com/theenduser009/Oscal-mapping-strategy/commit/a9d32fb9bdecedf0003bab5a648394baaf840b94)
