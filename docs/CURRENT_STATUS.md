@@ -1,7 +1,168 @@
 # Current Status
 
+## Current action - seven-cell lean rebuild
 
-## Current action - CSV-only Cell Three release for preview
+The owner requested a substantial simplification across all seven cells. The
+maintained source is now **1,802 lines, down from 3,700 (51.3% fewer)**.
+Alternate metadata formats, cached plans and duplicate validation/reporting
+were removed; accepted mapping scope and identities remain unchanged.
+
+The new release suite passes locally, including exact SSP/AR17 output, 1,403
+transformation comparisons, metadata-only third-model execution, source/lookup
+handling and transaction-failure tests. Installed Snowpark smoke is mandatory
+in GitHub CI; the local machine lacks that package. The previous 769-test
+private-API suite is historical evidence, not validation of the new runtime.
+See the [lean rebuild checkpoint](checkpoints/2026-09-13-lean-rebuild.md) and
+[release test instructions](../tests/lean/README.md).
+
+The rebuild is published in [draft PR #1](https://github.com/theenduser009/Oscal-mapping-strategy/pull/1).
+[Initial rebuild CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34738888719)
+passed all 105 tests, including five installed Snowpark API checks. A final
+compiler review added three regressions and small fixes with no runtime growth;
+103 local tests pass, with package checks required again in CI.
+
+**Next action:** perform live registry/preview and daily-loader acceptance when
+the intended Snowflake environment is available. Do not resume another general
+cleanup cycle: this requested lean rebuild is complete. No live database action
+occurred here.
+Normal writes remain false, the default model is SSP, and AR has no verified
+destination. No additional owner permission is needed for scoped code work.
+
+## Previous action - eight-hour delivery candidate
+
+Publication verified: commit [df7cf761](https://github.com/theenduser009/Oscal-mapping-strategy/commit/df7cf761e85227ed6e5689011447187999b361dc)
+contains the tested source; [GitHub Mapper checks #2](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34737812206)
+passed. The published tree matched the local tested index. Main remains unchanged.
+
+The owner authorized continued changes while away and requested tested code on
+GitHub within eight hours. All **769 local tests pass**; **2,209 metadata** and
+**729 linked-identity differential cases** match supported behavior. Generated
+notebooks are synchronized. GitHub CI passed for this tested source.
+
+The current cells contain **3,700 physical / 3,263 nonblank, noncomment lines**,
+159 physical lines below this task's start and 562 below the earlier 4,262-line
+draft. The larger simplification target remains unmet. Do not call this a major
+lean rewrite or production acceptance.
+
+Fixed malformed CSV row loss, quoted source bindings, stale party data after a
+failed build, and incorrect commit/failure attribution. Removed repeated registry
+validation, repeated identity scans and the unused mapping upload. Conflicting
+latest source payloads now block instead of selecting a JSON-hash winner; equal
+latest duplicates still collapse after configured technical ordering.
+
+**Next action:** continue meaningful remaining simplification from this tested checkpoint, and perform live acceptance
+in the intended Snowflake environment before enabling writes. The deadline check
+is scheduled for September 13 at 08:04 America/New_York. See the
+[eight-hour delivery checkpoint](checkpoints/2026-09-13-eight-hour-delivery.md).
+
+No Snowflake connection was available and no database action occurred. Registry
+setup and daily persistence/readback acceptance remain pending; normal writes
+stay false and AR has no verified destination. Historical SSP/AR evidence and
+the unresolved old/new SSP row difference are unchanged.
+
+## Previous action - review the tested seven-cell candidate
+
+All **749 local tests pass**, and **2,209 differential cases** match the supported
+CSV/registry behavior. An independent review found no blocking issue after the
+cached-plan upgrade fix. Generated split and combined cells are synchronized.
+
+The current notebook has **3,720 physical / 3,290 nonblank, noncomment lines**:
+139 / 126 fewer than the start of this task, and 542 physical lines below the
+earlier 4,262-line draft. Mapping is still 905 lines and transforms 1,207 lines.
+The larger lean-rewrite target is not met; do not inflate the size improvement.
+
+Removed duplicate runtime state and obsolete catalog/default/controlled-field
+execution. Those retired options now reject explicitly. Versioned cached plans
+and matching-cell checks prevent silent loss after an upgrade. Accepted SSP/CIA11/
+AR17 outputs and metadata-only future-model behavior remain covered; frozen
+historical engines and expected outputs are unchanged.
+
+**Next action:** review the tested candidate and decide the remaining simplification
+scope, then run live acceptance in the intended Snowflake environment before writes.
+See the [tested candidate checkpoint](checkpoints/2026-09-13-tested-seven-cell-candidate.md).
+No Snowflake connection was available and no database action occurred. Normal
+writes stay false, daily persistence/readback acceptance remains pending, and AR
+has no verified destination. Historical SSP/AR evidence and the unresolved old/new
+SSP row difference remain unchanged.
+
+## Previous action - tested cleanup across all seven cells
+
+The owner authorized continued simplification across all seven cells while away
+and asked for full testing. The current draft removes duplicate runtime state,
+reads each mapping CSV once, builds registry reference groups directly, shares
+loader result setup and simplifies the runner. All **739 local tests pass**;
+**2,209 differential mapping cases** match the prior behavior. Generated cells
+are synchronized. A pinned GitHub workflow checks the same suite and packaging.
+
+This pass is modest: **3,859 to 3,817 total lines** (42 fewer), with **3,383
+nonblank/noncomment lines**. Mapping remains 939 lines and transformations
+1,270 lines. The owner's larger readability/size target is not yet met; do not
+present this cleanup as the requested lean rewrite or production certification.
+
+**Next action:** continue the larger simplification from the tested draft,
+then perform live Snowflake verification before enabling writes. See the
+[verification checkpoint](checkpoints/2026-09-12-seven-cell-cleanup-and-testing.md).
+No live Snowflake connection is available here and no database action occurred.
+Normal writes remain false, the daily writer's live acceptance is pending,
+and the Assessment Results destination remains unverified. Historical accepted
+SSP/AR results and the unresolved old/new SSP row difference are unchanged.
+
+## Previous action - review the smaller seven-cell notebook
+
+The owner clarified that the target is a substantially easier, smaller notebook
+and supplied the complete original: **860 physical lines / 669 nonblank,
+noncomment lines**. The previous candidate consolidated responsibility without
+reducing total size. This pass removes **403 physical lines / 396 nonblank,
+noncomment lines** from that candidate: **4,262 to 3,859 physical lines**.
+Cell Four drops from 1,572 to 1,275 physical lines. The seven-cell sequence stays intact.
+
+The implementation shares scalar conversion and lookup validation, removes the
+intermediate hydration-plan object and fixed callback dispatch, consolidates
+CSV/registry parsing and routing reports, and removes redundant input counts,
+storage checks and graph traversal. Mapping CSV and registry SQL are unchanged.
+
+All **736 local tests pass**, including accepted SSP/CIA11/AR17 comparisons,
+metadata-only future models, source selection, lookup query behavior, identity,
+and guarded writes. Generated V2 cells and combined notebook are synchronized.
+Existing frozen fixtures are unchanged; a copy of the previous graph builder
+now keeps historical transformer/graph comparisons independent of current code.
+
+**Next action:** review the updated draft
+[Reduce notebook bulk and simplify metadata execution](https://github.com/theenduser009/Oscal-mapping-strategy/pull/1).
+See the [counts and verification checkpoint](checkpoints/2026-09-12-notebook-bulk-reduction.md).
+This is a review candidate, not a merged release or live Snowflake acceptance.
+No Snowflake action occurred. Normal writes remain false; the prior release's
+live preview and daily writer acceptance remain pending. No live rerun is
+requested during review. If adopted, use the matching Cells Two through Six.
+
+## Previous action - review Cells Three and Four metadata cleanup
+
+The owner authorized the first bounded simplification of V2. This candidate
+normalizes CSV/registry rows once, resolves reference families once, and puts
+compiled-plan validation and operator identity rules in one shared location.
+Unchanged compiled plans skip repeated constraint compilation; edited or
+independently supplied plans still validate before source rows are read.
+
+All **720 local tests pass**, with no failures, errors or skips. The twenty new
+tests cover preparation reuse, reference-family rejection, changed plans,
+required/enum enforcement, provenance compatibility and metadata-only edits.
+Existing SSP/CIA11/AR17 parity, future-model, identity and guarded-write checks
+remain green. Maintained cells, generated V2 pages and the combined notebook
+are synchronized. Frozen fixtures, mappings, registry SQL and Cells One, Two,
+Five, Six and Seven are unchanged.
+
+**Next action:** review the candidate on `simplify-metadata-boundary` before
+adopting it. See the [implementation and validation checkpoint](checkpoints/2026-09-12-metadata-boundary-simplification.md).
+This is a review candidate, not a merged release or live Snowflake acceptance.
+No notebook or SQL was executed against Snowflake; normal writes remain false.
+The prior release's live preview and daily writer acceptance remain pending.
+No registry cleanup, DEV reload or unchanged preview rerun is requested here.
+
+The cleanup removes repeated work and rule ownership; it does not materially
+reduce total notebook length or complete the other audit suggestions. If
+adopted, Cells Three and Four must be replaced together.
+
+## Previous action - CSV-only Cell Three release for preview
 
 Cell Three now uses one flat CSV compiler for executable mappings. The unused
 programmatic-format compiler is removed; required CSV rule IDs still undergo
@@ -1333,4 +1494,3 @@ within-record parent/child keys. Snowflake transport and unrelated component
 lookup I/O are faked locally; **live acceptance is pending**, and this does not
 prove all externally loaded Excel rows are supported. See the
 [routing correction checkpoint](checkpoints/2026-09-10_ssp_property_routing_fix.md).
-

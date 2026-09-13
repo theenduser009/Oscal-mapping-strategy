@@ -5,12 +5,18 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 **Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Accepted runs,
 cell responsibilities, unresolved gaps and the next action are recorded there.
 
-**Current compact lean release:** one mapping CSV, the original nine registry
-columns plus only three sparse execution rules, and the same
-[seven V2 cells](notebooks/cells_v2/README.md). No JSON catalog upload. The
-release passes all 697 local tests and its compactness audit is closed. The
-registry setup still needs live DEV verification before the notebook preview;
-follow the single current action in [current status](docs/CURRENT_STATUS.md).
+**Current lean rebuild:** 1,802 lines across the same
+[seven cells](notebooks/cells_v2/README.md), down from 3,700. One mapping CSV and
+the original nine registry columns plus three execution columns drive the
+mapper. Alternate metadata formats, cached plans and repeated validations have
+been removed. See the [rebuild and validation record](docs/checkpoints/2026-09-13-lean-rebuild.md).
+
+Run release tests with `python -m unittest discover -s tests/lean -v` and verify
+generated files with `python tools/sync_notebook_cells.py --check`.
+[Test instructions](tests/lean/README.md) distinguish local tests, installed
+Snowpark API checks and pending live Snowflake acceptance. Registry setup still
+needs live DEV verification before the notebook preview; follow
+[current status](docs/CURRENT_STATUS.md).
 
 Normal writes stay disabled. SSP's accepted full DEV reload is not repeated;
 AR remains seventeen accepted in-memory mappings without verified storage.

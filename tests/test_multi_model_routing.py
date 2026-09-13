@@ -44,7 +44,7 @@ def namespace():
     tree = ast.parse(CELL3.read_text(encoding="utf-8"))
     body = []
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.Import, ast.ImportFrom)):
             body.append(node)
         elif isinstance(node, (ast.Assign, ast.AnnAssign)):
             try:
@@ -65,23 +65,13 @@ def namespace():
 
 def contracts():
     return {
-        "SSP": {"MODEL_KEY": "SSP", "ROOT_PATH": SSP, "POLICY": "ssp-approved-v1",
+        "SSP": {"MODEL_KEY": "SSP", "POLICY": "metadata-v1",
                 "MODEL_ALIASES": ("SSP", "System Security Plan", "SSP - Metadata"),
-                "ELEMENTS": {
-                    SSP: {"operator": "object", "parameters": {}},
-                    META: {"operator": "object", "parameters": {}},
-                }},
+                "STORAGE_CONTRACT": None},
         "ASSESSMENT_RESULTS": {
-            "MODEL_KEY": "ASSESSMENT_RESULTS", "ROOT_PATH": AR,
-            "POLICY": "observation-scores-v2",
+            "MODEL_KEY": "ASSESSMENT_RESULTS", "POLICY": "metadata-v1",
             "MODEL_ALIASES": ("ASSESSMENT_RESULTS", "Assessment Results", "AR"),
-            "SELECTED_FIELDS": ACCEPTED_FIELDS,
-            "ELEMENT_PATHS": (AR, RESULT, OBS), "STORAGE_CONTRACT": None,
-            "ELEMENTS": {
-                AR: {"operator": "object", "parameters": {}},
-                RESULT: {"operator": "record", "parameters": {}},
-                OBS: {"operator": "observations", "parameters": {}},
-            },
+            "STORAGE_CONTRACT": None,
         },
     }
 
@@ -105,31 +95,37 @@ def registry():
         {"OSCAL_MODEL_KEY": model, "NODE_PATH": path, "ELEMENT_TYPE": kind,
          "PARENT_NODE_PATH": parent, "IS_COLLECTION": collection,
          "INSTANCE_KEY_RULE": rule, "PROCESS_ORDER": order,
-         "IS_ACTIVE": True, "ITEM_PATH": None}
-        for model, path, kind, parent, collection, rule, order in (
-            ("SSP", SSP, "system-security-plan", None, False, None, 1),
-            ("SSP", META, "metadata", SSP, False, None, 2),
-            ("ASSESSMENT_RESULTS", AR, "assessment-results", None, False, None, 1),
-            ("ASSESSMENT_RESULTS", RESULT, "results", AR, True, "SOURCE_RECORD_ID", 2),
-            ("ASSESSMENT_RESULTS", OBS, "observations", RESULT, True, "SOURCE_FIELD_NAME", 3),
+         "IS_ACTIVE": True, "ITEM_PATH": None, "OPERATOR": operator,
+         "UUID_POLICY": "omit", "REQUIRED_MEMBERS": None}
+        for model, path, kind, parent, collection, rule, order, operator in (
+            ("SSP", SSP, "system-security-plan", None, False, None, 1, "object"),
+            ("SSP", META, "metadata", SSP, False, None, 2, "object"),
+            ("ASSESSMENT_RESULTS", AR, "assessment-results", None, False, None, 1, "object"),
+            ("ASSESSMENT_RESULTS", RESULT, "results", AR, True, "SOURCE_RECORD_ID", 2, "record"),
+            ("ASSESSMENT_RESULTS", OBS, "observations", RESULT, True, "SOURCE_FIELD_NAME", 3, "observations"),
         )
     ]
 
 
-def mapping(field="AUTHORIZATION_PACKAGE_NAME", model="SSP", path=META + ".title", **extra):
-    row = {"SOURCE_FIELD_NAME": field, "OSCAL_MODEL": model, "OSCAL_ELEMENT_PATH": path,
-           "MAPPING_TYPE": "Direct", "TRANSFORMATION_LOGIC": "Preserve source text", "STATUS": "Mapped"}
+def mapping(field="AUTHORIZATION_PACKAGE_NAME", model="SSP", path=META + ".title",
+            source="source-one", **extra):
+    row = {"SOURCE_KEY": source, "SOURCE_FIELD_NAME": field, "OSCAL_MODEL": model,
+           "OSCAL_ELEMENT_PATH": path, "MAPPING_TYPE": "Direct",
+           "TRANSFORMATION_LOGIC": "Preserve source text", "STATUS": "Mapped",
+           "EXECUTION_STATUS": "APPROVED", "TRANSFORM_ID": "text",
+           "RUNTIME_TARGET_PATH": path, "RULE_ID": "routing:" + str(field) + ":" + str(path)}
     row.update(extra)
     return row
 
 
-def ar_mappings(candidate=False):
-    rows = [mapping(field, "Assessment Results", OBS, MAPPING_TYPE="Extension Property",
+def ar_mappings(candidate=False, source="source-one"):
+    rows = [mapping(field, "Assessment Results", OBS, source=source,
+                    MAPPING_TYPE="Extension Property", TRANSFORM_ID="scalar-score",
                     TRANSFORMATION_LOGIC="", NOTES="Archer-specific risk scoring - map as observation")
             for field in ACCEPTED_FIELDS]
     if candidate:
-        rows.extend(mapping(field, "Assessment Results", OBS + " or props[]",
-                            MAPPING_TYPE="Extension Property",
+        rows.extend(mapping(field, "Assessment Results", OBS + " or props[]", source=source,
+                            MAPPING_TYPE="Extension Property", EXECUTION_STATUS="EXCLUDED",
                             TRANSFORMATION_LOGIC="", NOTES="Archer-specific risk scoring - map as observation or property")
                     for field in CANDIDATE_FIELDS)
     return rows
@@ -172,7 +168,8 @@ class MultiModelRouting(unittest.TestCase):
 
     def test_two_sources_same_fields_and_record_id_have_distinct_identity_context(self):
         profiles = [profile(), profile("source-two", "SOURCE_TWO")]
-        rows = {item["SOURCE_KEY"]: [mapping()] + ar_mappings() for item in profiles}
+        rows = {item["SOURCE_KEY"]: [mapping(source=item["SOURCE_KEY"])] +
+                ar_mappings(source=item["SOURCE_KEY"]) for item in profiles}
         contexts = self.compile(rows, profiles=profiles)
         self.assertEqual(4, len(contexts))
         identities = set()
@@ -220,7 +217,8 @@ class MultiModelRouting(unittest.TestCase):
                      "DIM_PK_COLUMN": "PK_NODE", "FACT_PK_COLUMN": "PK_EDGE"}
             contracts_by_source.append(copy.deepcopy(value))
             item["MODEL_STORAGE_CONTRACTS"] = {"SSP": value}
-        result = self.compile({p["SOURCE_KEY"]: [mapping()] for p in profiles}, profiles=profiles)
+        result = self.compile({p["SOURCE_KEY"]: [mapping(source=p["SOURCE_KEY"])]
+                               for p in profiles}, profiles=profiles)
         for context, expected in zip(result, contracts_by_source):
             self.assertEqual(expected, context["config"]["STORAGE_CONTRACT"])
             self.assertEqual(expected["TARGET_DIM"], context["config"]["TARGET_DIM"])
@@ -293,7 +291,9 @@ class MultiModelRouting(unittest.TestCase):
         self.assertEqual("READY", contexts[0]["routing_report"]["STATUS"])
 
     def test_missing_target_and_explicit_deferred_rows_are_preserved_as_deferred(self):
-        for row in (mapping(path=None), mapping(STATUS="Deferred"), mapping(STATUS="TBD")):
+        for row in (mapping(path=None, EXECUTION_STATUS="DEFERRED"),
+                    mapping(STATUS="Deferred", EXECUTION_STATUS="DEFERRED"),
+                    mapping(STATUS="TBD", EXECUTION_STATUS="DEFERRED")):
             context = self.compile({"source-one": [row]},
                                    profiles=[profile(models=("SSP",))])[0]
             self.conserved(context, 1)
@@ -321,6 +321,9 @@ class MultiModelRouting(unittest.TestCase):
     def test_header_aliases_and_generic_extension_label_preserve_rule(self):
         row = {"Archer_Field_Name": "VULNERABILITY_SCORE", "OSCAL_Model": "Extension Properties",
                "OSCAL_Element_Path": OBS, "Mapping_Type": "Extension Property",
+               "Source_Key": "source-one", "Execution_Status": "APPROVED",
+               "Transform_Id": "scalar-score", "Runtime_Target_Path": OBS,
+               "Rule_Id": "routing:VULNERABILITY_SCORE",
                "Notes": "Archer-specific risk scoring - map as observation"}
         context = self.compile({"source-one": [row]},
                                profiles=[profile(models=("ASSESSMENT_RESULTS",))])[0]

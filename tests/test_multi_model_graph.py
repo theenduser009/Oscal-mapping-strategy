@@ -17,6 +17,7 @@ ROOT = Path(__file__).parents[1]
 C3 = ROOT / "notebooks/cells/03_canonical_mapping_contract.py"
 C4 = ROOT / "notebooks/cells/04_parsing_transform_payload_helpers.py"
 LEGACY_C4 = ROOT / "tests/fixtures/legacy_cell4_pre_declarative.py"
+LEGACY_C5 = ROOT / "tests/fixtures/legacy_cell5_pre_direct_dispatch.py"
 C5 = ROOT / "notebooks/cells/05_registry_graph_builder.py"
 AR = ROOT / "notebooks/assessment_results/01_map_observation_scores.py"
 AUDIT = {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
@@ -65,7 +66,8 @@ def namespace(legacy=False):
             exec(compile(ast.Module(body=definitions, type_ignores=[]), str(C3), "exec"), ns)
         helper_path = LEGACY_C4 if legacy else C4
         exec(compile(helper_path.read_text(encoding="utf-8"), str(helper_path), "exec"), ns)
-        exec(compile(C5.read_text(encoding="utf-8"), str(C5), "exec"), ns)
+        graph_path = LEGACY_C5 if legacy else C5
+        exec(compile(graph_path.read_text(encoding="utf-8"), str(graph_path), "exec"), ns)
     return ns
 
 

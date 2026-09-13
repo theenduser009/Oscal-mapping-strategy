@@ -18,8 +18,9 @@
   allowed.
 - The earlier eighteen-column registry design is superseded. The lean setup SQL
   adds or verifies only the three active extension columns and never drops any
-  legacy DEV columns. It has not been live-verified. The compactness audit is
-  closed with 697 tests passing. The owner approved the exact fifteen-column DEV
+  legacy DEV columns. It has not been live-verified. The seven-cell lean rebuild
+  is recorded in docs/checkpoints/2026-09-13-lean-rebuild.md; run its tests/lean
+  release suite, not the retired engine's private-API suite. The owner approved the exact fifteen-column DEV
   cleanup; run only the guarded cleanup SQL before further registry verification.
   Do not advise a notebook run until the registry setup is live-verified. Normal
   DIM/FACT writes remain disabled.

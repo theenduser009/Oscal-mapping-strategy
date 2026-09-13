@@ -168,11 +168,12 @@ class MetadataRuntimeTests(unittest.TestCase):
         self.assertEqual(payload_at(nodes, ROOT_PATH), [{"details": {"valid-from": "2026-09-11"}}])
 
     def test_controlled_source_and_configuration_fields_are_metadata(self):
-        ctx = context([], {ROOT_PATH: element(
-            "object", controlled_fields=[
-                {"target": "title", "source_field": "DISPLAY_NAME", "transform_id": "text", "required": True},
-                {"target": "version", "config_key": "DOCUMENT_VERSION", "transform_id": "canonical-text"},
-            ])})
+        # Required FIELD/CONFIG mappings replace the retired controlled_fields dialect.
+        ctx = context([
+            mapping("DISPLAY_NAME", ROOT_PATH, "title", "text", params={"required": True}),
+            mapping("DOCUMENT_VERSION", ROOT_PATH, "version", "canonical-text",
+                    params={"value_source": "CONFIG", "required": True}),
+        ], {ROOT_PATH: element("object")})
         ctx["config"]["DOCUMENT_VERSION"] = "1.0"
         nodes, _ = build(graph.namespace(), copy.deepcopy(ctx), [
             {"SOURCE_RECORD_ID": "100", "CURATED_JSON": {"DISPLAY_NAME": "Title"}}])
@@ -182,14 +183,14 @@ class MetadataRuntimeTests(unittest.TestCase):
 
     def test_named_properties_require_explicit_naming_policy(self):
         path = ROOT_PATH + ".props[]"
-        row = mapping("FLAG", path, transform="archer-select", params={"namespace": "https://example.test/ns"})
+        row = mapping("FLAG", path, transform="archer-select")
         elements = {ROOT_PATH: element(materialize_empty=True),
                     path: element("properties", property_name_rule="source-field-slug")}
         ctx = context([row], elements)
         nodes, _ = build(graph.namespace(), ctx, [
             {"SOURCE_RECORD_ID": "100", "CURATED_JSON": {"FLAG": False}}])
         self.assertEqual(payload_at(nodes, path), [
-            {"name": "flag", "value": "false", "ns": "https://example.test/ns"}])
+            {"name": "flag", "value": "false"}])
         del elements[path]["parameters"]["property_name_rule"]
         with self.assertRaises(ValueError):
             build(graph.namespace(), context([row], elements), [
@@ -254,13 +255,15 @@ class MetadataRuntimeTests(unittest.TestCase):
         self.assertNotIn("COMPONENT_SOURCE_TYPES", ns)
         captured = []
         def query_backend(source, rows, frames, supplied_context):
-            spec = supplied_context["_metadata_hydration_spec"]
-            captured.append(spec)
-            self.assertEqual(set(frames), {"device"})
+            captured.extend(rows)
+            self.assertEqual(set(frames), {"inventory"})
+            self.assertEqual(supplied_context["lookups"]["component_contract"]["inventory"]["title_field"], "LABEL")
             return {"device": {"123": {"title": "Device", "description": "Details"}}}
         ns["_build_component_hydration_lookups"] = query_backend
         nodes, _ = build(ns, ctx, [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": {"NEW_ASSET": [123]}}])
-        self.assertEqual(captured[0]["routes"], {"NEW_ASSET": "device"})
+        self.assertEqual(captured[0]["SOURCE_FIELD_NAME"], "NEW_ASSET")
+        self.assertEqual(captured[0]["REPRESENTATION_PARAMS"]["reference_type"], "device")
+        self.assertEqual(captured[0]["REPRESENTATION_PARAMS"]["hydrate_lookup"], "inventory")
         self.assertEqual(payload_at(nodes, path)[0]["description"], "Details")
 
     def test_report_metadata_cannot_fabricate_write_success(self):
@@ -292,8 +295,7 @@ class MetadataRuntimeTests(unittest.TestCase):
         }
         row = mapping("NEW_USER_FIELD", assignments, params={"role_id": "reviewer", "role_title": "Reviewer"})
         group = {"roles_path": roles, "parties_path": parties, "assignments_path": assignments,
-                 "party_type": "person", "party_uuid_parts": [
-                     "$source_system", "$source_record", "party", "$reference_id"],
+                 "party_type": "person",
                  "source_namespace": {"SOURCE_SYSTEM_NAME": "TEST", "SOURCE_TABLE_NAME": "TABLE_A",
                                       "MODEL_KEY": "TEST_MODEL"}}
         ctx = context([row], elements, [group])
@@ -317,7 +319,7 @@ class MetadataRuntimeTests(unittest.TestCase):
     def test_registry_identity_drift_blocks_even_when_mapping_is_approved(self):
         ctx = context([mapping("NEW_SCORE", OBS, transform="scalar-score")])
         ctx["registry_rows"] = registry_rows(ctx, {OBS: "LIST_INDEX"})
-        with self.assertRaisesRegex(ValueError, "source-field identity"):
+        with self.assertRaisesRegex(ValueError, "SOURCE_FIELD_NAME identity"):
             build(graph.namespace(), ctx)
 
 

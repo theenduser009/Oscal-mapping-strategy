@@ -1,49 +1,65 @@
-# Mapper V2 - seven copy-ready cells
+# Seven copy-ready mapper cells
 
-**Compact lean release:** all 697 local tests pass. Exact accepted SSP, CIA11
-and AR17 outputs remain unchanged. The compactness audit is closed: duplicate
-registry parsing and SSP-only loader compatibility were removed without changing
-the seven-cell interface. Live registry setup and notebook preview are still
-pending. No new execution cells were added.
+These pages contain the lean seven-cell implementation and are generated from
+[notebooks/cells](../cells/README.md). Replace all seven cells together; older
+compiled contexts and field-report APIs are not supported.
 
-Field mappings come from the [CSV](../../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
-Structure and identity come from the original nine registry columns. Only
-`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS` are added as sparse execution
-rules. **No JSON catalog is required.** These pages are generated from one
-maintained implementation.
+Field mappings come from [ARCHER_OSCAL_MAPPINGS.csv](../../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
+The original nine registry columns own structure and identity, with three sparse
+execution columns: `OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`. No JSON
+catalog or test fixtures are uploaded to the notebook.
 
-## First: one-time registry setup
+## Setup and run
 
-Run the [lean registry metadata SQL](../../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql)
-in a fresh Snowflake SQL worksheet and share its aggregate result. It adds or
-verifies only three DEV registry columns, leaves any earlier experimental
-columns untouched, and does not access DIM/FACT. Follow the
-[exact setup and preview steps](../../docs/REGISTRY_METADATA_SETUP.md).
+Complete the recorded DEV cleanup and verify the registry migration using the
+[registry deployment guide](../../docs/REGISTRY_METADATA_SETUP.md). Their live
+completion remains unverified here. Then upload the exact mapping CSV to notebook
+Files and run these matching Python cells in order in one session:
 
-## Then: the same seven Python cells
+1. [Configuration](01_initialization_and_configuration.py)
+2. [Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)
+3. [CSV and registry compilation](03_canonical_mapping_contract.py)
+4. [Reusable transforms and registry operators](04_parsing_transform_payload_helpers.py)
+5. [Nodes and parent-child edges](05_registry_graph_builder.py)
+6. [Validation, preview and persistence](06_validation_and_guarded_loader.py)
+7. [Pipeline runner](07_mapper_orchestrator.py)
 
-After registry setup is verified, upload the updated mapping CSV to notebook
-Files and replace all seven matching cells. Run in order in one session with
-writes disabled and Cell Seven in PREVIEW.
+Cell One defaults to `SELECTED_MODELS = ("SSP",)`. Use
+`("ASSESSMENT_RESULTS",)` for AR alone or `("SSP", "ASSESSMENT_RESULTS")` for
+both. Keep `CONFIG["EXECUTE_WRITES"] = False` and Cell Seven's
+`OSCAL_LOAD_MODE = "PREVIEW"` for deployment verification.
 
-1. [Cell 1 - Configuration](01_initialization_and_configuration.py)
-2. [Cell 2 - Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)
-3. [Cell 3 - Mapping contracts and routing](03_canonical_mapping_contract.py)
-4. [Cell 4 - Parsing and transformations](04_parsing_transform_payload_helpers.py)
-5. [Cell 5 - Shared graph construction](05_registry_graph_builder.py)
-6. [Cell 6 - Validation and guarded persistence](06_validation_and_guarded_loader.py)
-7. [Cell 7 - Orchestration](07_mapper_orchestrator.py)
+Cell Seven calls `run_oscal_pipeline(SOURCE_INPUTS, MAPPING_CONTEXTS,
+OSCAL_LOAD_MODE)`. It publishes `MODEL_GRAPHS` and `PIPELINE_REPORT`, printing the
+aggregate report after `OSCAL_PIPELINE_REPORT`. A successful preview reports
+`PREVIEW_COMPLETE`; SSP's load status is `PREVIEW_PASSED_NO_TARGET_DML`.
+AR's expected status is `MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING` because
+it has no verified destination.
 
-Cell One's `SELECTED_MODELS` is the only model selector: `"SSP"`,
-`"ASSESSMENT_RESULTS"`, or `("SSP", "ASSESSMENT_RESULTS")` (default).
-Unknown models are not enabled automatically. AR has no verified destination
-and remains graph-preview-only.
+The lower-level `run_oscal_mapping(source_df, canonical_mapping_df,
+element_registry_df, config, context)` returns nodes, edges and the load result.
+The compiled context from Cell Three supplies mapping and registry execution;
+the runner passes `None` for the two retained DataFrame arguments.
 
-Accepted SSP/CIA and AR17 outputs pass local regression checks; this does not
-prove a new Snowflake run or authorize COMMIT. Do not rerun old pilots, standalone
-AR candidates or the accepted full DEV reload.
+## Persistence and verification
 
-Developers edit [notebooks/cells](../cells/README.md) once; run
+Cell Seven's COMMIT mode previews every selected route before its first commit.
+Each route has its own DIM/FACT transaction; a later route's failure cannot undo
+an earlier committed route. Every selected route needs a verified destination,
+and other target writers must be paused. Keep the shared write flag false;
+the runner enables writes only on its per-run configuration.
+
+Unknown transaction outcomes or failed post-commit readback require inspection
+before retrying. The writer preserves unchanged rows and records absent from the
+input; obsolete keys within selected records block the load.
+
+Accepted SSP/CIA and AR17 behavior is covered by the
+[release tests](../../tests/lean/README.md). Local tests and Snowpark emulator
+checks do not establish live registry or daily-loader acceptance, which remain
+pending. Historical pilots and the accepted full DEV reload are separate from
+this deployment.
+
+Developers edit [notebooks/cells](../cells/README.md), then run
 `python tools/sync_notebook_cells.py` to regenerate these pages and the
-[combined notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py).
-
+[combined notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py). The `--check` option detects
+generated-file drift; this tool is not a Snowflake execution cell.

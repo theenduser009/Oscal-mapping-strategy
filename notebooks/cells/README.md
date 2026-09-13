@@ -10,9 +10,10 @@ original nine registry columns. Only `OPERATOR`, `UUID_POLICY` and
 visible deployment settings. No JSON catalog upload or extra daily runtime cell
 is required.
 
-The compactness audit is closed. All 697 local tests pass after removing
-duplicate registry normalization from Cell Four and SSP-only compatibility from
-Cell Six. First complete the
+The lean rebuild contains 1,802 lines across seven cells, down from 3,700.
+The [release suite](../../tests/lean/README.md) checks accepted output, source
+selection, transforms, links and transaction failures. Live acceptance is still
+pending. First complete the
 [lean one-time registry setup](../../docs/REGISTRY_METADATA_SETUP.md), then use
 the updated mapping CSV and all seven matching cells in one Snowflake session,
 with normal writes disabled and Cell Seven in PREVIEW. Do not mix releases or
@@ -21,7 +22,9 @@ rerun the accepted full DEV reload.
 Developers edit these files once, then use `python tools/sync_notebook_cells.py`;
 `--check` reports generated-page drift. This is a packaging tool, not a
 Snowflake execution step. Historical diagnostics below are not current run
-requests.
+requests. Those diagnostics reference historical notebook globals and are not
+part of the lean release interface. Use `MODEL_GRAPHS` and `PIPELINE_REPORT` for
+this release; do not upload old diagnostic cells as additional mapper steps.
 
 ## Run order
 

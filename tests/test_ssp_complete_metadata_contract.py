@@ -56,7 +56,7 @@ TBD_FIELDS = (
 
 
 def _run_graph_cells(path, init_globals=None):
-    """Exercise the frozen policy oracle with the shared graph mechanics."""
+    """Exercise the frozen policy oracle with its matching frozen graph."""
     import datetime
     import hashlib
     import json
@@ -80,6 +80,7 @@ def _run_graph_cells(path, init_globals=None):
         if code is not None and Path(code.co_filename) == cell_4_path:
             continue
         namespace[name] = value
+    path = LEGACY_CELL_4_PATH.with_name("legacy_cell5_pre_direct_dispatch.py")
     exec(compile(Path(path).read_text(encoding="utf-8"), str(path), "exec"),
          namespace)
     return namespace
