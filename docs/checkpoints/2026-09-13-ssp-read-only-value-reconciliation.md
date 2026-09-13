@@ -63,7 +63,7 @@ Transcribed from the five supplied Snowflake notebook screenshots.
   "CANDIDATE_NODES": 70102,
   "COMPARISON": "ACCEPTED_CANDIDATE_VERSUS_CURRENT_TARGET",
   "DIM": {
-    "_it should be inserts": 0,
+    "INSERTS": 0,
     "UNCHANGED": 68108,
     "UPDATES": 1994
   },
@@ -87,7 +87,7 @@ Transcribed from the five supplied Snowflake notebook screenshots.
         "NODES": 36,
         "OBJECTIVE": "security-objective-availability"
       },
-     _it should be {
+      {
         "ACCEPTED_TRANSFORM": "MATCH",
         "LOWERCASE_LOOKUP_TRANSFORM": "CASE_NORMALIZATION_NEEDED",
         "NODES": 36,
