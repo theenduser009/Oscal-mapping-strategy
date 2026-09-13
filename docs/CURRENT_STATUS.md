@@ -1,28 +1,31 @@
 # Current Status
 
-## Current action - POA&M reference mapping implemented; live preview pending
+## Current action - POA&M storage bound using the SSP/AR naming pattern
 
-The owner confirmed Source One's POAMS field and the reviewed Reference mapping
-to plan-of-action-and-milestones.poam-items[]. No second Archer table is needed.
-The CSV now enables this one row. The same seven cells produce package-scoped
-UUID-only reference nodes and root-to-item links; no item details are invented.
-The runtime is 1,855 lines, six more than the AR binding baseline. SSP and AR
-mapped outputs remain unchanged in regression tests.
+The owner confirmed that POA&M uses the same physical tables and key rules as
+SSP/AR, with model-specific names. Cell One binds DIM_OSCAL_POAM_ELEMENT and
+FACT_OSCAL_POAM_DEPENDENCY in RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.
+Their PK columns are PK_DIM_OSCAL_POAM_ELEMENT_HASH and
+PK_FACT_OSCAL_POAM_DEPENDENCY_HASH. No further table-name confirmation is needed.
 
-Eleven focused POA&M tests pass. [CI passed all 205 tests with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34773274346)
-on code commit ad41b4fabe569ddc4d1d32c9e2192f572f4f7cad, including the real
-Snowpark POA&M VARIANT graph test. Generated cells also match.
-The readable private screenshot's empty-reference case is covered; populated
-POAMS examples and live persistence remain unverified. Reference graph
-acceptance does not establish complete POA&M document conformance.
+[CREATE_POAM_TABLES.sql](../sql/CREATE_POAM_TABLES.sql) preserves the ten-column DIM
+and six-column FACT definitions, including both audit timestamps. It creates
+missing tables only. The mapper remains seven cells / 1,865 lines; the shared
+loader, UUID/hash rules and approved Reference mapping are unchanged.
 
-**Next action:** run [READ_ONLY_POAM_INPUTS.sql](../notebooks/validation/READ_ONLY_POAM_INPUTS.sql)
-as SQL in Snowflake and post its three result grids: destination columns,
-existing registry rows and aggregate reference shapes. Then follow
-[POA&M next run](POAM_NEXT_RUN.md). The two-row registry metadata update is
-prepared; it is not a registry reset or a live execution claim. Actual POA&M
-destination names remain unbound. Retain accepted SSP/AR commits and do not
-repeat them or rerun the historical AR replacement DDL.
+The local suite passes 193 tests with three Snowpark-dependent classes skipped.
+The actual bound mapper/shared loader also passed local relational preview,
+insert, unchanged and added-reference readback checks. Installed-Snowpark CI for
+the new seven-cell POAM persistence test remains pending. SQL schema definitions
+match the loader contract; no live DDL, registry update or POAM write is claimed.
+
+**Next action:** follow [POAM_NEXT_RUN.md](POAM_NEXT_RUN.md): run the missing-table
+DDL and the scoped, self-checking POAM registry update, then use the updated CSV
+and matching seven cells with POAM selected in PREVIEW. Require storage-validated
+PREVIEW_PASSED_NO_TARGET_DML and post the report. The earlier discovery query is
+now optional diagnostic material. Preserve accepted SSP/AR runs; no repeats,
+whole-registry reset or replacement of populated tables is requested.
+Only the Source One POAMS reference graph is in scope, not complete item details.
 
 ## Accepted checkpoint - AR insert and committed readback
 

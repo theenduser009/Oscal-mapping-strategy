@@ -11,9 +11,13 @@
 
 The owner confirmed POAMS in the same Source One CURATED_JSON, Reference to
 plan-of-action-and-milestones.poam-items[]. Do not ask for a second source table
-for this scoped mapping. Follow docs/POAM_NEXT_RUN.md and its single read-only
-SQL next action. POAM is configured for graph-only preview; the actual destination
-names are not yet bound. The UUID-only item nodes use standard package-scoped
+for this scoped mapping. The owner also confirmed the SSP/AR table layout and POAM naming pattern.
+Cell One now binds DIM_OSCAL_POAM_ELEMENT / FACT_OSCAL_POAM_DEPENDENCY and
+PK_DIM_OSCAL_POAM_ELEMENT_HASH / PK_FACT_OSCAL_POAM_DEPENDENCY_HASH in the same
+DEV curated schema. Follow docs/POAM_NEXT_RUN.md: missing-table DDL, scoped
+self-checking POAM registry update, then target-aware PREVIEW. Do not ask for
+the table names again. The discovery SQL is optional diagnosis; actual live
+schema checks still precede target DML. The UUID-only item nodes use standard package-scoped
 identities; no titles/descriptions or external-document UUID resolution are
 invented. Compiled-plan release is lean-csv-registry-v2 in matching Cells 3/4.
 The POAM registry update touches only its existing root/item execution metadata

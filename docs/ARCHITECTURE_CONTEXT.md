@@ -47,9 +47,10 @@ The next scope is [POA&M references](POAM_NEXT_RUN.md) from the same Source One.
 One reviewed POAMS row uses the references operator without REFERENCE_TYPE,
 which produces UUID-only nodes. A type is still required for hydrated mappings.
 Existing package-scoped identity and the shared loader remain unchanged.
-The seven cells total 1,855 lines; compiled-plan release lean-csv-registry-v2
-requires matching Cells Three and Four. POA&M live registry, destination binding
-and preview remain pending. This is not a complete OSCAL POA&M document.
+The seven cells total 1,865 lines; compiled-plan release lean-csv-registry-v2
+requires matching Cells Three and Four. POA&M now has the owner-confirmed
+SSP/AR storage layout with POAM table and PK names. Its live registry preparation
+and target-aware preview remain pending. This is not a complete OSCAL POA&M document.
 
 ### Earlier metadata-engine migration - September 11 (superseded where noted above)
 

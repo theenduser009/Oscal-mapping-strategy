@@ -1,4 +1,4 @@
--- Run the whole statement only after the read-only registry check confirms these rows.
+-- Run the whole statement; it validates the two existing rows before updating them.
 -- Updates two existing POAM rows; no inserts, metadata DDL, resets or DIM/FACT DML.
 -- Pause other registry writers. Conflicting populated rules stop this statement.
 -- Root identity/ITEM_PATH and hierarchy stay unchanged; item ITEM_PATH becomes '$'.

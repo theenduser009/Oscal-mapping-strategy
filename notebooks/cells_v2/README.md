@@ -13,8 +13,8 @@ catalog or test fixtures are uploaded to the notebook.
 
 SSP and AR mapped graphs are committed and verified. Current work is
 [POA&M references](../../docs/POAM_NEXT_RUN.md) from the same Source One.
-Follow that guide's read-only SQL next action before preparing POAM registry
-metadata and running PREVIEW. Actual POAM destinations remain unbound.
+Follow that guide's table/registry preparation and target-aware PREVIEW.
+POAM uses the SSP/AR layout with its own table and PK names.
 No SSP/AR reload or whole-registry reset is needed.
 
 1. [Configuration](01_initialization_and_configuration.py)

@@ -3,7 +3,7 @@ name: Mapper checks
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, simplify-metadata-boundary]
   workflow_dispatch:
 
 permissions:

@@ -138,7 +138,7 @@ class SnowparkLocalSmokeTests(unittest.TestCase):
         for row in actual:
             if row["ELEMENT_PATH"] == ITEM_PATH:
                 self.assertEqual({"uuid": row["OSCAL_UUID"]}, json.loads(row["METADATA_JSON"]))
-        report = self.ns["validate_and_load_oscal"](nodes, edges, config)
+        report = self.ns["validate_and_load_oscal"](nodes, edges, dict(config, STORAGE_CONTRACT=None))
         self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", report["status"])
         self.assertFalse(report["writes_executed"])
 

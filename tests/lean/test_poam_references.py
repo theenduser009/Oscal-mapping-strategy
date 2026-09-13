@@ -65,7 +65,19 @@ class PoamReferenceTests(unittest.TestCase):
                                "TRANSFORM_ID", "APPROVAL_STATUS", "RULE_ID")))
         self.assertIsNone(row["REPRESENTATION_PARAMS"]["reference_type"])
         self.assertNotIn("hydrate_lookup", row["REPRESENTATION_PARAMS"])
-        self.assertIsNone(self.context["config"]["STORAGE_CONTRACT"])
+        contract = self.context["config"]["STORAGE_CONTRACT"]
+        prefix = "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED."
+        self.assertEqual((prefix + "DIM_OSCAL_POAM_ELEMENT", prefix + "FACT_OSCAL_POAM_DEPENDENCY",
+                          "PK_DIM_OSCAL_POAM_ELEMENT_HASH", "PK_FACT_OSCAL_POAM_DEPENDENCY_HASH"),
+                         tuple(contract[key] for key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN")))
+        differing = {"MODEL_KEY", "ROOT_PATH", "ROOT_ELEMENT_TYPE", "TARGET_DIM", "TARGET_FACT",
+                     "DIM_PK_COLUMN", "FACT_PK_COLUMN"}
+        for model in ("SSP", "ASSESSMENT_RESULTS"):
+            shared = self.ns["MODEL_CONTRACTS"][model]["STORAGE_CONTRACT"]
+            self.assertEqual({key: value for key, value in shared.items() if key not in differing},
+                             {key: value for key, value in contract.items() if key not in differing})
+        self.assertEqual(("POAM", ROOT_PATH, ROOT_PATH),
+                         tuple(contract[key] for key in ("MODEL_KEY", "ROOT_PATH", "ROOT_ELEMENT_TYPE")))
 
     def test_content_ids_build_standard_identities_and_matching_root_edges(self):
         records = [{"SOURCE_RECORD_ID": "package-a", "CURATED_JSON": {
@@ -119,14 +131,15 @@ class PoamReferenceTests(unittest.TestCase):
 
     def test_targetless_preview_validates_and_commit_cannot_write(self):
         nodes, edges = self.graph([{"SOURCE_RECORD_ID": "package-a", "CURATED_JSON": {"POAMS": [101]}}])
+        config = dict(self.context["config"], STORAGE_CONTRACT=None)
         with patch.dict(self.ns, _load_query=lambda *args: self.fail("Unexpected database query")):
-            result = self.ns["validate_and_load_oscal"](nodes, edges, self.context["config"])
+            result = self.ns["validate_and_load_oscal"](nodes, edges, config)
             self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", result["status"])
             self.assertTrue(result["validation_passed"])
             self.assertFalse(result["writes_executed"])
             self.assertFalse(result["storage_verified"])
             with self.assertRaisesRegex(self.ns["LoadError"], "STORAGE_CONTRACT_NOT_VERIFIED"):
-                self.ns["validate_and_load_oscal"](nodes, edges, dict(self.context["config"], EXECUTE_WRITES=True))
+                self.ns["validate_and_load_oscal"](nodes, edges, dict(config, EXECUTE_WRITES=True))
 
     def test_hydrated_reference_still_requires_type(self):
         rows = copy.deepcopy(self.rows)

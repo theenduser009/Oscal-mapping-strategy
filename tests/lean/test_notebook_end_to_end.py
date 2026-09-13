@@ -263,6 +263,88 @@ class NotebookEndToEndTests(unittest.TestCase):
             self.assertFalse(any(sql.startswith("MERGE") for sql in self.session.events))
         self.session.schema[dim] = original
 
+    def test_poam_only_preview_insert_unchanged_and_new_reference_isolates_models(self):
+        from test_poam_references import poam_registry
+        baseline = self.run_notebook(("SSP", "ASSESSMENT_RESULTS"))
+        with self.notebook_transport():
+            _, accepted = baseline["run_oscal_pipeline"](
+                baseline["SOURCE_INPUTS"], baseline["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", accepted["status"])
+        unaffected = {context["config"]["STORAGE_CONTRACT"][key]: self.session.query(
+            "SELECT * FROM " + context["config"]["STORAGE_CONTRACT"][key] + " ORDER BY 1")
+            for context in baseline["MAPPING_CONTEXTS"] for key in ("TARGET_DIM", "TARGET_FACT")}
+        self.assertTrue(all(unaffected.values()))
+        self.session.sources[self.defaults["CONFIG"]["ELEMENT_REGISTRY_TABLE"]] = self.frame(
+            release_registry() + poam_registry())
+        source = dict(self.source, POAMS=[{"ContentId": "201", "LevelId": 9}, 202])
+        self.session.sources[self.profile["RAW_TABLE"]] = self.frame([
+            {"CONTENT_ID": "synthetic-record", "CURATED_JSON": json.dumps(source)}])
+        self.session.events.clear()
+        ns = self.run_notebook(("POAM",))
+        context = ns["MAPPING_CONTEXTS"][0]
+        contract = context["config"]["STORAGE_CONTRACT"]
+        dim, fact = contract["TARGET_DIM"], contract["TARGET_FACT"]
+        pk, edge_pk = contract["DIM_PK_COLUMN"], contract["FACT_PK_COLUMN"]
+        preview = ns["PIPELINE_REPORT"]["groups"][0]["load"]
+        self.assertEqual("PREVIEW_PASSED_NO_TARGET_DML", preview["status"])
+        self.assertEqual((3, 2), (preview["nodes"], preview["edges"]))
+        self.assertEqual([], self.session.query("SELECT * FROM " + dim))
+        self.assertEqual([], self.session.query("SELECT * FROM " + fact))
+        self.assertFalse(any(sql.startswith("MERGE") for sql in self.session.events))
+        with self.notebook_transport():
+            _, inserted = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", inserted["status"])
+        load = inserted["groups"][0]["load"]
+        for kind, label, count in (("D", "DIM", 3), ("F", "FACT", 2)):
+            self.assertEqual({"INSERTS": count, "UPDATES": 0, "UNCHANGED": 0}, load["expected_changes"][kind])
+            self.assertEqual({"INSERTS": 0, "UPDATES": 0, "UNCHANGED": count}, load["verification"][label])
+        saved = {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)}
+        saved_edges = {row[edge_pk]: row for row in self.session.query("SELECT * FROM " + fact)}
+        for key, row in saved.items():
+            self.assertIsInstance(key, bytes)
+            self.assertEqual(16, len(key))
+            self.assertEqual(32, len(row["OSCAL_UUID"]))
+            payload = json.loads(row["METADATA_JSON"])
+            self.assertEqual({"uuid"}, set(payload))
+            self.assertEqual(row["OSCAL_UUID"], payload["uuid"].replace("-", ""))
+            self.assertTrue(row["DW_LOAD_TIMESTAMP"] and row["DW_LOAD_TIMESTAMP_TZ"])
+        for key, edge in saved_edges.items():
+            self.assertIsInstance(key, bytes)
+            self.assertEqual(16, len(key))
+            for endpoint in ("SOURCE", "TARGET"):
+                self.assertEqual(saved[edge["FK_" + endpoint + "_ELEMENT_HASH"]]["OSCAL_UUID"],
+                                 edge[endpoint + "_OSCAL_UUID"])
+        context["config"]["RUN_ID"] = "poam-unchanged"
+        with self.notebook_transport():
+            _, repeated = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", repeated["status"])
+        for kind, count in (("D", 3), ("F", 2)):
+            self.assertEqual({"INSERTS": 0, "UPDATES": 0, "UNCHANGED": count},
+                             repeated["groups"][0]["load"]["expected_changes"][kind])
+        self.assertEqual(saved, {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)})
+        self.assertEqual(saved_edges, {row[edge_pk]: row for row in self.session.query("SELECT * FROM " + fact)})
+        source["POAMS"].append({"ContentId": 203, "LevelId": 9})
+        ns["SOURCE_INPUTS"]["source-one"]["source_df"] = self.frame([
+            {"SOURCE_RECORD_ID": "synthetic-record", "CURATED_JSON": json.dumps(source)}])
+        context["config"]["RUN_ID"] = "poam-new-reference"
+        with self.notebook_transport():
+            _, changed = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", changed["status"])
+        load = changed["groups"][0]["load"]
+        for kind, label, previous in (("D", "DIM", 3), ("F", "FACT", 2)):
+            self.assertEqual({"INSERTS": 1, "UPDATES": 0, "UNCHANGED": previous}, load["expected_changes"][kind])
+            self.assertEqual({"INSERTS": 0, "UPDATES": 0, "UNCHANGED": previous + 1}, load["verification"][label])
+        final_nodes = {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)}
+        final_edges = {row[edge_pk]: row for row in self.session.query("SELECT * FROM " + fact)}
+        self.assertEqual(saved, {key: final_nodes[key] for key in saved})
+        self.assertEqual(saved_edges, {key: final_edges[key] for key in saved_edges})
+        self.assertEqual(["poam-new-reference"], [row["DW_PIPELINE_RUN_ID"]
+                         for key, row in final_nodes.items() if key not in saved])
+        for table, rows in unaffected.items():
+            self.assertEqual(rows, self.session.query("SELECT * FROM " + table + " ORDER BY 1"))
+            self.assertFalse(any(sql.startswith("MERGE INTO " + table + " ") for sql in self.session.events))
+        self.assertFalse(ns["CONFIG"]["EXECUTE_WRITES"])
+
     def test_many_records_keep_exact_coverage_and_record_scoped_links(self):
         rows = [{"CONTENT_ID": f"record-{index:03d}", "CURATED_JSON": json.dumps(self.source)} for index in range(32)]
         self.session.sources[self.profile["RAW_TABLE"]] = self.frame(rows)
