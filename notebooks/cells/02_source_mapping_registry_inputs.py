@@ -65,31 +65,26 @@ def load_source_input(active_session, profile):
                     "DUPLICATE_SOURCE_ROWS_RESOLVED": count - distinct}, candidates
 
 
-def _read_mapping_header(mapping_file, encoding="cp1252"):
-    # Inspect the real header before pandas can mangle repeated column names.
-    # Use the same encoding and CSV quoting rules as the mapping-file read.
-    with open(mapping_file, encoding=encoding, newline="") as handle:
-        header = next((row for row in csv.reader(handle)
-                       if row and any(value.strip() for value in row)), None)
-    if header is None:
-        raise ValueError("Mapping CSV header is missing")
-    return header
-
-
 def load_mapping_rows(profile):
+    """Read the artifact once, preserving literal text and its real header."""
     encoding = profile.get("MAPPING_ENCODING", "cp1252")
-    header = [str(name).strip().upper()
-              for name in _read_mapping_header(profile["MAPPING_FILE"], encoding)]
-    if len(header) != len(set(header)):
-        raise ValueError("Duplicate normalized mapping columns")
-    frame = pd.read_csv(profile["MAPPING_FILE"], encoding=encoding, dtype=str,
-                        keep_default_na=False)
-    # Preserve literal labels such as N/A; only empty cells are absent metadata.
-    frame = frame.replace("", None)
+    with open(profile["MAPPING_FILE"], encoding=encoding, newline="") as handle:
+        reader = csv.reader(handle)
+        header = next((row for row in reader if row and any(v.strip() for v in row)), None)
+        if header is None:
+            raise ValueError("Mapping CSV header is missing")
+        header = [name.strip().upper() for name in header]
+        if len(header) != len(set(header)):
+            raise ValueError("Duplicate normalized mapping columns")
+        records = []
+        for row in reader:
+            if not row or not any(value.strip() for value in row):
+                continue
+            if len(row) > len(header):
+                raise ValueError("Mapping CSV row has more values than header columns")
+            records.append(dict(zip(header, row)))
+        frame = pd.DataFrame(records, columns=header, dtype=object).replace("", None)
     frame = frame.where(lambda data: data.notna(), None)
-    frame.columns = [str(name).strip().upper() for name in frame.columns]
-    if len(frame.columns) != len(set(frame.columns)):
-        raise ValueError("Duplicate normalized mapping columns")
     source_column = profile.get("MAPPING_SOURCE_COLUMN")
     if source_column:
         source_column = source_column.upper()

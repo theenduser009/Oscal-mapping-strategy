@@ -11,8 +11,11 @@ from decimal import Decimal
 # Cell 3 owns the shared compiled-plan boundary.
 try:
     _validate_compiled_metadata
+    _metadata_plan_snapshot
 except NameError:
     raise RuntimeError("Run the matching Cell 3 before Cell 4") from None
+if not (_metadata_plan_snapshot({}) or b"").startswith(b"csv-registry-v2\0"):
+    raise RuntimeError("Run the matching Cell 3 before Cell 4")
 
 SKIP_VALUE = object()
 
@@ -592,7 +595,7 @@ def _canonical_registry_rows(element_registry_dataframe, model_key, context=None
     # Cell 3 is the sole transport-normalization and registry-validation
     # boundary. Cell 4 only adapts that compiled contract to graph row names.
     del element_registry_dataframe, model_key
-    if not isinstance(context, dict) or "policy" not in context:
+    if not isinstance(context, dict) or not isinstance(context.get("compiled_plan"), dict):
         raise ValueError("Compiled metadata context is required for registry validation")
     normalized_rows = context.get("registry_rows")
     if normalized_rows is None:
@@ -672,7 +675,7 @@ def _metadata_transform(row, value, context):
     if transform_id == "skip":
         return SKIP_VALUE
     if not _has_value(value):
-        if _metadata_params(row).get("required") or params.get("required"):
+        if _metadata_params(row).get("required"):
             raise ValueError("Required mapped source value is absent")
         return SKIP_VALUE
     if transform_id == "direct":
@@ -719,13 +722,12 @@ def _metadata_transform(row, value, context):
         target = crosswalk.get(_stable_property_name(label))
         if target is None:
             raise ValueError("Label is absent from reviewed crosswalk")
-        member = params.get("target_member", "state")
-        payload = {member: target}
-        if target == params.get("other_value", "other"):
+        payload = {"state": target}
+        if target == "other":
             prefix = params.get("other_remarks_prefix")
             if not isinstance(prefix, str):
                 raise ValueError("Crosswalk fallback explanation is not configured")
-            payload[params.get("remarks_member", "remarks")] = prefix + label + params.get("other_remarks_suffix", ".")
+            payload["remarks"] = prefix + label + params.get("other_remarks_suffix", ".")
         return payload
     if transform_id == "reject-populated":
         raise ValueError("Populated source has no reviewed transformation")
@@ -773,26 +775,9 @@ def _metadata_parent_key(parameters, source_record_id):
 
 
 def _metadata_property_name(row, parameters):
-    name = _metadata_params(row).get("property_name")
-    if name is None and parameters.get("property_name_rule") == "source-field-slug":
-        name = _stable_property_name(row["SOURCE_FIELD_NAME"])
-    return _metadata_text(name, "Reviewed property name")
-
-
-def _metadata_spec(path, context, registry_row=None):
-    specification = context["compiled_plan"]["elements"].get(path)
-    if specification is not None:
-        return specification
-    if registry_row and not registry_row["is_collection"]:
-        fallback = context["compiled_plan"].get("default_element")
-        if fallback is not None:
-            scope = fallback.get("scope", "noncollection")
-            if scope not in {"noncollection", "singletons-without-collection-ancestors"}:
-                raise ValueError("Unknown default element scope")
-            if scope == "singletons-without-collection-ancestors" and "[]" in path:
-                return None
-            return fallback
-    return None
+    if parameters.get("property_name_rule") != "source-field-slug":
+        raise ValueError("Reviewed property name requires the registry naming policy")
+    return _metadata_text(_stable_property_name(row["SOURCE_FIELD_NAME"]), "Reviewed property name")
 
 
 def _metadata_registry_policy(rows, context):
@@ -801,10 +786,8 @@ def _metadata_registry_policy(rows, context):
     if not set(plan["elements"]).issubset(by_path):
         raise ValueError("Metadata plan names an unregistered element")
     for path, row in by_path.items():
-        specification = _metadata_spec(path, context, row)
+        specification = plan["elements"].get(path)
         if specification is None:
-            if context["_metadata_by_path"].get(path):
-                raise ValueError("Mapped element has no reviewed representation")
             continue
         parameters = specification.get("parameters") or {}
         expected = parameters.get("registry_contract") or {}
@@ -820,7 +803,6 @@ def _metadata_registry_policy(rows, context):
         if operator not in {"roles", "parties", "assignments"} and operator in METADATA_INSTANCE_RULES and (
                 row["instance_key_rule"] != METADATA_INSTANCE_RULES[operator]):
             raise ValueError(f"Collection requires {METADATA_INSTANCE_RULES[operator]} identity")
-    context["_metadata_registry"] = by_path
     for group in plan.get("reference_groups", ()):
         paths = [group.get(key) for key in ("roles_path", "parties_path", "assignments_path")]
         if any(path not in by_path for path in paths) or len(set(paths)) != 3:
@@ -858,7 +840,7 @@ def _metadata_prepare(source_df, context):
 
 def _metadata_parse(record, context):
     value = _to_python(record["CURATED_JSON"])
-    options = context["_metadata_options"]
+    options = context["compiled_plan"].get("options") or {}
     if value is None and options.get("null_source_as_empty", False):
         return {}
     if isinstance(value, str):
@@ -918,16 +900,16 @@ def _metadata_mapped_value(row, source_obj, context):
         raw_value = (context["config"].get(field) if source_kind == "CONFIG"
                      else resolve_json_path(source_obj, field))
         value = _metadata_transform(row, raw_value, context)
-        required = (_metadata_params(row).get("required")
-                    or (row.get("TRANSFORM_PARAMS") or {}).get("required"))
+        required = _metadata_params(row).get("required")
         if required and (value is SKIP_VALUE or not _has_value(value)):
             raise ValueError("Required mapped value is absent after conversion")
         _metadata_validate_value(value, row.get("VALUE_CONSTRAINTS") or {})
     except (TypeError, ValueError, ArithmeticError):
         if counts is not None:
             counts["invalid"] += 1
-        if counts is not None and context["policy"]["aggregate_invalid"]:
-            return SKIP_VALUE
+            options = context["compiled_plan"].get("options") or {}
+            if options.get("aggregate_invalid", True):
+                return SKIP_VALUE
         raise
     if counts is not None:
         counts["missing" if value is SKIP_VALUE else "emitted"] += 1
@@ -935,31 +917,14 @@ def _metadata_mapped_value(row, source_obj, context):
 
 
 def _metadata_party_uuid(group, source_record_id, identifier, context):
-    parts = group.get("party_uuid_parts")
-    if not isinstance(parts, (tuple, list)) or not parts:
-        raise ValueError("Reference UUID policy must be explicit")
     config = context["config"]
-    namespace = group.get("source_namespace")
-    if namespace is not None:
-        if not isinstance(namespace, dict) or set(namespace) != {"SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME", "MODEL_KEY"}:
-            raise ValueError("Legacy reference namespace must be explicit")
-        actual = {"SOURCE_SYSTEM_NAME": config["SOURCE_SYSTEM_NAME"],
-                  "SOURCE_TABLE_NAME": config["SOURCE_TABLE_NAME"], "MODEL_KEY": config["OSCAL_MODEL"]}
-        if namespace != actual:
-            parts = ["$identity_version", "$source_system", "$source_table", "$source_record", "$model", "party", "$reference_id"]
-    values = {"$source_system": config["SOURCE_SYSTEM_NAME"],
-              "$source_table": config["SOURCE_TABLE_NAME"],
-              "$source_record": source_record_id, "$source_record_id": source_record_id,
-              "$reference_id": identifier, "$model": config["OSCAL_MODEL"],
-              "$identity_version": config["IDENTITY_VERSION"]}
-    resolved = []
-    for part in parts:
-        if not isinstance(part, str) or not part:
-            raise ValueError("Invalid reference UUID token")
-        if part.startswith("$") and part not in values:
-            raise ValueError("Unknown reference UUID token")
-        resolved.append(values.get(part, part))
-    return _deterministic_uuid(*resolved)
+    namespace = {"SOURCE_SYSTEM_NAME": config["SOURCE_SYSTEM_NAME"],
+                 "SOURCE_TABLE_NAME": config["SOURCE_TABLE_NAME"], "MODEL_KEY": config["OSCAL_MODEL"]}
+    if group["source_namespace"] == namespace:
+        return _deterministic_uuid(config["SOURCE_SYSTEM_NAME"], source_record_id, "party", identifier)
+    return _deterministic_uuid(config["IDENTITY_VERSION"], config["SOURCE_SYSTEM_NAME"],
+                               config["SOURCE_TABLE_NAME"], source_record_id,
+                               config["OSCAL_MODEL"], "party", identifier)
 
 
 def _metadata_party_instances(path, source_obj, source_record_id, operator, parameters, context):
@@ -972,7 +937,7 @@ def _metadata_party_instances(path, source_obj, source_record_id, operator, para
     cache_key = (source_record_id, group["assignments_path"])
     if cache_key not in cache:
         roles, parties, assignments = [], [], {}
-        for row in context["_metadata_by_path"].get(group["assignments_path"], ()):
+        for row in context["mappings_by_path"].get(group["assignments_path"], ()):
             params = _metadata_params(row)
             value = _metadata_mapped_value(row, source_obj, context)
             if value is SKIP_VALUE:
@@ -1034,7 +999,7 @@ def _metadata_reference_instances(source_obj, source_record_id, rows, parameters
     for reference_id in sorted(references):
         params = references[reference_id]
         type_name = params["reference_type"]
-        payload = {parameters.get("type_member", "type"): type_name}
+        payload = {"type": type_name}
         if params.get("hydrate_lookup"):
             lookup = context.get("component_hydration_lookups", {}).get(type_name, {})
             if reference_id not in lookup:
@@ -1052,12 +1017,12 @@ def _metadata_reference_instances(source_obj, source_record_id, rows, parameters
 
 def _metadata_instances(source_obj, source_record_id, registry_row, context):
     path = registry_row["element_path"]
-    specification = _metadata_spec(path, context, registry_row)
+    specification = context["compiled_plan"]["elements"].get(path)
     if specification is None:
         return []
     operator = specification["operator"]
     parameters = specification.get("parameters") or {}
-    rows = context["_metadata_by_path"].get(path, ())
+    rows = context["mappings_by_path"].get(path, ())
     parent = _metadata_parent_key(parameters, source_record_id)
     if operator in {"roles", "parties", "assignments"}:
         return _metadata_party_instances(path, source_obj, source_record_id,
@@ -1065,28 +1030,10 @@ def _metadata_instances(source_obj, source_record_id, registry_row, context):
     if operator == "references":
         return _metadata_reference_instances(source_obj, source_record_id, rows, parameters, context)
     payload, instances, deferred_merges = {}, [], []
-    for controlled in parameters.get("controlled_fields", ()):
-        keys = [name for name in ("config_key", "source_field", "value") if name in controlled]
-        if len(keys) != 1:
-            raise ValueError("Controlled field needs exactly one reviewed value source")
-        source_kind = keys[0]
-        if source_kind == "config_key":
-            value = context["config"].get(controlled["config_key"])
-        elif source_kind == "source_field":
-            value = resolve_json_path(source_obj, controlled["source_field"])
-        else:
-            value = controlled["value"]
-        synthetic = {"TRANSFORM_ID": controlled.get("transform_id", "direct"),
-                     "TRANSFORM_PARAMS": controlled.get("transform_params", {}),
-                     "REPRESENTATION_PARAMS": {"required": controlled.get("required", True)}}
-        value = _metadata_transform(synthetic, value, context)
-        if value is not SKIP_VALUE:
-            _metadata_assign(payload, controlled["target"], value)
     for row in rows:
         value = _metadata_mapped_value(row, source_obj, context)
         if value is SKIP_VALUE:
             continue
-        params = _metadata_params(row)
         field = row["SOURCE_FIELD_NAME"]
         target = _metadata_target(row)
         if operator in {"properties", "observations"}:
@@ -1096,8 +1043,6 @@ def _metadata_instances(source_obj, source_record_id, registry_row, context):
                 raise ValueError("One scalar value is required per observation")
             for item in values:
                 property_payload = {"name": name, "value": item}
-                if "namespace" in params:
-                    property_payload["ns"] = _metadata_text(params["namespace"], "Property namespace")
                 instance_payload = ({"props": [property_payload]} if operator == "observations"
                                     else property_payload)
                 key = field if operator == "observations" else _source_value_instance_key(field, item)
@@ -1140,17 +1085,15 @@ def _metadata_instances(source_obj, source_record_id, registry_row, context):
                     "parent_instance_key": parent,
                 })
             continue
-        representation = str(row.get("REPRESENTATION") or "").lower()
-        if representation == "merge-object" or row["TRANSFORM_ID"] == "status-crosswalk":
+        if row["TRANSFORM_ID"] == "status-crosswalk":
             if not isinstance(value, dict):
                 raise ValueError("Object merge transform must return an object")
-            deferred_merges.append((row, value))
+            deferred_merges.append(value)
         else:
             _metadata_assign(payload, target, value)
-    for row, values in deferred_merges:
-        defaults = set((row.get("TRANSFORM_PARAMS") or {}).get("default_members", ("remarks",)))
+    for values in deferred_merges:
         for member, value in values.items():
-            _metadata_assign(payload, member, value, preserve_existing=member in defaults)
+            _metadata_assign(payload, member, value, preserve_existing=member == "remarks")
     required = parameters.get("required_members") or ()
     if any(not _has_value(_metadata_get(payload, member)) for member in required):
         if parameters.get("optional_assembly"):
@@ -1163,7 +1106,7 @@ def _metadata_instances(source_obj, source_record_id, registry_row, context):
 
 
 def _metadata_uuid(path, instance, source_system, source_table, source_id, model_key, context):
-    parameters = (_metadata_spec(path, context, context["_metadata_registry"].get(path)) or {}).get("parameters") or {}
+    parameters = context["compiled_plan"]["elements"].get(path, {}).get("parameters") or {}
     if parameters.get("uuid_from_instance"):
         instance_uuid = _canonical_uuid(instance["instance_key"], "Instance identity")
         if instance["payload"].get("uuid") != instance_uuid:
@@ -1174,14 +1117,9 @@ def _metadata_uuid(path, instance, source_system, source_table, source_id, model
 
 
 def _metadata_payload(path, payload, node_uuid, context):
-    parameters = (_metadata_spec(path, context, context["_metadata_registry"].get(path)) or {}).get("parameters") or {}
+    parameters = context["compiled_plan"]["elements"].get(path, {}).get("parameters") or {}
     if not isinstance(payload, dict):
         raise ValueError("Element payload must be an object")
-    if set(parameters.get("forbidden_members", ())) & set(payload):
-        raise ValueError("Payload contains an unapproved member")
-    for member in parameters.get("nonblank_text_members", ()):
-        if member in payload:
-            _metadata_text(payload[member], "Governed payload member")
     if parameters.get("include_uuid"):
         if payload.get("uuid") not in (None, "", node_uuid):
             raise ValueError("Payload UUID conflicts with node UUID")
@@ -1257,13 +1195,7 @@ def _prepare_model_context(context, model_key, source_system, source_table):
     grouped = {}
     for row in plan["mappings"]:
         grouped.setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
-    options = dict(plan.get("options") or {})
-    context["_metadata_options"] = options
-    context["_metadata_by_path"] = grouped
-    context["policy"] = {
-        "aggregate_invalid": bool(options.get("aggregate_invalid", True)),
-        "allow_nan": bool(options.get("allow_nan", False)),
-    }
+    context["mappings_by_path"] = grouped
     context["graph_report"] = {
         "SOURCE_RECORDS": 0, "INVALID_SOURCE_RECORDS": 0, "DUPLICATE_SOURCE_RECORDS": 0,
         "STATUS": "NOT_RUN", "OUTPUTS_PUBLISHED": False,

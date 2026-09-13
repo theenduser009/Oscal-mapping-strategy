@@ -68,16 +68,14 @@ class MetadataPreparationOnceTests(unittest.TestCase):
         self.assertEqual(original, models)
         self.assertTrue(all(row.reads == 1 for row in rows + [mapping]))
 
-    def test_explicit_programmatic_contract_preserves_default_element(self):
+    def test_model_settings_cannot_supply_a_default_element(self):
         model = base.model_contract()
         model["DEFAULT_ELEMENT"] = {"operator": "object", "parameters": {"materialize_empty": True}}
         before = copy.deepcopy(model)
-        context = self.ns["compile_mapping_contexts"](
-            {"source-one": [base.mapping()]}, base.registry_rows(), [base.profile()],
-            {base.MODEL: model})[0]
-        self.assertEqual("READY", context["routing_report"]["STATUS"])
-        self.assertEqual(before, context["model_contract"])
-        self.assertEqual(before["DEFAULT_ELEMENT"], context["compiled_plan"]["default_element"])
+        with self.assertRaises(ValueError):
+            self.ns["compile_mapping_contexts"](
+                {"source-one": [base.mapping()]}, base.registry_rows(), [base.profile()],
+                {base.MODEL: model})
         self.assertEqual(before, model)
 
     def test_mapping_activates_inferred_assignment_family_once(self):
@@ -117,7 +115,6 @@ class MetadataPreparationOnceTests(unittest.TestCase):
             "parties_path": base.SUMMARY + ".parties[]",
             "assignments_path": base.SUMMARY + ".assignments[]",
             "party_type": "person",
-            "party_uuid_parts": ["$source_system", "$source_record", "party", "$reference_id"],
             "source_namespace": {
                 "SOURCE_SYSTEM_NAME": "ARCHER",
                 "SOURCE_TABLE_NAME": "SYNTHETIC_SOURCE",

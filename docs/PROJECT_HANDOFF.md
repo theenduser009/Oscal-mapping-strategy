@@ -1,7 +1,54 @@
 # Project handoff - read this before resuming
 
 
-## Current action - review the smaller seven-cell notebook
+## Current action - review the tested seven-cell candidate
+
+All **749 local tests pass**, and **2,209 differential cases** match the supported
+CSV/registry behavior. An independent review found no blocking issue after the
+cached-plan upgrade fix. Generated split and combined cells are synchronized.
+
+The current notebook has **3,720 physical / 3,290 nonblank, noncomment lines**:
+139 / 126 fewer than the start of this task, and 542 physical lines below the
+earlier 4,262-line draft. Mapping is still 905 lines and transforms 1,207 lines.
+The larger lean-rewrite target is not met; do not inflate the size improvement.
+
+Removed duplicate runtime state and obsolete catalog/default/controlled-field
+execution. Those retired options now reject explicitly. Versioned cached plans
+and matching-cell checks prevent silent loss after an upgrade. Accepted SSP/CIA11/
+AR17 outputs and metadata-only future-model behavior remain covered; frozen
+historical engines and expected outputs are unchanged.
+
+**Next action:** review the tested candidate and decide the remaining simplification
+scope, then run live acceptance in the intended Snowflake environment before writes.
+See the [tested candidate checkpoint](checkpoints/2026-09-13-tested-seven-cell-candidate.md).
+No Snowflake connection was available and no database action occurred. Normal
+writes stay false, daily persistence/readback acceptance remains pending, and AR
+has no verified destination. Historical SSP/AR evidence and the unresolved old/new
+SSP row difference remain unchanged.
+
+## Previous action - tested cleanup across all seven cells
+
+The owner authorized continued simplification across all seven cells while away
+and asked for full testing. The current draft removes duplicate runtime state,
+reads each mapping CSV once, builds registry reference groups directly, shares
+loader result setup and simplifies the runner. All **739 local tests pass**;
+**2,209 differential mapping cases** match the prior behavior. Generated cells
+are synchronized. A pinned GitHub workflow checks the same suite and packaging.
+
+This pass is modest: **3,859 to 3,817 total lines** (42 fewer), with **3,383
+nonblank/noncomment lines**. Mapping remains 939 lines and transformations
+1,270 lines. The owner's larger readability/size target is not yet met; do not
+present this cleanup as the requested lean rewrite or production certification.
+
+**Next action:** continue the larger simplification from the tested draft,
+then perform live Snowflake verification before enabling writes. See the
+[verification checkpoint](checkpoints/2026-09-12-seven-cell-cleanup-and-testing.md).
+No live Snowflake connection is available here and no database action occurred.
+Normal writes remain false, the daily writer's live acceptance is pending,
+and the Assessment Results destination remains unverified. Historical accepted
+SSP/AR results and the unresolved old/new SSP row difference are unchanged.
+
+## Previous action - review the smaller seven-cell notebook
 
 The owner clarified that the target is a substantially easier, smaller notebook
 and supplied the complete original: **860 physical lines / 669 nonblank,

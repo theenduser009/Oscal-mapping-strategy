@@ -264,7 +264,7 @@ def _metadata_target(row):
 def _metadata_plan_snapshot(plan):
     # Compare exact types, including tuple/list and bool/int; never deserialize.
     try:
-        return pickle.dumps(plan, protocol=4)
+        return b"csv-registry-v2\0" + pickle.dumps(plan, protocol=4)
     except (TypeError, AttributeError, pickle.PickleError):
         return None  # Uncacheable provenance still uses the full validator.
 
@@ -277,17 +277,21 @@ def _validate_compiled_metadata(plan, root_path, constraints_compiled=False):
         raise ValueError("Compiled metadata element and mapping plans are required")
     if root_path not in plan["elements"]:
         raise ValueError("Compiled plan must describe the configured root")
-    specifications = list(plan["elements"].values())
     if plan.get("default_element") is not None:
-        specifications.append(plan["default_element"])
-    for specification in specifications:
+        raise ValueError("Retired runtime metadata; use maintained CSV and registry columns")
+    for specification in plan["elements"].values():
         if not isinstance(specification, dict) or specification.get("operator") not in METADATA_OPERATORS:
             raise ValueError("Unsupported reviewed element representation")
         if not isinstance(specification.get("parameters", {}), dict):
             raise ValueError("Element parameters must be an object")
-        for field in specification.get("parameters", {}).get("controlled_fields", ()):
-            if field.get("transform_id", "direct") not in METADATA_TRANSFORM_IDS:
-                raise ValueError("Unknown controlled-field transform")
+        if {"controlled_fields", "type_member", "forbidden_members", "nonblank_text_members"} & specification.get("parameters", {}).keys():
+            raise ValueError("Retired runtime metadata; use maintained CSV and registry columns")
+    for group in plan.get("reference_groups", ()):
+        namespace = group.get("source_namespace")
+        if ("party_uuid_parts" in group or not isinstance(namespace, dict)
+                or set(namespace) != {"SOURCE_SYSTEM_NAME", "SOURCE_TABLE_NAME", "MODEL_KEY"}
+                or any(not isinstance(value, str) or not value.strip() for value in namespace.values())):
+            raise ValueError("Retired runtime metadata; use maintained CSV and registry columns")
     seen = set()
     for row in plan["mappings"]:
         if row.get("TRANSFORM_ID") not in METADATA_TRANSFORM_IDS:
@@ -302,10 +306,13 @@ def _validate_compiled_metadata(plan, root_path, constraints_compiled=False):
         if path not in plan["elements"]:
             raise ValueError("Mapped element lacks a reviewed representation")
         if str(row.get("REPRESENTATION") or "").lower() not in {
-                "", "scalar", "merge-object", plan["elements"][path]["operator"]}:
+                "", "scalar", plan["elements"][path]["operator"]}:
             raise ValueError("Unknown metadata mapping representation")
         if not isinstance(row.get("TRANSFORM_PARAMS", {}), dict):
             raise ValueError("Transform parameters must be an object")
+        if ({"target_member", "other_value", "remarks_member", "default_members", "required"} & row.get("TRANSFORM_PARAMS", {}).keys()
+                or {"namespace", "property_name"} & _metadata_params(row).keys()):
+            raise ValueError("Retired runtime metadata; use maintained CSV and registry columns")
         if not isinstance(row.get("VALUE_CONSTRAINTS", {}), dict):
             raise ValueError("Compiled value constraints must be an object")
         if not constraints_compiled:
@@ -317,50 +324,18 @@ def _validate_compiled_metadata(plan, root_path, constraints_compiled=False):
 
 
 def compile_metadata_plan(context):
-    """Compile approved metadata to inert operations; never evaluate Notes as code."""
+    """Combine the registry's decoded operators with approved flat CSV mappings."""
     contract = context["model_contract"]
-    definitions = _metadata_object(contract.get("ELEMENTS"), "ELEMENTS")
-    default = _metadata_object(contract.get("DEFAULT_ELEMENT"), "DEFAULT_ELEMENT")
-    default_scope = default.get("scope", "noncollection")
-    if default_scope not in {"noncollection", "singletons-without-collection-ancestors"}:
-        raise ValueError("Unknown default element scope")
-    elements = {}
-    mapped_paths = {row["OWNER_ELEMENT_PATH"] for row in context["mapping_rows"]}
-    for registry in context["registry_rows"]:
-        path = _registry_path(registry)
-        definition = definitions.get(path)
-        collection = str(registry.get("IS_COLLECTION", False)).upper() in {"TRUE", "T", "1", "YES", "Y"}
-        if definition is None:
-            if (not collection and default and
-                    (default_scope != "singletons-without-collection-ancestors" or "[]" not in path)):
-                definition = default
-            elif path in mapped_paths:
-                raise ValueError("Mapped registry path has no metadata-defined operator")
-            else:
-                continue
-        definition = _metadata_object(definition, "Element definition")
-        if definition.get("operator") not in METADATA_OPERATORS:
-            raise ValueError("Unknown reusable element operator")
-        definition["parameters"] = _metadata_object(definition.get("parameters"), "Element parameters")
-        elements[path] = definition
-    if contract["ROOT_PATH"] not in elements:
-        raise ValueError("Registry root has no metadata-defined operator")
+    elements = copy.deepcopy(contract["ELEMENTS"])
     mappings = [_compile_flat_mapping(row, elements) for row in context["mapping_rows"]]
     rule_ids = [row["RULE_ID"] for row in mappings]
     if len(rule_ids) != len(set(rule_ids)):
         raise ValueError("Duplicate flat mapping RULE_ID within source/model")
-    reference_groups = []
-    for group in contract.get("REFERENCE_GROUPS", []):
-        required = {group[k] for k in ("roles_path", "parties_path", "assignments_path")}
-        if required.issubset(elements):
-            reference_groups.append(copy.deepcopy(group))
-        elif required & mapped_paths:
-            raise ValueError("Mapped reference family requires every governed registry path")
     plan = {"version": 1, "elements": elements, "mappings": mappings,
-            "reference_groups": reference_groups,
+            "reference_groups": copy.deepcopy(contract["REFERENCE_GROUPS"]),
             "options": copy.deepcopy(contract.get("RUNTIME_OPTIONS", {})),
             "report": copy.deepcopy(contract.get("REPORT", {})),
-            "default_element": copy.deepcopy(default) if default else None}
+            "default_element": None}
     _validate_compiled_metadata(plan, contract["ROOT_PATH"], constraints_compiled=True)
     context["_compiled_plan_snapshot"] = _metadata_plan_snapshot(plan)
     return plan
@@ -449,8 +424,8 @@ def _registry_model_rows(registry, model):
     if not paths or any(not path for path in paths) or len(paths) != len(set(paths)):
         raise ValueError("Enabled model requires unique active registry paths")
     by_path = dict(zip(paths, rows))
-    roots = [path for path, row in by_path.items()
-             if _metadata_column_text(row, "PARENT_NODE_PATH") is None]
+    parents = {path: _metadata_column_text(row, "PARENT_NODE_PATH") for path, row in by_path.items()}
+    roots = [path for path, parent in parents.items() if parent is None]
     if len(roots) != 1 or "." in roots[0]:
         raise ValueError("Enabled model requires exactly one registry root")
     root = roots[0]
@@ -458,7 +433,7 @@ def _registry_model_rows(registry, model):
         collection = _registry_meta_bool(row, "IS_COLLECTION")
         if collection != path.endswith("[]"):
             raise ValueError("Registry collection flag conflicts with path")
-        parent = _metadata_column_text(row, "PARENT_NODE_PATH")
+        parent = parents[path]
         if path != root and (parent not in by_path or not path.startswith(parent + ".")):
             raise ValueError("Registry child requires its active path ancestor")
     return by_path, root
@@ -474,32 +449,18 @@ def _executable_registry_paths(mapping_rows, source_profiles, model, registry_pa
                 status = _flat_mapping_status(row)
             except ValueError:
                 continue  # The routing report retains the invalid row as blocked.
-            executable = status in {"APPROVED", "BLOCKED_IF_POPULATED"}
-            executable = executable or (status is None and
-                                         _model_token(row.get("APPROVAL_STATUS")) == "approved")
-            if not executable:
+            if status not in {"APPROVED", "BLOCKED_IF_POPULATED"}:
                 continue
             declared_source = row.get("SOURCE_KEY")
             if declared_source and declared_source != profile["SOURCE_KEY"]:
                 continue
-            path = str((row.get("RUNTIME_TARGET_PATH") if status else
-                        row.get("OSCAL_ELEMENT_PATH")) or "").strip()
+            path = str(row.get("RUNTIME_TARGET_PATH") or "").strip()
             if not (path == root or path.startswith(root + ".")):
                 continue
             owner = _owner_for_path(path, registry_paths)
             if owner:
                 owners.add(owner)
     return owners
-
-
-def _with_registry_ancestors(paths, by_path):
-    result = set(paths)
-    for path in tuple(paths):
-        current = path
-        while current is not None:
-            result.add(current)
-            current = _metadata_column_text(by_path[current], "PARENT_NODE_PATH")
-    return result
 
 
 def _decode_registry_element(row, by_path):
@@ -576,16 +537,14 @@ def _decode_registry_model_contracts(registry, source_profiles, model_contracts,
     """Resolve model contracts from already normalized metadata rows."""
     result = copy.deepcopy(model_contracts)
     enabled = {model for profile in source_profiles for model in profile.get("MODEL_KEYS", ())}
-    forbidden = {"ROOT_PATH", "ELEMENT_PATHS", "REFERENCE_GROUPS", "DEFAULT_ELEMENT",
-                 "REQUIRED_RULE_IDS", "MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS"}
+    forbidden = {"ROOT_PATH", "ELEMENTS", "ELEMENT_PATHS", "REFERENCE_GROUPS", "DEFAULT_ELEMENT",
+                 "REQUIRED_RULE_IDS", "MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS", "SELECTED_FIELDS"}
     for model in sorted(enabled):
         if model not in result:
             raise ValueError("Source route names an unconfigured model")
         contract = result[model]
-        # Explicit in-memory contracts remain a test/programmatic API; deployed
-        # contracts have no structural definitions and use the live registry.
-        if isinstance(contract.get("ELEMENTS"), dict) and contract.get("ROOT_PATH"):
-            continue
+        if {"MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS", "SELECTED_FIELDS"} & contract.keys():
+            raise ValueError("Field rules belong in the mapping artifact, not model settings")
         if forbidden & contract.keys() or contract.get("MODEL_KEY") != model or \
                 contract.get("POLICY") != "metadata-v1":
             raise ValueError("Lean registry model identity is invalid")
@@ -596,60 +555,57 @@ def _decode_registry_model_contracts(registry, source_profiles, model_contracts,
                     if _metadata_column_text(row, "OPERATOR") is not None}
         included = mapped | explicit | {root}
 
-        # Assignment mappings materialize the registered role and party
-        # siblings even though those nodes are not direct CSV payload owners.
-        families = {}
-        for path in tuple(included):
+        # Resolve each assignment family once and add its role/party siblings.
+        groups, linked = [], set()
+        for path in sorted(included):
             if _registry_operator(by_path[path]) != "assignments":
                 continue
             parent = _metadata_column_text(by_path[path], "PARENT_NODE_PATH")
-            siblings = []
+            siblings = {"roles": [], "parties": []}
             for candidate, row in by_path.items():
                 if _metadata_column_text(row, "PARENT_NODE_PATH") != parent:
                     continue
                 try:
-                    sibling_operator = _registry_operator(row)
+                    operator = _registry_operator(row)
                 except ValueError:
                     if _metadata_column_text(row, "OPERATOR") is not None:
                         raise
                     continue
-                if sibling_operator in {"roles", "parties"}:
-                    siblings.append((candidate, sibling_operator))
-            roles = [candidate for candidate, operator in siblings if operator == "roles"]
-            parties = [candidate for candidate, operator in siblings if operator == "parties"]
-            if len(roles) != 1 or len(parties) != 1:
+                if operator in siblings:
+                    siblings[operator].append(candidate)
+            if any(len(paths) != 1 for paths in siblings.values()):
                 raise ValueError("Assignment mapping requires one role and one party registry sibling")
-            families[path] = (roles[0], parties[0])
-            included.update((roles[0], parties[0]))
-        included = _with_registry_ancestors(included, by_path)
-
-        elements = {path: _decode_registry_element(by_path[path], by_path)
-                    for path in sorted(included)}
+            roles_path, parties_path = siblings["roles"][0], siblings["parties"][0]
+            group_paths = {path, roles_path, parties_path}
+            if group_paths & linked:
+                raise ValueError("Reference family registry paths must be distinct")
+            groups.append({
+                "roles_path": roles_path, "parties_path": parties_path,
+                "assignments_path": path, "party_type": "person",
+            })
+            linked.update(group_paths)
+        included.update(linked)
+        # Ancestors already visited through another mapped path need no repeat walk.
+        for path in tuple(included):
+            parent = _metadata_column_text(by_path[path], "PARENT_NODE_PATH")
+            while parent is not None and parent not in included:
+                included.add(parent)
+                parent = _metadata_column_text(by_path[parent], "PARENT_NODE_PATH")
+        elements = {path: _decode_registry_element(by_path[path], by_path) for path in sorted(included)}
         if elements[root]["operator"] != "object":
             raise ValueError("Registry root requires an object operator")
-
-        groups, linked = [], set()
-        if families:
+        if any(spec["operator"] in {"roles", "parties"} and path not in linked
+               for path, spec in elements.items()):
+            raise ValueError("Linked identity operator lacks an assignment family")
+        if groups:
             namespaces = {(profile["SOURCE_SYSTEM_NAME"], profile["SOURCE_TABLE_NAME"])
                           for profile in source_profiles if model in profile.get("MODEL_KEYS", ())}
             if len(namespaces) != 1:
                 raise ValueError("Reference family requires one source namespace")
             source_system, source_table = next(iter(namespaces))
-        for path, (roles_path, parties_path) in sorted(families.items()):
-            group_paths = {path, roles_path, parties_path}
-            if len(group_paths) != 3 or group_paths & linked:
-                raise ValueError("Reference family registry paths must be distinct")
-            groups.append({
-                "roles_path": roles_path, "parties_path": parties_path,
-                "assignments_path": path, "party_type": "person",
-                "party_uuid_parts": ["$source_system", "$source_record", "party", "$reference_id"],
-                "source_namespace": {"SOURCE_SYSTEM_NAME": source_system,
-                                     "SOURCE_TABLE_NAME": source_table, "MODEL_KEY": model},
-            })
-            linked.update(group_paths)
-        if any(spec["operator"] in {"roles", "parties"} and path not in linked
-               for path, spec in elements.items()):
-            raise ValueError("Linked identity operator lacks an assignment family")
+            for group in groups:
+                group["source_namespace"] = {"SOURCE_SYSTEM_NAME": source_system,
+                                             "SOURCE_TABLE_NAME": source_table, "MODEL_KEY": model}
 
         report = _metadata_object(contract.get("REPORT"), "REPORT")
         if "TARGET_PATH" in report:
@@ -841,22 +797,20 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     classification, reason = "DEFERRED_ROWS", "PLACEHOLDER_MAPPING"
                 elif path_model and path_model != model or not path and labelled and labelled != model:
                     classification = "EXCLUDED_ROWS"
-                elif flat_status is None and not row.get("APPROVAL_STATUS") and any(
+                elif flat_status is None and row.get("APPROVAL_STATUS"):
+                    classification, reason = "BLOCKED_ROWS", "RETIRED_MAPPING_METADATA"
+                elif flat_status is None and any(
                         row.get(key) not in (None, "") for key in (
                             "TRANSFORM_ID", "TRANSFORM_PARAMS", "REPRESENTATION",
                             "REPRESENTATION_PARAMS", "VALUE_CONSTRAINTS")):
                     classification, reason = "BLOCKED_ROWS", "UNAPPROVED_EXECUTABLE_METADATA"
-                elif flat_status is None and contract.get("POLICY") == "metadata-v1" and not row.get("APPROVAL_STATUS"):
+                elif flat_status is None:
                     classification = "DEFERRED_ROWS" if contract.get("UNREVIEWED_ROWS") == "DEFER" else "BLOCKED_ROWS"
                     reason = "MISSING_APPROVED_METADATA"
-                elif flat_status is None and (_model_token(row.get("STATUS")) in {"deferred", "blocked", "tbd", "moreinformationneeded", "notmapped"} or _model_token(row.get("MAPPING_TYPE")) == "tbd"):
-                    classification, reason = "DEFERRED_ROWS", "UNAPPROVED_MAPPING"
                 elif path and path_model is None:
                     classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
                 elif not field:
                     classification, reason = "BLOCKED_ROWS", "MISSING_SOURCE_FIELD"
-                elif contract.get("SELECTED_FIELDS") and field not in contract["SELECTED_FIELDS"]:
-                    classification = "EXCLUDED_ROWS"
                 elif not path:
                     classification = "BLOCKED_ROWS" if flat_status else "DEFERRED_ROWS"
                     reason = "MISSING_TARGET_PATH"
@@ -908,7 +862,7 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                              "mapping_rows": selected,
                              "model_contract": contract, "registry_rows": model_registry,
                              "routing_report": report}
-            if contract.get("POLICY") == "metadata-v1" and report["STATUS"] == "READY":
+            if report["STATUS"] == "READY":
                 try:
                     context["compiled_plan"] = compile_metadata_plan(context)
                     context["mapping_rows"] = context["compiled_plan"]["mappings"]

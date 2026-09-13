@@ -189,8 +189,6 @@ def raw(identity, value, **extra):
 class MultiModelInputs(unittest.TestCase):
     def setUp(self):
         self.ns = namespace()
-        self.real_header_reader = self.ns["_read_mapping_header"]
-        self.ns["_read_mapping_header"] = lambda filename, encoding="cp1252": ["SOURCE_FIELD_NAME"]
 
     def test_source_is_cached_once_before_counts_and_snapshot_is_retained(self):
         session = Session({"RAW_ONE": [raw("a", 1), raw("b", 2)]})
@@ -265,27 +263,19 @@ class MultiModelInputs(unittest.TestCase):
         self.assertEqual({}, dict(session.cache_calls))
 
     def test_mapping_source_column_selects_only_explicit_binding(self):
-        original = pd.DataFrame([
-            {"Source Table": "SOURCE_ONE", "Archer Field Name": "ONE"},
-            {"Source Table": "SOURCE_TWO", "Archer Field Name": "TWO"},
-            {"Source Table": None, "Archer Field Name": "UNBOUND"},
-        ])
-        before = original.copy(deep=True)
+        text = "Source Table,Archer Field Name\nSOURCE_ONE,ONE\nSOURCE_TWO,TWO\n,UNBOUND\n"
         selected = profile()
         selected["MAPPING_SOURCE_COLUMN"] = "Source Table"
-        with patch.object(pd, "read_csv", return_value=original.copy(deep=True)) as read:
+        with patch("builtins.open", mock_open(read_data=text)) as opened:
             frame = self.ns["load_mapping_rows"](selected)
         self.assertEqual(["ONE"], frame["ARCHER FIELD NAME"].tolist())
-        read.assert_called_once_with("one.csv", encoding="cp1252", dtype=str,
-                                     keep_default_na=False)
-        pd.testing.assert_frame_equal(before, original)
+        opened.assert_called_once_with("one.csv", encoding="cp1252", newline="")
 
     def test_live_flat_mapping_file_keeps_utf8_notes_and_source_binding(self):
         from test_model_selection import cell_namespace
         selected = copy.deepcopy(cell_namespace()["SOURCE_PROFILES"][0])
         selected["MAPPING_FILE"] = str(ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv")
-        with patch.dict(self.ns, {"_read_mapping_header": self.real_header_reader}):
-            actual = self.ns["load_mapping_rows"](selected)
+        actual = self.ns["load_mapping_rows"](selected)
         with open(selected["MAPPING_FILE"], encoding="utf-8", newline="") as handle:
             expected = list(csv.DictReader(handle))
         self.assertEqual(len(actual), len(expected))
@@ -294,30 +284,31 @@ class MultiModelInputs(unittest.TestCase):
         self.assertEqual(set(actual["SOURCE_KEY"]), {"source-one"})
 
     def test_csv_literal_na_and_unicode_are_not_lost(self):
-        text = 'SOURCE_FIELD_NAME,NOTES\nN/A,"Keep nulls - do not drop"\n'
+        text = ('SOURCE_FIELD_NAME,NOTES\r\nN/A,"Café — first line, quoted comma\nsecond line"\r\n'
+                'null,\r\nNaN,""\r\n0,false\r\n')
         selected = profile()
         selected["MAPPING_ENCODING"] = "utf-8-sig"
-        read_csv = pd.read_csv
-        with patch.object(pd, "read_csv", side_effect=lambda filename, **kwargs: read_csv(io.StringIO(text), **kwargs)):
+        with patch("builtins.open", mock_open(read_data=text)) as opened:
             actual = self.ns["load_mapping_rows"](selected)
-        self.assertEqual(actual.iloc[0]["SOURCE_FIELD_NAME"], "N/A")
-        self.assertEqual(actual.iloc[0]["NOTES"], "Keep nulls - do not drop")
+        opened.assert_called_once_with("one.csv", encoding="utf-8-sig", newline="")
+        self.assertEqual(actual["SOURCE_FIELD_NAME"].tolist(), ["N/A", "null", "NaN", "0"])
+        self.assertEqual(actual["NOTES"].tolist(),
+                         ["Café — first line, quoted comma\nsecond line", None, None, "false"])
 
     def test_explicit_mapping_source_value_does_not_default_to_another_source(self):
         selected = profile()
         selected.update(MAPPING_SOURCE_COLUMN="BINDING", MAPPING_SOURCE_VALUE="approved-one")
-        data = pd.DataFrame([{"BINDING": " approved-one ", "FIELD": "A"},
-                             {"BINDING": "SOURCE_ONE", "FIELD": "B"}])
-        with patch.object(pd, "read_csv", return_value=data):
+        text = "BINDING,FIELD\n approved-one ,A\nSOURCE_ONE,B\n"
+        with patch("builtins.open", mock_open(read_data=text)):
             self.assertEqual(["A"], self.ns["load_mapping_rows"](selected)["FIELD"].tolist())
 
     def test_mapping_header_collision_or_missing_binding_fails(self):
         cases = [
-            (pd.DataFrame([["a", "b"]], columns=["FIELD", " field "]), profile()),
-            (pd.DataFrame([{"FIELD": "A"}]), {**profile(), "MAPPING_SOURCE_COLUMN": "MISSING"}),
+            ("FIELD, field \na,b\n", profile()),
+            ("FIELD\nA\n", {**profile(), "MAPPING_SOURCE_COLUMN": "MISSING"}),
         ]
-        for data, selected in cases:
-            with self.subTest(columns=list(data.columns)), patch.object(pd, "read_csv", return_value=data):
+        for text, selected in cases:
+            with self.subTest(header=text.splitlines()[0]), patch("builtins.open", mock_open(read_data=text)):
                 with self.assertRaises(ValueError):
                     self.ns["load_mapping_rows"](selected)
 
@@ -325,12 +316,10 @@ class MultiModelInputs(unittest.TestCase):
         for text in ("FIELD,FIELD\none,two\n", '"Field"," FIELD "\none,two\n'):
             with self.subTest(header=text.splitlines()[0]):
                 opened = mock_open(read_data=text)
-                with patch.dict(self.ns, {"_read_mapping_header": self.real_header_reader}), \
-                        patch("builtins.open", opened), patch.object(pd, "read_csv") as read:
+                with patch("builtins.open", opened):
                     with self.assertRaisesRegex(ValueError, "Duplicate normalized mapping columns"):
                         self.ns["load_mapping_rows"](profile())
                 opened.assert_called_once_with("one.csv", encoding="cp1252", newline="")
-                read.assert_not_called()
 
     def test_component_lookup_is_selected_by_contract_group_not_model_name(self):
         tables = {"VALUES": [{"SELECT_VALUE_ID": 1, "SELECT_VALUE_NAME": "High"}],
@@ -344,6 +333,18 @@ class MultiModelInputs(unittest.TestCase):
         self.assertEqual({"1": "High"}, lookups["fips_values"])
         self.assertIn("software", lookups["component_sources"])
         self.assertEqual(1, session.cache_calls["LOOKUP_ONE"])
+
+    def test_csv_blank_lines_and_missing_trailing_cells_preserve_column_alignment(self):
+        text = 'FIELD,NOTES,STATUS\n  \nA\nB,"two, words",APPROVED\n'
+        with patch("builtins.open", mock_open(read_data=text)):
+            frame = self.ns["load_mapping_rows"](profile())
+        self.assertEqual(frame.to_dict("records"), [
+            {"FIELD": "A", "NOTES": None, "STATUS": None},
+            {"FIELD": "B", "NOTES": "two, words", "STATUS": "APPROVED"},
+        ])
+        with patch("builtins.open", mock_open(read_data='A,B\nx,y,z\n')):
+            with self.assertRaisesRegex(ValueError, "more values than header"):
+                self.ns["load_mapping_rows"](profile())
 
     def test_ssp_name_alone_does_not_trigger_component_lookup(self):
         session = Session({"VALUES": [{"SELECT_VALUE_ID": 1, "SELECT_VALUE_NAME": "custom"}]})
@@ -367,9 +368,10 @@ class MultiModelInputs(unittest.TestCase):
         start = next(index for index, node in enumerate(tree.body)
                      if isinstance(node, ast.Assign) and any(
                          isinstance(target, ast.Name) and target.id == "SOURCE_INPUTS" for target in node.targets))
-        artifact = pd.DataFrame([{"SOURCE_FIELD_NAME": "SYNTHETIC_FIELD"}])
-        with patch.object(pd, "read_csv", side_effect=lambda *a, **k: artifact.copy(deep=True)), redirect_stdout(io.StringIO()):
+        artifact = "SOURCE_FIELD_NAME\nSYNTHETIC_FIELD\n"
+        with patch("builtins.open", mock_open(read_data=artifact)) as opened, redirect_stdout(io.StringIO()):
             exec(compile(ast.Module(body=tree.body[start:], type_ignores=[]), str(CELL), "exec"), ns)
+        self.assertEqual(["one.csv", "two.csv"], [call.args[0] for call in opened.call_args_list])
         self.assertEqual({"one", "two"}, set(ns["SOURCE_INPUTS"]))
         self.assertEqual({"RAW_ONE": 1, "RAW_TWO": 1}, dict(session.cache_calls))
         for selected in profiles:

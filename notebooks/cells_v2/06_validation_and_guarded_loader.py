@@ -606,26 +606,21 @@ def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
     try:
         context = _load_prepare(session, canonical_nodes_df, canonical_edges_df, config)
         candidate = context["candidate"]
-        if context.get("storage_verified") is False:
+        nodes, edges = int(candidate["NODES"]), int(candidate["EDGES"])
+        verified = context.get("storage_verified") is not False
+        result.update(nodes=nodes, edges=edges, source_records=context["records"],
+                      validation_passed=True, storage_verified=verified,
+                      pre_write_validation_passed=verified,
+                      dim_load_rows=nodes if verified else 0, fact_load_rows=edges if verified else 0)
+        if not verified:
             result.update(status="MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING",
-                          validation_passed=True, pre_write_validation_passed=False, storage_verified=False,
-                          nodes=int(candidate["NODES"]), edges=int(candidate["EDGES"]),
-                          source_records=context["records"], graph_integrity=candidate,
-                          dim_load_rows=0, fact_load_rows=0)
+                          graph_integrity=candidate)
             return result
         c = _load_runtime_contract(context.get("contract"))
         dim_table, fact_table, dk, fk = _load_targets(c)
-        result.update(nodes=int(candidate["NODES"]), edges=int(candidate["EDGES"]),
-                      source_records=context["records"], validation_passed=True,
-                      pre_write_validation_passed=True, storage_verified=True, dim_load_rows=int(candidate["NODES"]),
-                      fact_load_rows=int(candidate["EDGES"]), scope=context["scope"],
+        result.update(scope=context["scope"],
                       expected_changes={"DIM": context["changes"][0], "FACT": context["changes"][1]})
-        print("Graph nodes:", result["nodes"])
-        print("Graph edges:", result["edges"])
-        print("Duplicate node keys:", candidate["DIM_DUPLICATE_KEYS"])
-        print("Duplicate edge keys:", candidate["FACT_DUPLICATE_KEYS"])
-        print("Dangling source edges:", candidate["DANGLING_SOURCE_KEYS"])
-        print("Dangling target edges:", candidate["DANGLING_TARGET_KEYS"])
+        print("Validated graph:", nodes, "nodes,", edges, "edges")
         print("PRE-WRITE VALIDATION PASSED")
         if not config["EXECUTE_WRITES"]:
             result["status"] = "DAILY_" + c["MODEL_KEY"] + "_PREVIEW_PASSED_NO_TARGET_DML"

@@ -46,7 +46,8 @@ def build_oscal_graph(
     # This loop owns only graph mechanics and never swaps notebook globals.
     del canonical_mapping_df
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    config, policy = context["config"], context["policy"]
+    config = context["config"]
+    options = context["compiled_plan"].get("options") or {}
     report = context["graph_report"]
     registry_rows = _canonical_registry_rows(element_registry_df, model_key, context)
     root_paths = [row["element_path"] for row in registry_rows if not row["parent_path"]]
@@ -63,12 +64,12 @@ def build_oscal_graph(
         source_record_id = record["SOURCE_RECORD_ID"]
         if not isinstance(source_record_id, str) or not source_record_id.strip() or source_record_id != source_record_id.strip():
             report["INVALID_SOURCE_RECORDS"] += 1
-            if policy["aggregate_invalid"]:
+            if options.get("aggregate_invalid", True):
                 continue
             raise ValueError("Source record identity must be a nonblank canonical string")
         if source_record_id in seen_records:
             report["DUPLICATE_SOURCE_RECORDS"] += 1
-            if policy["aggregate_invalid"]:
+            if options.get("aggregate_invalid", True):
                 continue
             raise ValueError("Duplicate source record identity")
         seen_records.add(source_record_id)
@@ -76,7 +77,7 @@ def build_oscal_graph(
             source_obj = _metadata_parse(record, context)
         except (TypeError, ValueError, ArithmeticError):
             report["INVALID_SOURCE_RECORDS"] += 1
-            if policy["aggregate_invalid"]:
+            if options.get("aggregate_invalid", True):
                 continue
             raise
         nodes_by_path = {}
@@ -107,7 +108,7 @@ def build_oscal_graph(
                     "PARENT_INSTANCE_KEY": instance.get("parent_instance_key"),
                     "OSCAL_UUID": oscal_uuid,
                     "ELEMENT_TYPE": registry_row.get("element_type") or _element_type(path),
-                    "METADATA_JSON": json.dumps(payload, sort_keys=True, default=str, allow_nan=policy["allow_nan"]),
+                    "METADATA_JSON": json.dumps(payload, sort_keys=True, default=str, allow_nan=options.get("allow_nan", False)),
                     "SOURCE_SYSTEM_NAME": source_system, "SOURCE_TABLE_NAME": source_table,
                     "SOURCE_RECORD_ID": source_record_id, "DW_PIPELINE_RUN_ID": config["RUN_ID"],
                     "DW_LOAD_TIMESTAMP": load_timestamp, "DW_LOAD_TIMESTAMP_TZ": load_timestamp,

@@ -1,13 +1,7 @@
 # %% Cell 1 - Initialization and configuration
 
 from snowflake.snowpark.context import get_active_session
-from snowflake.snowpark.functions import (
-    col,
-    lit,
-    row_number,
-    sha2,
-    to_json,
-)
+from snowflake.snowpark.functions import col, lit, row_number, sha2, to_json
 from snowflake.snowpark.window import Window
 
 import copy
@@ -65,10 +59,7 @@ SOURCE_FILES = [
                 "description_field": "DESCRIPTION",
             },
         },
-        "MODEL_BINDINGS": [
-            "SSP",
-            "ASSESSMENT_RESULTS",
-        ],
+        "MODEL_BINDINGS": ["SSP", "ASSESSMENT_RESULTS"],
         "MAPPING_SOURCE_VALUE": "source-one",
         "MAPPING_ENCODING": "utf-8-sig",
     },
@@ -93,9 +84,7 @@ MODEL_CONTRACTS = {
         "MODEL_KEY": "SSP",
         "POLICY": "metadata-v1",
         "UNREVIEWED_ROWS": "DEFER",
-        "LOOKUP_GROUPS": [
-            "components",
-        ],
+        "LOOKUP_GROUPS": ["components"],
         "MODEL_ALIASES": [
             "SSP",
             "System Security Plan",
@@ -174,7 +163,7 @@ for _model_key, _contract in MODEL_CONTRACTS.items():
         raise ValueError("Active models require the shared metadata policy")
     if {"REGISTRY_METADATA_VERSION", "ROOT_PATH", "ELEMENTS", "DEFAULT_ELEMENT", "REFERENCE_GROUPS",
             "REQUIRED_RULE_IDS", "ELEMENT_PATHS", "MAPPING_RULES", "PATH_RULES",
-            "EXCLUDED_FIELDS"} & _contract.keys():
+            "EXCLUDED_FIELDS", "SELECTED_FIELDS"} & _contract.keys():
         raise ValueError("Graph structure belongs in the registry; field rules belong in the mapping CSV")
 _enabled_models = _selected_model_keys(SELECTED_MODELS, MODEL_CONTRACTS)
 if not isinstance(CONFIG, dict) or CONFIG.get("EXECUTE_WRITES") is not False:
@@ -185,10 +174,10 @@ CONFIG["OSCAL_MODEL"] = _enabled_models[0]
 # Compatibility targets are projected only from a verified default contract.
 _default_storage = MODEL_CONTRACTS[_enabled_models[0]].get("STORAGE_CONTRACT")
 for _key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
-    CONFIG.pop(_key, None)
-if _default_storage and _default_storage.get("VERIFIED") is True:
-    for _key in ("TARGET_DIM", "TARGET_FACT", "DIM_PK_COLUMN", "FACT_PK_COLUMN"):
+    if _default_storage and _default_storage.get("VERIFIED") is True:
         CONFIG[_key] = _default_storage[_key]
+    else:
+        CONFIG.pop(_key, None)
 
 if not isinstance(SOURCE_FILES, (tuple, list)) or not SOURCE_FILES:
     raise ValueError("Deployment configuration must define source bindings")

@@ -25,9 +25,7 @@ def _oscal_run_config(config, load_mode):
         raise ValueError("Run the matching updated Cell 6 before this Cell 7")
     if load_mode == "COMMIT" and (config.get("STORAGE_CONTRACT") or {}).get("VERIFIED") is not True:
         raise ValueError("Every selected source/model route needs a verified storage contract before COMMIT")
-    run_config = dict(config)
-    run_config["EXECUTE_WRITES"] = load_mode == "COMMIT"
-    return run_config
+    return {**config, "EXECUTE_WRITES": load_mode == "COMMIT"}
 
 
 def _oscal_source_count(source_df):
@@ -47,14 +45,12 @@ def run_oscal_mapping(
 ):
     run_config = _oscal_run_config(config, load_mode)
     run_config["EXPECTED_SOURCE_RECORDS"] = _oscal_source_count(source_df)
-    graph_arguments = dict(
+    nodes_df, edges_df = build_oscal_graph(
         source_df=source_df, canonical_mapping_df=canonical_mapping_df,
         element_registry_df=element_registry_df, model_key=config["OSCAL_MODEL"],
         source_system=config["SOURCE_SYSTEM_NAME"], source_table=config["SOURCE_TABLE_NAME"],
+        context=context,
     )
-    if context is not None:
-        graph_arguments["context"] = context
-    nodes_df, edges_df = build_oscal_graph(**graph_arguments)
     coverage_df = None
     if config.get("BUILD_COVERAGE_REPORT", False):
         mapping_rows = context["mapping_rows"] if context is not None else CANONICAL_MAPPING_ROWS
@@ -168,11 +164,10 @@ try:
     )
 except PipelineError as error:
     PIPELINE_REPORT = error.report
+    raise
+finally:
     print("OSCAL_PIPELINE_REPORT")
     print(json.dumps(PIPELINE_REPORT, indent=2, sort_keys=True, default=str))
-    raise
-print("OSCAL_PIPELINE_REPORT")
-print(json.dumps(PIPELINE_REPORT, indent=2, sort_keys=True, default=str))
 # Compatibility outputs refer only to the explicitly configured default group.
 _default_key = (SOURCE_PROFILES[0]["SOURCE_KEY"], CONFIG["OSCAL_MODEL"])
 if _default_key in MODEL_GRAPHS:
