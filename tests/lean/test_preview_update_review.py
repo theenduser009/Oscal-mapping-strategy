@@ -1,5 +1,6 @@
 """Read-only update review: local classifications and explicit Snowpark boundaries."""
 import contextlib
+import copy
 import io
 import json
 import os
@@ -8,8 +9,9 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from lean_support import ROOT
+from lean_support import ROOT, namespace
 import test_loader
+from test_registry_release import mapping_rows, release_registry
 
 HELPER = ROOT / "notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py"
 
@@ -186,9 +188,168 @@ class PreviewReviewTests(unittest.TestCase):
             runpy.run_path(str(HELPER), run_name="__main__", init_globals={
                 **{name: test_loader.P[name] for name in ("_load_storage", "_DIM_FIELDS", "_AUDIT")},
                 "_load_no_transaction": Mock(),
-                "session": session, "MODEL_GRAPHS": graphs, "PIPELINE_REPORT": report})
+                "session": session, "MODEL_GRAPHS": graphs, "PIPELINE_REPORT": report, "SOURCE_INPUTS": {}})
         self.assertNotIn("private", output.getvalue())
         self.assertEqual("RuntimeError", json.loads(output.getvalue())["ERROR"])
+
+
+class ValueReconciliationTests(unittest.TestCase):
+    def setUp(self):
+        runtime = namespace()
+        self.ns = runpy.run_path(str(HELPER), init_globals=runtime)
+        self.context = runtime["compile_mapping_contexts"](
+            {"source-one": mapping_rows()}, release_registry(), runtime["SOURCE_PROFILES"],
+            runtime["MODEL_CONTRACTS"], runtime["ROUTING_METADATA"])[0]
+        self.impact = "system-security-plan.system-characteristics.security-impact-level"
+        self.parent = "system-security-plan.system-characteristics"
+        self.sensitivity = "security-sensitivity-level"
+        self.rules = [r for r in self.context["compiled_plan"]["mappings"] if r["TRANSFORM_ID"] == "security-objective"]
+        self.objectives = sorted({runtime["_metadata_target"](r) for r in self.rules})
+        self.fields = {objective: [r["SOURCE_FIELD_NAME"] for r in self.rules
+                                  if runtime["_metadata_target"](r) == objective] for objective in self.objectives}
+        self.context["lookups"] = {"archer_values": {"1": "Low", "2": "High", "3": "Legacy LOE A", "4": "private-label"},
+                                   "fips_values": {"1": "Low", "2": "High"}}
+        self.source = {fields[0]: {"ValuesListIds": [1]} for fields in self.fields.values()}
+
+    def changed(self, old=None, new=None, record="private-record", path=None):
+        change = row(record=record, old=json.dumps(old if old is not None else dict.fromkeys(self.objectives, "fips-199-low")),
+                     new=json.dumps(new if new is not None else dict.fromkeys(self.objectives, "Low")))
+        change["ELEMENT_PATH"] = path or self.impact
+        return change
+
+    def run_review(self, changes, sources):
+        class SourceFrame:
+            def select(self, *columns):
+                self.columns = columns
+                return self
+            def to_local_iterator(self):
+                return iter(sources)
+        frame = SourceFrame()
+        report = self.ns["_preview_value_reconciliation"](changes, self.context, {"source_df": frame})
+        self.assertEqual(("SOURCE_RECORD_ID", "CURATED_JSON"), frame.columns)
+        return report
+
+    def records(self, source=None):
+        return [{"SOURCE_RECORD_ID": "private-record", "CURATED_JSON": self.source if source is None else source}]
+
+    def test_accepted_case_and_lowercase_context_are_compared_without_mutation(self):
+        before_context, before_source = copy.deepcopy(self.context), copy.deepcopy(self.source)
+        report = self.run_review([self.changed()], self.records())
+        self.assertEqual({"MATCH": 1}, report["IMPACT_PAYLOAD_SOURCE_CHECKS"])
+        self.assertEqual({"MATCH"}, {r["ACCEPTED_TRANSFORM"] for r in report["IMPACT_SOURCE_CHECKS"]})
+        self.assertEqual({"CASE_NORMALIZATION_NEEDED"}, {r["LOWERCASE_LOOKUP_TRANSFORM"] for r in report["IMPACT_SOURCE_CHECKS"]})
+        self.assertEqual(before_context, self.context)
+        self.assertEqual(before_source, self.source)
+        self.assertFalse(report["COMMIT_AUTHORIZED"])
+        self.assertNotIn("private", json.dumps(report))
+
+    def test_transitions_preserve_exact_case_only_and_prefix_changes(self):
+        old = dict(zip(self.objectives, ("Low", "low", "fips-199-low")))
+        report = self.run_review([self.changed(old=old)], self.records())
+        self.assertEqual({"EXACT_MATCH", "CASE_ONLY", "OTHER_TRANSITION"},
+                         {r["RELATION"] for r in report["IMPACT_VALUE_TRANSITIONS"]})
+
+    def test_only_controlled_values_and_exact_approved_legacy_are_displayed(self):
+        objective = self.objectives[0]
+        self.source[self.fields[objective][0]] = {"ValuesListIds": [3]}
+        candidate = dict.fromkeys(self.objectives, "Low")
+        candidate[objective] = "Legacy LOE A"
+        previous = {objective: "private-secret", self.objectives[1]: ["private-id"], self.objectives[2]: None}
+        report = self.run_review([self.changed(previous, candidate)], self.records())
+        text = json.dumps(report)
+        self.assertIn("Legacy LOE A", text)
+        self.assertNotIn("private", text)
+        self.assertEqual({"REDACTED_STR", "REDACTED_LIST", "REDACTED_NULL"},
+                         {r["OLD"] for r in report["IMPACT_VALUE_TRANSITIONS"]})
+        self.assertEqual({"MATCH": 1}, report["IMPACT_PAYLOAD_SOURCE_CHECKS"])
+        safe = self.ns["_preview_controlled_value"]
+        self.assertEqual("REDACTED_STR", safe("legacy loe a", {"Legacy LOE A"}))
+
+    def test_unknown_and_multiple_ids_cannot_be_reported_as_single_source_match(self):
+        field = self.fields[self.objectives[0]][0]
+        for ids, resolution in (([1, 999], "MULTIPLE_WITH_UNKNOWN_IDS"), ([1, 2], "MULTIPLE_VALUES"), ([999], "UNKNOWN_ID")):
+            with self.subTest(resolution=resolution):
+                source = dict(self.source, **{field: {"ValuesListIds": ids}})
+                report = self.run_review([self.changed()], self.records(source))
+                self.assertEqual({"UNRESOLVED": 1}, report["IMPACT_PAYLOAD_SOURCE_CHECKS"])
+                self.assertIn(resolution, {r["RESOLUTION"] for r in report["IMPACT_SOURCE_FIELDS"] if r["FIELD"] == field})
+                self.assertNotIn("999", json.dumps(report))
+
+    def test_source_mismatch_and_conflicting_rules_are_separate(self):
+        candidate = dict.fromkeys(self.objectives, "High")
+        report = self.run_review([self.changed(new=candidate)], self.records())
+        self.assertEqual({"MISMATCH": 1}, report["IMPACT_PAYLOAD_SOURCE_CHECKS"])
+        source = dict(self.source, **{self.fields[self.objectives[0]][1]: {"ValuesListIds": [2]}})
+        report = self.run_review([self.changed()], self.records(source))
+        self.assertIn("CONFLICTING_RULES", {r["ACCEPTED_TRANSFORM"] for r in report["IMPACT_SOURCE_CHECKS"]})
+
+    def test_absent_parse_failed_and_duplicate_source_records_are_explicit(self):
+        for sources, expected in (([], "SOURCE_RECORD_ABSENT"), (self.records("invalid-json"), "SOURCE_PARSE_ERROR"),
+                                  (self.records() * 2, "DUPLICATE_SOURCE_RECORD")):
+            with self.subTest(expected=expected):
+                report = self.run_review([self.changed()], sources)
+                self.assertEqual({expected}, {r["ACCEPTED_TRANSFORM"] for r in report["IMPACT_SOURCE_CHECKS"]})
+                self.assertEqual({"UNRESOLVED": 1}, report["IMPACT_PAYLOAD_SOURCE_CHECKS"])
+
+    def test_sensitivity_presence_shapes_lookup_and_comparison_do_not_infer_mapping(self):
+        cases = [({}, "ABSENT", "EMPTY", "UNRESOLVED"), ({"SECURITY_CATEGORY": None}, "NULL", "EMPTY", "UNRESOLVED"),
+                 ({"SECURITY_CATEGORY": []}, "EMPTY", "EMPTY", "UNRESOLVED"),
+                 ({"SECURITY_CATEGORY": "  "}, "EMPTY", "EMPTY", "UNRESOLVED"),
+                 ({"SECURITY_CATEGORY": {"ValuesListIds": [1]}}, "POPULATED", "SINGLE_LOOKUP", "CASE_ONLY"),
+                 ({"SECURITY_CATEGORY": {"ValuesListIds": [1, 999]}}, "POPULATED", "MULTIPLE_WITH_UNKNOWN_IDS", "UNRESOLVED"),
+                 ({"SECURITY_CATEGORY": {"ValuesListIds": [1, 2]}}, "POPULATED", "MULTIPLE_VALUES", "UNRESOLVED"),
+                 ({"SECURITY_CATEGORY": "private-label"}, "POPULATED", "DIRECT_TEXT", "OTHER_TRANSITION")]
+        for source, presence, resolution, relation in cases:
+            with self.subTest(presence=presence, resolution=resolution):
+                change = self.changed({self.sensitivity: "low"}, {}, path=self.parent)
+                report = self.run_review([change], self.records(dict(self.source, **source)))
+                item = report["SENSITIVITY_SOURCE"][0]
+                self.assertEqual((presence, resolution, relation),
+                                 (item["PRESENCE"], item["RESOLUTION"], item["SOURCE_VS_REMOVED_VALUE"]))
+                self.assertEqual(1, report["SENSITIVITY_REMOVALS"])
+                self.assertNotIn("private", json.dumps(report))
+
+    def test_all_posted_nodes_reconcile_with_one_retained_source_read(self):
+        changes, sources = [], []
+        for number in range(1958):
+            record_id = "private-" + str(number)
+            sources.append({"SOURCE_RECORD_ID": record_id,
+                            "CURATED_JSON": dict(self.source, SECURITY_CATEGORY={"ValuesListIds": [1]})})
+            changes.append(self.changed({self.sensitivity: "Low"}, {}, record=record_id, path=self.parent))
+            if number < 36:
+                changes.append(self.changed(record=record_id))
+        frame = SimpleNamespace(select=Mock())
+        frame.select.return_value = SimpleNamespace(to_local_iterator=Mock(return_value=iter(sources)))
+        report = self.ns["_preview_value_reconciliation"](changes, self.context, {"source_df": frame})
+        frame.select.assert_called_once_with("SOURCE_RECORD_ID", "CURATED_JSON")
+        frame.select.return_value.to_local_iterator.assert_called_once_with()
+        self.assertTrue(report["COUNTS_MATCH_POSTED_REVIEW"])
+        self.assertEqual({"MATCH": 36}, report["IMPACT_PAYLOAD_SOURCE_CHECKS"])
+        self.assertEqual(1958, report["SENSITIVITY_SOURCE"][0]["NODES"])
+        self.assertEqual("EXACT_MATCH", report["SENSITIVITY_SOURCE"][0]["SOURCE_VS_REMOVED_VALUE"])
+
+    def test_source_read_failure_preserves_original_summary_without_private_error_text(self):
+        graphs, report = accepted()
+        ns = helper()
+        complete = {"STATUS": "READ_ONLY_REVIEW_COMPLETE", "DIM": {"UPDATES": 1994}}
+        with patch.dict(ns["run_ssp_preview_update_review"].__globals__,
+                        _preview_comparison_frame=Mock(return_value=SimpleNamespace(collect=lambda: [row()])),
+                        _preview_summarize=Mock(return_value=copy.deepcopy(complete)),
+                        _preview_value_reconciliation=Mock(side_effect=RuntimeError("private-source-payload"))):
+            actual = ns["run_ssp_preview_update_review"](Mock(), graphs, report, source_inputs={"source": object()})
+        self.assertEqual(complete["DIM"], actual["DIM"])
+        self.assertEqual("VALUE_RECONCILIATION_STOPPED", actual["VALUE_RECONCILIATION"]["STATUS"])
+        self.assertNotIn("private", json.dumps(actual))
+
+    def test_existing_drift_blocks_reconciliation_before_reading_sources(self):
+        graphs, report = accepted()
+        ns = helper()
+        ns["run_ssp_preview_update_review"].__globals__["_preview_comparison_frame"] = Mock(return_value=SimpleNamespace(collect=lambda: [row()]))
+        reconcile = Mock(side_effect=AssertionError("must not read retained source on drift"))
+        with patch.dict(ns["run_ssp_preview_update_review"].__globals__, _preview_value_reconciliation=reconcile):
+            actual = ns["run_ssp_preview_update_review"](Mock(), graphs, report, source_inputs={"source": object()})
+        reconcile.assert_not_called()
+        self.assertEqual("READ_ONLY_REVIEW_DRIFT_DETECTED", actual["STATUS"])
 
 
 class PreviewReviewSnowparkTests(unittest.TestCase):

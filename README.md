@@ -9,11 +9,12 @@ cell responsibilities, unresolved gaps and the next action are recorded there.
 validation, pre-write and storage checks passed with no target writes. DIM
 proposes 1,994 updates, zero inserts and 68,108 unchanged rows; all 67,289 FACT
 rows are unchanged. See the [live checkpoint](docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
-The next action is a read-only review of those updates. The
-[review helper](notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py) is
-covered by twelve unit tests and an installed Snowpark join test; live
-execution is pending. Do not repeat registry
-setup, cleanup or the accepted pipeline run.
+The initial read-only review passed and identified 1,958 sensitivity-member
+removals and 36 changed impact nodes. A one-line FIPS lookup correction now
+normalizes letter case. Next, run the extended
+[value review](notebooks/validation/SSP_PREVIEW_UPDATE_REVIEW.md) in the retained
+session. Its live result and a later corrected preview remain pending. Do not
+repeat registry setup, cleanup or replace the accepted session before review.
 
 **Current lean rebuild:** 1,838 lines across the same
 [seven cells](notebooks/cells_v2/README.md), down from 3,700. One mapping CSV and

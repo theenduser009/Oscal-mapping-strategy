@@ -129,7 +129,7 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             col(names["CURATED_JSON"]).alias("CURATED_JSON")
         ).cache_result()
     return {"archer_values": archer,
-            "fips_values": {key: value for key, value in archer.items()
+            "fips_values": {key: value.lower() for key, value in archer.items()
                             if value.lower() in {"low", "moderate", "high"}},
             "component_sources": components,
             "component_contract": profile.get("LOOKUP_CONTRACTS", {})}

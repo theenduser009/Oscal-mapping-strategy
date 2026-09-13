@@ -46,9 +46,15 @@ never fills missing functions from an older active mapper.
   and temporary-table cleanup. Unknown outcomes retain inspection data.
 - `test_preview_update_review.py` covers the separate read-only comparison
   helper: JSON member differences, aggregate counts, drift, privacy and guards.
+  Its value reconciliation checks controlled transitions, frozen source values,
+  ambiguous selections, sensitivity-source presence and unchanged contexts.
   Its installed Snowpark test preserves duplicate and missing binary-key
   matches. The emulator's unsupported SQL-string projections are explicitly
   adapted; those expressions still require live Snowflake execution.
+- `test_fips_normalization.py` loads the actual lookup code and checks that
+  picklist IDs and direct labels produce the same lowercase FIPS value across
+  all eleven approved objective mappings. It preserves general Archer labels
+  and all eight approved legacy exceptions without inventing severity values.
 
 The package smoke tests exercise an installed Snowpark implementation, but no
 local emulator proves the live schema, roles, transactions, MERGE semantics or

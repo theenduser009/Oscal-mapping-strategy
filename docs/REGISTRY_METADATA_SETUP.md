@@ -8,10 +8,10 @@ and 67,289 edges. No target writes occurred. **Do not repeat registry setup,
 cleanup or the seven-cell pipeline.** The deployment instructions below are
 historical reference, not the current next action.
 
-Next is read-only review of the 1,994 proposed DIM updates using
+The initial read-only review passed. Next is value reconciliation of those updates using
 [READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py](../notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py),
-which has twelve unit tests and an installed Snowpark join test; live execution
-is pending. The accepted
+whose extended value report still needs live execution. A one-line FIPS lookup
+casing correction awaits a later corrected preview. The accepted
 candidate remains in `MODEL_GRAPHS`; preview temporary snapshots report
 `REMOVED`. Comparison must use the current target, and matching counts cannot
 prove the historical baseline is unchanged. Daily COMMIT and committed

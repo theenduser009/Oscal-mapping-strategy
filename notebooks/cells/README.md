@@ -23,9 +23,10 @@ is accepted: 2,813 records, 70,102 nodes and 67,289 edges, with all validation
 gates passed and no target writes. DIM proposes 1,994 updates; FACT is unchanged.
 Registry setup, cleanup and the seven-cell pipeline must not be repeated.
 
-Next is the [read-only update review](../validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py),
-which has twelve unit tests and an installed Snowpark join test; live execution
-is pending. It compares the
+The initial read-only review passed. Next is its extended
+[value reconciliation](../validation/SSP_PREVIEW_UPDATE_REVIEW.md), which still
+needs live execution. The Cell Two FIPS lookup now normalizes casing; the
+retained graph has not been rebuilt with that correction. The review compares the
 existing `MODEL_GRAPHS` candidate with the current target because preview
 snapshots were removed. Equal counts cannot prove the historical baseline is
 unchanged. This separate helper does not add a runtime cell. Daily COMMIT and

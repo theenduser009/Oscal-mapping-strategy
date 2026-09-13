@@ -21,8 +21,10 @@
   legacy DEV columns. Registry setup and cleanup must not be repeated: the
   owner posted an accepted live SSP PREVIEW, recorded in
   docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md.
-  Do not rerun the seven-cell pipeline. The current task is read-only review of
-  its 1,994 proposed DIM updates using the tested helper at
+  The initial read-only comparison is live-accepted. A one-line FIPS lookup
+  casing correction and extended value reconciliation follow; see
+  docs/checkpoints/2026-09-13-fips-value-reconciliation.md. Keep the accepted
+  session intact for the extended review of its 1,994 proposed updates using
   notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py. Compare the
   existing MODEL_GRAPHS candidate with the current target; removed preview
   snapshots cannot prove an unchanged historical baseline through counts alone.

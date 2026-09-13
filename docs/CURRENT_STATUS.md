@@ -1,6 +1,25 @@
 # Current Status
 
-## Current action - reconcile the reviewed SSP field changes
+## Current action - FIPS source/value reconciliation
+
+The owner requested reconciliation against the existing FIPS mapping.
+A one-line Cell Two correction now normalizes lookup labels to lowercase
+`low`, `moderate`, or `high`; it adds no runtime lines. The
+[reconciliation checkpoint](checkpoints/2026-09-13-fips-value-reconciliation.md)
+records the exact change, tests and remaining live boundary.
+
+**Next action:** run the extended read-only review cell in the retained accepted
+session and share its `VALUE_RECONCILIATION` output. Keep `MODEL_GRAPHS`,
+`PIPELINE_REPORT` and `SOURCE_INPUTS` intact. Do not rerun Cell Two or the
+pipeline before that comparison. The extension checks accepted and lowercase
+lookup behavior without modifying the source, candidate or target.
+
+The initial live comparison below is accepted. The extended value comparison
+and a later preview of corrected output remain pending; normal writes stay
+disabled. The sensitivity mapping remains deferred until its source/stored
+values are reconciled. No new mapping rule or severity inference is approved.
+
+## Previous action - reconcile the reviewed SSP field changes
 
 The owner posted the [completed live read-only review](checkpoints/2026-09-13-ssp-read-only-dim-review.md):
 `READ_ONLY_REVIEW_COMPLETE`, 70,102 candidate nodes across 2,813 source records,

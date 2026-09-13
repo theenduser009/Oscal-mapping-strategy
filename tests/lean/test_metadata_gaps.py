@@ -146,7 +146,7 @@ class LookupInputBoundaryTests(unittest.TestCase):
                                 {"SELECT_VALUE_ID": 2, "SELECT_VALUE_NAME": "Custom label"}])
         lookups = self.load(session, self.profile, self.models, self.config)
         self.assertEqual({"1": "High", "2": "Custom label"}, lookups["archer_values"])
-        self.assertEqual({"1": "High"}, lookups["fips_values"])
+        self.assertEqual({"1": "high"}, lookups["fips_values"])
         self.assertEqual({"software", "interconnection"}, set(lookups["component_sources"]))
         self.assertTrue(all(count == 1 for count in session.cache_calls.values()))
         self.assertEqual(2, len(session.cache_calls))
