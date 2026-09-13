@@ -21,6 +21,18 @@ prerequisite for AR. System implementation is part of SSP, with six accepted
 component-reference mappings and partial hydration. Do not claim full models
 complete from partial field coverage.
 
+## Latest shared AR preview
+
+The owner-posted shared AR graph preview passed for 2,813 records, 73,189 nodes
+and 70,376 edges. See docs/checkpoints/2026-09-13-assessment-results-preview-target-contract-pending.md.
+No AR target DML or persistence occurred; storage remains unverified.
+The next action is the output of the supplied destination-column query, not
+another unchanged graph run. The SQL text saved on main is not schema output.
+Bind actual AR tables through the existing Cell One storage contract after
+their physical definitions are verified. Do not borrow SSP destination names.
+The posted report lacks the selected-field count/per-field coverage; distinguish
+graph acceptance from populated-value acceptance of every added AR field.
+
 ## Non-negotiable metadata-driven architecture
 
 - Current code is JSON-free. Mapping/ARCHER_OSCAL_MAPPINGS.csv maintains the

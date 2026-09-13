@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-13, AR30 enabled/pending live; SSP COMMIT and readback accepted. Owner: Source One mapping implementation team.
+Last updated: 2026-09-13, shared AR graph preview accepted; AR storage pending; SSP COMMIT and readback accepted. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -10,7 +10,30 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
-## Current action - AR30 preview and destination verification
+## Current action - bind the AR destination after accepted graph preview
+
+The owner posted the [shared Assessment Results preview](checkpoints/2026-09-13-assessment-results-preview-target-contract-pending.md)
+in main commit `5c8ef0cbdc5bec29b1f88d1be2e5ea1ae802faeb`.
+It reports `PREVIEW_COMPLETE` and graph validation passed for 2,813 source
+records, 73,189 nodes and 70,376 edges. The AR load status is
+`MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING`; storage verification and
+pre-write validation are false, and no writes, persistence or commit occurred.
+
+This accepts the posted shared-AR graph preview. The report does not include
+Cell Three's selected-field count or per-field coverage, so it does not by
+itself establish populated-value acceptance for every newly enabled field.
+AR DIM/FACT names and physical column definitions are still unverified;
+Cell One correctly has no AR storage contract.
+
+**Next action:** obtain the result rows from the already supplied
+[destination-column query](../notebooks/validation/READ_ONLY_OSCAL_DESTINATION_COLUMNS.sql).
+The owner saved the SQL itself on main; that is not its output.
+Use actual table/key/UUID/column definitions to configure the existing writer.
+Do not repeat the accepted AR graph preview merely to discover table names,
+or substitute SSP destinations. Preserve the AR30 mapping scope and deferrals
+in [AR next run](AR_NEXT_RUN.md); target-aware preview follows verified binding.
+
+## Previous action - AR30 preview and destination verification
 
 The owner chose to advance Assessment Results next, then POA&M and remaining
 model work. The [accepted SSP COMMIT](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
