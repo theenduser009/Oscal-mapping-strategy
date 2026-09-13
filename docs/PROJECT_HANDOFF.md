@@ -1,6 +1,35 @@
 # Project handoff - read this before resuming
 
-## Current action - complete the selected AR destination definition
+## Current action - load AR using the shared SSP table definition
+
+The owner confirmed that all model tables use SSP's physical rules; only table
+and primary-key names differ. The full AR pair and key names are now posted.
+See [the owner decision and binding](checkpoints/2026-09-13-ar-shared-ssp-storage-contract.md)
+and [DIM/FACT evidence](checkpoints/2026-09-13-assessment-results-dim-fact-target-evidence.md).
+The earlier NTZ/second-timestamp difference is a schema mistake to reconcile,
+not a reason to add a separate loader rule. No names need to be resubmitted.
+
+Cell One now configures the AR destination using the same BINARY16_UUID32
+contract as SSP. The existing loader checks the actual schema before any DML;
+configuration VERIFIED does not claim that this live check has already passed.
+No loader/transform/registry changes are needed. The seven cells total 1,850
+lines. AR mapping scope remains 30 enabled rows and 15 deferred rows.
+
+The accepted shared AR graph preview remains 2,813 records, 73,189 nodes and
+70,376 edges. AR target writes/readback are not yet accepted. Four exact private
+screenshot scalar examples passed again locally (12 nodes, 8 edges, no writes).
+Private values and transcriptions remain outside GitHub and release files.
+
+**Next action:** follow [AR next run](AR_NEXT_RUN.md). Match AR's tables to the
+[shared target definition](../sql/CREATE_ASSESSMENT_RESULTS_TABLES.sql), replacing
+no existing data. Replace Cell One, select AR only, keep shared EXECUTE_WRITES
+false and set Cell Seven to COMMIT. This authorized load first performs the
+existing previews and live schema checks, then merges and verifies readback.
+Success is COMMITTED_AND_VERIFIED with actual DIM/FACT counts. Stop on schema
+mismatch; inspect unknown commit outcomes before any retry. No registry reset,
+SSP rerun, new CSV change or separate AR engine is needed for this binding.
+
+## Previous action - complete the selected AR destination definition
 
 The [owner-posted table definition](checkpoints/2026-09-13-assessment-results-target-table-selection.md)
 selects `ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT`.

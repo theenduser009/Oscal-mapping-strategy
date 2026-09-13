@@ -51,16 +51,17 @@ def populated_source(rows):
 
 class NotebookSession(storage.Session):
     """Real input/frame APIs, local relational adapter for the SQL boundary."""
-    def __init__(self, actual, sources, contract):
+    def __init__(self, actual, sources, contracts):
         super().__init__()
         self.actual, self.sources = actual, sources
-        for table_key, pk_key, fields in (("TARGET_DIM", "DIM_PK_COLUMN", storage.P["_DIM_FIELDS"]),
-                                          ("TARGET_FACT", "FACT_PK_COLUMN", storage.P["_FACT_FIELDS"])):
-            table, pk = contract[table_key], contract[pk_key]
-            self.schema[table] = [dict(name=name, type=dtype, kind="COLUMN", expression=None,
-                                      **{"null?": "N" if table_key == "TARGET_FACT" or name == pk else "Y"})
-                                  for name, dtype in {pk: "BINARY(16)", **fields}.items()]
-            self.query(f"CREATE TABLE {table} ({', '.join(row['name'] for row in self.schema[table])})")
+        for contract in contracts:
+            for table_key, pk_key, fields in (("TARGET_DIM", "DIM_PK_COLUMN", storage.P["_DIM_FIELDS"]),
+                                              ("TARGET_FACT", "FACT_PK_COLUMN", storage.P["_FACT_FIELDS"])):
+                table, pk = contract[table_key], contract[pk_key]
+                self.schema[table] = [dict(name=name, type=dtype, kind="COLUMN", expression=None,
+                                          **{"null?": "N" if table_key == "TARGET_FACT" or name == pk else "Y"})
+                                      for name, dtype in {pk: "BINARY(16)", **fields}.items()]
+                self.query(f"CREATE TABLE {table} ({', '.join(row['name'] for row in self.schema[table])})")
 
     def table(self, name):
         return self.sources[name] if name in self.sources else super().table(name)
@@ -102,7 +103,9 @@ class NotebookEndToEndTests(unittest.TestCase):
         for kind, contract in self.profile["LOOKUP_CONTRACTS"].items():
             sources[contract["source_table"]] = self.frame([
                 {"CONTENT_ID": key, "CURATED_JSON": json.dumps(payload)} for key, payload in lookups[kind].items()])
-        self.session = NotebookSession(self.actual, sources, self.contract)
+        contracts = [model["STORAGE_CONTRACT"] for model in self.defaults["MODEL_CONTRACTS"].values()
+                     if (model.get("STORAGE_CONTRACT") or {}).get("VERIFIED") is True]
+        self.session = NotebookSession(self.actual, sources, contracts)
         self.addCleanup(self.session.db.close)
 
     def frame(self, rows):
@@ -177,15 +180,88 @@ class NotebookEndToEndTests(unittest.TestCase):
         self.assertEqual(0, repeated["groups"][0]["load"]["expected_changes"]["D"]["UPDATES"])
         self.assertEqual(0, repeated["groups"][0]["load"]["expected_changes"]["F"]["INSERTS"])
 
-    def test_both_models_preview_then_ar_destination_blocks_all_commits(self):
+    def test_both_models_preview_and_explicitly_targetless_ar_blocks_all_commits(self):
         ns = self.run_notebook(("SSP", "ASSESSMENT_RESULTS"))
         self.assertEqual(2, len(ns["MODEL_GRAPHS"]))
         self.assertEqual([48, 30], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
-        self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", ns["PIPELINE_REPORT"]["groups"][1]["load"]["status"])
+        self.assertTrue(all(group["load"]["storage_verified"] for group in ns["PIPELINE_REPORT"]["groups"]))
+        ns["MAPPING_CONTEXTS"][1]["config"]["STORAGE_CONTRACT"] = None
+        with self.notebook_transport():
+            _, preview = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "PREVIEW")
+        self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", preview["groups"][1]["load"]["status"])
         self.session.events.clear()
         with self.notebook_transport(), self.assertRaises(ns["PipelineError"]):
             ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
         self.assertFalse(any(event.startswith("MERGE") for event in self.session.events))
+
+    def test_ar_only_preview_insert_update_and_unchanged_commit(self):
+        ns = self.run_notebook(("ASSESSMENT_RESULTS",))
+        context = ns["MAPPING_CONTEXTS"][0]
+        contract = context["config"]["STORAGE_CONTRACT"]
+        dim, fact = contract["TARGET_DIM"], contract["TARGET_FACT"]
+        pk = contract["DIM_PK_COLUMN"]
+        self.assertEqual("PREVIEW_PASSED_NO_TARGET_DML", ns["PIPELINE_REPORT"]["groups"][0]["load"]["status"])
+        self.assertEqual((32, 31), tuple(ns["PIPELINE_REPORT"]["groups"][0]["load"][key] for key in ("nodes", "edges")))
+        self.assertEqual([], self.session.query("SELECT * FROM " + dim))
+        with self.notebook_transport():
+            _, inserted = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", inserted["status"])
+        self.assertEqual(32, inserted["groups"][0]["load"]["expected_changes"]["D"]["INSERTS"])
+        self.assertEqual(31, inserted["groups"][0]["load"]["expected_changes"]["F"]["INSERTS"])
+        saved = {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)}
+        saved_edges = self.session.query("SELECT * FROM " + fact)
+        self.assertTrue(all(isinstance(key, bytes) and len(key) == 16 for key in saved))
+        self.assertTrue(all(len(row["OSCAL_UUID"]) == 32 and "-" not in row["OSCAL_UUID"] for row in saved.values()))
+        self.assertTrue(all(row["DW_LOAD_TIMESTAMP"] and row["DW_LOAD_TIMESTAMP_TZ"] for row in saved.values()))
+        for edge in saved_edges:
+            self.assertIn(edge["FK_SOURCE_ELEMENT_HASH"], saved)
+            self.assertIn(edge["FK_TARGET_ELEMENT_HASH"], saved)
+            self.assertEqual(saved[edge["FK_SOURCE_ELEMENT_HASH"]]["OSCAL_UUID"], edge["SOURCE_OSCAL_UUID"])
+            self.assertEqual(saved[edge["FK_TARGET_ELEMENT_HASH"]]["OSCAL_UUID"], edge["TARGET_OSCAL_UUID"])
+        changed_source = dict(self.source, ADJUSTED_TOTAL_RISK_SCORE=7.25)
+        ns["SOURCE_INPUTS"]["source-one"]["source_df"] = self.frame([
+            {"SOURCE_RECORD_ID": "synthetic-record", "CURATED_JSON": json.dumps(changed_source)}])
+        context["config"]["RUN_ID"] = "ar-changed"
+        with self.notebook_transport():
+            _, changed = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", changed["status"])
+        self.assertEqual({"INSERTS": 0, "UPDATES": 1, "UNCHANGED": 31}, changed["groups"][0]["load"]["expected_changes"]["D"])
+        saved_changed = {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)}
+        self.assertEqual(set(saved), set(saved_changed))
+        self.assertEqual(saved_edges, self.session.query("SELECT * FROM " + fact))
+        updated = [row for key, row in saved_changed.items() if row != saved[key]]
+        self.assertEqual(1, len(updated))
+        self.assertEqual([{"name": "adjusted-total-risk-score", "value": "7.25"}], json.loads(updated[0]["METADATA_JSON"])["props"])
+        self.assertEqual("ar-changed", updated[0]["DW_PIPELINE_RUN_ID"])
+        context["config"]["RUN_ID"] = "ar-unchanged"
+        with self.notebook_transport():
+            _, repeated = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", repeated["status"])
+        self.assertEqual({"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 32}, repeated["groups"][0]["load"]["verification"]["DIM"])
+        self.assertEqual(saved_changed, {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)})
+        self.assertEqual(saved_edges, self.session.query("SELECT * FROM " + fact))
+        for table in (self.contract["TARGET_DIM"], self.contract["TARGET_FACT"]):
+            self.assertEqual([], self.session.query("SELECT * FROM " + table))
+            self.assertFalse(any(sql.startswith("MERGE INTO " + table + " ") for sql in self.session.events))
+        self.assertFalse(ns["CONFIG"]["EXECUTE_WRITES"])
+
+    def test_ar_schema_must_match_shared_ssp_layout_before_any_commit(self):
+        ns = self.run_notebook(("ASSESSMENT_RESULTS",))
+        dim = ns["MAPPING_CONTEXTS"][0]["config"]["STORAGE_CONTRACT"]["TARGET_DIM"]
+        original = copy.deepcopy(self.session.schema[dim])
+        for mismatch in ("ntz", "missing_tz"):
+            self.session.schema[dim] = copy.deepcopy(original)
+            if mismatch == "ntz":
+                next(row for row in self.session.schema[dim] if row["name"] == "DW_LOAD_TIMESTAMP")["type"] = "TIMESTAMP_NTZ(9)"
+            else:
+                self.session.schema[dim] = [row for row in self.session.schema[dim] if row["name"] != "DW_LOAD_TIMESTAMP_TZ"]
+            self.session.events.clear()
+            with self.subTest(mismatch=mismatch), self.notebook_transport(), self.assertRaises(ns["PipelineError"]) as caught:
+                ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+            self.assertEqual("TARGET_SCHEMA_MISMATCH", caught.exception.report["load_error"]["status"])
+            self.assertFalse(caught.exception.report["commit_attempted"])
+            self.assertFalse(any(sql.startswith("MERGE") for sql in self.session.events))
+        self.session.schema[dim] = original
 
     def test_many_records_keep_exact_coverage_and_record_scoped_links(self):
         rows = [{"CONTENT_ID": f"record-{index:03d}", "CURATED_JSON": json.dumps(self.source)} for index in range(32)]

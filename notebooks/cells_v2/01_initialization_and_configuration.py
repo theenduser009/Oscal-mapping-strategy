@@ -65,7 +65,18 @@ MODEL_CONTRACTS = {
         "MODEL_KEY": "ASSESSMENT_RESULTS", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
         "MODEL_ALIASES": ("Assessment Results", "AR"), "LOOKUP_GROUPS": (),
         "RUNTIME_OPTIONS": {"parse_decimal": True, "null_source_as_empty": False},
-        "STORAGE_CONTRACT": None,
+        # Owner-confirmed SSP physical layout; only AR model/table/key names differ.
+        "STORAGE_CONTRACT": {
+            "VERIFIED": True, "PHYSICAL_PROFILE": "BINARY16_UUID32", "MODEL_KEY": "ASSESSMENT_RESULTS",
+            "ROOT_PATH": "assessment-results", "ROOT_ELEMENT_TYPE": "assessment-results",
+            "SOURCE_SYSTEM_NAME": "ARCHER", "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+            "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+            "TARGET_DIM": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT",
+            "TARGET_FACT": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY",
+            "DIM_PK_COLUMN": "PK_DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT_HASH",
+            "FACT_PK_COLUMN": "PK_FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY_HASH",
+            "IDENTITY_VERSION": "v1_registry_path_instance",
+        },
     },
 }
 ROUTING_METADATA = {

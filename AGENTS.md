@@ -14,8 +14,8 @@ Monday. Follow docs/AR_NEXT_RUN.md. The CSV now enables 30 AR fields: 17
 previously live accepted plus 13 owner-approved additions pending live
 acceptance. Preserve the 15 deferred rows, including threshold-name conflicts,
 two parked shape rejections and prior workflow/score deferrals. No new
-runtime or registry rules are needed for the 13 additions. AR destination
-schema evidence remains required before binding the shared loader.
+runtime or registry rules are needed for the 13 additions. AR now has its own
+owner-confirmed storage binding with the same physical definition as SSP.
 SSP's no-change COMMIT and readback are accepted; do not repeat them as a
 prerequisite for AR. System implementation is part of SSP, with six accepted
 component-reference mappings and partial hydration. Do not claim full models
@@ -25,11 +25,14 @@ complete from partial field coverage.
 
 The owner-posted shared AR graph preview passed for 2,813 records, 73,189 nodes
 and 70,376 edges. See docs/checkpoints/2026-09-13-assessment-results-preview-target-contract-pending.md.
-No AR target DML or persistence occurred; storage remains unverified.
-The next action is the output of the supplied destination-column query, not
-another unchanged graph run. The SQL text saved on main is not schema output.
-Bind actual AR tables through the existing Cell One storage contract after
-their physical definitions are verified. Do not borrow SSP destination names.
+No AR target DML or persistence has been accepted. Both AR table/key names
+are posted. The owner subsequently confirmed identical SSP physical rules for
+all models; the earlier timestamp differences are schema mistakes to correct.
+See docs/checkpoints/2026-09-13-ar-shared-ssp-storage-contract.md. Cell One now
+binds AR's own targets. Reuse the unchanged loader and its live schema checks.
+Do not ask for names again or introduce an AR-specific timestamp transform.
+The owner authorized proceeding to AR loading once its table schema matches;
+follow docs/AR_NEXT_RUN.md and preserve existing data when reconciling schema.
 The posted report lacks the selected-field count/per-field coverage; distinguish
 graph acceptance from populated-value acceptance of every added AR field.
 

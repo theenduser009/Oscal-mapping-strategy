@@ -10,7 +10,7 @@ Updated September 13, 2026. Use the existing seven-cell mapper and the updated
 | SSP agreed mapping subset | Committed and read-back verified in DEV; the latest batch changed no rows. |
 | SSP system implementation | Six component-reference mappings implemented; software/interconnection hydration is partial. This is part of SSP, not another model. |
 | AR original 17 fields | Previously live accepted in memory; no AR database load is accepted. |
-| AR next 13 fields | Enabled in the CSV through the existing scalar-score transform; local regression coverage, live preview pending. |
+| AR next 13 fields | Enabled in the CSV through the existing scalar-score transform; shared graph preview passed; per-field populated coverage/persistence remain pending. |
 | Remaining 15 AR rows | Deferred for the specific decisions below; not counted as completed mappings. |
 | POA&M | Reference mapping recorded; item source/identity, hierarchy and destination still need confirmation. |
 
@@ -19,35 +19,42 @@ Implementation remain separate. See [SSP scope](SSP_DONE_AND_NEXT.md).
 The owner's target is to progress AR, POA&M and remaining models by Monday;
 that is a delivery target, not evidence of completed mapping or storage.
 
-## Run AR30 in preview
+## Run AR against its confirmed destination
 
-1. Upload the revised `ARCHER_OSCAL_MAPPINGS.csv` to notebook Files.
+1. Keep the already updated AR30 mapping CSV in notebook Files. Replace
+   [Cell One](../notebooks/cells/01_initialization_and_configuration.py) with the
+   version containing the AR storage contract; Cells Two through Seven are unchanged.
 2. In existing Cell One, set `SELECTED_MODELS = ("ASSESSMENT_RESULTS",)`.
    Preserve deployment settings and `CONFIG["EXECUTE_WRITES"] = False`.
-3. In Cell Seven, set `OSCAL_LOAD_MODE = "PREVIEW"`.
+3. Confirm AR's tables match the [shared definition](../sql/CREATE_ASSESSMENT_RESULTS_TABLES.sql).
+   Both DIM timestamps are TIMESTAMP_TZ(9), as in SSP. The SQL creates missing
+   tables only; it does not replace existing rows or repair an existing schema.
+   Set Cell Seven's `OSCAL_LOAD_MODE = "COMMIT"` for the owner-authorized load.
+   Use `PREVIEW` instead if a separate no-write comparison is desired.
 4. Run matching Cells One through Seven in order in one session. No replacement
    runtime, separate AR mapper or registry reset is required.
 5. Post Cell Three's AR routing summary and the complete `OSCAL_PIPELINE_REPORT`.
 
 Expected signals: Cell Three is `READY` with `SELECTED_ROWS = 30`; Cell Seven
-reports `PREVIEW_COMPLETE`, one AR group and
-`MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING`, with writes false.
-The missing destination contract is expected at this stage. Report actual
-source/node/edge counts; the old 17-field counts are not AR30 expected counts.
+first previews the route and validates the live schema before DML. COMMIT
+success is `COMMITTED_AND_VERIFIED`, one AR group, writes/persisted/committed
+true and successful DIM/FACT verification. In PREVIEW, require
+`PREVIEW_PASSED_NO_TARGET_DML` with storage/pre-write validation true and writes
+false. Report actual source/node/edge and insert/update/unchanged counts;
+the old 17-field counts are not AR30 expected counts.
 Do not run the old standalone 34-field candidate.
 
-## Destination evidence for AR and subsequent models
+## Shared storage rules
 
-Run [READ_ONLY_OSCAL_DESTINATION_COLUMNS.sql](../notebooks/validation/READ_ONLY_OSCAL_DESTINATION_COLUMNS.sql)
-in a Snowflake SQL worksheet and post its result. It requires no notebook
-variables and reads only column metadata in the currently used DEV schema.
-Completion is the result grid, including an empty result if no matching columns
-are visible. Empty output does not prove absence from other schemas or roles.
-
-Use the returned table names, key/UUID types and column definitions to bind AR
-to its actual destination in Cell One. Reuse the existing Cell Six loader.
-AR COMMIT remains unavailable until that destination is verified and the
-expanded preview is accepted.
+The [owner decision](checkpoints/2026-09-13-ar-shared-ssp-storage-contract.md)
+confirms identical SSP physical rules for AR and future models, with different
+table/key names. Use the full-name AR pair in Cell One; the abbreviated AR DIM
+is not selected. Exact source/model/root identity checks remain enforced.
+The live schema has not been read from this workstation. A reported
+TARGET_SCHEMA_MISMATCH means actual AR columns still differ; reconcile them
+with the standard before rerunning. Do not bypass the checks or drop rows.
+An unknown commit outcome or failed committed readback requires inspection,
+not an automatic retry.
 
 ## Thirteen additions and their existing approval
 

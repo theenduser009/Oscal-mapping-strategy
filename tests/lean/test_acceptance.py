@@ -81,7 +81,7 @@ class LeanAcceptanceTests(unittest.TestCase):
         self.assertEqual(frozen.business(expected["nodes"]), business(nodes))
         self.assertEqual(frozen.business(expected["edges"]), business(edges))
         self.ns["_load_graph"](nodes, edges, dict(context["config"], EXPECTED_SOURCE_RECORDS=2))
-        result = self.ns["validate_and_load_oscal"](nodes, edges, context["config"])
+        result = self.ns["validate_and_load_oscal"](nodes, edges, dict(context["config"], STORAGE_CONTRACT=None))
         self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", result["status"])
         self.assertFalse(result["writes_executed"])
 

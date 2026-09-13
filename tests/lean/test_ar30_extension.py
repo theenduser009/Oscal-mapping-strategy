@@ -93,7 +93,7 @@ class AR30ExtensionTests(unittest.TestCase):
         self.assertEqual(business(old_nodes), [row for row in business(nodes) if row["NODE_KEY"] in old_keys])
         self.assertEqual(business(old_edges), [row for row in business(edges) if row["EDGE_KEY"] in old_edge_keys])
         self.ns["_load_graph"](nodes, edges, dict(self.context["config"], EXPECTED_SOURCE_RECORDS=2))
-        result = self.ns["validate_and_load_oscal"](nodes, edges, self.context["config"])
+        result = self.ns["validate_and_load_oscal"](nodes, edges, dict(self.context["config"], STORAGE_CONTRACT=None))
         self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", result["status"])
         self.assertFalse(result["writes_executed"])
 
