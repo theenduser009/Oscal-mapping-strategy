@@ -15,8 +15,12 @@ CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD fields as scalar-score observations at
 assessment-results.results[].observations[]. This supersedes only the previous
 source-name deferral for those two rows. Preserve the existing 30 AR rows and
 their IDs, SSP sensitivity, and the POAMS reference mapping. Thirty-two AR
-rows are enabled and thirteen remain deferred. Original spreadsheet path/Notes
-are provenance; approved RUNTIME_TARGET_PATH contains one exact full path.
+rows are enabled and thirteen remain deferred. The owner clarified that the
+visible OSCAL_ELEMENT_PATH must also be one clean path. Approved AR rows equal
+their existing runtime target; three unresolved alternatives are blank targets
+with their original wording in EXECUTION_NOTE. No AR path cell contains 'or'.
+Preserve original source names, Notes and reference coordinates. The original
+path-column preservation test is superseded by this explicit cleanup requirement.
 No runtime, registry or table changes accompany this extension.
 Follow docs/AR_NEXT_RUN.md for a fresh AR32 preview; added-field live coverage
 is not accepted from synthetic tests or the previous aggregate AR load.

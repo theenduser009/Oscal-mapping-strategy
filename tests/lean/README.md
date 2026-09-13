@@ -32,7 +32,9 @@ never fills missing functions from an older active mapper.
 - `test_ar30_extension.py` compares the 13 added AR fields with the earlier
   standalone oracle, including decimal precision, zero/false, null omission,
   parent links and preservation of the original AR17 identities. Original
-  CSV source names, paths, Notes and provenance remain unchanged; parked
+  CSV source names, Notes and reference coordinates remain unchanged. Original
+  AR path alternatives move to execution notes; an explicit acceptance test
+  requires clean visible paths and identical graph output. Parked
   reference/multi-value fields and workflow rows stay deferred. The two exact-name
   AR threshold additions are checked separately for zero preservation, unchanged
   AR30 keys/payloads and no fallback to underscore-prefixed names.

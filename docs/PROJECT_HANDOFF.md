@@ -1,6 +1,23 @@
 # Project handoff - read this before resuming
 
-## Current action - AR32 CSV extension; POAM preview accepted
+## Current action - clean AR path cells; AR32 preview pending
+
+### Visible OSCAL path correction
+
+The owner clarified that OSCAL_ELEMENT_PATH itself must contain one clean path,
+including RISK_ASSESSMENT at CSV row 131. Fifteen approved AR alternative-path
+cells now equal their existing RUNTIME_TARGET_PATH:
+assessment-results.results[].observations[]. The three still-deferred
+alternative-path rows have blank targets until a destination is chosen.
+Their exact former alternatives are retained in EXECUTION_NOTE, along with
+those of the approved rows. No new columns or mapping choices are introduced.
+
+All 32 approved AR rows have one clean OSCAL_ELEMENT_PATH; no AR path cell
+contains "or". Source fields, Notes, runtime targets, transforms, statuses,
+rule IDs, registry and seven cells are unchanged. The new acceptance test
+checks those visible paths, retained alternatives, and identical compiled
+routing and graph output. Local checks ran 195 tests without failures, with
+three unavailable-Snowpark class skips. CI for this cleanup is pending.
 
 The owner requested the additional Assessment Results mappings discussed in the
 other chat. Comparing its [main-branch change](https://github.com/theenduser009/Oscal-mapping-strategy/commit/a9d32fb9bdecedf0003bab5a648394baaf840b94)
@@ -11,12 +28,13 @@ with this branch found only two additional fields:
 | CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD | assessment-results.results[].observations[] | scalar-score |
 | CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD | assessment-results.results[].observations[] | scalar-score |
 
-Only the five execution cells on those two existing CSV rows change. Their exact
-unprefixed source names and original spreadsheet columns remain intact. There
+The earlier AR32 increment changed five execution cells on two existing CSV
+rows. The subsequent path cleanup above changes only visible path cells and
+records their original alternatives in existing execution notes. There
 is no fallback to underscored names, no threshold calculation and no PCT-field
 substitution. Existing ar30 rule IDs, SSP sensitivity and POAMS remain intact.
 AR now has 32 enabled rows and 13 deferred rows. Each executable row selects one
-full RUNTIME_TARGET_PATH; original alternative wording is provenance only.
+full path in both target columns; original alternatives are retained in execution notes.
 The seven runtime cells, registry and database definitions are unchanged.
 
 Local checks ran 194 tests with no failures and three unavailable-Snowpark

@@ -10,11 +10,23 @@ Use the existing seven cells on simplify-metadata-boundary and the updated
 | CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD | assessment-results.results[].observations[] | scalar-score |
 | CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD | assessment-results.results[].observations[] | scalar-score |
 
+## Clean visible paths
+
+OSCAL_ELEMENT_PATH now contains one exact path for every approved AR row.
+RISK_ASSESSMENT and fourteen other resolved alternatives now show
+`assessment-results.results[].observations[]` directly. Three unresolved
+alternative mappings stay DEFERRED with blank path cells. The old alternatives
+are retained in EXECUTION_NOTE; no new columns or mapping choices are introduced.
+A regression checks clean paths, note provenance and identical graph output.
+Local checks ran 195 tests with three unavailable-Snowpark class skips; CI for
+this cleanup is pending.
+
 Both fields use their exact unprefixed Excel names. A populated scalar creates
 one observation with one named inline property. Zero is preserved, empty values
 are omitted, and multiple values or unsupported objects fail. No threshold is calculated and no
-underscore/PCT aliases are added. Original path wording and Notes remain
-unchanged; RUNTIME_TARGET_PATH selects the one executable destination.
+underscore/PCT aliases are added. Original Notes remain unchanged, and former
+path alternatives are retained in execution notes. Both path columns show the
+same single destination for approved AR mappings.
 
 The 13 additions already enabled on this branch stay in place with their ar30
 rule IDs. This increment adds two rows' execution metadata, yielding **32 enabled

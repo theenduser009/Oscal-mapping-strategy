@@ -45,7 +45,7 @@ class AR30ExtensionTests(unittest.TestCase):
         return context
 
     def test_exact_approved_scope_preserves_original_mapping_provenance(self):
-        original_columns = ("SOURCE_FIELD_NAME", "OSCAL_MODEL", "OSCAL_ELEMENT_PATH",
+        original_columns = ("SOURCE_FIELD_NAME", "OSCAL_MODEL",
                             "MAPPING_TYPE", "NOTES", "ORIGINAL_ROW_ID", "SOURCE_DOCUMENT",
                             "SOURCE_LINE", "ORIGINAL_EXCEL_ROW")
         with (ROOT / "tests/fixtures/mappings_pre_registry.csv").open(encoding="utf-8", newline="") as handle:
@@ -54,6 +54,14 @@ class AR30ExtensionTests(unittest.TestCase):
         for row in original:
             self.assertEqual({key: row[key] for key in original_columns},
                              {key: actual_by_id[row["ORIGINAL_ROW_ID"]][key] for key in original_columns})
+            actual = actual_by_id[row["ORIGINAL_ROW_ID"]]
+            old_path = row["OSCAL_ELEMENT_PATH"]
+            if row["OSCAL_MODEL"] == "Assessment Results" and " or " in old_path:
+                expected_path = actual["RUNTIME_TARGET_PATH"] if actual["EXECUTION_STATUS"] == "APPROVED" else ""
+                self.assertEqual(expected_path, actual["OSCAL_ELEMENT_PATH"])
+                self.assertIn("Original target alternatives: " + old_path + ".", actual["EXECUTION_NOTE"])
+            else:
+                self.assertEqual(old_path, actual["OSCAL_ELEMENT_PATH"])
         accepted = {row["SOURCE_FIELD_NAME"] for row in self.old["mapping_rows"]}
         selected = {row["SOURCE_FIELD_NAME"] for row in self.context["mapping_rows"]}
         self.assertEqual(accepted | set(AR_ADDITIONS) | set(AR_THRESHOLD_ADDITIONS), selected)
@@ -72,6 +80,32 @@ class AR30ExtensionTests(unittest.TestCase):
                     "FINDINGS", "AVG_SECURITY_COMPLIANCE_SCORE", "AVG_SECURITY_COMPLIANCE_REPORTING_SCORE"}
         self.assertEqual(deferred, {row["SOURCE_FIELD_NAME"] for row in self.rows
                                    if row["SOURCE_FIELD_NAME"] in deferred and row["EXECUTION_STATUS"] == "DEFERRED"})
+
+    def test_visible_ar_paths_are_single_targets_without_changing_execution(self):
+        ar_rows = [row for row in self.rows if row["OSCAL_MODEL"] == "Assessment Results"]
+        approved = [row for row in ar_rows if row["EXECUTION_STATUS"] == "APPROVED"]
+        self.assertEqual(32, len(approved))
+        self.assertTrue(all(row["OSCAL_ELEMENT_PATH"] == OBSERVATION_PATH for row in approved))
+        self.assertFalse(any(" or " in row["OSCAL_ELEMENT_PATH"].lower() for row in ar_rows))
+        unresolved = {"RISK_ACCEPTANCE_RBDS", "TOTAL_PACKAGE_INHERENT_RISK", "RISK_ASSESSMENT_REPORT"}
+        for row in ar_rows:
+            if row["SOURCE_FIELD_NAME"] in unresolved:
+                self.assertEqual(("DEFERRED", ""), (row["EXECUTION_STATUS"], row["OSCAL_ELEMENT_PATH"]))
+                self.assertIn("Original target alternatives: ", row["EXECUTION_NOTE"])
+        with (ROOT / "tests/fixtures/mappings_pre_registry.csv").open(encoding="utf-8", newline="") as handle:
+            old_paths = {row["ORIGINAL_ROW_ID"]: row["OSCAL_ELEMENT_PATH"] for row in csv.DictReader(handle)}
+        previous_rows = copy.deepcopy(self.rows)
+        for row in previous_rows:
+            if row["ORIGINAL_ROW_ID"] in old_paths:
+                row["OSCAL_ELEMENT_PATH"] = old_paths[row["ORIGINAL_ROW_ID"]]
+        previous = self.compile(previous_rows)
+        records = [{"SOURCE_RECORD_ID": "synthetic-clean-paths", "CURATED_JSON":
+                    {row["SOURCE_FIELD_NAME"]: index for index, row in enumerate(approved)}}]
+        old_nodes, old_edges = build(self.ns, previous, records)
+        nodes, edges = build(self.ns, self.context, records)
+        self.assertEqual(business(old_nodes), business(nodes))
+        self.assertEqual(business(old_edges), business(edges))
+        self.assertEqual(previous["routing_report"], self.context["routing_report"])
 
     def test_ar30_matches_original_oracle_and_preserves_existing_keys(self):
         oracle = runpy.run_path(str(frozen.AR), run_name="ar30_independent_oracle")
