@@ -99,3 +99,6 @@ acceptance is still needed.
 Current inventory is 45 AR-target row occurrences: 17 live accepted + 13
 enabled/pending live + 15 deferred. Full AR/OSCAL conformance and AR persistence
 are separate from this field-mapping increment.
+
+SQL creation behavior follows [Snowflake CREATE TABLE](https://docs.snowflake.com/en/sql-reference/sql/create-table).
+IF NOT EXISTS leaves an existing table unchanged; OR REPLACE is not used.

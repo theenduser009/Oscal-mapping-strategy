@@ -12,13 +12,15 @@ not a reason to add a separate loader rule. No names need to be resubmitted.
 Cell One now configures the AR destination using the same BINARY16_UUID32
 contract as SSP. The existing loader checks the actual schema before any DML;
 configuration VERIFIED does not claim that this live check has already passed.
-No loader/transform/registry changes are needed. The seven cells total 1,850
+No loader/transform/registry changes are needed. The seven cells total 1,849
 lines. AR mapping scope remains 30 enabled rows and 15 deferred rows.
 
 The accepted shared AR graph preview remains 2,813 records, 73,189 nodes and
 70,376 edges. AR target writes/readback are not yet accepted. Four exact private
 screenshot scalar examples passed again locally (12 nodes, 8 edges, no writes).
 Private values and transcriptions remain outside GitHub and release files.
+[GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34769427830) passed all
+193 tests with zero skips, including AR write/readback and schema-rejection tests.
 
 **Next action:** follow [AR next run](AR_NEXT_RUN.md). Match AR's tables to the
 [shared target definition](../sql/CREATE_ASSESSMENT_RESULTS_TABLES.sql), replacing

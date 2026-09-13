@@ -19,7 +19,7 @@ configuration confirms the chosen contract; it is not a live schema readback.
 The unchanged Cell Six still runs DESC TABLE and checks exact column types,
 lengths and nullability before staging or target DML. A mismatch stops the run.
 No separate timestamp transform, loader, runtime branch or registry change is
-introduced. The seven maintained cells total 1,850 lines (12 configuration lines
+introduced. The seven maintained cells total 1,849 lines (11 net configuration lines
 added). The field scope remains 30 enabled AR rows and 15 deferred rows.
 
 The owner authorized proceeding to AR loading and offered to correct/recreate
@@ -34,7 +34,9 @@ Four exact private screenshot scalar examples also passed mapping/graph
 validation (12 nodes, 8 edges), with no target writes. Real values remain outside
 GitHub. New CI coverage exercises AR inserts, one payload update, unchanged
 commit/readback, SSP isolation and rejection of incorrect timestamp columns.
-CI completion and live AR load are separate evidence; neither is claimed here.
+[GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34769427830) completed successfully:
+193 tests passed with zero skips, including the new AR insert/update/readback
+and schema-rejection tests. This does not establish live AR persistence.
 
 Next action: follow [AR next run](../AR_NEXT_RUN.md). Align existing AR tables to
 the shared definition if needed, replace Cell One, select AR only, and run the
