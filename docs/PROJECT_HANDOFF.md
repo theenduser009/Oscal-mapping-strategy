@@ -1,6 +1,37 @@
 # Project handoff - read this before resuming
 
-## Current action - inspect AR schema mismatch before changing tables
+## Current action - correct the six verified AR DIM schema differences
+
+The [complete owner-posted DESC evidence](checkpoints/2026-09-13-assessment-results-vs-ssp-target-schema-evidence.md)
+from main commit 781049f78085ba016e7004161b78aac74f4cdd8f resolves the earlier
+missing-definition request. FACT matches the shared physical contract.
+AR DIM differs from SSP in six places: ELEMENT_TYPE VARCHAR(32) -> (64),
+SOURCE_TABLE_NAME VARCHAR(50) -> (128), SOURCE_RECORD_ID VARCHAR(32) -> (128),
+DW_PIPELINE_RUN_ID VARCHAR(50) -> (64), DW_LOAD_TIMESTAMP NTZ -> TZ(9), and
+missing DW_LOAD_TIMESTAMP_TZ TZ(9). Full AR key names/types are correct.
+Adding only the missing column is insufficient. No loader rewrite is required.
+
+**Next action:** obtain the one-row result of this read-only Snowflake query:
+
+~~~sql
+SELECT COUNT(*) AS ROW_COUNT,
+       COUNT(DW_LOAD_TIMESTAMP) AS POPULATED_TIMESTAMPS
+FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT;
+~~~
+
+Then prepare the smallest owner-authorized schema correction, preserving any
+existing rows. Do not assume AR is empty because this pipeline has not yet
+written successfully. VARCHAR widening and adding a nullable timestamp column
+are supported. Direct ALTER COLUMN from TIMESTAMP_NTZ to TIMESTAMP_TZ is not a
+supported type change; see [Snowflake ALTER COLUMN](https://docs.snowflake.com/en/sql-reference/sql/alter-table-column).
+If populated NTZ timestamps need conversion, establish their timezone semantics
+rather than assuming UTC. Adding a nullable column leaves historical values
+null; unchanged mapper rows preserve their audit values, so a no-op run is not
+a backfill. The existing CREATE TABLE IF NOT EXISTS script changes no existing
+table. No blind DROP/replace, FACT changes, registry reset or notebook rerun is
+needed for this diagnostic. The previous AR failure made no target writes.
+
+## Previous action - inspect AR schema mismatch before changing tables
 
 The [posted AR PREVIEW failure](checkpoints/2026-09-13-assessment-results-target-schema-mismatch.md)
 from main commit 85ce0594d5d8fc94987c6b689e896167da8ad67e confirms AR is now
