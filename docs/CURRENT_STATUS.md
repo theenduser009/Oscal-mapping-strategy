@@ -1,6 +1,28 @@
 # Current Status
 
-## Current action - correct the six verified AR DIM schema differences
+## Current action - apply the owner-requested empty AR DIM replacement
+
+The owner explicitly confirmed that the AR DIM is completely empty/truncated
+and requested updated DDL. No additional row-count query is needed for this
+agreed empty-table repair. See [the owner confirmation](checkpoints/2026-09-13-ar-empty-dim-replacement.md)
+and [the replacement SQL](../sql/ddl).
+
+The DDL fixes all six verified AR DIM differences in one replacement, uses
+AR's own primary-key name, and retains the ten-column SSP physical contract.
+FACT already matches. The runtime loader, mappings and registry are unchanged.
+COPY GRANTS retains privileges except ownership. This is a one-time repair of
+the owner-confirmed empty table, not a reusable daily-load script.
+
+**Next action:** run the SQL once in Snowflake outside an active transaction,
+then rerun Cell Seven in PREVIEW using the already-built AR contexts. Require
+PREVIEW_PASSED_NO_TARGET_DML with storage/pre-write validation true. Then run
+the authorized Cell Seven COMMIT and capture COMMITTED_AND_VERIFIED plus counts
+and readback. Rerun Cells One through Seven only if earlier inputs/selection or
+session contexts changed. No additional SSP run or registry reset is needed.
+No replacement or load has been executed from this workstation. Published DDL
+and earlier CI success are not live DDL/write acceptance.
+
+## Previous action - correct the six verified AR DIM schema differences
 
 The [complete owner-posted DESC evidence](checkpoints/2026-09-13-assessment-results-vs-ssp-target-schema-evidence.md)
 from main commit 781049f78085ba016e7004161b78aac74f4cdd8f resolves the earlier
