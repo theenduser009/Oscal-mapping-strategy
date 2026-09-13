@@ -1,30 +1,7 @@
 # Project handoff - read this before resuming
 
 
-## Current action — successful SSP PREVIEW v3.1
-
-The posted Snowflake Cell Seven report completed successfully for
-`source-one` / SSP, release `oscal-lean-daily-v3.1`. PREVIEW processed
-2,813 source records into 70,102 nodes and 67,289 edges. Pre-write validation,
-overall validation and storage verification all passed. The group status was
-`PREVIEW_PASSED_NO_TARGET_DML`; the aggregate status was
-`PREVIEW_COMPLETE`.
-
-Expected changes were zero inserts, 1,994 DIM updates and 68,108 unchanged DIM
-rows; FACT reported zero inserts, zero updates and 67,289 unchanged rows.
-`writes_executed`, `persisted`, `committed` and
-`target_dml_attempted` were all false. Temporary objects were removed.
-
-This resolves the previously recorded Cell Three scalar-object
-collection-identity failure for the current preview path. It is PREVIEW
-acceptance only, not COMMIT authorization.
-
-**Next action:** keep `EXECUTE_WRITES = False` and review the 1,994 expected
-DIM updates before any separate write authorization. Do not rerun registry
-setup or cleanup. See the
-[accepted preview checkpoint](checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
-
-## Previous action - CSV-only Cell Three release for preview
+## Current action - CSV-only Cell Three release for preview
 
 Cell Three now uses one flat CSV compiler for executable mappings. The unused
 programmatic-format compiler is removed; required CSV rule IDs still undergo
