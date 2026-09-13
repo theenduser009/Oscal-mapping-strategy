@@ -77,10 +77,11 @@ if (not SELECTED_MODELS or len(set(SELECTED_MODELS)) != len(SELECTED_MODELS)
         or set(SELECTED_MODELS) - MODEL_CONTRACTS.keys()):
     raise ValueError("Choose distinct configured models in SELECTED_MODELS")
 SOURCE_PROFILES = []
-if (len({source["RAW_TABLE"].upper() for source in SOURCE_FILES}) != len(SOURCE_FILES)
+if (len({source["SOURCE_KEY"] for source in SOURCE_FILES}) != len(SOURCE_FILES)
+        or len({source["RAW_TABLE"].upper() for source in SOURCE_FILES}) != len(SOURCE_FILES)
         or len({(source["SOURCE_SYSTEM_NAME"].upper(), source["SOURCE_TABLE_NAME"].upper())
                 for source in SOURCE_FILES}) != len(SOURCE_FILES)):
-    raise ValueError("Each physical source and source namespace must have one binding")
+    raise ValueError("Each source key, physical source and source namespace must have one binding")
 for source in SOURCE_FILES:
     routes = tuple(model for model in SELECTED_MODELS if model in source["MODEL_BINDINGS"])
     if routes:

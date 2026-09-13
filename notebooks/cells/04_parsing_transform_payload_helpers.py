@@ -53,6 +53,10 @@ def _deterministic_hash(*parts):
     return hashlib.md5("|".join(map(str, parts)).encode("utf-8")).hexdigest()
 
 
+def _json_text(value):
+    return json.dumps(value, sort_keys=True, default=str, allow_nan=False)
+
+
 def _scalar_text(value, shape_error, value_error, allow_bool=False):
     value = _to_python(value)
     if value is None or isinstance(value, (dict, list)) or isinstance(value, bool) and not allow_bool:
@@ -260,11 +264,11 @@ def _metadata_assign(payload, target, value, preserve_existing=False):
         if not isinstance(current, dict):
             raise ValueError("Nested payload member conflicts with scalar")
     member = tokens[-1]
-    if member in current and current[member] != value:
+    if member in current and _json_text(current[member]) != _json_text(value):
         if preserve_existing:
             return
         raise ValueError("Singleton target has conflicting populated mappings")
-    current[member] = value
+    current[member] = copy.deepcopy(value)
 
 
 def _metadata_get(payload, target):
@@ -284,7 +288,7 @@ def _metadata_parent_key(parameters, source_record_id):
 def _append_unique_collection_instance(instances, instance):
     for existing in instances:
         if existing["instance_key"] == instance["instance_key"]:
-            if existing["payload"] != instance["payload"]:
+            if _json_text(existing["payload"]) != _json_text(instance["payload"]):
                 raise ValueError("Collection identity resolves to conflicting payloads")
             return
     instances.append(instance)
@@ -458,7 +462,7 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             if operator == "observations" and len(values) != 1:
                 raise ValueError("One scalar value is required per observation")
             for item in values:
-                prop = {"name": _stable_property_name(field), "value": item}
+                prop = {"name": _metadata_text(_stable_property_name(field), "Property name"), "value": item}
                 item_payload = {"props": [prop]} if operator == "observations" else prop
                 key = field if operator == "observations" else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
                 _append_unique_collection_instance(instances, {"instance_key": key, "payload": item_payload,

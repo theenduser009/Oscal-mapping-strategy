@@ -4,7 +4,7 @@ import json
 import re
 import uuid
 
-OSCAL_LOAD_RELEASE = "oscal-lean-daily-v3"
+OSCAL_LOAD_RELEASE = "oscal-lean-daily-v3.1"
 _AUDIT = {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
 _DIM_FIELDS = {
     "ELEMENT_TYPE": "VARCHAR(64)", "OSCAL_UUID": "VARCHAR(32)", "METADATA_JSON": "VARIANT",
@@ -125,6 +125,14 @@ def _load_graph(nodes, edges, config):
         uuids.add(identity)
         if not isinstance(instance, str) or not instance.strip():
             raise LoadError("MISSING_INSTANCE_KEY")
+        if (config.get("STORAGE_CONTRACT") or {}).get("VERIFIED") is True:
+            if path != root and element_type == config["ROOT_ELEMENT_TYPE"]:
+                raise LoadError("AMBIGUOUS_STORED_ROOT_TYPE")
+            for name in _AUDIT:
+                value = node.get(name)
+                if (value is None or (isinstance(value, str) and not value.strip())
+                        or (name == "DW_PIPELINE_RUN_ID" and not isinstance(value, str))):
+                    raise LoadError("INVALID_AUDIT_VALUE")
         try:
             payload = node.get("METADATA_JSON")
             payload = json.loads(payload) if isinstance(payload, str) else payload
@@ -139,7 +147,8 @@ def _load_graph(nodes, edges, config):
             if sid in roots:
                 raise LoadError("DUPLICATE_RECORD_ROOT")
             roots[sid] = k
-    if not roots or config.get("EXPECTED_SOURCE_RECORDS", len(roots)) != len(roots):
+    expected = config.get("EXPECTED_SOURCE_RECORDS", len(roots))
+    if not roots or type(expected) is not int or expected != len(roots):
         raise LoadError("SOURCE_RECORD_GRAPH_COVERAGE_MISMATCH")
     edge_keys = set()
     for edge in rows(edges):
@@ -319,6 +328,17 @@ def _load_verify(context):
     return report
 
 
+def _load_cleanup(context):
+    """Remove only this run's temporary tables, without changing its recorded outcome."""
+    try:
+        _load_no_transaction()  # DROP must never implicitly commit another transaction.
+        for name in context["names"].values():
+            _load_query("DROP TABLE IF EXISTS " + name)
+        return "REMOVED"
+    except BaseException:
+        return "FAILED"
+
+
 def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
     config = dict(config)
     result = {"release": OSCAL_LOAD_RELEASE, "model": config.get("OSCAL_MODEL"),
@@ -375,13 +395,19 @@ def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
             code = "POST_COMMIT_READBACK_FAILED_DO_NOT_RETRY"
         result.update(status=code, phase=phase)
         raise LoadError(code, result) from None
+    finally:
+        if context and context["storage"] and (phase == "ROLLED_BACK" or result.get("status") in {
+                "PREVIEW_PASSED_NO_TARGET_DML", "COMMITTED_AND_VERIFIED"}):
+            result["temporary_cleanup"] = _load_cleanup(context)
 
 
 def verify_oscal_load(canonical_nodes_df, canonical_edges_df, config):
     context = _load_prepare(canonical_nodes_df, canonical_edges_df, dict(config, EXECUTE_WRITES=False))
     if context["storage"] is None:
         return {"status": "TARGET_CONTRACT_PENDING", "storage_verified": False, **context["graph"]}
-    return {"status": "LOAD_VERIFIED", "storage_verified": True, **_load_verify(context)}
+    report = {"status": "LOAD_VERIFIED", "storage_verified": True, **_load_verify(context)}
+    report["temporary_cleanup"] = _load_cleanup(context)
+    return report
 
 
 validate_and_load_oscal._oscal_loader_release = OSCAL_LOAD_RELEASE

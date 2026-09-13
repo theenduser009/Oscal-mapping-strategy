@@ -53,7 +53,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                     "NODE_KEY": node_key, "ELEMENT_PATH": path, "PARENT_NODE_PATH": parent_path, "INSTANCE_KEY": key,
                     "PARENT_INSTANCE_KEY": item.get("parent_instance_key"), "OSCAL_UUID": node_uuid,
                     "ELEMENT_TYPE": row["element_type"],
-                    "METADATA_JSON": json.dumps(payload, sort_keys=True, default=str, allow_nan=False),
+                    "METADATA_JSON": _json_text(payload),
                     "SOURCE_SYSTEM_NAME": source_system, "SOURCE_TABLE_NAME": source_table,
                     "SOURCE_RECORD_ID": record_id, "DW_PIPELINE_RUN_ID": config["RUN_ID"],
                     "DW_LOAD_TIMESTAMP": timestamp, "DW_LOAD_TIMESTAMP_TZ": timestamp,
@@ -77,5 +77,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
         _metadata_record_complete({path: list(values.values()) for path, values in by_path.items()}, context)
     if not nodes:
         raise ValueError("Graph builder produced no nodes")
+    node_frame = _create_canonical_graph_frame(nodes, "nodes")
+    edge_frame = _create_canonical_graph_frame(edges, "edges")
     _metadata_finish(nodes, edges, context)
-    return _create_canonical_graph_frame(nodes, "nodes"), _create_canonical_graph_frame(edges, "edges")
+    return node_frame, edge_frame

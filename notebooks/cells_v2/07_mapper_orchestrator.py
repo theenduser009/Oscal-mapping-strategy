@@ -29,7 +29,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
     try:
         if load_mode not in {"PREVIEW", "COMMIT"} or not mapping_contexts:
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
-        if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3":
+        if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.1":
             raise ValueError("Run the matching Cell 6 before Cell 7")
         routes = {}
         for context in mapping_contexts:

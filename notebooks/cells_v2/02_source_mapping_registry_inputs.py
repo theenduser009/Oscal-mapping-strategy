@@ -94,6 +94,8 @@ def load_mapping_rows(profile):
             row.update((key, value or None) for key, value in zip(header, values))
             if not binding or str(row[binding] or "").strip() == profile.get("MAPPING_SOURCE_VALUE", profile["SOURCE_TABLE_NAME"]):
                 rows.append(row)
+    if binding and not rows:
+        raise ValueError("No mapping rows match the configured source binding")
     return rows
 
 

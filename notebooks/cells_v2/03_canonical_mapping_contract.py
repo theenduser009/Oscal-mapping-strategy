@@ -92,7 +92,7 @@ def _registry_operator(row):
         return operator
     if not _registry_meta_bool(row, "IS_COLLECTION"):
         return "object"
-    identity = (row.get("INSTANCE_KEY_RULE"), row.get("ITEM_PATH"))
+    identity = (row.get("INSTANCE_KEY_RULE"), _metadata_column_text(row, "ITEM_PATH"))
     for candidate in METADATA_INSTANCE_RULES:
         if identity == (METADATA_INSTANCE_RULES[candidate], METADATA_ITEM_PATHS[candidate]):
             return candidate
@@ -161,7 +161,7 @@ def _registry_elements(rows, selected, profile, model):
             raise ValueError("Collection operator requires IS_COLLECTION=true")
         parameters = {"registry_contract": {"parent_path": parent, "is_collection": collection}}
         if collection:
-            identity = (row.get("INSTANCE_KEY_RULE"), row.get("ITEM_PATH"))
+            identity = (row.get("INSTANCE_KEY_RULE"), _metadata_column_text(row, "ITEM_PATH"))
             expected = ("VALUE", "$") if operator == "object" else (METADATA_INSTANCE_RULES[operator], METADATA_ITEM_PATHS[operator])
             if identity != expected:
                 raise ValueError("Registry identity conflicts with OPERATOR")

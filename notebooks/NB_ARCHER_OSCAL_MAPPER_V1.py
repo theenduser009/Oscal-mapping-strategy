@@ -89,10 +89,11 @@ if (not SELECTED_MODELS or len(set(SELECTED_MODELS)) != len(SELECTED_MODELS)
         or set(SELECTED_MODELS) - MODEL_CONTRACTS.keys()):
     raise ValueError("Choose distinct configured models in SELECTED_MODELS")
 SOURCE_PROFILES = []
-if (len({source["RAW_TABLE"].upper() for source in SOURCE_FILES}) != len(SOURCE_FILES)
+if (len({source["SOURCE_KEY"] for source in SOURCE_FILES}) != len(SOURCE_FILES)
+        or len({source["RAW_TABLE"].upper() for source in SOURCE_FILES}) != len(SOURCE_FILES)
         or len({(source["SOURCE_SYSTEM_NAME"].upper(), source["SOURCE_TABLE_NAME"].upper())
                 for source in SOURCE_FILES}) != len(SOURCE_FILES)):
-    raise ValueError("Each physical source and source namespace must have one binding")
+    raise ValueError("Each source key, physical source and source namespace must have one binding")
 for source in SOURCE_FILES:
     routes = tuple(model for model in SELECTED_MODELS if model in source["MODEL_BINDINGS"])
     if routes:
@@ -198,6 +199,8 @@ def load_mapping_rows(profile):
             row.update((key, value or None) for key, value in zip(header, values))
             if not binding or str(row[binding] or "").strip() == profile.get("MAPPING_SOURCE_VALUE", profile["SOURCE_TABLE_NAME"]):
                 rows.append(row)
+    if binding and not rows:
+        raise ValueError("No mapping rows match the configured source binding")
     return rows
 
 
@@ -347,7 +350,7 @@ def _registry_operator(row):
         return operator
     if not _registry_meta_bool(row, "IS_COLLECTION"):
         return "object"
-    identity = (row.get("INSTANCE_KEY_RULE"), row.get("ITEM_PATH"))
+    identity = (row.get("INSTANCE_KEY_RULE"), _metadata_column_text(row, "ITEM_PATH"))
     for candidate in METADATA_INSTANCE_RULES:
         if identity == (METADATA_INSTANCE_RULES[candidate], METADATA_ITEM_PATHS[candidate]):
             return candidate
@@ -416,7 +419,7 @@ def _registry_elements(rows, selected, profile, model):
             raise ValueError("Collection operator requires IS_COLLECTION=true")
         parameters = {"registry_contract": {"parent_path": parent, "is_collection": collection}}
         if collection:
-            identity = (row.get("INSTANCE_KEY_RULE"), row.get("ITEM_PATH"))
+            identity = (row.get("INSTANCE_KEY_RULE"), _metadata_column_text(row, "ITEM_PATH"))
             expected = ("VALUE", "$") if operator == "object" else (METADATA_INSTANCE_RULES[operator], METADATA_ITEM_PATHS[operator])
             if identity != expected:
                 raise ValueError("Registry identity conflicts with OPERATOR")
@@ -749,6 +752,10 @@ def _deterministic_hash(*parts):
     return hashlib.md5("|".join(map(str, parts)).encode("utf-8")).hexdigest()
 
 
+def _json_text(value):
+    return json.dumps(value, sort_keys=True, default=str, allow_nan=False)
+
+
 def _scalar_text(value, shape_error, value_error, allow_bool=False):
     value = _to_python(value)
     if value is None or isinstance(value, (dict, list)) or isinstance(value, bool) and not allow_bool:
@@ -956,11 +963,11 @@ def _metadata_assign(payload, target, value, preserve_existing=False):
         if not isinstance(current, dict):
             raise ValueError("Nested payload member conflicts with scalar")
     member = tokens[-1]
-    if member in current and current[member] != value:
+    if member in current and _json_text(current[member]) != _json_text(value):
         if preserve_existing:
             return
         raise ValueError("Singleton target has conflicting populated mappings")
-    current[member] = value
+    current[member] = copy.deepcopy(value)
 
 
 def _metadata_get(payload, target):
@@ -980,7 +987,7 @@ def _metadata_parent_key(parameters, source_record_id):
 def _append_unique_collection_instance(instances, instance):
     for existing in instances:
         if existing["instance_key"] == instance["instance_key"]:
-            if existing["payload"] != instance["payload"]:
+            if _json_text(existing["payload"]) != _json_text(instance["payload"]):
                 raise ValueError("Collection identity resolves to conflicting payloads")
             return
     instances.append(instance)
@@ -1154,7 +1161,7 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             if operator == "observations" and len(values) != 1:
                 raise ValueError("One scalar value is required per observation")
             for item in values:
-                prop = {"name": _stable_property_name(field), "value": item}
+                prop = {"name": _metadata_text(_stable_property_name(field), "Property name"), "value": item}
                 item_payload = {"props": [prop]} if operator == "observations" else prop
                 key = field if operator == "observations" else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
                 _append_unique_collection_instance(instances, {"instance_key": key, "payload": item_payload,
@@ -1323,7 +1330,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                     "NODE_KEY": node_key, "ELEMENT_PATH": path, "PARENT_NODE_PATH": parent_path, "INSTANCE_KEY": key,
                     "PARENT_INSTANCE_KEY": item.get("parent_instance_key"), "OSCAL_UUID": node_uuid,
                     "ELEMENT_TYPE": row["element_type"],
-                    "METADATA_JSON": json.dumps(payload, sort_keys=True, default=str, allow_nan=False),
+                    "METADATA_JSON": _json_text(payload),
                     "SOURCE_SYSTEM_NAME": source_system, "SOURCE_TABLE_NAME": source_table,
                     "SOURCE_RECORD_ID": record_id, "DW_PIPELINE_RUN_ID": config["RUN_ID"],
                     "DW_LOAD_TIMESTAMP": timestamp, "DW_LOAD_TIMESTAMP_TZ": timestamp,
@@ -1347,8 +1354,10 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
         _metadata_record_complete({path: list(values.values()) for path, values in by_path.items()}, context)
     if not nodes:
         raise ValueError("Graph builder produced no nodes")
+    node_frame = _create_canonical_graph_frame(nodes, "nodes")
+    edge_frame = _create_canonical_graph_frame(edges, "edges")
     _metadata_finish(nodes, edges, context)
-    return _create_canonical_graph_frame(nodes, "nodes"), _create_canonical_graph_frame(edges, "edges")
+    return node_frame, edge_frame
 
 
 # %% Cell 6 - Validate once, preview, then atomically upsert the reviewed tables
@@ -1357,7 +1366,7 @@ import json
 import re
 import uuid
 
-OSCAL_LOAD_RELEASE = "oscal-lean-daily-v3"
+OSCAL_LOAD_RELEASE = "oscal-lean-daily-v3.1"
 _AUDIT = {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
 _DIM_FIELDS = {
     "ELEMENT_TYPE": "VARCHAR(64)", "OSCAL_UUID": "VARCHAR(32)", "METADATA_JSON": "VARIANT",
@@ -1478,6 +1487,14 @@ def _load_graph(nodes, edges, config):
         uuids.add(identity)
         if not isinstance(instance, str) or not instance.strip():
             raise LoadError("MISSING_INSTANCE_KEY")
+        if (config.get("STORAGE_CONTRACT") or {}).get("VERIFIED") is True:
+            if path != root and element_type == config["ROOT_ELEMENT_TYPE"]:
+                raise LoadError("AMBIGUOUS_STORED_ROOT_TYPE")
+            for name in _AUDIT:
+                value = node.get(name)
+                if (value is None or (isinstance(value, str) and not value.strip())
+                        or (name == "DW_PIPELINE_RUN_ID" and not isinstance(value, str))):
+                    raise LoadError("INVALID_AUDIT_VALUE")
         try:
             payload = node.get("METADATA_JSON")
             payload = json.loads(payload) if isinstance(payload, str) else payload
@@ -1492,7 +1509,8 @@ def _load_graph(nodes, edges, config):
             if sid in roots:
                 raise LoadError("DUPLICATE_RECORD_ROOT")
             roots[sid] = k
-    if not roots or config.get("EXPECTED_SOURCE_RECORDS", len(roots)) != len(roots):
+    expected = config.get("EXPECTED_SOURCE_RECORDS", len(roots))
+    if not roots or type(expected) is not int or expected != len(roots):
         raise LoadError("SOURCE_RECORD_GRAPH_COVERAGE_MISMATCH")
     edge_keys = set()
     for edge in rows(edges):
@@ -1672,6 +1690,17 @@ def _load_verify(context):
     return report
 
 
+def _load_cleanup(context):
+    """Remove only this run's temporary tables, without changing its recorded outcome."""
+    try:
+        _load_no_transaction()  # DROP must never implicitly commit another transaction.
+        for name in context["names"].values():
+            _load_query("DROP TABLE IF EXISTS " + name)
+        return "REMOVED"
+    except BaseException:
+        return "FAILED"
+
+
 def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
     config = dict(config)
     result = {"release": OSCAL_LOAD_RELEASE, "model": config.get("OSCAL_MODEL"),
@@ -1728,13 +1757,19 @@ def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
             code = "POST_COMMIT_READBACK_FAILED_DO_NOT_RETRY"
         result.update(status=code, phase=phase)
         raise LoadError(code, result) from None
+    finally:
+        if context and context["storage"] and (phase == "ROLLED_BACK" or result.get("status") in {
+                "PREVIEW_PASSED_NO_TARGET_DML", "COMMITTED_AND_VERIFIED"}):
+            result["temporary_cleanup"] = _load_cleanup(context)
 
 
 def verify_oscal_load(canonical_nodes_df, canonical_edges_df, config):
     context = _load_prepare(canonical_nodes_df, canonical_edges_df, dict(config, EXECUTE_WRITES=False))
     if context["storage"] is None:
         return {"status": "TARGET_CONTRACT_PENDING", "storage_verified": False, **context["graph"]}
-    return {"status": "LOAD_VERIFIED", "storage_verified": True, **_load_verify(context)}
+    report = {"status": "LOAD_VERIFIED", "storage_verified": True, **_load_verify(context)}
+    report["temporary_cleanup"] = _load_cleanup(context)
+    return report
 
 
 validate_and_load_oscal._oscal_loader_release = OSCAL_LOAD_RELEASE
@@ -1771,7 +1806,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
     try:
         if load_mode not in {"PREVIEW", "COMMIT"} or not mapping_contexts:
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
-        if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3":
+        if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.1":
             raise ValueError("Run the matching Cell 6 before Cell 7")
         routes = {}
         for context in mapping_contexts:
