@@ -66,6 +66,9 @@ commits remain accepted and need no repeated run.
 
 ## Validation scope
 
+[CI passed all 205 tests with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34773274346)
+on code commit ad41b4fabe569ddc4d1d32c9e2192f572f4f7cad. This includes eleven
+focused POA&M cases and a real Snowpark VARIANT graph test; generated pages match.
 Focused tests cover reference payloads, deterministic identity, deduplication,
 null/malformed inputs, links and rejection of stale plans/unverified writes.
 SSP/AR regression and generated-cell checks accompany this change. The private

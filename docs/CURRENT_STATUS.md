@@ -9,8 +9,9 @@ UUID-only reference nodes and root-to-item links; no item details are invented.
 The runtime is 1,855 lines, six more than the AR binding baseline. SSP and AR
 mapped outputs remain unchanged in regression tests.
 
-Eleven focused POA&M tests pass. The full local suite passes 193 tests with
-three Snowpark-dependent classes skipped; CI with Snowpark remains pending.
+Eleven focused POA&M tests pass. [CI passed all 205 tests with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34773274346)
+on code commit ad41b4fabe569ddc4d1d32c9e2192f572f4f7cad, including the real
+Snowpark POA&M VARIANT graph test. Generated cells also match.
 The readable private screenshot's empty-reference case is covered; populated
 POAMS examples and live persistence remain unverified. Reference graph
 acceptance does not establish complete POA&M document conformance.
