@@ -10,10 +10,17 @@ original nine registry columns. Only `OPERATOR`, `UUID_POLICY` and
 visible deployment settings. No JSON catalog upload or extra daily runtime cell
 is required.
 
-The lean rebuild contains 1,802 lines across seven cells, down from 3,700.
+The lean rebuild contains 1,838 lines across seven cells, down from 3,700.
 The [release suite](../../tests/lean/README.md) checks accepted output, source
-selection, transforms, links and transaction failures. Live acceptance is still
-pending. First complete the
+selection, transforms, links and transaction failures. The expanded audit fixed
+eleven reproduced gaps and NumPy integer compatibility. All 158 tests pass in
+[GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34758711257),
+including eight installed Snowpark checks and complete seven-cell executions. See the
+[full validation record](../../docs/checkpoints/2026-09-13-full-validation.md).
+
+Live registry verification and daily Snowflake preview/MERGE/readback acceptance
+remain pending. AR has no verified destination, and full-document OSCAL
+conformance is outside the accepted mapped scope. First complete the
 [lean one-time registry setup](../../docs/REGISTRY_METADATA_SETUP.md), then use
 the updated mapping CSV and all seven matching cells in one Snowflake session,
 with normal writes disabled and Cell Seven in PREVIEW. Do not mix releases or

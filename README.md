@@ -5,11 +5,14 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 **Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Accepted runs,
 cell responsibilities, unresolved gaps and the next action are recorded there.
 
-**Current lean rebuild:** 1,802 lines across the same
+**Current lean rebuild:** 1,838 lines across the same
 [seven cells](notebooks/cells_v2/README.md), down from 3,700. One mapping CSV and
 the original nine registry columns plus three execution columns drive the
 mapper. Alternate metadata formats, cached plans and repeated validations have
-been removed. See the [rebuild and validation record](docs/checkpoints/2026-09-13-lean-rebuild.md).
+been removed. The expanded audit fixed eleven reproduced gaps and NumPy
+integer compatibility. [GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34758711257)
+passes all 158 tests, including eight installed Snowpark checks and complete
+seven-cell executions. See the [full validation record](docs/checkpoints/2026-09-13-full-validation.md).
 
 Run release tests with `python -m unittest discover -s tests/lean -v` and verify
 generated files with `python tools/sync_notebook_cells.py --check`.
@@ -20,6 +23,9 @@ needs live DEV verification before the notebook preview; follow
 
 Normal writes stay disabled. SSP's accepted full DEV reload is not repeated;
 AR remains seventeen accepted in-memory mappings without verified storage.
+Live registry verification and daily Snowflake preview/MERGE/readback acceptance
+remain pending. Passing mapped-scope tests does not establish full OSCAL
+document conformance.
 
 ## Authoritative files
 

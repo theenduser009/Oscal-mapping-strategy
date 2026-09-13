@@ -1,32 +1,38 @@
 # Project handoff - read this before resuming
 
-## Current action - seven-cell lean rebuild
+## Current action - expanded validation of the lean rebuild
 
 The owner requested a substantial simplification across all seven cells. The
-maintained source is now **1,802 lines, down from 3,700 (51.3% fewer)**.
+maintained source is now **1,838 lines, down from 3,700 (50.3% fewer)**.
 Alternate metadata formats, cached plans and duplicate validation/reporting
 were removed; accepted mapping scope and identities remain unchanged.
 
-The new release suite passes locally, including exact SSP/AR17 output, 1,403
-transformation comparisons, metadata-only third-model execution, source/lookup
-handling and transaction-failure tests. Installed Snowpark smoke is mandatory
-in GitHub CI; the local machine lacks that package. The previous 769-test
-private-API suite is historical evidence, not validation of the new runtime.
-See the [lean rebuild checkpoint](checkpoints/2026-09-13-lean-rebuild.md) and
+The expanded audit fixed eleven reproduced input, graph and persistence gaps,
+plus NumPy integer compatibility in source coverage. The local run reports
+**150 tests**, with two Snowpark test classes skipped because the package is
+unavailable. Coverage includes exact SSP/AR17 output, 1,403 transformation
+comparisons, metadata-only third-model execution, source/lookup handling and
+transaction failures. The previous 769-test private-API suite is historical
+evidence, not validation of the new runtime.
+See the [full validation checkpoint](checkpoints/2026-09-13-full-validation.md) and
 [release test instructions](../tests/lean/README.md).
 
 The rebuild is published in [draft PR #1](https://github.com/theenduser009/Oscal-mapping-strategy/pull/1).
-[Initial rebuild CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34738888719)
-passed all 105 tests, including five installed Snowpark API checks. A final
-compiler review added three regressions and small fixes with no runtime growth;
-103 local tests pass, with package checks required again in CI.
+**All 158 tests pass** in [GitHub CI #10](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34758711257)
+for code commit [ae90082b](https://github.com/theenduser009/Oscal-mapping-strategy/commit/ae90082bc89029f6731872e1d89253c178f087e5).
+This includes five installed Snowpark API tests and three complete seven-cell
+executions, without skips. The tested code tree is unchanged by documentation updates.
+The notebook integration tests use an explicit SQLite/MERGE adapter for SQL and
+target writes; they do not establish live Snowflake acceptance.
 
-**Next action:** perform live registry/preview and daily-loader acceptance when
-the intended Snowflake environment is available. Do not resume another general
-cleanup cycle: this requested lean rebuild is complete. No live database action
-occurred here.
+**Next action:** perform live registry
+verification and daily preview/MERGE/rollback/readback acceptance when the
+intended Snowflake environment is available. No live database action occurred
+here. Approved mapped-scope validation does not establish full-document OSCAL
+schema or constraint conformance; unapproved fields remain separate work.
 Normal writes remain false, the default model is SSP, and AR has no verified
-destination. No additional owner permission is needed for scoped code work.
+destination. The unresolved historical SSP row-count reduction is unchanged.
+No additional owner permission is needed for scoped code work.
 
 ## Previous action - eight-hour delivery candidate
 
@@ -553,7 +559,8 @@ See [shared workflow](SHARED_SEVEN_CELL_MAPPER.md) and [SSP daily policy](SSP_DA
 
 Cell Seven defaults to OSCAL_LOAD_MODE=PREVIEW and global EXECUTE_WRITES remains
 false. Every selected route must have a verified storage contract before COMMIT.
-The current AR route does not, so the shipped two-model selection is preview-only.
+The current AR route does not. The shipped default selects SSP; selecting AR
+alongside SSP permits preview only until AR storage is verified.
 
 The writer inserts new keys, updates changed business values and leaves
 unchanged rows/audit values alone. PK/FK, UUID, payload, source scope and hierarchy

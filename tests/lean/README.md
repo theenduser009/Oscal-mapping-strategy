@@ -35,6 +35,15 @@ never fills missing functions from an older active mapper.
   snapshots, ranking, deduplication, typed graph frames and row collection.
   `test_snowpark_local.py` adapts only the emulator's unsupported transaction
   query and string-filter boundaries and describes those substitutions.
+- `test_notebook_end_to_end.py` executes every statement of all seven cells
+  using the actual CSV, synthetic values for every approved field, installed
+  Snowpark frames and the local relational adapter. It covers SSP preview,
+  commit and unchanged retry; SSP/AR route selection; and 32-record isolation.
+  The emulator's unsupported `TRIM` uses the documented `mock.patch` hook;
+  SQL and target writes use the explicit SQLite/MERGE adapter.
+- The gap suites cover source mutation, typed-value collisions, failed output
+  materialization, empty CSV bindings, nullable registry inputs, audit lineage
+  and temporary-table cleanup. Unknown outcomes retain inspection data.
 
 The package smoke tests exercise an installed Snowpark implementation, but no
 local emulator proves the live schema, roles, transactions, MERGE semantics or
