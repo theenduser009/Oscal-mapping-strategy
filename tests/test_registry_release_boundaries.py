@@ -112,7 +112,7 @@ class AdditionalReleaseTests(unittest.TestCase):
                 ns = self.run_ar_pipeline(value)
                 result = ns["MODEL_GRAPHS"][("source-one", "ASSESSMENT_RESULTS")]
                 self.assertEqual((2, 1), (len(result["nodes"].rows), len(result["edges"].rows)))
-                self.assertEqual(17, len(result["coverage"].rows))
+                self.assertEqual(32, len(result["coverage"].rows))
                 self.assertFalse(ns["PIPELINE_REPORT"]["writes_executed"])
 
     def test_ar_repeat_run_preserves_business_payload_and_keys(self):
@@ -193,7 +193,7 @@ class RegistryMigrationBoundaryTests(unittest.TestCase):
 
     def test_valid_seed_fixture_still_compiles_in_active_decoder(self):
         contexts = self.harness.compile(registry=copy.deepcopy(self.rows))
-        self.assertEqual({"SSP": 47, "ASSESSMENT_RESULTS": 17},
+        self.assertEqual({"SSP": 47, "ASSESSMENT_RESULTS": 32},
                          {ctx["config"]["OSCAL_MODEL"]: len(ctx["mapping_rows"])
                           for ctx in contexts})
 
@@ -252,4 +252,3 @@ class RegistryMigrationBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

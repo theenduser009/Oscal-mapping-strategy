@@ -72,7 +72,7 @@ class NotebookFlowTests(unittest.TestCase):
             with self.subTest(models=models):
                 namespace = self.execute(models)
                 self.assertEqual(
-                    {model: {"SSP": 47, "ASSESSMENT_RESULTS": 17}[model] for model in models},
+                    {model: {"SSP": 47, "ASSESSMENT_RESULTS": 32}[model] for model in models},
                     {context["config"]["OSCAL_MODEL"]: len(context["mapping_rows"])
                      for context in namespace["MAPPING_CONTEXTS"]})
 
@@ -95,4 +95,3 @@ class NotebookFlowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

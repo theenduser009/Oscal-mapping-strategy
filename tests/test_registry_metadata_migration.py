@@ -173,7 +173,7 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
         harness = release.RegistryReleaseTests()
         harness.setUp()
         contexts = harness.compile(registry=registry)
-        self.assertEqual({"SSP": 47, "ASSESSMENT_RESULTS": 17},
+        self.assertEqual({"SSP": 47, "ASSESSMENT_RESULTS": 32},
                          {ctx["config"]["OSCAL_MODEL"]: len(ctx["mapping_rows"]) for ctx in contexts})
         for context in contexts:
             self.assertEqual(context["routing_report"]["STATUS"], "READY", context["routing_report"])
@@ -415,4 +415,3 @@ class RegistryMetadataMigrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -144,7 +144,7 @@ MODEL_CONTRACTS = {
             "allow_nan": False,
         },
         "REPORT": {
-            "MAPPING_RELEASE": "ar-observation-scores-v2-17-fields",
+            "MAPPING_RELEASE": "ar-observation-scores-metadata-v1",
             "REPRESENTATION": "one-named-property-per-observation",
         },
     },

@@ -1,5 +1,22 @@
 # Current Status
 
+## Current action - Assessment Results CSV correction preview
+
+The canonical CSV now enables fifteen clean owner-approved alternative-path
+fields as observation nodes containing inline named properties. Assessment
+Results therefore compiles 32 executable mappings instead of 17. Three
+ambiguous rows remain deferred: `RISK_ACCEPTANCE_RBDS`,
+`TOTAL_PACKAGE_INHERENT_RISK`, and `RISK_ASSESSMENT_REPORT`.
+
+The seven workflow fields, duplicate score rows and `FINDINGS` remain deferred.
+SSP and registry metadata are unchanged. All 701 local tests pass. No Snowflake
+preview or database write was performed for this correction.
+
+**Next action:** refresh the mapping CSV and V2 Cell One, keep
+`EXECUTE_WRITES = False`, run the V2 cells in PREVIEW, and inspect the Assessment
+Results field-level coverage report before authorizing any commit. See the
+[checkpoint](checkpoints/2026-09-13-assessment-results-csv-execution-metadata-fix.md).
+
 
 ## Current action - CSV-only Cell Three release for preview
 
@@ -1333,4 +1350,3 @@ within-record parent/child keys. Snowflake transport and unrelated component
 lookup I/O are faked locally; **live acceptance is pending**, and this does not
 prove all externally loaded Excel rows are supported. See the
 [routing correction checkpoint](checkpoints/2026-09-10_ssp_property_routing_fix.md).
-

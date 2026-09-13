@@ -1,5 +1,14 @@
 # Archer to OSCAL mapping progress
 
+## September 13 — Assessment Results CSV execution metadata corrected
+
+Fifteen clean alternative-path rows are now executable as
+`assessment-results.results[].observations[]` nodes with one named inline
+property. The generic pipeline compiles 32 Assessment Results mappings. Three
+ambiguous alternative rows remain deferred, and no SSP or registry definition
+changed. All 701 local tests pass; Snowflake PREVIEW remains required before any
+new acceptance or write. See [E29](checkpoints/2026-09-13-assessment-results-csv-execution-metadata-fix.md).
+
 Last updated: 2026-09-11, end-of-day reconciliation after the accepted full SSP DEV reload and publication of the updated Cells 6-7 daily path. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.

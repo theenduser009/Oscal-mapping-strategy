@@ -146,7 +146,7 @@ class ModelSelectionTests(unittest.TestCase):
                      if row["OSCAL_MODEL"].strip().upper().replace(" ", "_")
                      == "ASSESSMENT_RESULTS"
                      and row["EXECUTION_STATUS"] == "APPROVED"]
-        self.assertEqual(len(rules), 17)
+        self.assertEqual(len(rules), 32)
         self.assertTrue(all(rule["EXECUTION_STATUS"] == "APPROVED" for rule in rules))
         self.assert_no_targets(ar_only)
 
@@ -301,4 +301,3 @@ class ModelSelectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

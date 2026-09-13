@@ -1,5 +1,21 @@
 # Assessment Results — score mapping
 
+## September 13 CSV execution-metadata correction — preview required
+
+The canonical CSV now resolves fifteen clean owner-approved alternative-path
+rows to `assessment-results.results[].observations[]`. Each observation carries
+one named inline `props[]` value. Together with the original seventeen, the
+generic metadata-driven pipeline now compiles **32 executable Assessment Results
+mappings**. The original Excel path and Notes remain unchanged as provenance.
+
+`RISK_ACCEPTANCE_RBDS`, `TOTAL_PACKAGE_INHERENT_RISK`, and
+`RISK_ASSESSMENT_REPORT` remain deferred; they were not forced through the scalar
+score transform. SSP, registry metadata and database data were not changed.
+
+All 701 local tests pass. This mapping correction still requires a Snowflake
+PREVIEW with `EXECUTE_WRITES = False`; it is not yet a new live acceptance or
+authorization to commit. See the [correction checkpoint](checkpoints/2026-09-13-assessment-results-csv-execution-metadata-fix.md).
+
 Active source: Source One, Archer Authorization Package `CURATED_JSON`.
 SSP is parked and preserved. All seventeen selected observation-score mappings
 are now live accepted, including the thirteen-field extension. The [September 11

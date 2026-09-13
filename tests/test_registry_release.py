@@ -86,18 +86,22 @@ class RegistryReleaseTests(unittest.TestCase):
             deployed['MODEL_CONTRACTS'], deployed['ROUTING_METADATA'])
         return contexts
 
-    def test_original_mapping_cells_and_provenance_are_unchanged(self):
+    def test_original_mapping_provenance_is_unchanged_and_approved_metadata_is_extended(self):
         rows = mapping_rows()
         with (ROOT / 'tests/fixtures/mappings_pre_registry.csv').open(encoding='utf-8', newline='') as handle:
             frozen = list(csv.DictReader(handle))
         self.assertEqual(151, len(rows))
-        self.assertEqual(frozen, [{key: row[key] for key in frozen[0]} for row in rows[:148]])
-        self.assertEqual(Counter(APPROVED=63, BLOCKED_IF_POPULATED=1, DEFERRED=85, EXCLUDED=2),
+        columns = previous.PROVENANCE_COLUMNS
+        self.assertEqual(
+            [[row[key] for key in columns] for row in frozen],
+            [[row[key] for key in columns] for row in rows[:148]],
+        )
+        self.assertEqual(Counter(APPROVED=78, BLOCKED_IF_POPULATED=1, DEFERRED=70, EXCLUDED=2),
                          Counter(row['EXECUTION_STATUS'] for row in rows))
         self.assertEqual(set(SUPPORT), {row['RULE_ID'] for row in rows[148:]})
         self.assertEqual(['FIELD', 'CONFIG', 'CONFIG'], [row['VALUE_SOURCE'] for row in rows[148:]])
 
-    def test_actual_release_compiles_all_61_original_contracts_and_three_supports(self):
+    def test_actual_release_preserves_61_contracts_and_adds_15_approved_ar_fields(self):
         contexts = self.compile()
         for context in contexts:
             self.assertEqual('READY', context['routing_report']['STATUS'], context['routing_report'])
@@ -109,9 +113,29 @@ class RegistryReleaseTests(unittest.TestCase):
             context['compiled_plan']['mappings'] = [row for row in context['compiled_plan']['mappings']
                                                    if row['RULE_ID'] not in SUPPORT]
         frozen = json.loads(previous.OLD_CATALOG_PATH.read_text(encoding='utf-8'))
-        self.assertEqual(previous._frozen_semantics(frozen), previous._compiled_semantics(original))
-        self.assertEqual({'SSP': 47, 'ASSESSMENT_RESULTS': 17},
+        frozen_semantics = previous._frozen_semantics(frozen)
+        actual_semantics = previous._compiled_semantics(original)
+        self.assertTrue(all(row in actual_semantics for row in frozen_semantics))
+        self.assertEqual(len(frozen_semantics) + 15, len(actual_semantics))
+        self.assertEqual({'SSP': 47, 'ASSESSMENT_RESULTS': 32},
                          {c['config']['OSCAL_MODEL']: len(c['mapping_rows']) for c in contexts})
+
+    def test_ar_alternative_paths_have_one_runtime_representation(self):
+        rows = [row for row in mapping_rows()
+                if row['OSCAL_MODEL'] == 'Assessment Results'
+                and ' or props[]' in row['OSCAL_ELEMENT_PATH']]
+        approved = [row for row in rows if row['EXECUTION_STATUS'] == 'APPROVED']
+        deferred = [row for row in rows if row['EXECUTION_STATUS'] == 'DEFERRED']
+        self.assertEqual(15, len(approved))
+        self.assertEqual(
+            {'RISK_ACCEPTANCE_RBDS', 'TOTAL_PACKAGE_INHERENT_RISK', 'RISK_ASSESSMENT_REPORT'},
+            {row['SOURCE_FIELD_NAME'] for row in deferred},
+        )
+        for row in approved:
+            self.assertEqual('scalar-score', row['TRANSFORM_ID'])
+            self.assertEqual('assessment-results.results[].observations[]',
+                             row['RUNTIME_TARGET_PATH'])
+            self.assertTrue(row['RULE_ID'].startswith('ar-alt:'))
 
     def ssp(self, mutate_record=None, registry_extra=None):
         old, records, original_registry, lookups = graph.ssp_fixture(graph.namespace(legacy=True))
@@ -184,10 +208,13 @@ class RegistryReleaseTests(unittest.TestCase):
         self.assertTrue(all(context['routing_report']['STATUS'] == 'READY'
                             for context in contexts))
 
-    def test_exact_ar17_standalone_outputs_use_current_inputs(self):
+    def test_exact_ar32_standalone_outputs_use_current_inputs(self):
         old_ns = graph.namespace(legacy=True)
         old = graph.ar_context(old_ns)
-        fields = tuple(row['SOURCE_FIELD_NAME'] for row in old['mapping_rows'])
+        live_rows = [row for row in mapping_rows()
+                     if row['OSCAL_MODEL'] == 'Assessment Results'
+                     and row['EXECUTION_STATUS'] == 'APPROVED']
+        fields = tuple(row['SOURCE_FIELD_NAME'] for row in live_rows)
         records = [{'SOURCE_RECORD_ID': '100', 'CURATED_JSON': json.dumps({f: n + 1 for n, f in enumerate(fields)})},
                    {'SOURCE_RECORD_ID': '101', 'CURATED_JSON': '{"VULNERABILITY_SCORE":1.000000000000000001,"PATCH_SCORE":0,"RISK_SCORE_GRADE":"A"}'}]
         registry = release_registry()
@@ -196,11 +223,13 @@ class RegistryReleaseTests(unittest.TestCase):
         context['lookups'] = copy.deepcopy(old['lookups'])
         oracle = runpy.run_path(str(graph.AR), run_name='registry_release_oracle')
         scope = oracle['build_ar_score_batch'].__globals__
-        scope['AR_SCORE_FIELDS'], scope['AR_ALTERNATIVE_SCORE_FIELDS'] = scope['AR_ACCEPTED_SCORE_FIELDS'], ()
+        scope['AR_SCORE_FIELDS'] = fields
+        scope['AR_ALTERNATIVE_SCORE_FIELDS'] = tuple(
+            field for field in fields if field not in scope['AR_ACCEPTED_SCORE_FIELDS'])
         helpers = {name: old_ns[name] for name in oracle['AR_HELPERS']}
         helpers['resolve_archer_select_value'] = lambda value: old_ns['resolve_archer_select_value'](value, old)
         ar_registry = [row for row in registry if row['OSCAL_MODEL_KEY'] == 'ASSESSMENT_RESULTS']
-        expected = oracle['build_ar_score_batch'](records, old['mapping_rows'], ar_registry, old['config'], helpers)
+        expected = oracle['build_ar_score_batch'](records, live_rows, ar_registry, old['config'], helpers)
         nodes, edges = graph.build(self.ns, context, records, graph.Frame(registry))
         self.assertEqual(graph.business(expected['nodes']), graph.business(nodes.rows))
         self.assertEqual(graph.business(expected['edges']), graph.business(edges.rows))
@@ -209,4 +238,3 @@ class RegistryReleaseTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
