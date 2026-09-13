@@ -1,6 +1,36 @@
 # Project handoff - read this before resuming
 
-## Current action - select AR; the latest posted COMMIT ran SSP only
+## Current action - inspect AR schema mismatch before changing tables
+
+The [posted AR PREVIEW failure](checkpoints/2026-09-13-assessment-results-target-schema-mismatch.md)
+from main commit 85ce0594d5d8fc94987c6b689e896167da8ad67e confirms AR is now
+selected. It reports FAILED_BEFORE_COMMIT, TARGET_SCHEMA_MISMATCH in PREPARATION,
+and false writes/persisted/committed/target_dml_attempted/commit_attempted.
+No AR target DML was attempted. The empty groups list reflects the failure
+before the route preview completed, not absence of an AR model selection.
+
+Earlier AR graph-only preview did not inspect destinations. The newly bound
+route now checks exact table columns, types/widths and nullability. The posted
+failure does not preserve the specific differing columns. Earlier evidence
+showed an NTZ timestamp and omitted the second timestamp, but current actual
+column definitions must be inspected before declaring the complete cause.
+The CREATE TABLE IF NOT EXISTS script does not repair an existing table.
+
+**Next action:** run these read-only SQL statements in Snowflake and post both
+result grids (column names, full types, nullability and expressions):
+
+~~~sql
+DESC TABLE RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT;
+DESC TABLE RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY;
+~~~
+
+Use those definitions to prepare the smallest correction matching the owner's
+shared SSP standard. No new model-specific timestamp rules, registry reset,
+unchanged notebook rerun or blind table recreation is required for diagnosis.
+Preserve existing data. Code's 193-test CI and private excerpt checks remain
+valid; they are not proof that these live destination schemas match.
+
+## Previous action - select AR; the latest posted COMMIT ran SSP only
 
 The [latest owner-posted report](checkpoints/2026-09-13-ssp-commit-reverification.md)
 from main commit 2a9e7512f405c802dbdc4d790c43ffcbec0cb998 contains a single SSP
