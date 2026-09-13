@@ -7,12 +7,12 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
-## Active task - Assessment Results
+## Active scope - AR mapped graph persisted; POA&M next
 
 The owner selected AR next, followed by POA&M and remaining model work by
 Monday. Follow docs/AR_NEXT_RUN.md. The CSV now enables 30 AR fields: 17
-previously live accepted plus 13 owner-approved additions pending live
-acceptance. Preserve the 15 deferred rows, including threshold-name conflicts,
+previously live accepted plus 13 owner-approved additions. The current AR graph
+has now been inserted and verified; per-field populated coverage remains separate. Preserve the 15 deferred rows, including threshold-name conflicts,
 two parked shape rejections and prior workflow/score deferrals. No new
 runtime or registry rules are needed for the 13 additions. AR now has its own
 owner-confirmed storage binding with the same physical definition as SSP.
@@ -21,20 +21,20 @@ prerequisite for AR. System implementation is part of SSP, with six accepted
 component-reference mappings and partial hydration. Do not claim full models
 complete from partial field coverage.
 
-## Latest shared AR preview
+## Latest shared AR COMMIT accepted
 
-The owner-posted shared AR graph preview passed for 2,813 records, 73,189 nodes
-and 70,376 edges. See docs/checkpoints/2026-09-13-assessment-results-preview-target-contract-pending.md.
-No AR target DML or persistence has been accepted. Both AR table/key names
-are posted. The owner subsequently confirmed identical SSP physical rules for
-all models; the earlier timestamp differences are schema mistakes to correct.
-See docs/checkpoints/2026-09-13-ar-shared-ssp-storage-contract.md. Cell One now
-binds AR's own targets. Reuse the unchanged loader and its live schema checks.
-Do not ask for names again or introduce an AR-specific timestamp transform.
-The owner authorized proceeding to AR loading once its table schema matches;
-follow docs/AR_NEXT_RUN.md and preserve existing data when reconciling schema.
-The posted report lacks the selected-field count/per-field coverage; distinguish
-graph acceptance from populated-value acceptance of every added AR field.
+The owner-posted AR COMMIT is COMMITTED_AND_VERIFIED for 2,813 records,
+73,189 DIM inserts and 70,376 FACT inserts. All validation/write/commit flags
+passed and committed readback matched every inserted row; cleanup is REMOVED.
+See docs/checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md.
+The prior AR schema mismatch is superseded by this successful storage run.
+AR tables are now populated. Do not rerun sql/ddl, recreate tables, reset the
+registry or request another unchanged run. Retain the accepted SSP checkpoint.
+Advance the owner's next POA&M work without adding a separate runtime engine.
+Thirty AR metadata rows remain enabled and fifteen deferred. Aggregate graph
+persistence does not establish every field's populated coverage or full OSCAL
+conformance. Continue using relevant private screenshot excerpts alongside
+synthetic tests without publishing source values.
 
 ## Non-negotiable metadata-driven architecture
 

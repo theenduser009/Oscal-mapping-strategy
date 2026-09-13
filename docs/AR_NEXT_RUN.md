@@ -1,7 +1,16 @@
-# Assessment Results - next run
+# Assessment Results - accepted load and future runs
 
 Updated September 13, 2026. Use the existing seven-cell mapper and the updated
 [maintained CSV](../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
+
+## Current acceptance
+
+The [posted AR COMMIT](checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md)
+inserted 73,189 DIM elements and 70,376 FACT relationships for 2,813 source
+records, then verified committed readback. Status is COMMITTED_AND_VERIFIED.
+AR storage is accepted for this mapped graph. Do not repeat this unchanged run
+or the empty-table DDL; the tables are now populated. The next selected model
+work is POA&M. Instructions below apply only to future intended data loads.
 
 ## Scope now
 
@@ -9,8 +18,8 @@ Updated September 13, 2026. Use the existing seven-cell mapper and the updated
 | --- | --- |
 | SSP agreed mapping subset | Committed and read-back verified in DEV; the latest batch changed no rows. |
 | SSP system implementation | Six component-reference mappings implemented; software/interconnection hydration is partial. This is part of SSP, not another model. |
-| AR original 17 fields | Previously live accepted in memory; no AR database load is accepted. |
-| AR next 13 fields | Enabled in the CSV through the existing scalar-score transform; shared graph preview passed; per-field populated coverage/persistence remain pending. |
+| AR original 17 fields | Original in-memory baseline retained; current shared AR graph is now persisted/read-back verified. |
+| AR next 13 fields | Enabled in the CSV through the existing scalar-score transform; current shared AR graph persisted/read-back verified; individual populated-field coverage remains separate. |
 | Remaining 15 AR rows | Deferred for the specific decisions below; not counted as completed mappings. |
 | POA&M | Reference mapping recorded; item source/identity, hierarchy and destination still need confirmation. |
 
@@ -19,7 +28,7 @@ Implementation remain separate. See [SSP scope](SSP_DONE_AND_NEXT.md).
 The owner's target is to progress AR, POA&M and remaining models by Monday;
 that is a delivery target, not evidence of completed mapping or storage.
 
-## Run AR against its confirmed destination
+## Future intended AR loads
 
 1. Keep the already updated AR30 mapping CSV in notebook Files. Replace
    [Cell One](../notebooks/cells/01_initialization_and_configuration.py) with the

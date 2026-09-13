@@ -1,6 +1,6 @@
 # Archer to OSCAL mapping progress
 
-Last updated: 2026-09-13, shared AR graph preview accepted; AR storage pending; SSP COMMIT and readback accepted. Owner: Source One mapping implementation team.
+Last updated: 2026-09-13, AR insert/committed readback and SSP COMMIT/readback accepted. Owner: Source One mapping implementation team.
 
 This is the durable field-to-target register and the basis for daily reporting.
 It covers the evidence-backed subset below, not every row in the external Excel
@@ -10,7 +10,35 @@ Implementation respectively. These labels are grouping aids; the path controls
 the destination. An artifact row is not complete merely because it is accepted
 by a dispatcher or a target node exists.
 
-## Current action - bind the AR destination after accepted graph preview
+## Current action - AR insert and committed readback accepted
+
+The [owner-posted AR COMMIT](checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md)
+from main commit 823570de2c62e5e91cbfbad888befb040030fc87 reports
+COMMITTED_AND_VERIFIED for ASSESSMENT_RESULTS: 2,813 source records,
+73,189 DIM inserts and 70,376 FACT inserts, with zero updates/unchanged rows.
+Validation, pre-write validation and storage verification passed. Target DML,
+writes, persisted and committed flags are true. Post-commit verification reports
+zero remaining inserts/updates and all 73,189 DIM / 70,376 FACT rows unchanged;
+temporary cleanup is REMOVED. This accepts changed-row persistence and committed
+readback for the posted AR graph, superseding the schema-failure/load-pending state.
+
+The AR DIM is now populated. The empty-table replacement in sql/ddl is historical
+and must not be rerun. No further schema repair, registry reset, unchanged
+preview, repeated COMMIT or SSP reload is requested. Existing table/key, UUID,
+audit and hierarchy checks remain enforced by the shared seven-cell loader.
+
+This is aggregate graph persistence evidence, not full AR/OSCAL conformance or
+populated-value coverage of every enabled field. Thirty AR rows remain enabled
+in metadata and fifteen remain deferred; this report supplies no new field-level
+approval. Readback proves no remaining differences in the committed batch; it
+is not evidence of a separately executed repeat COMMIT.
+
+**Next action:** advance the owner's next selected POA&M scope using the existing
+mapping register and registry contracts, retaining the specific AR deferrals
+for later decisions. Preserve this successful AR checkpoint and the accepted
+SSP checkpoint; do not repeat accepted loads as a prerequisite for POA&M.
+
+## Previous action - bind the AR destination after accepted graph preview
 
 The owner posted the [shared Assessment Results preview](checkpoints/2026-09-13-assessment-results-preview-target-contract-pending.md)
 in main commit `5c8ef0cbdc5bec29b1f88d1be2e5ea1ae802faeb`.
