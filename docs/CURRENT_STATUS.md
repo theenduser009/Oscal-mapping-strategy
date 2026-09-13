@@ -1,28 +1,5 @@
 # Current Status
 
-## Latest runtime status — SSP PREVIEW v3.1 accepted
-
-The Snowflake aggregate report is `PREVIEW_COMPLETE` for `source-one`,
-model SSP, release `oscal-lean-daily-v3.1`.
-
-- Source records: **2,813**
-- Nodes: **70,102**
-- Edges: **67,289**
-- Pre-write validation: **passed**
-- Validation: **passed**
-- Storage verification: **passed**
-- Expected DIM: **0 inserts, 1,994 updates, 68,108 unchanged**
-- Expected FACT: **0 inserts, 0 updates, 67,289 unchanged**
-- Writes executed / persisted / committed / target DML attempted: **false**
-- Temporary cleanup: **REMOVED**
-
-The earlier scalar-object collection-identity failure is resolved for this
-preview path. This is not COMMIT approval. Keep `EXECUTE_WRITES = False` and
-review the 1,994 expected DIM updates before requesting any write action.
-
-[Full checkpoint](checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
-
-
 
 ## Current action - CSV-only Cell Three release for preview
 
