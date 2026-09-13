@@ -96,6 +96,9 @@ screenshot check covers the readable empty-reference example only; no populated
 POAMS screenshot example or complete source dataset has been executed.
 SQL preparation and local tests are not evidence of live POA&M acceptance.
 
-The storage binding adds an all-seven-cell POAM preview/insert/unchanged/new-reference
-readback test that also preserves populated SSP/AR destinations. Current local
-checks pass; the installed-Snowpark CI run for this binding is pending.
+The storage binding passed [all 206 CI tests with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34782320867)
+on ce5b37b7b0bb09985d563f117e7e958000cce2a6, including all seven cells with
+installed Snowpark and the local SQL adapter: POAM preview/insert/unchanged/new-reference
+readback preserves populated SSP/AR destinations. The readable private empty-reference
+example separately passed bound local preview/commit/readback: one root, no items or
+edges, one DIM row and zero FACT rows. No live Snowflake write is claimed.

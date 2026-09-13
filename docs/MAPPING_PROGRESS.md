@@ -23,11 +23,13 @@ and six-column FACT definitions, including both audit timestamps. It creates
 missing tables only. The mapper remains seven cells / 1,865 lines; the shared
 loader, UUID/hash rules and approved Reference mapping are unchanged.
 
-The local suite passes 193 tests with three Snowpark-dependent classes skipped.
-The actual bound mapper/shared loader also passed local relational preview,
-insert, unchanged and added-reference readback checks. Installed-Snowpark CI for
-the new seven-cell POAM persistence test remains pending. SQL schema definitions
-match the loader contract; no live DDL, registry update or POAM write is claimed.
+[CI passed all 206 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34782320867)
+on code commit ce5b37b7b0bb09985d563f117e7e958000cce2a6. This includes the
+installed-Snowpark seven-cell POAM preview/insert/unchanged/new-reference test
+and preservation of populated SSP/AR tables; SQL writes use the local relational
+adapter. Generated pages match. The private empty-reference example separately
+passed bound local readback: one root, no item/edge, one DIM row and zero FACT rows.
+DDL matches the shared physical contract. No live POAM DDL/update/write is claimed.
 
 **Next action:** follow [POAM_NEXT_RUN.md](POAM_NEXT_RUN.md): run the missing-table
 DDL and the scoped, self-checking POAM registry update, then use the updated CSV
