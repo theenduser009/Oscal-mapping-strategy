@@ -2,11 +2,14 @@
 
 ## Current action - eight-hour delivery candidate
 
+Publication verified: commit [df7cf761](https://github.com/theenduser009/Oscal-mapping-strategy/commit/df7cf761e85227ed6e5689011447187999b361dc)
+contains the tested source; [GitHub Mapper checks #2](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34737812206)
+passed. The published tree matched the local tested index. Main remains unchanged.
+
 The owner authorized continued changes while away and requested tested code on
 GitHub within eight hours. All **769 local tests pass**; **2,209 metadata** and
 **729 linked-identity differential cases** match supported behavior. Generated
-notebooks are synchronized. The preceding checkpoint af639853 passed GitHub CI;
-verify this candidate's own remote commit and checks before claiming publication.
+notebooks are synchronized. GitHub CI passed for this tested source.
 
 The current cells contain **3,700 physical / 3,263 nonblank, noncomment lines**,
 159 physical lines below this task's start and 562 below the earlier 4,262-line
@@ -19,8 +22,7 @@ validation, repeated identity scans and the unused mapping upload. Conflicting
 latest source payloads now block instead of selecting a JSON-hash winner; equal
 latest duplicates still collapse after configured technical ordering.
 
-**Next action:** verify the final GitHub publication/CI, continue meaningful
-remaining simplification from this tested checkpoint, and perform live acceptance
+**Next action:** continue meaningful remaining simplification from this tested checkpoint, and perform live acceptance
 in the intended Snowflake environment before enabling writes. The deadline check
 is scheduled for September 13 at 08:04 America/New_York. See the
 [eight-hour delivery checkpoint](checkpoints/2026-09-13-eight-hour-delivery.md).
@@ -1464,4 +1466,3 @@ within-record parent/child keys. Snowflake transport and unrelated component
 lookup I/O are faked locally; **live acceptance is pending**, and this does not
 prove all externally loaded Excel rows are supported. See the
 [routing correction checkpoint](checkpoints/2026-09-10_ssp_property_routing_fix.md).
-

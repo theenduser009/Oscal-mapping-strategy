@@ -46,9 +46,13 @@ mappings, registry identity recipes and frozen parity fixtures remain intact.
   loader and orchestration changes. Source transport behavior was checked against
   official documentation; local tests still substitute the Snowpark transport.
 - Generated split/combined notebook synchronization and whitespace checks pass.
-- The preceding checkpoint, af639853f8c9543f025d89b547321c6b02993a29, passed the
-  new pinned GitHub workflow. Publication and CI for this final candidate must
-  be verified against its own commit before claiming the remote result.
+- This tested source was published in commit df7cf761e85227ed6e5689011447187999b361dc.
+  GitHub Mapper checks #2 passed on that commit. Its tree matched the tested
+  local index; main remains unchanged.
+
+Publication verified: commit [df7cf761](https://github.com/theenduser009/Oscal-mapping-strategy/commit/df7cf761e85227ed6e5689011447187999b361dc)
+contains the tested source; [GitHub Mapper checks #2](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34737812206)
+passed. The published tree matched the local tested index. Main remains unchanged.
 
 The input correction follows Snowflake's documented unpredictable object-key
 ordering in [TO_JSON](https://docs.snowflake.com/en/sql-reference/functions/to_json),
@@ -81,7 +85,6 @@ path remain pending, and Assessment Results has no verified destination. The
 historical SSP row-count discrepancy is unchanged. A successful local or GitHub
 test run does not resolve those deployment requirements.
 
-Next action: verify publication and CI for this candidate, continue any meaningful
-remaining simplification from this tested checkpoint, and obtain live acceptance
+Next action: continue any meaningful remaining simplification from this tested checkpoint, and obtain live acceptance
 in the intended Snowflake environment before enabling writes. The one-time
 delivery check is scheduled for September 13 at 08:04 America/New_York.
