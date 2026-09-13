@@ -136,7 +136,10 @@ class NotebookEndToEndTests(unittest.TestCase):
                 for node in tree.body:
                     if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "SELECTED_MODELS" for t in node.targets):
                         node.value = ast.parse(repr(models), mode="eval").body
-                exec(compile(ast.fix_missing_locations(tree), str(path), "exec"), ns)
+                try:
+                    exec(compile(ast.fix_missing_locations(tree), str(path), "exec"), ns)
+                except Exception as error:
+                    raise AssertionError(f"{path.name}: {getattr(error, 'report', str(error))}") from error.__context__
         return ns
 
     def test_all_seven_cells_full_csv_preview_commit_and_unchanged_retry(self):
