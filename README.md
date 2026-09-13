@@ -5,6 +5,16 @@ This repository is the durable checkpoint for the metadata-driven Archer-to-OSCA
 **Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Accepted runs,
 cell responsibilities, unresolved gaps and the next action are recorded there.
 
+**Live SSP preview accepted:** 2,813 records, 70,102 nodes and 67,289 edges;
+validation, pre-write and storage checks passed with no target writes. DIM
+proposes 1,994 updates, zero inserts and 68,108 unchanged rows; all 67,289 FACT
+rows are unchanged. See the [live checkpoint](docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
+The next action is a read-only review of those updates. The
+[review helper](notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py) is
+covered by twelve unit tests and an installed Snowpark join test; live
+execution is pending. Do not repeat registry
+setup, cleanup or the accepted pipeline run.
+
 **Current lean rebuild:** 1,838 lines across the same
 [seven cells](notebooks/cells_v2/README.md), down from 3,700. One mapping CSV and
 the original nine registry columns plus three execution columns drive the
@@ -17,14 +27,15 @@ seven-cell executions. See the [full validation record](docs/checkpoints/2026-09
 Run release tests with `python -m unittest discover -s tests/lean -v` and verify
 generated files with `python tools/sync_notebook_cells.py --check`.
 [Test instructions](tests/lean/README.md) distinguish local tests, installed
-Snowpark API checks and pending live Snowflake acceptance. Registry setup still
-needs live DEV verification before the notebook preview; follow
+Snowpark API checks and live Snowflake evidence. Daily COMMIT and committed
+readback acceptance remain pending; follow
 [current status](docs/CURRENT_STATUS.md).
 
 Normal writes stay disabled. SSP's accepted full DEV reload is not repeated;
 AR remains seventeen accepted in-memory mappings without verified storage.
-Live registry verification and daily Snowflake preview/MERGE/readback acceptance
-remain pending. Passing mapped-scope tests does not establish full OSCAL
+Preview snapshots were removed. The review compares existing `MODEL_GRAPHS`
+with the current target; matching counts do not prove the old baseline is
+unchanged. Passing mapped-scope tests does not establish full OSCAL
 document conformance.
 
 ## Authoritative files
@@ -54,11 +65,11 @@ The committed notebook always starts with:
 
 Cell 6 already defines graph validation and insert/update MERGE loading; Cell 7
 orchestrates the normal notebook. The updated daily writer defaults to PREVIEW,
-uses an explicit Cell 7 mode for approved SSP DEV commits, and is not yet
-live-accepted. Clean in-memory keys alone are not permission to enable it.
+uses an explicit Cell 7 mode for approved SSP DEV commits. Its live PREVIEW is
+accepted; daily COMMIT and committed readback remain pending.
 The separate DEV persistence cells have their own explicitly scoped modes.
 
-## Latest verified checkpoint
+## Accepted full DEV reload - historical write evidence
 
 The [full SSP DEV reload](docs/SSP_FULL_DEV_RELOAD_2026-09-11.md) committed and
 verified **2,813 records, 70,102 DIM elements and 67,289 FACT dependencies**.
@@ -134,7 +145,7 @@ The same release makes the optional `security-impact-level` branch atomic:
 only payloads containing all three confidentiality, integrity, and
 availability objectives are emitted. Missing values are never invented.
 
-## Immediate next action
+## Historical mapped-scope follow-up
 
 The component hydration and hardened mapper release is accepted. Cell 4
 enforces the Excel-defined mapping contracts: the four approved SSP

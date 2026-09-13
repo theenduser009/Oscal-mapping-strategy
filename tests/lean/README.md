@@ -44,6 +44,11 @@ never fills missing functions from an older active mapper.
 - The gap suites cover source mutation, typed-value collisions, failed output
   materialization, empty CSV bindings, nullable registry inputs, audit lineage
   and temporary-table cleanup. Unknown outcomes retain inspection data.
+- `test_preview_update_review.py` covers the separate read-only comparison
+  helper: JSON member differences, aggregate counts, drift, privacy and guards.
+  Its installed Snowpark test preserves duplicate and missing binary-key
+  matches. The emulator's unsupported SQL-string projections are explicitly
+  adapted; those expressions still require live Snowflake execution.
 
 The package smoke tests exercise an installed Snowpark implementation, but no
 local emulator proves the live schema, roles, transactions, MERGE semantics or

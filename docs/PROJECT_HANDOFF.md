@@ -1,6 +1,39 @@
 # Project handoff - read this before resuming
 
-## Current action - expanded validation of the lean rebuild
+## Current action - review 1,994 proposed SSP updates
+
+The owner's live `oscal-lean-daily-v3.1` SSP run is accepted at
+`PREVIEW_COMPLETE`: **2,813 source records, 70,102 nodes and 67,289 edges**.
+Validation, pre-write and storage checks passed for `source-one` / `SSP`.
+See the [accepted live preview](checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
+
+| Target | Proposed inserts | Proposed updates | Unchanged |
+| --- | ---: | ---: | ---: |
+| DIM | 0 | 1,994 | 68,108 |
+| FACT | 0 | 0 | 67,289 |
+
+Writes executed, persisted, committed and target DML are all **false**.
+Temporary cleanup reports `REMOVED`. Do not repeat registry setup, cleanup,
+the seven-cell pipeline or the accepted full DEV reload.
+
+**Next action:** review the 1,994 proposed DIM updates with
+[READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py](../notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py).
+The helper includes twelve unit tests and an installed Snowpark join test;
+live execution is pending. It must
+compare the accepted candidate still in `MODEL_GRAPHS` with the **current**
+target because the preview's temporary snapshots were removed. Matching counts
+alone cannot prove that the historical target baseline is unchanged.
+
+No direct database connector is available here, and browser startup is blocked
+by a missing runtime path. The owner's posted report supplies the live evidence.
+Daily COMMIT and committed readback remain pending; normal writes stay false,
+AR storage is unverified, and full OSCAL conformance remains separate work.
+The helper does not change the seven runtime cells or their 1,838-line size.
+
+## Previous action - expanded validation of the lean rebuild
+
+Historical source-validation evidence follows; its deployment next action is
+superseded by the accepted preview and update review above.
 
 The owner requested a substantial simplification across all seven cells. The
 maintained source is now **1,838 lines, down from 3,700 (50.3% fewer)**.

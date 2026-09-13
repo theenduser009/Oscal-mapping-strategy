@@ -1,9 +1,30 @@
 # Registry prerequisites and seven-cell deployment
 
+## Current state - live SSP preview accepted
+
+The owner's [live SSP preview](checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md)
+passed validation, pre-write and storage checks for 2,813 records, 70,102 nodes
+and 67,289 edges. No target writes occurred. **Do not repeat registry setup,
+cleanup or the seven-cell pipeline.** The deployment instructions below are
+historical reference, not the current next action.
+
+Next is read-only review of the 1,994 proposed DIM updates using
+[READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py](../notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py),
+which has twelve unit tests and an installed Snowpark join test; live execution
+is pending. The accepted
+candidate remains in `MODEL_GRAPHS`; preview temporary snapshots report
+`REMOVED`. Comparison must use the current target, and matching counts cannot
+prove the historical baseline is unchanged. Daily COMMIT and committed
+readback remain pending. Normal writes stay false, AR storage is unverified,
+and full OSCAL conformance remains separate work.
+
+## Historical registry deployment context
+
 The code no longer needs the JSON catalog. The lean runtime contract uses the
 existing nine registry columns plus only three sparse execution columns:
-`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`. **This revised migration has
-not been run or verified in Snowflake.**
+`OPERATOR`, `UUID_POLICY` and `REQUIRED_MEMBERS`. The following notes record the
+earlier preparation sequence; the accepted preview supersedes its pending-run
+instructions.
 
 The reported block-line-270 attempt failed on a JSON binding type mismatch
 before ALTER or UPDATE. A later 18-column run was reported as finishing, but its
@@ -17,17 +38,16 @@ The new seven-cell implementation uses this same registry contract. Its local
 tests do not establish that the registry migration or daily writer succeeded
 in the intended Snowflake environment.
 
-## Recorded DEV cleanup prerequisite
+## Historical DEV cleanup prerequisite
 
 Because the earlier experimental setup created additional DEV columns, first
 the owner already authorized
 [CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql](../sql/registry/CLEANUP_UNUSED_OSCAL_MAPPER_METADATA_COLUMNS.sql).
 The scoped cleanup removes only the fifteen retired columns and returns
-`STATUS = REGISTRY_UNUSED_COLUMNS_REMOVED`. Its completion has not been verified
-here. Complete and record that prerequisite before the registry verification
-below; do not repeat it if matching successful evidence is already available.
+`STATUS = REGISTRY_UNUSED_COLUMNS_REMOVED`. This was an earlier prerequisite;
+the current accepted preview does not call for another cleanup or verification.
 
-## Lean registry metadata verification
+## Historical lean registry metadata verification procedure
 
 Open [EXTEND_OSCAL_MAPPER_METADATA.sql](../sql/registry/EXTEND_OSCAL_MAPPER_METADATA.sql),
 copy the whole file into a **fresh Snowflake SQL worksheet**, and run it with
@@ -67,7 +87,7 @@ An uncertain commit/rollback outcome requires inspection, not an automatic
 retry. A successful setup can be rerun without changing matching metadata,
 but is a one-time deployment action, not a daily Matillion step.
 
-## After setup is verified: preview
+## Historical seven-cell deployment procedure
 
 1. Replace the notebook Files copy of
    [ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
@@ -91,7 +111,7 @@ preview reports `PREVIEW_COMPLETE`; the SSP group reports
 change counts and write status. The former field-report and cached-plan APIs
 are not part of this release.
 
-Live registry setup and this release's preview/daily persistence acceptance
+This release's live preview is accepted; daily COMMIT and committed readback
 remain pending. Keep the shared `CONFIG["EXECUTE_WRITES"]` false. Cell Seven's
 `OSCAL_LOAD_MODE` controls any later COMMIT through per-run configuration;
 every selected route must have a verified destination. The daily writer requires

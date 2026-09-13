@@ -18,12 +18,16 @@
   allowed.
 - The earlier eighteen-column registry design is superseded. The lean setup SQL
   adds or verifies only the three active extension columns and never drops any
-  legacy DEV columns. It has not been live-verified. The seven-cell lean rebuild
-  is recorded in docs/checkpoints/2026-09-13-lean-rebuild.md; run its tests/lean
-  release suite, not the retired engine's private-API suite. The owner approved the exact fifteen-column DEV
-  cleanup; run only the guarded cleanup SQL before further registry verification.
-  Do not advise a notebook run until the registry setup is live-verified. Normal
-  DIM/FACT writes remain disabled.
+  legacy DEV columns. Registry setup and cleanup must not be repeated: the
+  owner posted an accepted live SSP PREVIEW, recorded in
+  docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md.
+  Do not rerun the seven-cell pipeline. The current task is read-only review of
+  its 1,994 proposed DIM updates using the tested helper at
+  notebooks/validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py. Compare the
+  existing MODEL_GRAPHS candidate with the current target; removed preview
+  snapshots cannot prove an unchanged historical baseline through counts alone.
+  Run tests/lean, not the retired engine's private-API suite. Normal DIM/FACT
+  writes remain disabled; daily COMMIT/readback and AR storage remain pending.
 - The deployed JSON file is retired. Historical settings and mappings are
   frozen under tests/fixtures for independent parity only, never uploaded or
   loaded in production. Required title/version and AR17 gates remain preserved.
@@ -46,7 +50,7 @@
 
 - Matillion converts raw field-ID JSON to the Archer RAW table's CURATED_JSON column. The OSCAL notebook reads that column; it does not perform that upstream conversion.
 - Cells 1-5 configure/read/normalize/transform/build. Cell 6 already defines validation, insert/update MERGE loading, and load verification. Cell 7 orchestrates them. Do not say the notebook has no loader.
-- Normal Cells 1-7 runs used writes disabled. The separate full DEV reload was accepted; the existing Cells 6-7 daily persistence path is not yet end-to-end accepted.
+- The live oscal-lean-daily-v3.1 SSP PREVIEW passed all gates with writes disabled: 2,813 records, 70,102 nodes and 67,289 edges. The separate full DEV reload was accepted; daily COMMIT and committed readback remain pending. Do not treat PREVIEW_COMPLETE or proposed updates as a write.
 - User notebook cell numbers after seven are session-local. Identify a separate cell by its file and purpose, not by assuming every Cell 8 is the same program.
 - Registry governs hierarchy and identity. Excel/CSV source field, model, exact element path, mapping type and Notes govern field mappings. Registry presence is not proof of complete mapping.
 - Separate implemented, candidate-only, runtime-accepted in memory, persisted/read-back verified, deferred, blocked, and full OSCAL conformance. Do not turn one status into another.

@@ -18,13 +18,19 @@ eleven reproduced gaps and NumPy integer compatibility. All 158 tests pass in
 including eight installed Snowpark checks and complete seven-cell executions. See the
 [full validation record](../../docs/checkpoints/2026-09-13-full-validation.md).
 
-Live registry verification and daily Snowflake preview/MERGE/readback acceptance
-remain pending. AR has no verified destination, and full-document OSCAL
-conformance is outside the accepted mapped scope. First complete the
-[lean one-time registry setup](../../docs/REGISTRY_METADATA_SETUP.md), then use
-the updated mapping CSV and all seven matching cells in one Snowflake session,
-with normal writes disabled and Cell Seven in PREVIEW. Do not mix releases or
-rerun the accepted full DEV reload.
+The [live SSP preview](../../docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md)
+is accepted: 2,813 records, 70,102 nodes and 67,289 edges, with all validation
+gates passed and no target writes. DIM proposes 1,994 updates; FACT is unchanged.
+Registry setup, cleanup and the seven-cell pipeline must not be repeated.
+
+Next is the [read-only update review](../validation/READ_ONLY_SSP_PREVIEW_UPDATE_REVIEW.py),
+which has twelve unit tests and an installed Snowpark join test; live execution
+is pending. It compares the
+existing `MODEL_GRAPHS` candidate with the current target because preview
+snapshots were removed. Equal counts cannot prove the historical baseline is
+unchanged. This separate helper does not add a runtime cell. Daily COMMIT and
+committed readback remain pending; AR has no verified destination, normal
+writes stay disabled, and full-document OSCAL conformance is separate work.
 
 Developers edit these files once, then use `python tools/sync_notebook_cells.py`;
 `--check` reports generated-page drift. This is a packaging tool, not a
@@ -100,7 +106,7 @@ OSCAL version and SSP document version `1.0` without changing timestamps.
 
 The repository baseline keeps `EXECUTE_WRITES = False`.
 
-## Current post-revision checkpoint
+## Historical post-revision checkpoints
 
 Pinned run `20260908T220830Z` passed graph and pre-write validation with
 51,500 nodes, 48,687 edges, zero duplicate/dangling keys, and no writes. The
