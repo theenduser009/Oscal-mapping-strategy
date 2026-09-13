@@ -1,6 +1,29 @@
 # Current Status
 
-## Current action - load AR using the shared SSP table definition
+## Current action - select AR; the latest posted COMMIT ran SSP only
+
+The [latest owner-posted report](checkpoints/2026-09-13-ssp-commit-reverification.md)
+from main commit 2a9e7512f405c802dbdc4d790c43ffcbec0cb998 contains a single SSP
+group. It reports COMMITTED_AND_VERIFIED for 2,813 records, 70,102 nodes and
+67,289 edges, with zero DIM/FACT inserts or updates and successful readback.
+This is SSP re-verification, not an AR load attempt or AR loader failure.
+
+**Next action:** in the published Cell One that includes AR's storage binding,
+set SELECTED_MODELS = ("ASSESSMENT_RESULTS",), keep shared EXECUTE_WRITES false,
+and set Cell Seven OSCAL_LOAD_MODE = "COMMIT". Run Cells One through Seven in
+order so SOURCE_PROFILES, SOURCE_INPUTS and MAPPING_CONTEXTS are rebuilt for AR.
+Changing only the selector without rerunning the earlier cells leaves old
+contexts in memory. The report must name ASSESSMENT_RESULTS and finish
+COMMITTED_AND_VERIFIED with actual DIM/FACT changes and committed readback.
+The existing loader checks the live AR schema before any target DML; reconcile
+actual schema mismatches with the owner's shared SSP definition if reported.
+No registry reset or additional SSP run is needed.
+
+AR code remains tested (193 CI tests, no skips; four private screenshot excerpt
+checks). No new code change or test rerun is needed to diagnose this posted
+SSP-only selection. AR persistence remains pending its actual run report.
+
+## Previous action - load AR using the shared SSP table definition
 
 The owner confirmed that all model tables use SSP's physical rules; only table
 and primary-key names differ. The full AR pair and key names are now posted.
