@@ -304,7 +304,7 @@ WHERE COALESCE(d.N,0)<>COALESCE(r.N,0)"""
     return report
 
 
-def _load_comparison(columns, left="t", right="s"):
+def _load_comparison(columns, left="t", right="s", include_audit=False, parse_json=True):
     names = [c["name"] if isinstance(c, dict) else c for c in columns]
     for name in names:
         _load_ident(name)
@@ -313,9 +313,9 @@ def _load_comparison(columns, left="t", right="s"):
     if left not in ("t", "s", "b") or right not in ("t", "s", "b"):
         raise LoadError("INVALID_COMPARISON_ALIAS")
     terms = []
-    for name in (name for name in names if name not in _LOAD_AUDIT_COLUMNS):
+    for name in (name for name in names if include_audit or name not in _LOAD_AUDIT_COLUMNS):
         lhs, rhs = left + "." + _load_ident(name), right + "." + _load_ident(name)
-        if name == "METADATA_JSON":
+        if parse_json and name == "METADATA_JSON":
             # Structural object comparison, not JSON key ordering.
             lhs = "TRY_PARSE_JSON(TO_VARCHAR(" + lhs + "))"
             rhs = "TRY_PARSE_JSON(TO_VARCHAR(" + rhs + "))"
@@ -516,13 +516,10 @@ def _load_verify_context(session, context):
             raise LoadError("SAVED_BUSINESS_PAYLOAD_OR_KEYS_DIFFER", {"TABLE_KIND": kind, "COUNTS": changes})
         # Business-unchanged rows retain prior fields, including audit. Updated/new
         # rows must match every projected stage field, including current audit.
-        cols, business_changed = _load_comparison(plan, "b", "s")
+        _, business_changed = _load_comparison(plan, "b", "s")
         business_same = "NOT (" + business_changed + ")"
-        all_old = " OR ".join("t." + _load_ident(c) + " IS DISTINCT FROM b." + _load_ident(c) for c in cols)
-        all_new = " OR ".join(
-            ("TRY_PARSE_JSON(TO_VARCHAR(t." + _load_ident(c) + ")) IS DISTINCT FROM "
-             "TRY_PARSE_JSON(TO_VARCHAR(s." + _load_ident(c) + "))") if c == "METADATA_JSON"
-            else "t." + _load_ident(c) + " IS DISTINCT FROM s." + _load_ident(c) for c in cols)
+        _, all_old = _load_comparison(plan, "t", "b", include_audit=True, parse_json=False)
+        _, all_new = _load_comparison(plan, include_audit=True)
         _load_zero(session, f"""SELECT COUNT(*) AS N FROM {names[kind]} s
  JOIN {target} t ON t.{pk}=s.{pk} LEFT JOIN {baseline} b ON b.{pk}=s.{pk}
  WHERE (b.{pk} IS NOT NULL AND ({business_same}) AND ({all_old}))
@@ -567,23 +564,20 @@ def _load_transaction(session, merges, before_write, verify, expected_changes, c
         _load_query(session, "BEGIN TRANSACTION")
     except BaseException:
         raise LoadError("BEGIN_OUTCOME_UNKNOWN") from None
-    step, pass_number, changes = "PREWRITE_BASELINE", 0, []
+    step, result = "PREWRITE_BASELINE", []
     try:
         before_write()
-        pass_number, result = 1, []
-        for index, (step, statement) in enumerate(zip(("DIM_MERGE", "FACT_MERGE"), merges)):
+        for step, statement, expected in zip(("DIM_MERGE", "FACT_MERGE"), merges, expected_changes):
             actual = _load_dml_counts(_load_query(session, statement))
-            expected = tuple(expected_changes[index])
-            if actual != expected:
+            if actual != tuple(expected):
                 raise LoadError("UNEXPECTED_MERGE_CHANGE_COUNT",
                                 {"EXPECTED_INSERTS": expected[0], "EXPECTED_UPDATES": expected[1],
                                  "ACTUAL_INSERTS": actual[0], "ACTUAL_UPDATES": actual[1]})
             result.append({"INSERTS": actual[0], "UPDATES": actual[1]})
-        changes.append({"PASS": pass_number, "DIM": result[0], "FACT": result[1]})
         step = "READBACK_AND_INTEGRITY"
-        verify(pass_number)
+        verify(1)
     except BaseException as error:
-        details = dict(_load_error_details(error), STEP=step, PASS=pass_number)
+        details = dict(_load_error_details(error), STEP=step, PASS=int(step != "PREWRITE_BASELINE"))
         try:
             _load_query(session, "ROLLBACK")
         except BaseException:
@@ -593,7 +587,8 @@ def _load_transaction(session, merges, before_write, verify, expected_changes, c
         _load_query(session, "COMMIT")
     except BaseException:
         raise LoadError("COMMIT_OUTCOME_UNKNOWN") from None
-    return {"STATUS": "COMMITTED", "CHANGE_COUNTS": changes, "VERIFIED_PASSES": 1}
+    return {"STATUS": "COMMITTED", "VERIFIED_PASSES": 1,
+            "CHANGE_COUNTS": [{"PASS": 1, "DIM": result[0], "FACT": result[1]}]}
 
 
 def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):

@@ -69,7 +69,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
     """
     report = {"status": "NOT_RUN", "mode": load_mode, "writes_executed": False,
               "commit_attempted": False, "groups": []}
-    graphs, seen = {}, set()
+    graphs, routes = {}, {}
     context = None
     phase = "routing"
     try:
@@ -79,9 +79,9 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             key = (original["source_key"], original["config"]["OSCAL_MODEL"])
             report["active_group"] = {"source": key[0], "model": key[1]}
             report["active_routing"] = copy.deepcopy(original["routing_report"])
-            if key in seen:
+            if key in routes:
                 raise ValueError("Duplicate source/model route")
-            seen.add(key)
+            routes[key] = original
             if key[0] not in source_inputs:
                 raise ValueError("Missing selected source input")
             if original["routing_report"].get("STATUS") != "READY":
@@ -91,8 +91,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             _oscal_run_config(original["config"], load_mode)
         # Build and validate every candidate before the first target commit.
         phase = "preview"
-        for original in mapping_contexts:
-            key = (original["source_key"], original["config"]["OSCAL_MODEL"])
+        for key, original in routes.items():
             context = copy.deepcopy(original)
             report["active_group"] = {"source": key[0], "model": key[1]}
             context["lookups"] = dict(source_inputs[key[0]].get("lookups", {}))
@@ -118,7 +117,8 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             for group in report["groups"]:
                 report["active_group"] = {"source": group["source"], "model": group["model"]}
                 graph = graphs[(group["source"], group["model"])]
-                cfg = _oscal_run_config(graph["context"]["config"], "COMMIT")
+                context = graph["context"]
+                cfg = _oscal_run_config(context["config"], "COMMIT")
                 report["commit_attempted"] = True
                 result = validate_and_load_oscal(
                     canonical_nodes_df=graph["nodes"], canonical_edges_df=graph["edges"], config=cfg,
@@ -137,19 +137,22 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
         report.pop("active_group", None)
         report.pop("active_routing", None)
         return graphs, report
-    except Exception as exc:
+    except BaseException as exc:
         report["status"] = ("PIPELINE_COMMIT_FAILED_REVIEW_REQUIRED" if report["commit_attempted"]
                             else "PIPELINE_FAILED_NO_TARGET_DML")
         report["failed_phase"] = phase
         report["error_type"] = type(exc).__name__
         if phase == "routing":
             report["error_reason"] = str(exc)
+        elif context is not None:
+            report["active_routing"] = copy.deepcopy(context["routing_report"])
         if context is not None and "graph_report" in context:
             report["active_graph_report"] = copy.deepcopy(context["graph_report"])
         # Loader reports carry only approved diagnostics; never print source payloads.
         load_report = getattr(exc, "report", getattr(exc, "details", None))
         if isinstance(load_report, dict):
             report["failed_load_report"] = load_report
+            report["writes_executed"] = report["writes_executed"] or load_report.get("writes_executed") is True
         if report["commit_attempted"]:
             report["failed_commit_outcome"] = "REVIEW_REQUIRED_NO_AUTOMATIC_RETRY"
         raise PipelineError("OSCAL pipeline stopped; inspect OSCAL_PIPELINE_REPORT", report) from None

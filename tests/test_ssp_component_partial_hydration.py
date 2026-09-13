@@ -146,6 +146,8 @@ def _database_write_attributes(source):
         ("_legacy_prepare_model_context", "config"),
         ("_metadata_prepare", "report"),
         ("_metadata_record_complete", "used_parties"),
+        ("_metadata_party_instances", "parties"),
+        ("_metadata_party_instances", "assigned_parties"),
         ("_metadata_finish", "report"),
         ("_prepare_model_context", "options"),
     }
@@ -638,6 +640,10 @@ class ComponentPartialHydrationRepositoryTests(unittest.TestCase):
                 self.assertFalse(_database_write_attributes(source))
 
     def test_write_detector_keeps_database_updates_blocked(self):
+        self.assertEqual(
+            _database_write_attributes("def _metadata_party_instances(table):\n    table.update({})\n"),
+            {"update"},
+        )
         self.assertEqual(
             _database_write_attributes("def write_rows(table):\n    table.update({})\n"),
             {"update"},

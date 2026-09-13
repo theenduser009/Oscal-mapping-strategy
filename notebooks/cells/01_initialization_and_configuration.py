@@ -1,7 +1,7 @@
 # %% Cell 1 - Initialization and configuration
 
 from snowflake.snowpark.context import get_active_session
-from snowflake.snowpark.functions import col, lit, row_number, sha2, to_json
+from snowflake.snowpark.functions import col, lit, dense_rank
 from snowflake.snowpark.window import Window
 
 import copy

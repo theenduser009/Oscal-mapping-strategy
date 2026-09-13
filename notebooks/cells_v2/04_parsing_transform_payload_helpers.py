@@ -936,7 +936,8 @@ def _metadata_party_instances(path, source_obj, source_record_id, operator, para
     cache = context.setdefault("_metadata_reference_cache", {})
     cache_key = (source_record_id, group["assignments_path"])
     if cache_key not in cache:
-        roles, parties, assignments = [], [], {}
+        # Index each identity once; insertion order preserves reviewed output order.
+        roles, parties, assignments = {}, {}, {}
         for row in context["mappings_by_path"].get(group["assignments_path"], ()):
             params = _metadata_params(row)
             value = _metadata_mapped_value(row, source_obj, context)
@@ -944,41 +945,29 @@ def _metadata_party_instances(path, source_obj, source_record_id, operator, para
                 continue
             extracted = _extract_reference_ids(value)
             members = extracted if isinstance(extracted, list) else [extracted]
-            party_ids = []
-            for member in members:
-                if member is None:
-                    continue
-                identifier = _party_reference_identifier(member)
-                key = _metadata_party_uuid(group, source_record_id, identifier, context)
-                if key not in party_ids:
-                    party_ids.append(key)
+            party_ids = dict.fromkeys(
+                _metadata_party_uuid(group, source_record_id, _party_reference_identifier(member), context)
+                for member in members if member is not None
+            )
             if not party_ids:
                 continue
             role_id = _metadata_text(params.get("role_id"), "Reviewed role identity")
             role_title = _metadata_text(params.get("role_title"), "Reviewed role title")
-            _append_unique_collection_instance(roles, {
-                "instance_key": role_id, "payload": {"id": role_id, "title": role_title},
-                "parent_instance_key": None,
-            })
-            for key in party_ids:
-                _append_unique_collection_instance(parties, {
-                    "instance_key": key,
-                    "payload": {"uuid": key, "type": _metadata_text(group.get("party_type"), "Reviewed party type")},
-                    "parent_instance_key": None,
-                })
-            assignment = assignments.setdefault(role_id, {
-                "instance_key": row["SOURCE_FIELD_NAME"],
-                "payload": {"role-id": role_id, "party-uuids": []},
-                "parent_instance_key": None,
-            })
-            for key in party_ids:
-                if key not in assignment["payload"]["party-uuids"]:
-                    assignment["payload"]["party-uuids"].append(key)
-        cache[cache_key] = {"roles": roles, "parties": parties,
-                           "assignments": list(assignments.values())}
-    instances = cache[cache_key][operator]
+            if roles.setdefault(role_id, role_title) != role_title:
+                raise ValueError("Collection identity resolves to conflicting payloads")
+            party_type = _metadata_text(group.get("party_type"), "Reviewed party type")
+            parties.update(dict.fromkeys(party_ids, party_type))
+            source_field, assigned_parties = assignments.setdefault(role_id, (row["SOURCE_FIELD_NAME"], {}))
+            assigned_parties.update(party_ids)
+        cache[cache_key] = {
+            "roles": [(key, {"id": key, "title": title}) for key, title in roles.items()],
+            "parties": [(key, {"uuid": key, "type": kind}) for key, kind in parties.items()],
+            "assignments": [(field, {"role-id": role, "party-uuids": list(refs)})
+                            for role, (field, refs) in assignments.items()],
+        }
     parent_key = _metadata_parent_key(parameters, source_record_id)
-    return [dict(instance, parent_instance_key=parent_key) for instance in instances]
+    return [{"instance_key": key, "payload": payload, "parent_instance_key": parent_key}
+            for key, payload in cache[cache_key][operator]]
 
 
 def _metadata_reference_instances(source_obj, source_record_id, rows, parameters, context):
@@ -1196,6 +1185,7 @@ def _prepare_model_context(context, model_key, source_system, source_table):
     for row in plan["mappings"]:
         grouped.setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
     context["mappings_by_path"] = grouped
+    context.pop("_metadata_reference_cache", None)
     context["graph_report"] = {
         "SOURCE_RECORDS": 0, "INVALID_SOURCE_RECORDS": 0, "DUPLICATE_SOURCE_RECORDS": 0,
         "STATUS": "NOT_RUN", "OUTPUTS_PUBLISHED": False,

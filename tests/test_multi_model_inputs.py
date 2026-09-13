@@ -4,10 +4,10 @@ from collections import Counter
 import copy
 import csv
 from contextlib import redirect_stdout
-import hashlib
 import io
 import json
 from pathlib import Path
+import re
 from types import SimpleNamespace
 import unittest
 from unittest.mock import mock_open, patch
@@ -31,10 +31,11 @@ class Expr:
     def __eq__(self, other):
         return Expr("eq", self, other)
     def over(self, window):
-        return Expr("row-number", window)
+        return Expr(self.op, window)
     def eval(self, row):
         if self.op == "col":
-            return row[self.args[0]]
+            name = self.args[0]
+            return row[name[1:-1].replace('""', '"') if name.startswith('"') and name.endswith('"') else name]
         if self.op == "literal":
             return self.args[0]
         if self.op == "cast":
@@ -44,10 +45,6 @@ class Expr:
             return self.args[0].eval(row) is not None
         if self.op == "eq":
             return self.args[0].eval(row) == self.args[1].eval(row)
-        if self.op == "json":
-            return json.dumps(self.args[0].eval(row), sort_keys=True)
-        if self.op == "sha2":
-            return hashlib.sha256(self.args[0].eval(row).encode()).hexdigest()
         raise AssertionError("Unexpected fake expression operation")
 
 
@@ -71,7 +68,9 @@ class Frame:
     def __init__(self, owner, table, rows, columns=None, snapshot=None):
         self.owner, self.table = owner, table
         self.rows = copy.deepcopy(rows)
-        self.columns = list(columns if columns is not None else (rows[0] if rows else []))
+        self.columns = list(columns) if columns is not None else [
+            name if re.fullmatch(r"[A-Z_][A-Z0-9_$]*", name) else '"' + name.replace('"', '""') + '"'
+            for name in (rows[0] if rows else [])]
         self.snapshot = snapshot
 
     def child(self, rows, columns=None):
@@ -119,7 +118,7 @@ class Frame:
 
     def with_column(self, name, expression):
         self.owner.events.append(("rank", self.table))
-        if expression.op != "row-number":
+        if expression.op != "dense-rank":
             raise AssertionError("Unexpected generated source column")
         window = expression.args[0]
         groups = {}
@@ -129,7 +128,13 @@ class Frame:
         for rows in groups.values():
             ordered = sorted(rows, key=lambda row: tuple(
                 (expr.eval(row) is not None, expr.eval(row)) for expr in window.order), reverse=True)
-            ranked.extend({**row, name: index} for index, row in enumerate(ordered, 1))
+            previous, rank = None, 0
+            for row in ordered:
+                ordering = tuple(expr.eval(row) for expr in window.order)
+                if ordering != previous:
+                    rank += 1
+                    previous = ordering
+                ranked.append({**row, name: rank})
         return self.child(ranked, [*self.columns, name])
 
     def drop(self, *names):
@@ -150,7 +155,7 @@ class Session:
         self.events.append(("table", name))
         return self.tables[name]
     def create_dataframe(self, frame):
-        return Frame(self, "mapping-view", frame.to_dict("records"))
+        raise AssertionError("Mapping metadata must stay local; no Snowflake upload")
     def sql(self, statement):
         if statement != "SELECT CURRENT_TRANSACTION() AS TX":
             raise AssertionError("Only the read-only transaction-state query is allowed")
@@ -163,8 +168,7 @@ class Session:
 def namespace():
     tree = ast.parse(CELL.read_text(encoding="utf-8"))
     ns = {"csv": csv, "pd": pd, "Window": Window, "col": lambda name: Expr("col", name),
-          "lit": lambda value: Expr("literal", value), "row_number": lambda: Expr("row-number"),
-          "to_json": lambda expr: Expr("json", expr), "sha2": lambda expr, bits: Expr("sha2", expr, bits)}
+          "lit": lambda value: Expr("literal", value), "dense_rank": lambda: Expr("dense-rank")}
     exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n, ast.FunctionDef)],
                            type_ignores=[]), str(CELL), "exec"), ns)
     return ns
@@ -234,6 +238,7 @@ class MultiModelInputs(unittest.TestCase):
 
     def test_configured_identity_and_json_columns_are_used(self):
         session = Session({"RAW_ONE": [{"Source Id": 42, "Payload": {"x": 1}}]})
+        session.tables["RAW_ONE"].columns = ['"Source Id"', '"Payload"']
         selected = profile()
         selected.update(CONTENT_ID_COLUMN="Source Id", CURATED_JSON_COLUMN="Payload")
         result, _, _ = self.ns["load_source_input"](session, selected)
@@ -257,7 +262,7 @@ class MultiModelInputs(unittest.TestCase):
 
     def test_duplicate_source_columns_fail_before_snapshot(self):
         session = Session({"RAW_ONE": [raw("a", 1)]})
-        session.tables["RAW_ONE"].columns += [" content_id "]
+        session.tables["RAW_ONE"].columns += ['"CONTENT_ID"']
         with self.assertRaisesRegex(ValueError, "Duplicate normalized source column"):
             self.ns["load_source_input"](session, profile())
         self.assertEqual({}, dict(session.cache_calls))
@@ -272,7 +277,7 @@ class MultiModelInputs(unittest.TestCase):
         opened.assert_called_once_with("one.csv", encoding="cp1252", newline="")
 
     def test_live_flat_mapping_file_keeps_utf8_notes_and_source_binding(self):
-        from test_model_selection import cell_namespace
+        from tests.test_model_selection import cell_namespace
         selected = copy.deepcopy(cell_namespace()["SOURCE_PROFILES"][0])
         selected["MAPPING_FILE"] = str(ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv")
         actual = self.ns["load_mapping_rows"](selected)
@@ -346,6 +351,69 @@ class MultiModelInputs(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "more values than header"):
                 self.ns["load_mapping_rows"](profile())
 
+    def test_malformed_csv_cannot_swallow_later_mapping_rows(self):
+        cases = [
+            'FIELD,NOTES\nFIRST,"unclosed note\nSECOND,valid note\n',
+            'FIELD,NOTES\nFIRST,"closed note"garbage\nSECOND,valid note\n',
+        ]
+        for text in cases:
+            with self.subTest(text=text), patch("builtins.open", mock_open(read_data=text)):
+                with self.assertRaises(csv.Error):
+                    self.ns["load_mapping_rows"](profile())
+
+    def test_latest_conflicting_payloads_fail_regardless_of_input_order(self):
+        rows = [raw("same", {"a": 0, "b": 1}, UPDATED=2),
+                raw("same", {"a": 1, "b": 0}, UPDATED=2)]
+        for ordered in (rows, list(reversed(rows))):
+            session = Session({"RAW_ONE": ordered})
+            with self.subTest(order=ordered), self.assertRaisesRegex(ValueError, "Conflicting source payloads"):
+                self.ns["load_source_input"](session, profile())
+
+    def test_identical_latest_payloads_collapse_independent_of_object_key_order(self):
+        rows = [raw("same", {"a": 1, "b": 2}, UPDATED=2),
+                raw("same", {"b": 2, "a": 1}, UPDATED=2)]
+        session = Session({"RAW_ONE": rows})
+        result, report, _ = self.ns["load_source_input"](session, profile())
+        self.assertEqual([{"SOURCE_RECORD_ID": "same", "CURATED_JSON": {"value": {"a": 1, "b": 2}}}], result.rows)
+        self.assertEqual(1, report["DUPLICATE_SOURCE_ROWS_RESOLVED"])
+
+    def test_null_payload_is_not_discarded_when_detecting_latest_conflicts(self):
+        rows = [dict(raw("same", 1, UPDATED=2), CURATED_JSON=None), raw("same", 1, UPDATED=2)]
+        with self.assertRaisesRegex(ValueError, "Conflicting source payloads"):
+            self.ns["load_source_input"](Session({"RAW_ONE": rows}), profile())
+        rows[1]["CURATED_JSON"] = None
+        result, _, _ = self.ns["load_source_input"](Session({"RAW_ONE": rows}), profile())
+        self.assertEqual([{"SOURCE_RECORD_ID": "same", "CURATED_JSON": None}], result.rows)
+
+    def test_conflicting_obsolete_versions_do_not_block_a_unique_latest_row(self):
+        rows = [raw("same", "older-a", UPDATED=1), raw("same", "older-b", UPDATED=1),
+                raw("same", "latest", UPDATED=2)]
+        result, _, _ = self.ns["load_source_input"](Session({"RAW_ONE": rows}), profile())
+        self.assertEqual("latest", result.rows[0]["CURATED_JSON"]["value"])
+
+    def test_quoted_recency_columns_keep_priority_and_nulls_last(self):
+        rows = [raw("same", "first", **{"Updated At": None, "Sequence": 99}),
+                raw("same", "second", **{"Updated At": 2, "Sequence": None}),
+                raw("same", "chosen", **{"Updated At": 2, "Sequence": 1})]
+        selected = {**profile(), "SOURCE_ORDER_CANDIDATES": ("Updated At", "Sequence")}
+        result, _, _ = self.ns["load_source_input"](Session({"RAW_ONE": rows}), selected)
+        self.assertEqual("chosen", result.rows[0]["CURATED_JSON"]["value"])
+        self.assertEqual({"SOURCE_RECORD_ID", "CURATED_JSON"}, set(result.columns))
+
+    def test_quoted_case_distinct_identifiers_are_resolved_exactly(self):
+        session = Session({"RAW_ONE": [{"CONTENT_ID": "upper", "content_id": "lower", "CURATED_JSON": {}}]})
+        for configured, expected in (("CONTENT_ID", "upper"), ("content_id", "lower"), ('"content_id"', "lower")):
+            with self.subTest(configured=configured):
+                selected = {**profile(), "CONTENT_ID_COLUMN": configured}
+                result, _, _ = self.ns["load_source_input"](session, selected)
+                self.assertEqual(expected, result.rows[0]["SOURCE_RECORD_ID"])
+
+    def test_embedded_quotes_in_identifiers_are_preserved(self):
+        session = Session({"RAW_ONE": [{'Id"Key': "one", 'Json"Payload': {}}]})
+        selected = {**profile(), "CONTENT_ID_COLUMN": '"Id""Key"', "CURATED_JSON_COLUMN": 'Json"Payload'}
+        result, _, _ = self.ns["load_source_input"](session, selected)
+        self.assertEqual([{"SOURCE_RECORD_ID": "one", "CURATED_JSON": {}}], result.rows)
+
     def test_ssp_name_alone_does_not_trigger_component_lookup(self):
         session = Session({"VALUES": [{"SELECT_VALUE_ID": 1, "SELECT_VALUE_NAME": "custom"}]})
         lookups = self.ns["load_source_lookups"](
@@ -382,6 +450,7 @@ class MultiModelInputs(unittest.TestCase):
             self.assertEqual(1, sum(event == ("table", selected["RAW_TABLE"]) for event in session.events))
             self.assertEqual(key, entry["source_df"].rows[0]["CURATED_JSON"]["value"])
         self.assertIs(ns["source_df"], ns["SOURCE_INPUTS"]["one"]["source_df"])
+        self.assertIsNone(ns["mapping_df"])
 
 
 if __name__ == "__main__":

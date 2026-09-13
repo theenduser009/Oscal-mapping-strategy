@@ -13,7 +13,7 @@ See docs/REGISTRY_METADATA_SETUP.md for one-time setup and preview instructions.
 # %% Cell 1 - Initialization and configuration
 
 from snowflake.snowpark.context import get_active_session
-from snowflake.snowpark.functions import col, lit, row_number, sha2, to_json
+from snowflake.snowpark.functions import col, lit, dense_rank
 from snowflake.snowpark.window import Window
 
 import copy
@@ -240,11 +240,18 @@ import pandas as pd
 def _normalized_columns(columns):
     result = {}
     for name in columns:
-        key = str(name).strip().upper()
+        # Snowpark includes quotes around case-sensitive/otherwise quoted names.
+        key = name[1:-1].replace('""', '"') if name.startswith('"') and name.endswith('"') else name.strip().upper()
         if key in result:
             raise ValueError("Duplicate normalized source column")
         result[key] = name
     return result
+
+
+def _input_column(columns, configured):
+    if configured.startswith('"') and configured.endswith('"'):
+        return columns.get(configured[1:-1].replace('""', '"'))
+    return columns.get(configured, columns.get(configured.upper()))
 
 
 def _input_no_transaction(active_session):
@@ -261,17 +268,19 @@ def load_source_input(active_session, profile):
     _input_no_transaction(active_session)
     raw = active_session.table(profile["RAW_TABLE"])
     columns = _normalized_columns(raw.columns)
-    id_name = profile.get("CONTENT_ID_COLUMN", "CONTENT_ID").upper()
-    json_name = profile.get("CURATED_JSON_COLUMN", "CURATED_JSON").upper()
-    if id_name not in columns or json_name not in columns:
+    id_name = _input_column(columns, profile.get("CONTENT_ID_COLUMN", "CONTENT_ID"))
+    json_name = _input_column(columns, profile.get("CURATED_JSON_COLUMN", "CURATED_JSON"))
+    if id_name is None or json_name is None:
         raise ValueError("Source requires its configured identity and curated JSON columns")
-    selected = [col(columns[id_name]).cast("string").alias("SOURCE_RECORD_ID"),
-                col(columns[json_name]).alias("CURATED_JSON")]
+    selected = [col(id_name).cast("string").alias("SOURCE_RECORD_ID"),
+                col(json_name).alias("CURATED_JSON")]
     order_columns = []
     for candidate in profile.get("SOURCE_ORDER_CANDIDATES", ()):
-        if candidate in columns:
-            selected.append(col(columns[candidate]).alias(candidate))
-            order_columns.append(candidate)
+        name = _input_column(columns, candidate)
+        if name is not None:
+            alias = "_SOURCE_ORDER_" + str(len(order_columns))
+            selected.append(col(name).alias(alias))
+            order_columns.append(alias)
     # Freeze once in a session-local temporary table, before validation and
     # model fan-out. Keep the returned cache handle alive in SOURCE_INPUTS.
     candidates = raw.select(*selected).cache_result()
@@ -283,14 +292,16 @@ def load_source_input(active_session, profile):
         if not order_columns:
             raise ValueError("Duplicate source identities require approved technical ordering")
         order = [col(name).desc_nulls_last() for name in order_columns]
-        order.append(sha2(to_json(col("CURATED_JSON")), 256).desc_nulls_last())
-        result = candidates.with_column(
-            "_SOURCE_ROW_NUMBER", row_number().over(
+        latest = candidates.with_column(
+            "_SOURCE_RANK", dense_rank().over(
                 Window.partition_by("SOURCE_RECORD_ID").order_by(*order)
             )
-        ).filter(col("_SOURCE_ROW_NUMBER") == lit(1)).drop(
-            "_SOURCE_ROW_NUMBER", *order_columns
-        )
+        ).filter(col("_SOURCE_RANK") == lit(1))
+        # Equal latest payloads are interchangeable; conflicting ones need a
+        # source tie-break column. JSON text/object key order is not an identity.
+        result = latest.select("SOURCE_RECORD_ID", "CURATED_JSON").distinct()
+        if result.count() != distinct:
+            raise ValueError("Conflicting source payloads share the latest approved technical ordering")
     else:
         result = candidates.select("SOURCE_RECORD_ID", "CURATED_JSON")
     # The frozen snapshot yields one selected row per distinct source identity.
@@ -302,7 +313,7 @@ def load_mapping_rows(profile):
     """Read the artifact once, preserving literal text and its real header."""
     encoding = profile.get("MAPPING_ENCODING", "cp1252")
     with open(profile["MAPPING_FILE"], encoding=encoding, newline="") as handle:
-        reader = csv.reader(handle)
+        reader = csv.reader(handle, strict=True)
         header = next((row for row in reader if row and any(v.strip() for v in row)), None)
         if header is None:
             raise ValueError("Mapping CSV header is missing")
@@ -394,7 +405,7 @@ REGISTRY_INPUT_ROWS = [row.as_dict(recursive=True) for row in element_registry_d
 _default_source_key = SOURCE_PROFILES[0]["SOURCE_KEY"]
 source_df = SOURCE_INPUTS[_default_source_key]["source_df"]
 mapping_artifact_pdf = MAPPING_FRAMES[_default_source_key]
-mapping_df = session.create_dataframe(mapping_artifact_pdf)
+mapping_df = None  # Mapping execution uses MAPPING_INPUTS; no temporary upload.
 ARCHER_VALUE_LOOKUP = SOURCE_INPUTS[_default_source_key]["lookups"]["archer_values"]
 FIPS_199_VALUE_LOOKUP = SOURCE_INPUTS[_default_source_key]["lookups"]["fips_values"]
 COMPONENT_HYDRATION_SOURCE_DFS = SOURCE_INPUTS[_default_source_key]["lookups"]["component_sources"]
@@ -1052,12 +1063,6 @@ def _validate_source_profiles(source_profiles, model_contracts, mapping_rows):
             raise ValueError("Unknown enabled model")
         if set(profile.get("MODEL_STORAGE_CONTRACTS", {})) - set(models):
             raise ValueError("Storage contract override has no enabled model route")
-        for model in models:
-            contract = model_contracts[model]
-            if {"MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS"} & contract.keys():
-                raise ValueError("Field rules belong in the mapping artifact, not model settings")
-            if contract.get("MODEL_KEY") != model or not contract.get("ROOT_PATH"):
-                raise ValueError("Model contract identity is invalid")
         if key not in mapping_rows or not isinstance(mapping_rows[key], list):
             raise ValueError("Missing source mapping input")
     if set(mapping_rows) != keys:
@@ -1146,18 +1151,10 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
             contract = copy.deepcopy(model_contracts[model])
             if model in profile.get("MODEL_STORAGE_CONTRACTS", {}):
                 contract["STORAGE_CONTRACT"] = copy.deepcopy(profile["MODEL_STORAGE_CONTRACTS"][model])
-            model_registry = [row for row in active if _registry_model(row) == model]
-            paths = [_registry_path(row) for row in model_registry]
-            if len(paths) != len(set(paths)):
-                raise ValueError("Duplicate active registry path")
-            if contract["ROOT_PATH"] not in paths:
-                raise ValueError("Configured model registry root is absent")
-            selected_paths = contract.get("ELEMENT_PATHS")
-            if selected_paths:
-                if not set(selected_paths).issubset(paths):
-                    raise ValueError("Required model collection is absent from registry")
-                model_registry = [row for row in model_registry if _registry_path(row) in selected_paths]
-                paths = list(selected_paths)
+            # The registry decoder already validated roots, uniqueness and ancestors.
+            paths = contract["ELEMENT_PATHS"]
+            model_registry = [row for row in active if _registry_model(row) == model
+                              and _registry_path(row) in paths]
             # Retain known non-executable boundaries before resolving payload owners.
             # Otherwise a disabled singleton silently becomes a member of its parent.
             unavailable_paths = {_registry_path(row) for row in registry
@@ -1218,15 +1215,10 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 elif not field:
                     classification, reason = "BLOCKED_ROWS", "MISSING_SOURCE_FIELD"
                 elif not path:
-                    classification = "BLOCKED_ROWS" if flat_status else "DEFERRED_ROWS"
-                    reason = "MISSING_TARGET_PATH"
-                elif path_model != model:
-                    classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
+                    classification, reason = "BLOCKED_ROWS", "MISSING_TARGET_PATH"
                 elif any(path == boundary or path.startswith(boundary + ".") for boundary in unavailable_paths):
                     classification, reason = "BLOCKED_ROWS", "REGISTRY_PATH_NOT_EXECUTABLE"
-                elif owner is None:
-                    classification, reason = "BLOCKED_ROWS", "UNREGISTERED_PATH"
-                elif "[]" in relative or flat_status and any(token in relative for token in ("[", "]", "..")):
+                elif any(token in relative for token in ("[", "]", "..")):
                     classification, reason = "BLOCKED_ROWS", "UNREGISTERED_COLLECTION"
                 if classification:
                     report[classification] += 1
@@ -2249,7 +2241,8 @@ def _metadata_party_instances(path, source_obj, source_record_id, operator, para
     cache = context.setdefault("_metadata_reference_cache", {})
     cache_key = (source_record_id, group["assignments_path"])
     if cache_key not in cache:
-        roles, parties, assignments = [], [], {}
+        # Index each identity once; insertion order preserves reviewed output order.
+        roles, parties, assignments = {}, {}, {}
         for row in context["mappings_by_path"].get(group["assignments_path"], ()):
             params = _metadata_params(row)
             value = _metadata_mapped_value(row, source_obj, context)
@@ -2257,41 +2250,29 @@ def _metadata_party_instances(path, source_obj, source_record_id, operator, para
                 continue
             extracted = _extract_reference_ids(value)
             members = extracted if isinstance(extracted, list) else [extracted]
-            party_ids = []
-            for member in members:
-                if member is None:
-                    continue
-                identifier = _party_reference_identifier(member)
-                key = _metadata_party_uuid(group, source_record_id, identifier, context)
-                if key not in party_ids:
-                    party_ids.append(key)
+            party_ids = dict.fromkeys(
+                _metadata_party_uuid(group, source_record_id, _party_reference_identifier(member), context)
+                for member in members if member is not None
+            )
             if not party_ids:
                 continue
             role_id = _metadata_text(params.get("role_id"), "Reviewed role identity")
             role_title = _metadata_text(params.get("role_title"), "Reviewed role title")
-            _append_unique_collection_instance(roles, {
-                "instance_key": role_id, "payload": {"id": role_id, "title": role_title},
-                "parent_instance_key": None,
-            })
-            for key in party_ids:
-                _append_unique_collection_instance(parties, {
-                    "instance_key": key,
-                    "payload": {"uuid": key, "type": _metadata_text(group.get("party_type"), "Reviewed party type")},
-                    "parent_instance_key": None,
-                })
-            assignment = assignments.setdefault(role_id, {
-                "instance_key": row["SOURCE_FIELD_NAME"],
-                "payload": {"role-id": role_id, "party-uuids": []},
-                "parent_instance_key": None,
-            })
-            for key in party_ids:
-                if key not in assignment["payload"]["party-uuids"]:
-                    assignment["payload"]["party-uuids"].append(key)
-        cache[cache_key] = {"roles": roles, "parties": parties,
-                           "assignments": list(assignments.values())}
-    instances = cache[cache_key][operator]
+            if roles.setdefault(role_id, role_title) != role_title:
+                raise ValueError("Collection identity resolves to conflicting payloads")
+            party_type = _metadata_text(group.get("party_type"), "Reviewed party type")
+            parties.update(dict.fromkeys(party_ids, party_type))
+            source_field, assigned_parties = assignments.setdefault(role_id, (row["SOURCE_FIELD_NAME"], {}))
+            assigned_parties.update(party_ids)
+        cache[cache_key] = {
+            "roles": [(key, {"id": key, "title": title}) for key, title in roles.items()],
+            "parties": [(key, {"uuid": key, "type": kind}) for key, kind in parties.items()],
+            "assignments": [(field, {"role-id": role, "party-uuids": list(refs)})
+                            for role, (field, refs) in assignments.items()],
+        }
     parent_key = _metadata_parent_key(parameters, source_record_id)
-    return [dict(instance, parent_instance_key=parent_key) for instance in instances]
+    return [{"instance_key": key, "payload": payload, "parent_instance_key": parent_key}
+            for key, payload in cache[cache_key][operator]]
 
 
 def _metadata_reference_instances(source_obj, source_record_id, rows, parameters, context):
@@ -2509,6 +2490,7 @@ def _prepare_model_context(context, model_key, source_system, source_table):
     for row in plan["mappings"]:
         grouped.setdefault(row["OWNER_ELEMENT_PATH"], []).append(row)
     context["mappings_by_path"] = grouped
+    context.pop("_metadata_reference_cache", None)
     context["graph_report"] = {
         "SOURCE_RECORDS": 0, "INVALID_SOURCE_RECORDS": 0, "DUPLICATE_SOURCE_RECORDS": 0,
         "STATUS": "NOT_RUN", "OUTPUTS_PUBLISHED": False,
@@ -2992,7 +2974,7 @@ WHERE COALESCE(d.N,0)<>COALESCE(r.N,0)"""
     return report
 
 
-def _load_comparison(columns, left="t", right="s"):
+def _load_comparison(columns, left="t", right="s", include_audit=False, parse_json=True):
     names = [c["name"] if isinstance(c, dict) else c for c in columns]
     for name in names:
         _load_ident(name)
@@ -3001,9 +2983,9 @@ def _load_comparison(columns, left="t", right="s"):
     if left not in ("t", "s", "b") or right not in ("t", "s", "b"):
         raise LoadError("INVALID_COMPARISON_ALIAS")
     terms = []
-    for name in (name for name in names if name not in _LOAD_AUDIT_COLUMNS):
+    for name in (name for name in names if include_audit or name not in _LOAD_AUDIT_COLUMNS):
         lhs, rhs = left + "." + _load_ident(name), right + "." + _load_ident(name)
-        if name == "METADATA_JSON":
+        if parse_json and name == "METADATA_JSON":
             # Structural object comparison, not JSON key ordering.
             lhs = "TRY_PARSE_JSON(TO_VARCHAR(" + lhs + "))"
             rhs = "TRY_PARSE_JSON(TO_VARCHAR(" + rhs + "))"
@@ -3204,13 +3186,10 @@ def _load_verify_context(session, context):
             raise LoadError("SAVED_BUSINESS_PAYLOAD_OR_KEYS_DIFFER", {"TABLE_KIND": kind, "COUNTS": changes})
         # Business-unchanged rows retain prior fields, including audit. Updated/new
         # rows must match every projected stage field, including current audit.
-        cols, business_changed = _load_comparison(plan, "b", "s")
+        _, business_changed = _load_comparison(plan, "b", "s")
         business_same = "NOT (" + business_changed + ")"
-        all_old = " OR ".join("t." + _load_ident(c) + " IS DISTINCT FROM b." + _load_ident(c) for c in cols)
-        all_new = " OR ".join(
-            ("TRY_PARSE_JSON(TO_VARCHAR(t." + _load_ident(c) + ")) IS DISTINCT FROM "
-             "TRY_PARSE_JSON(TO_VARCHAR(s." + _load_ident(c) + "))") if c == "METADATA_JSON"
-            else "t." + _load_ident(c) + " IS DISTINCT FROM s." + _load_ident(c) for c in cols)
+        _, all_old = _load_comparison(plan, "t", "b", include_audit=True, parse_json=False)
+        _, all_new = _load_comparison(plan, include_audit=True)
         _load_zero(session, f"""SELECT COUNT(*) AS N FROM {names[kind]} s
  JOIN {target} t ON t.{pk}=s.{pk} LEFT JOIN {baseline} b ON b.{pk}=s.{pk}
  WHERE (b.{pk} IS NOT NULL AND ({business_same}) AND ({all_old}))
@@ -3255,23 +3234,20 @@ def _load_transaction(session, merges, before_write, verify, expected_changes, c
         _load_query(session, "BEGIN TRANSACTION")
     except BaseException:
         raise LoadError("BEGIN_OUTCOME_UNKNOWN") from None
-    step, pass_number, changes = "PREWRITE_BASELINE", 0, []
+    step, result = "PREWRITE_BASELINE", []
     try:
         before_write()
-        pass_number, result = 1, []
-        for index, (step, statement) in enumerate(zip(("DIM_MERGE", "FACT_MERGE"), merges)):
+        for step, statement, expected in zip(("DIM_MERGE", "FACT_MERGE"), merges, expected_changes):
             actual = _load_dml_counts(_load_query(session, statement))
-            expected = tuple(expected_changes[index])
-            if actual != expected:
+            if actual != tuple(expected):
                 raise LoadError("UNEXPECTED_MERGE_CHANGE_COUNT",
                                 {"EXPECTED_INSERTS": expected[0], "EXPECTED_UPDATES": expected[1],
                                  "ACTUAL_INSERTS": actual[0], "ACTUAL_UPDATES": actual[1]})
             result.append({"INSERTS": actual[0], "UPDATES": actual[1]})
-        changes.append({"PASS": pass_number, "DIM": result[0], "FACT": result[1]})
         step = "READBACK_AND_INTEGRITY"
-        verify(pass_number)
+        verify(1)
     except BaseException as error:
-        details = dict(_load_error_details(error), STEP=step, PASS=pass_number)
+        details = dict(_load_error_details(error), STEP=step, PASS=int(step != "PREWRITE_BASELINE"))
         try:
             _load_query(session, "ROLLBACK")
         except BaseException:
@@ -3281,7 +3257,8 @@ def _load_transaction(session, merges, before_write, verify, expected_changes, c
         _load_query(session, "COMMIT")
     except BaseException:
         raise LoadError("COMMIT_OUTCOME_UNKNOWN") from None
-    return {"STATUS": "COMMITTED", "CHANGE_COUNTS": changes, "VERIFIED_PASSES": 1}
+    return {"STATUS": "COMMITTED", "VERIFIED_PASSES": 1,
+            "CHANGE_COUNTS": [{"PASS": 1, "DIM": result[0], "FACT": result[1]}]}
 
 
 def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
@@ -3632,7 +3609,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
     """
     report = {"status": "NOT_RUN", "mode": load_mode, "writes_executed": False,
               "commit_attempted": False, "groups": []}
-    graphs, seen = {}, set()
+    graphs, routes = {}, {}
     context = None
     phase = "routing"
     try:
@@ -3642,9 +3619,9 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             key = (original["source_key"], original["config"]["OSCAL_MODEL"])
             report["active_group"] = {"source": key[0], "model": key[1]}
             report["active_routing"] = copy.deepcopy(original["routing_report"])
-            if key in seen:
+            if key in routes:
                 raise ValueError("Duplicate source/model route")
-            seen.add(key)
+            routes[key] = original
             if key[0] not in source_inputs:
                 raise ValueError("Missing selected source input")
             if original["routing_report"].get("STATUS") != "READY":
@@ -3654,8 +3631,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             _oscal_run_config(original["config"], load_mode)
         # Build and validate every candidate before the first target commit.
         phase = "preview"
-        for original in mapping_contexts:
-            key = (original["source_key"], original["config"]["OSCAL_MODEL"])
+        for key, original in routes.items():
             context = copy.deepcopy(original)
             report["active_group"] = {"source": key[0], "model": key[1]}
             context["lookups"] = dict(source_inputs[key[0]].get("lookups", {}))
@@ -3681,7 +3657,8 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             for group in report["groups"]:
                 report["active_group"] = {"source": group["source"], "model": group["model"]}
                 graph = graphs[(group["source"], group["model"])]
-                cfg = _oscal_run_config(graph["context"]["config"], "COMMIT")
+                context = graph["context"]
+                cfg = _oscal_run_config(context["config"], "COMMIT")
                 report["commit_attempted"] = True
                 result = validate_and_load_oscal(
                     canonical_nodes_df=graph["nodes"], canonical_edges_df=graph["edges"], config=cfg,
@@ -3700,19 +3677,22 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
         report.pop("active_group", None)
         report.pop("active_routing", None)
         return graphs, report
-    except Exception as exc:
+    except BaseException as exc:
         report["status"] = ("PIPELINE_COMMIT_FAILED_REVIEW_REQUIRED" if report["commit_attempted"]
                             else "PIPELINE_FAILED_NO_TARGET_DML")
         report["failed_phase"] = phase
         report["error_type"] = type(exc).__name__
         if phase == "routing":
             report["error_reason"] = str(exc)
+        elif context is not None:
+            report["active_routing"] = copy.deepcopy(context["routing_report"])
         if context is not None and "graph_report" in context:
             report["active_graph_report"] = copy.deepcopy(context["graph_report"])
         # Loader reports carry only approved diagnostics; never print source payloads.
         load_report = getattr(exc, "report", getattr(exc, "details", None))
         if isinstance(load_report, dict):
             report["failed_load_report"] = load_report
+            report["writes_executed"] = report["writes_executed"] or load_report.get("writes_executed") is True
         if report["commit_attempted"]:
             report["failed_commit_outcome"] = "REVIEW_REQUIRED_NO_AUTOMATIC_RETRY"
         raise PipelineError("OSCAL pipeline stopped; inspect OSCAL_PIPELINE_REPORT", report) from None

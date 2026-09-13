@@ -646,12 +646,6 @@ def _validate_source_profiles(source_profiles, model_contracts, mapping_rows):
             raise ValueError("Unknown enabled model")
         if set(profile.get("MODEL_STORAGE_CONTRACTS", {})) - set(models):
             raise ValueError("Storage contract override has no enabled model route")
-        for model in models:
-            contract = model_contracts[model]
-            if {"MAPPING_RULES", "PATH_RULES", "EXCLUDED_FIELDS"} & contract.keys():
-                raise ValueError("Field rules belong in the mapping artifact, not model settings")
-            if contract.get("MODEL_KEY") != model or not contract.get("ROOT_PATH"):
-                raise ValueError("Model contract identity is invalid")
         if key not in mapping_rows or not isinstance(mapping_rows[key], list):
             raise ValueError("Missing source mapping input")
     if set(mapping_rows) != keys:
@@ -740,18 +734,10 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
             contract = copy.deepcopy(model_contracts[model])
             if model in profile.get("MODEL_STORAGE_CONTRACTS", {}):
                 contract["STORAGE_CONTRACT"] = copy.deepcopy(profile["MODEL_STORAGE_CONTRACTS"][model])
-            model_registry = [row for row in active if _registry_model(row) == model]
-            paths = [_registry_path(row) for row in model_registry]
-            if len(paths) != len(set(paths)):
-                raise ValueError("Duplicate active registry path")
-            if contract["ROOT_PATH"] not in paths:
-                raise ValueError("Configured model registry root is absent")
-            selected_paths = contract.get("ELEMENT_PATHS")
-            if selected_paths:
-                if not set(selected_paths).issubset(paths):
-                    raise ValueError("Required model collection is absent from registry")
-                model_registry = [row for row in model_registry if _registry_path(row) in selected_paths]
-                paths = list(selected_paths)
+            # The registry decoder already validated roots, uniqueness and ancestors.
+            paths = contract["ELEMENT_PATHS"]
+            model_registry = [row for row in active if _registry_model(row) == model
+                              and _registry_path(row) in paths]
             # Retain known non-executable boundaries before resolving payload owners.
             # Otherwise a disabled singleton silently becomes a member of its parent.
             unavailable_paths = {_registry_path(row) for row in registry
@@ -812,15 +798,10 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 elif not field:
                     classification, reason = "BLOCKED_ROWS", "MISSING_SOURCE_FIELD"
                 elif not path:
-                    classification = "BLOCKED_ROWS" if flat_status else "DEFERRED_ROWS"
-                    reason = "MISSING_TARGET_PATH"
-                elif path_model != model:
-                    classification, reason = "BLOCKED_ROWS", "UNKNOWN_MODEL_OR_PATH"
+                    classification, reason = "BLOCKED_ROWS", "MISSING_TARGET_PATH"
                 elif any(path == boundary or path.startswith(boundary + ".") for boundary in unavailable_paths):
                     classification, reason = "BLOCKED_ROWS", "REGISTRY_PATH_NOT_EXECUTABLE"
-                elif owner is None:
-                    classification, reason = "BLOCKED_ROWS", "UNREGISTERED_PATH"
-                elif "[]" in relative or flat_status and any(token in relative for token in ("[", "]", "..")):
+                elif any(token in relative for token in ("[", "]", "..")):
                     classification, reason = "BLOCKED_ROWS", "UNREGISTERED_COLLECTION"
                 if classification:
                     report[classification] += 1

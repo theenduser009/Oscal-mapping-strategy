@@ -1,7 +1,36 @@
 # Project handoff - read this before resuming
 
+## Current action - eight-hour delivery candidate
 
-## Current action - review the tested seven-cell candidate
+The owner authorized continued changes while away and requested tested code on
+GitHub within eight hours. All **769 local tests pass**; **2,209 metadata** and
+**729 linked-identity differential cases** match supported behavior. Generated
+notebooks are synchronized. The preceding checkpoint af639853 passed GitHub CI;
+verify this candidate's own remote commit and checks before claiming publication.
+
+The current cells contain **3,700 physical / 3,263 nonblank, noncomment lines**,
+159 physical lines below this task's start and 562 below the earlier 4,262-line
+draft. The larger simplification target remains unmet. Do not call this a major
+lean rewrite or production acceptance.
+
+Fixed malformed CSV row loss, quoted source bindings, stale party data after a
+failed build, and incorrect commit/failure attribution. Removed repeated registry
+validation, repeated identity scans and the unused mapping upload. Conflicting
+latest source payloads now block instead of selecting a JSON-hash winner; equal
+latest duplicates still collapse after configured technical ordering.
+
+**Next action:** verify the final GitHub publication/CI, continue meaningful
+remaining simplification from this tested checkpoint, and perform live acceptance
+in the intended Snowflake environment before enabling writes. The deadline check
+is scheduled for September 13 at 08:04 America/New_York. See the
+[eight-hour delivery checkpoint](checkpoints/2026-09-13-eight-hour-delivery.md).
+
+No Snowflake connection was available and no database action occurred. Registry
+setup and daily persistence/readback acceptance remain pending; normal writes
+stay false and AR has no verified destination. Historical SSP/AR evidence and
+the unresolved old/new SSP row difference are unchanged.
+
+## Previous action - review the tested seven-cell candidate
 
 All **749 local tests pass**, and **2,209 differential cases** match the supported
 CSV/registry behavior. An independent review found no blocking issue after the

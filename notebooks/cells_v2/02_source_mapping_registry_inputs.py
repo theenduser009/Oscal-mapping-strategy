@@ -7,11 +7,18 @@ import pandas as pd
 def _normalized_columns(columns):
     result = {}
     for name in columns:
-        key = str(name).strip().upper()
+        # Snowpark includes quotes around case-sensitive/otherwise quoted names.
+        key = name[1:-1].replace('""', '"') if name.startswith('"') and name.endswith('"') else name.strip().upper()
         if key in result:
             raise ValueError("Duplicate normalized source column")
         result[key] = name
     return result
+
+
+def _input_column(columns, configured):
+    if configured.startswith('"') and configured.endswith('"'):
+        return columns.get(configured[1:-1].replace('""', '"'))
+    return columns.get(configured, columns.get(configured.upper()))
 
 
 def _input_no_transaction(active_session):
@@ -28,17 +35,19 @@ def load_source_input(active_session, profile):
     _input_no_transaction(active_session)
     raw = active_session.table(profile["RAW_TABLE"])
     columns = _normalized_columns(raw.columns)
-    id_name = profile.get("CONTENT_ID_COLUMN", "CONTENT_ID").upper()
-    json_name = profile.get("CURATED_JSON_COLUMN", "CURATED_JSON").upper()
-    if id_name not in columns or json_name not in columns:
+    id_name = _input_column(columns, profile.get("CONTENT_ID_COLUMN", "CONTENT_ID"))
+    json_name = _input_column(columns, profile.get("CURATED_JSON_COLUMN", "CURATED_JSON"))
+    if id_name is None or json_name is None:
         raise ValueError("Source requires its configured identity and curated JSON columns")
-    selected = [col(columns[id_name]).cast("string").alias("SOURCE_RECORD_ID"),
-                col(columns[json_name]).alias("CURATED_JSON")]
+    selected = [col(id_name).cast("string").alias("SOURCE_RECORD_ID"),
+                col(json_name).alias("CURATED_JSON")]
     order_columns = []
     for candidate in profile.get("SOURCE_ORDER_CANDIDATES", ()):
-        if candidate in columns:
-            selected.append(col(columns[candidate]).alias(candidate))
-            order_columns.append(candidate)
+        name = _input_column(columns, candidate)
+        if name is not None:
+            alias = "_SOURCE_ORDER_" + str(len(order_columns))
+            selected.append(col(name).alias(alias))
+            order_columns.append(alias)
     # Freeze once in a session-local temporary table, before validation and
     # model fan-out. Keep the returned cache handle alive in SOURCE_INPUTS.
     candidates = raw.select(*selected).cache_result()
@@ -50,14 +59,16 @@ def load_source_input(active_session, profile):
         if not order_columns:
             raise ValueError("Duplicate source identities require approved technical ordering")
         order = [col(name).desc_nulls_last() for name in order_columns]
-        order.append(sha2(to_json(col("CURATED_JSON")), 256).desc_nulls_last())
-        result = candidates.with_column(
-            "_SOURCE_ROW_NUMBER", row_number().over(
+        latest = candidates.with_column(
+            "_SOURCE_RANK", dense_rank().over(
                 Window.partition_by("SOURCE_RECORD_ID").order_by(*order)
             )
-        ).filter(col("_SOURCE_ROW_NUMBER") == lit(1)).drop(
-            "_SOURCE_ROW_NUMBER", *order_columns
-        )
+        ).filter(col("_SOURCE_RANK") == lit(1))
+        # Equal latest payloads are interchangeable; conflicting ones need a
+        # source tie-break column. JSON text/object key order is not an identity.
+        result = latest.select("SOURCE_RECORD_ID", "CURATED_JSON").distinct()
+        if result.count() != distinct:
+            raise ValueError("Conflicting source payloads share the latest approved technical ordering")
     else:
         result = candidates.select("SOURCE_RECORD_ID", "CURATED_JSON")
     # The frozen snapshot yields one selected row per distinct source identity.
@@ -69,7 +80,7 @@ def load_mapping_rows(profile):
     """Read the artifact once, preserving literal text and its real header."""
     encoding = profile.get("MAPPING_ENCODING", "cp1252")
     with open(profile["MAPPING_FILE"], encoding=encoding, newline="") as handle:
-        reader = csv.reader(handle)
+        reader = csv.reader(handle, strict=True)
         header = next((row for row in reader if row and any(v.strip() for v in row)), None)
         if header is None:
             raise ValueError("Mapping CSV header is missing")
@@ -161,7 +172,7 @@ REGISTRY_INPUT_ROWS = [row.as_dict(recursive=True) for row in element_registry_d
 _default_source_key = SOURCE_PROFILES[0]["SOURCE_KEY"]
 source_df = SOURCE_INPUTS[_default_source_key]["source_df"]
 mapping_artifact_pdf = MAPPING_FRAMES[_default_source_key]
-mapping_df = session.create_dataframe(mapping_artifact_pdf)
+mapping_df = None  # Mapping execution uses MAPPING_INPUTS; no temporary upload.
 ARCHER_VALUE_LOOKUP = SOURCE_INPUTS[_default_source_key]["lookups"]["archer_values"]
 FIPS_199_VALUE_LOOKUP = SOURCE_INPUTS[_default_source_key]["lookups"]["fips_values"]
 COMPONENT_HYDRATION_SOURCE_DFS = SOURCE_INPUTS[_default_source_key]["lookups"]["component_sources"]
