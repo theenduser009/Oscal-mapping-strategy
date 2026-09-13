@@ -7,6 +7,20 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
+## Active task - Assessment Results
+
+The owner selected AR next, followed by POA&M and remaining model work by
+Monday. Follow docs/AR_NEXT_RUN.md. The CSV now enables 30 AR fields: 17
+previously live accepted plus 13 owner-approved additions pending live
+acceptance. Preserve the 15 deferred rows, including threshold-name conflicts,
+two parked shape rejections and prior workflow/score deferrals. No new
+runtime or registry rules are needed for the 13 additions. AR destination
+schema evidence remains required before binding the shared loader.
+SSP's no-change COMMIT and readback are accepted; do not repeat them as a
+prerequisite for AR. System implementation is part of SSP, with six accepted
+component-reference mappings and partial hydration. Do not claim full models
+complete from partial field coverage.
+
 ## Non-negotiable metadata-driven architecture
 
 - Current code is JSON-free. Mapping/ARCHER_OSCAL_MAPPINGS.csv maintains the
@@ -69,7 +83,7 @@
 
 - Matillion converts raw field-ID JSON to the Archer RAW table's CURATED_JSON column. The OSCAL notebook reads that column; it does not perform that upstream conversion.
 - Cells 1-5 configure/read/normalize/transform/build. Cell 6 already defines validation, insert/update MERGE loading, and load verification. Cell 7 orchestrates them. Do not say the notebook has no loader.
-- The live oscal-lean-daily-v3.1 SSP PREVIEW passed all gates with writes disabled: 2,813 records, 70,102 nodes and 67,289 edges. The separate full DEV reload was accepted; daily COMMIT and committed readback remain pending. Do not treat PREVIEW_COMPLETE or proposed updates as a write.
+- The live SSP no-change COMMIT and post-commit readback are accepted: 2,813 records, 70,102 nodes and 67,289 edges. Changed-row acceptance is separate; PREVIEW_COMPLETE alone is not a write.
 - User notebook cell numbers after seven are session-local. Identify a separate cell by its file and purpose, not by assuming every Cell 8 is the same program.
 - Registry governs hierarchy and identity. Excel/CSV source field, model, exact element path, mapping type and Notes govern field mappings. Registry presence is not proof of complete mapping.
 - Separate implemented, candidate-only, runtime-accepted in memory, persisted/read-back verified, deferred, blocked, and full OSCAL conformance. Do not turn one status into another.
@@ -90,4 +104,3 @@
 After a material accepted run, failure, user decision or change of next action, update PROJECT_HANDOFF and the current-action section of CURRENT_STATUS; update the mapping register when field statuses change. Link the exact evidence and preserve historical reports. Record what changed, what is accepted, what is pending/deferred, why, and the single next action. Verify remote publication before saying a change is on GitHub.
 
 These files provide project continuity; they do not preserve a Snowflake session or guarantee memory in unrelated chats. No mapper/database change is authorized merely by reading them.
-

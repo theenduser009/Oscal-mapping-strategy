@@ -64,13 +64,13 @@ class TransformTests(unittest.TestCase):
         for context in self.contexts:
             context["lookups"] = {"archer_values": {"1": "low", "2": "high"}, "fips_values": {}}
 
-    def test_1403_maintained_transform_cases_match_frozen_code(self):
+    def test_maintained_and_added_transform_cases_match_frozen_code(self):
         frozen = frozen_transform_namespace()
         values = [None, "", [], {}, False, True, 0, 1, -1, 1.25, "  example  ",
                   "Low", "Moderate", "High", "LOE 1", "2025-01-02", "2025-01-02T23:01:00-02:00",
                   [False], [1], [1, 2], {"ValuesListIds": [1]}, {"ValuesListIds": [999]},
                   {"UserList": [{"Id": "user"}]}]
-        count = 0
+        counts = {"baseline": 0, "ar_additions": 0}
         for context in self.contexts:
             for row in context["mapping_rows"]:
                 # This oracle predates the restored field; acceptance tests cover its source preservation.
@@ -82,8 +82,9 @@ class TransformTests(unittest.TestCase):
                     with self.subTest(rule=row["RULE_ID"], value=value):
                         self.assertEqual(outcome(frozen, row, value, context),
                                          outcome(self.ns, row, value, context))
-                    count += 1
-        self.assertEqual(1403, count)
+                    bucket = "ar_additions" if row["RULE_ID"].startswith("ar30:") else "baseline"
+                    counts[bucket] += 1
+        self.assertEqual({"baseline": 1403, "ar_additions": 299}, counts)
 
     def test_required_values_fail_after_transform_without_exposing_source_value(self):
         context = self.contexts[0]

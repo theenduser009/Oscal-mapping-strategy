@@ -29,6 +29,11 @@ never fills missing functions from an older active mapper.
 - The restored Direct `SECURITY_CATEGORY` mapping is checked separately for
   source-text preservation, absent/null/empty-string omission and unchanged
   graph keys, UUIDs and edges. All earlier 1,403 transform cases remain intact.
+- `test_ar30_extension.py` compares the 13 added AR fields with the earlier
+  standalone oracle, including decimal precision, zero/false, null omission,
+  parent links and preservation of the original AR17 identities. Original
+  CSV source names, paths, Notes and provenance remain unchanged; parked
+  reference/multi-value fields, workflow rows and name conflicts stay deferred.
 - Batched component hydration, selected lookup validation and retained partial
   component behavior.
 - Loader preview, insert/update/unchanged behavior, rollback, unknown commit
@@ -70,8 +75,8 @@ also distinct from validation of the currently mapped graph.
 `tests/fixtures/legacy_cell4_pre_declarative.py` and related historical fixtures
 preserve earlier accepted behavior. `tests/fixtures/pre_lean_cells` contains the
 unchanged pre-rebuild Cell Three/Four source used as an independent transform
-oracle; `test_transforms.py` checks their SHA-256 hashes before comparing 1,403
-mapping/value cases. These files are test-only and must never be imported by the
+oracle; `test_transforms.py` checks their SHA-256 hashes before comparing the
+original 1,403 mapping/value cases and 299 cases for the AR additions. These files are test-only and must never be imported by the
 deployed notebook or edited to make a comparison pass.
 
 The older tests directly under `tests/` include historical private APIs,

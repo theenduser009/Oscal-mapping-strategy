@@ -1,6 +1,35 @@
 # Current Status
 
-## Current status - SSP COMMIT and readback accepted for an unchanged batch
+## Current action - AR30 preview and destination verification
+
+The owner chose to advance Assessment Results next, then POA&M and remaining
+model work. The [accepted SSP COMMIT](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
+remains the DEV baseline: 2,813 records, 70,102 elements and 67,289 relationships,
+with zero inserts/updates and successful committed readback. No unchanged SSP
+rerun is requested.
+
+The maintained CSV now enables 30 AR fields: the 17 previously live-accepted
+fields plus 13 conflict-free additions from the earlier owner-approved
+observation/inline-property batch. Only execution metadata changes; the seven
+runtime cells remain 1,838 lines and registry/identity rules are unchanged.
+The new 13 are implemented and tested locally, not live accepted or persisted.
+The remaining 15 AR rows retain their specific deferrals. Historical threshold
+source-name differences are not silently aliased.
+
+**Next action:** follow [AR next run](AR_NEXT_RUN.md): upload the updated CSV,
+select AR only in Cell One, keep shared writes false and Cell Seven in PREVIEW,
+then run the same seven cells. Require READY/30 selected AR rows and the complete
+pipeline report. Supply the [destination-column query](../notebooks/validation/READ_ONLY_OSCAL_DESTINATION_COLUMNS.sql)
+result so the existing writer can be bound to verified AR tables. No registry
+reset, separate AR runtime, old candidate rerun or SSP reload is needed.
+
+System implementation is part of SSP: its six accepted component-reference
+mappings are implemented with partial hydration. Full SSP, AR, POA&M and other
+model completion are not established by this increment. The Monday target
+does not waive unresolved source identity, reference or storage decisions.
+Earlier instructions below are historical where superseded.
+
+## Accepted checkpoint - SSP COMMIT and readback for an unchanged batch
 
 The owner posted the [live SSP COMMIT report](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
 in main commit `a53c16aff842cde044f7bda2efb64a2198ac3117`.

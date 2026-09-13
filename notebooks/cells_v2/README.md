@@ -11,10 +11,10 @@ catalog or test fixtures are uploaded to the notebook.
 
 ## Setup and run
 
-Complete the recorded DEV cleanup and verify the registry migration using the
-[registry deployment guide](../../docs/REGISTRY_METADATA_SETUP.md). Their live
-completion remains unverified here. Then upload the exact mapping CSV to notebook
-Files and run these matching Python cells in order in one session:
+Registry setup/cleanup and the SSP no-change commit/readback are accepted.
+The next run is [AR30 preview](../../docs/AR_NEXT_RUN.md). Upload the updated
+mapping CSV, select AR only and run the same matching Python cells in order.
+No registry reset or replacement runtime is needed for this metadata-only batch.
 
 1. [Configuration](01_initialization_and_configuration.py)
 2. [Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)
@@ -53,11 +53,10 @@ Unknown transaction outcomes or failed post-commit readback require inspection
 before retrying. The writer preserves unchanged rows and records absent from the
 input; obsolete keys within selected records block the load.
 
-Accepted SSP/CIA and AR17 behavior is covered by the
-[release tests](../../tests/lean/README.md). Local tests and Snowpark emulator
-checks do not establish live registry or daily-loader acceptance, which remain
-pending. Historical pilots and the accepted full DEV reload are separate from
-this deployment.
+The [release tests](../../tests/lean/README.md) preserve accepted SSP/CIA and
+AR17 output and compare the 13 AR additions with the earlier mapper.
+AR30 live preview and AR storage verification are pending; the successful
+SSP no-change commit does not establish AR persistence or full conformance.
 
 Developers edit [notebooks/cells](../cells/README.md), then run
 `python tools/sync_notebook_cells.py` to regenerate these pages and the

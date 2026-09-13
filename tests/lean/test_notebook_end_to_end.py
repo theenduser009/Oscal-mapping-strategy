@@ -180,7 +180,7 @@ class NotebookEndToEndTests(unittest.TestCase):
     def test_both_models_preview_then_ar_destination_blocks_all_commits(self):
         ns = self.run_notebook(("SSP", "ASSESSMENT_RESULTS"))
         self.assertEqual(2, len(ns["MODEL_GRAPHS"]))
-        self.assertEqual([48, 17], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
+        self.assertEqual([48, 30], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
         self.assertEqual("MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING", ns["PIPELINE_REPORT"]["groups"][1]["load"]["status"])
         self.session.events.clear()
         with self.notebook_transport(), self.assertRaises(ns["PipelineError"]):

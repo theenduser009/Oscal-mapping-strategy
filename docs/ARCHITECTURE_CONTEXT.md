@@ -42,13 +42,14 @@ CSV row is restored through the existing transform; no runtime branch is added.
 Cell Two separately lowercases FIPS lookup labels. This preserves raw Direct
 source values; it does not infer sensitivity from CIA or recommended category.
 
-Upload the revised CSV, replace Cell Two and run all seven cells for a new
-PREVIEW, preserving Cell One deployment settings and disabled writes. Cell One
-creates the new run ID. Actual output must resolve any remaining whitespace,
-unreviewed-record or changed-source differences. Do not repeat registry work,
-diagnostics or the accepted full reload. Daily COMMIT/readback and AR storage
-remain pending; COMMIT is not approved. Earlier architecture snapshots below
-describe history, not current inputs.
+The [live SSP COMMIT and readback](checkpoints/2026-09-13-ssp-commit-completed-and-verified.md)
+are accepted for an unchanged batch. The active work is [AR30 preview and
+destination verification](AR_NEXT_RUN.md): 13 additional approved AR rows use
+the existing scalar-score transform and observations operator. The CSV now
+selects 48 SSP rows and 30 AR rows; the original AR17 remains the live-accepted
+in-memory baseline. Runtime cells and registry rules are unchanged.
+Do not repeat registry work, the accepted SSP run or the historical AR
+candidate. AR persistence requires verified AR destination metadata.
 
 ### Earlier metadata-engine migration - September 11 (superseded where noted above)
 
@@ -190,5 +191,3 @@ Coverage must be measurable at field level:
 - Populated record count and population percentage
 
 Approved status values should distinguish completed work, in-progress work, more information required, no source data, and not applicable.
-
-
