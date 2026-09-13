@@ -1,6 +1,26 @@
 # Current Status
 
-## Current action - bind the AR destination after accepted graph preview
+## Current action - complete the selected AR destination definition
+
+The [owner-posted table definition](checkpoints/2026-09-13-assessment-results-target-table-selection.md)
+selects `ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT`.
+The abbreviated `DIM_OSCAL_AR_ELEMENT` is not the selected destination.
+This is table-definition evidence, not a failed mapping run.
+
+The post shows a BINARY primary key, but its full name is truncated; BINARY/TEXT
+lengths and the FACT definition are not supplied. The visible
+`DW_LOAD_TIMESTAMP` is `TIMESTAMP_NTZ`, whereas the current shared loader
+expects `TIMESTAMP_TZ`. A second timezone audit column is not shown; absence
+is not established from a partial screenshot.
+
+**Next action:** obtain the untruncated key/column definitions and matching
+FACT destination, then adapt the existing storage binding/projection to the
+verified physical schema. Do not invent key names, assume column lengths,
+change tables to fit the loader, or reuse the SSP destination. The accepted
+AR graph preview remains valid evidence and needs no unchanged rerun for this
+metadata collection step.
+
+## Previous action - bind the AR destination after accepted graph preview
 
 The owner posted the [shared Assessment Results preview](checkpoints/2026-09-13-assessment-results-preview-target-contract-pending.md)
 in main commit `5c8ef0cbdc5bec29b1f88d1be2e5ea1ae802faeb`.
