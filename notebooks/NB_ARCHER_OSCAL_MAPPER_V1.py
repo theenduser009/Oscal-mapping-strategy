@@ -1365,6 +1365,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
 import json
 import re
 import uuid
+from numbers import Integral
 
 OSCAL_LOAD_RELEASE = "oscal-lean-daily-v3.1"
 _AUDIT = {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
@@ -1510,7 +1511,7 @@ def _load_graph(nodes, edges, config):
                 raise LoadError("DUPLICATE_RECORD_ROOT")
             roots[sid] = k
     expected = config.get("EXPECTED_SOURCE_RECORDS", len(roots))
-    if not roots or type(expected) is not int or expected != len(roots):
+    if not roots or isinstance(expected, bool) or not isinstance(expected, Integral) or expected != len(roots):
         raise LoadError("SOURCE_RECORD_GRAPH_COVERAGE_MISMATCH")
     edge_keys = set()
     for edge in rows(edges):

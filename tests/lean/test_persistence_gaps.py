@@ -3,6 +3,8 @@ import copy
 import unittest
 from unittest.mock import patch
 
+import numpy as np
+
 import test_loader as loader
 from test_runner import runner_namespace, context as route_context, SourceFrame
 
@@ -113,6 +115,19 @@ class PersistenceGaps(unittest.TestCase):
         with self.assertRaisesRegex(loader.Error, "SOURCE_RECORD_GRAPH_COVERAGE_MISMATCH"):
             self.load(True, config=config)
         self.assertFalse(any(sql.startswith("MERGE") for sql in self.session.events))
+
+    def test_numpy_integral_source_count_from_snowpark_is_supported(self):
+        for expected in (np.int64(1), np.int32(1)):
+            with self.subTest(type=type(expected).__name__):
+                config = dict(loader.config(), EXPECTED_SOURCE_RECORDS=expected)
+                self.assertEqual("PREVIEW_PASSED_NO_TARGET_DML", self.load(config=config)["status"])
+
+    def test_integral_looking_float_source_count_is_rejected(self):
+        for expected in (1.0, np.float64(1), np.bool_(True)):
+            with self.subTest(type=type(expected).__name__):
+                config = dict(loader.config(), EXPECTED_SOURCE_RECORDS=expected)
+                with self.assertRaisesRegex(loader.Error, "SOURCE_RECORD_GRAPH_COVERAGE_MISMATCH"):
+                    self.load(config=config)
 
     def test_cleanup_does_not_commit_an_active_transaction_started_after_readback(self):
         verify = loader.G["_load_verify"]
