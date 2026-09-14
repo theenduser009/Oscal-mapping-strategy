@@ -42,7 +42,7 @@ class LeanCompilerTests(unittest.TestCase):
         for context in candidate:
             report = context['routing_report']
             self.assertEqual('READY', report['STATUS'], report)
-            self.assertEqual(151, sum(report[key] for key in ('SELECTED_ROWS', 'EXCLUDED_ROWS', 'DEFERRED_ROWS', 'BLOCKED_ROWS')))
+            self.assertEqual(153, sum(report[key] for key in ('SELECTED_ROWS', 'EXCLUDED_ROWS', 'DEFERRED_ROWS', 'BLOCKED_ROWS')))
             self.assertFalse(context['config']['EXECUTE_WRITES'])
 
     def test_unknown_model_display_label_still_uses_registry_ownership(self):

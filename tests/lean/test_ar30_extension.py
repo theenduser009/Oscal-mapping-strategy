@@ -68,6 +68,10 @@ class AR30ExtensionTests(unittest.TestCase):
                 expected_path = actual["RUNTIME_TARGET_PATH"] if actual["EXECUTION_STATUS"] == "APPROVED" else ""
                 self.assertEqual(expected_path, actual["OSCAL_ELEMENT_PATH"])
                 self.assertIn("Original target alternatives: " + old_path + ".", actual["EXECUTION_NOTE"])
+            elif row["ORIGINAL_ROW_ID"] in {"145", "146", "147"}:
+                suffix = "remarks" if row["ORIGINAL_ROW_ID"] == "147" else "props[]"
+                self.assertEqual("assessment-plan.tasks[]." + suffix, actual["OSCAL_ELEMENT_PATH"])
+                self.assertIn("Original workbook path: " + old_path, actual["EXECUTION_NOTE"])
             else:
                 self.assertEqual(old_path, actual["OSCAL_ELEMENT_PATH"])
         accepted = {row["SOURCE_FIELD_NAME"] for row in self.old["mapping_rows"]}

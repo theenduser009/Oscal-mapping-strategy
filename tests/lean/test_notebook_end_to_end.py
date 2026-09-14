@@ -363,6 +363,45 @@ class NotebookEndToEndTests(unittest.TestCase):
             self.assertFalse(any(sql.startswith("MERGE INTO " + table + " ") for sql in self.session.events))
         self.assertFalse(ns["CONFIG"]["EXECUTE_WRITES"])
 
+    def test_all_seven_cells_plan_nulls_and_updates_keep_task_and_property_links(self):
+        from test_assessment_plan import MODEL, REQUEST, APPROVAL, COMMENTS, sap_registry
+        self.session.sources[self.defaults["CONFIG"]["ELEMENT_REGISTRY_TABLE"]] = self.frame(
+            release_registry() + sap_registry())
+        self.session.sources[self.defaults["CONFIG"]["ARCHER_META_VALUE_TABLE"]] = self.frame([
+            {"SELECT_VALUE_ID": "1", "SELECT_VALUE_NAME": "Requested"},
+            {"SELECT_VALUE_ID": "2", "SELECT_VALUE_NAME": "Approved"}])
+        self.session.sources[self.profile["RAW_TABLE"]] = self.frame([
+            {"CONTENT_ID": "synthetic-sap", "CURATED_JSON": json.dumps(dict.fromkeys((REQUEST, APPROVAL, COMMENTS)))}])
+        ns = self.run_notebook((MODEL,))
+        self.assertEqual("PREVIEW_COMPLETE", ns["PIPELINE_REPORT"]["status"])
+        context = ns["MAPPING_CONTEXTS"][0]
+        self.assertEqual(5, len(context["mapping_rows"]))
+        contract = context["config"]["STORAGE_CONTRACT"]
+        dim, fact, pk = contract["TARGET_DIM"], contract["TARGET_FACT"], contract["DIM_PK_COLUMN"]
+        self.assertEqual([], self.session.query("SELECT * FROM " + dim))
+        with self.notebook_transport():
+            _, inserted = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", inserted["status"])
+        saved = {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)}
+        edges = self.session.query("SELECT * FROM " + fact)
+        self.assertEqual((4, 3), (len(saved), len(edges)))
+        payloads = [json.loads(row["METADATA_JSON"]) for row in saved.values()]
+        self.assertEqual(2, sum("value" in payload and payload["value"] is None for payload in payloads))
+        self.assertTrue(any("remarks" in payload and payload["remarks"] is None for payload in payloads))
+        ns["SOURCE_INPUTS"]["source-one"]["source_df"] = self.frame([
+            {"SOURCE_RECORD_ID": "synthetic-sap", "CURATED_JSON": json.dumps({
+                REQUEST: {"ValuesListIds": [1]}, APPROVAL: {"ValuesListIds": [2]}, COMMENTS: "Reviewed"})}])
+        with self.notebook_transport():
+            _, changed = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", changed["status"])
+        self.assertEqual({"INSERTS": 0, "UPDATES": 3, "UNCHANGED": 1},
+                         changed["groups"][0]["load"]["expected_changes"]["D"])
+        self.assertEqual(set(saved), {row[pk] for row in self.session.query("SELECT * FROM " + dim)})
+        self.assertEqual(edges, self.session.query("SELECT * FROM " + fact))
+        for model in ("SSP", "ASSESSMENT_RESULTS", "POAM"):
+            other = ns["MODEL_CONTRACTS"][model]["STORAGE_CONTRACT"]
+            self.assertEqual([], self.session.query("SELECT * FROM " + other["TARGET_DIM"]))
+
     def test_many_records_keep_exact_coverage_and_record_scoped_links(self):
         rows = [{"CONTENT_ID": f"record-{index:03d}", "CURATED_JSON": json.dumps(self.source)} for index in range(32)]
         self.session.sources[self.profile["RAW_TABLE"]] = self.frame(rows)

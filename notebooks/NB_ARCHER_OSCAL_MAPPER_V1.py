@@ -29,6 +29,7 @@ SELECTED_MODELS = ("SSP",)
 CONFIG = {
     "RUN_ID": str(uuid.uuid4()), "OSCAL_VERSION": "1.2.3", "SSP_DOCUMENT_VERSION": "1.0",
     "EXECUTE_WRITES": False, "IDENTITY_VERSION": "v1_registry_path_instance",
+    "ASSESSMENT_TASK_TITLE": "Preassessment review", "ASSESSMENT_TASK_TYPE": "action",
     "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
     "ARCHER_META_VALUE_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE",
 }
@@ -39,7 +40,7 @@ SOURCE_FILES = [{
     "CONTENT_ID_COLUMN": "CONTENT_ID", "CURATED_JSON_COLUMN": "CURATED_JSON",
     "MAPPING_FILE": "ARCHER_OSCAL_MAPPINGS.csv", "MAPPING_ENCODING": "utf-8-sig",
     "MAPPING_SOURCE_COLUMN": "SOURCE_KEY", "MAPPING_SOURCE_VALUE": "source-one",
-    "MODEL_BINDINGS": ("SSP", "ASSESSMENT_RESULTS", "POAM"),
+    "MODEL_BINDINGS": ("SSP", "ASSESSMENT_RESULTS", "POAM", "SECURITY_ASSESSMENT_PLAN"),
     "SOURCE_ORDER_CANDIDATES": (
         "DW_LOAD_TIMESTAMP_TZ", "DW_LOAD_TIMESTAMP", "UPDATED_DATE",
         "LAST_UPDATED_DATE", "MODIFIED_DATE", "CREATE_DATE",
@@ -56,6 +57,23 @@ SOURCE_FILES = [{
     },
 }]
 MODEL_CONTRACTS = {
+    "SECURITY_ASSESSMENT_PLAN": {
+        "MODEL_KEY": "SECURITY_ASSESSMENT_PLAN", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
+        "MODEL_ALIASES": ("Security Assessment Plan", "Assessment Plan", "SAP"), "LOOKUP_GROUPS": (),
+        "RUNTIME_OPTIONS": {"parse_decimal": False, "null_source_as_empty": True},
+        # Selected physical contract; the loader verifies the live tables before DML.
+        "STORAGE_CONTRACT": {
+            "VERIFIED": True, "PHYSICAL_PROFILE": "BINARY16_UUID32", "MODEL_KEY": "SECURITY_ASSESSMENT_PLAN",
+            "ROOT_PATH": "assessment-plan", "ROOT_ELEMENT_TYPE": "assessment-plan",
+            "SOURCE_SYSTEM_NAME": "ARCHER", "SOURCE_TABLE_NAME": "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+            "RAW_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW",
+            "TARGET_DIM": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_PLAN_ELEMENT",
+            "TARGET_FACT": "RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_PLAN_DEPENDENCY",
+            "DIM_PK_COLUMN": "PK_DIM_OSCAL_ASSESSMENT_PLAN_ELEMENT_HASH",
+            "FACT_PK_COLUMN": "PK_FACT_OSCAL_ASSESSMENT_PLAN_DEPENDENCY_HASH",
+            "IDENTITY_VERSION": "v1_registry_path_instance",
+        },
+    },
     "POAM": {
         "MODEL_KEY": "POAM", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
         "MODEL_ALIASES": ("POA&M", "Plan of Action and Milestones"), "LOOKUP_GROUPS": (),
@@ -291,7 +309,7 @@ import math
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v3"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v4"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -449,7 +467,7 @@ def _registry_elements(rows, selected, profile, model):
         if collection:
             identity = (row.get("INSTANCE_KEY_RULE"), _metadata_column_text(row, "ITEM_PATH"))
             expected = ("VALUE", "$") if operator == "object" else (METADATA_INSTANCE_RULES[operator], METADATA_ITEM_PATHS[operator])
-            if identity != expected:
+            if identity != expected and not (operator == "properties" and identity == ("SOURCE_FIELD_NAME", "$")):
                 raise ValueError("Registry identity conflicts with OPERATOR")
             parameters["registry_contract"].update(instance_key_rule=identity[0], item_path=identity[1])
         if parent and _registry_meta_bool(by_path[parent], "IS_COLLECTION"):
@@ -502,6 +520,13 @@ def _compile_mapping(row, elements):
         raise ValueError("CONFIG values require an explicit object member target")
     if source == "CONFIG":
         representation["value_source"] = source
+    null_policy = row.get("NULL_POLICY") or "omit"
+    if null_policy not in {"omit", "preserve"}:
+        raise ValueError("NULL_POLICY must be omit or preserve")
+    if null_policy == "preserve":
+        if source != "FIELD" or transform not in {"direct", "text", "archer-select", "scalar-score"} or operator not in {"object", "record", "properties", "observations"}:
+            raise ValueError("Null preservation requires a scalar member or property mapping")
+        representation["preserve_null"] = True
     if row.get("VALUE_REQUIRED") not in (None, ""):
         representation["required"] = _registry_meta_bool(row, "VALUE_REQUIRED")
     if transform == "skip" and representation.get("required"):
@@ -979,8 +1004,9 @@ def _metadata_mapped_value(row, source_obj, context):
     try:
         if raw is SKIP_VALUE:
             value = SKIP_VALUE
-        elif (raw is None and row["TRANSFORM_ID"] == "scalar-score" and row["REPRESENTATION"] == "observations"
-              and context["compiled_plan"]["options"].get("preserve_null_observations", False)):
+        elif (raw is None and (params.get("preserve_null") or (
+              row["TRANSFORM_ID"] == "scalar-score" and row["REPRESENTATION"] == "observations"
+              and context["compiled_plan"]["options"].get("preserve_null_observations", False)))):
             value = None
         else:
             value = _metadata_transform(row, raw, context)
@@ -1194,13 +1220,15 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             continue
         field, target = row["SOURCE_FIELD_NAME"], _metadata_target(row)
         if operator in {"properties", "observations"}:
-            values = [None] if operator == "observations" and value is None else _oscal_property_values(value)
-            if operator == "observations" and len(values) != 1:
-                raise ValueError("One scalar value is required per observation")
+            values = [None] if value is None else _oscal_property_values(value)
+            field_identity = (operator == "observations" or
+                              parameters["registry_contract"].get("instance_key_rule") == "SOURCE_FIELD_NAME")
+            if field_identity and len(values) != 1:
+                raise ValueError("One scalar value is required per field identity")
             for item in values:
                 prop = {"name": _metadata_text(_stable_property_name(field), "Property name"), "value": item}
                 item_payload = {"props": [prop]} if operator == "observations" else prop
-                key = field if operator == "observations" else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
+                key = field if field_identity else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
                 _append_unique_collection_instance(instances, {"instance_key": key, "payload": item_payload,
                                                                "parent_instance_key": parent})
         elif operator == "values":
@@ -1281,7 +1309,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v3":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v4":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     if (config["OSCAL_MODEL"], config["SOURCE_SYSTEM_NAME"], config["SOURCE_TABLE_NAME"]) != (model_key, source_system, source_table):

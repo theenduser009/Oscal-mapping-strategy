@@ -5,6 +5,18 @@
 One reusable metadata-driven ingestion template for current and future OSCAL
 models and approved source tables. Do not create a separate mapper per model.
 
+## Assessment Plan extension
+
+The three reviewed SAP fields use the existing record and properties operators.
+CSV NULL_POLICY selects explicit-null preservation per mapping. The properties
+operator accepts registry SOURCE_FIELD_NAME/$ identity for a single value per
+field, so label changes retain node/edge keys; existing value-based SSP identity
+is unchanged. One task per source record has two CONFIG support members, title
+and type, and owns the two picklist properties and source review remarks.
+The CSV now has 153 rows: 147 reviewed occurrences, one guard and five labelled
+structural support rows. The seven-cell runtime totals 1,903 lines, with matching
+Cell Three/Four release lean-csv-registry-v4. Follow [SAP next run](SAP_NEXT_RUN.md).
+
 ## Explicit-null warehouse policy
 
 The AR model runtime option `preserve_null_observations` retains explicit JSON

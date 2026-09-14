@@ -74,7 +74,7 @@ class CsvRegistryIntegrationTests(unittest.TestCase):
 
     def test_real_csv_optional_cells_do_not_lose_required_or_lookup_parameters(self):
         rows = self.ns["load_mapping_rows"](self.profile)
-        self.assertEqual(151, len(rows))
+        self.assertEqual(153, len(rows))
         contexts = self.compile(rows)
         self.assertEqual({"SSP": 48, "ASSESSMENT_RESULTS": 32},
                          {context["config"]["OSCAL_MODEL"]: len(context["mapping_rows"]) for context in contexts})

@@ -1,5 +1,12 @@
 # Seven copy-ready mapper cells
 
+Current package: [Security Assessment Plan](../../docs/SAP_NEXT_RUN.md).
+Replace Cells One, Three and Four; upload the CSV and apply the scoped SAP
+registry/table setup before its first preview. The seven cells total 1,903
+lines and use matching lean-csv-registry-v4 compiler/helpers. Existing SSP/AR
+acceptance and owner-resolved AR source keys remain intact. Earlier run
+instructions below are historical where they differ from SAP_NEXT_RUN.md.
+
 These pages contain the lean seven-cell implementation and are generated from
 [notebooks/cells](../cells/README.md). Keep a matching release; older compiled
 contexts and field-report APIs are not supported.

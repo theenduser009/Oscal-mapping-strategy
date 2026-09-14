@@ -1,5 +1,12 @@
 # Maintained seven-cell mapper source
 
+Current package: [Security Assessment Plan](../../docs/SAP_NEXT_RUN.md).
+Replace Cells One, Three and Four; upload the CSV and apply the scoped SAP
+registry/table setup before its first preview. The seven cells total 1,903
+lines and use matching lean-csv-registry-v4 compiler/helpers. Existing SSP/AR
+acceptance and owner-resolved AR source keys remain intact. Earlier run
+instructions below are historical where they differ from SAP_NEXT_RUN.md.
+
 These files are the single maintained implementation. The
 [V2 copy-ready pages](../cells_v2/README.md) and
 [combined notebook](../NB_ARCHER_OSCAL_MAPPER_V1.py) are generated from them.

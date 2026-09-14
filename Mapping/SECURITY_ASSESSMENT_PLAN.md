@@ -11,3 +11,13 @@ Source: screenshot review of the `archer_to_oscal_mapping` worksheet.
 ## Validation gate
 
 Define task identity, timing, dependency, and status semantics before registering these rows as task nodes.
+
+## Current execution decision
+
+The owner requested these three fields be mapped. The original table above is
+source transcription; the executable CSV now uses assessment-plan.tasks[].props[]
+for the two single-value picklists and assessment-plan.tasks[].remarks for review
+comments. One Preassessment review task per source record is the common parent.
+Task identity is source-record based; property identity is source-field based.
+Explicit nulls are preserved, while missing keys remain absent. No workflow
+status, timing or dependency is inferred. See [SAP next run](../docs/SAP_NEXT_RUN.md).

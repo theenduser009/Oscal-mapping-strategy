@@ -5,7 +5,7 @@ import math
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v3"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v4"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -163,7 +163,7 @@ def _registry_elements(rows, selected, profile, model):
         if collection:
             identity = (row.get("INSTANCE_KEY_RULE"), _metadata_column_text(row, "ITEM_PATH"))
             expected = ("VALUE", "$") if operator == "object" else (METADATA_INSTANCE_RULES[operator], METADATA_ITEM_PATHS[operator])
-            if identity != expected:
+            if identity != expected and not (operator == "properties" and identity == ("SOURCE_FIELD_NAME", "$")):
                 raise ValueError("Registry identity conflicts with OPERATOR")
             parameters["registry_contract"].update(instance_key_rule=identity[0], item_path=identity[1])
         if parent and _registry_meta_bool(by_path[parent], "IS_COLLECTION"):
@@ -216,6 +216,13 @@ def _compile_mapping(row, elements):
         raise ValueError("CONFIG values require an explicit object member target")
     if source == "CONFIG":
         representation["value_source"] = source
+    null_policy = row.get("NULL_POLICY") or "omit"
+    if null_policy not in {"omit", "preserve"}:
+        raise ValueError("NULL_POLICY must be omit or preserve")
+    if null_policy == "preserve":
+        if source != "FIELD" or transform not in {"direct", "text", "archer-select", "scalar-score"} or operator not in {"object", "record", "properties", "observations"}:
+            raise ValueError("Null preservation requires a scalar member or property mapping")
+        representation["preserve_null"] = True
     if row.get("VALUE_REQUIRED") not in (None, ""):
         representation["required"] = _registry_meta_bool(row, "VALUE_REQUIRED")
     if transform == "skip" and representation.get("required"):

@@ -7,7 +7,19 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
-## Active scope - owner-confirmed AR threshold source-name correction
+## Active scope - Security Assessment Plan
+
+The owner reports the AR source-key correction resolved and selected SAP next.
+Enable only the three reviewed SAP fields plus two structural task support rows.
+Use the existing SECURITY_ASSESSMENT_PLAN registry owner and assessment-plan
+canonical root. CSV NULL_POLICY=preserve retains actual nulls; missing keys stay
+absent. SAP properties use SOURCE_FIELD_NAME/$ identity so value changes update
+the same node. Existing SSP property identity and all previous mappings stay
+unchanged. Follow docs/SAP_NEXT_RUN.md; first live SAP preview is pending.
+SSP Control Implementation notes are posted but its 42 fields remain deferred.
+No new approval question is needed for this scoped implementation/publication.
+
+## Previous scope - owner-confirmed AR threshold source-name correction
 
 The owner requested a CSV correction after comparing the actual curated source
 with the mapping. SOURCE_FIELD_NAME now begins with an underscore for the two

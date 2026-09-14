@@ -1,6 +1,36 @@
 # Project handoff - read this before resuming
 
-## Current action - correct the two AR threshold source names
+## Current action — first Security Assessment Plan preview
+
+The owner confirmed the AR leading-underscore correction is resolved and moved
+to Security Assessment Plan. Do not request another unchanged AR run. That
+confirmation is not a new full COMMIT/readback report.
+
+All three reviewed SAP source fields are now enabled: request and approval
+map through the existing picklist lookup to named task properties, and
+preassessment comments map to task remarks. Explicit nulls are retained.
+One task per source record uses a stable source-record identity; each property
+uses the source-field identity so value changes update its existing row.
+Three CSV source rows plus two structural support rows are selected.
+The registry key remains SECURITY_ASSESSMENT_PLAN; canonical OSCAL paths use
+assessment-plan. Original workbook paths and Notes are preserved as provenance.
+
+Follow [SAP_NEXT_RUN.md](SAP_NEXT_RUN.md): prepare the missing SAP tables and
+the scoped registry metadata, upload the CSV, replace Cells One/Three/Four
+together, then run all seven in PREVIEW. No SSP/AR/POAM table reset is needed.
+The seven-cell runtime is 1,903 lines; graph builder and loader are unchanged.
+Local checks passed 216 tests with three unavailable-Snowpark class skips;
+private source-shape checks passed with synthetic lookup labels. CI and first
+live SAP preview are tracked in the next-run guide. No live SAP write is claimed.
+
+SSP Control Implementation remains deferred (42 rows). The owner's new notes
+are recorded in [the posted evidence](https://github.com/theenduser009/Oscal-mapping-strategy/blob/b8b3c1bc19876be011f2687831b2b758d3395e01/Mapping/SSP_CONTROL_IMPLEMENTATION_NOTES_EVIDENCE.md).
+The workbook's proposed direct control-implementation properties conflict
+with the pinned NIST SSP definition; no control mapping was enabled. The user
+chose SAP as the current focus. Existing accepted SSP/AR runs stand, and the
+posted POAM preview remains distinct from an unverified COMMIT outcome.
+
+## Previous action - correct the two AR threshold source names
 
 The owner confirmed the source-name mismatch, and direct review of the private
 source screenshot verified both leading underscores. Two existing CSV rows now

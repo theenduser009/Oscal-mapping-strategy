@@ -154,7 +154,7 @@ class MappingCsvTests(unittest.TestCase):
         selected = {**profile(), "MAPPING_FILE": str(ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv"),
                     "MAPPING_SOURCE_COLUMN": "SOURCE_KEY", "MAPPING_SOURCE_VALUE": "source-one"}
         rows = self.load(selected)
-        self.assertEqual(151, len(rows))
+        self.assertEqual(153, len(rows))
         self.assertEqual({"source-one"}, {row["SOURCE_KEY"] for row in rows})
         with open(selected["MAPPING_FILE"], encoding="utf-8-sig", newline="") as handle:
             original = list(csv.DictReader(handle))

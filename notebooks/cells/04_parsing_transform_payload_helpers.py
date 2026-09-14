@@ -250,8 +250,9 @@ def _metadata_mapped_value(row, source_obj, context):
     try:
         if raw is SKIP_VALUE:
             value = SKIP_VALUE
-        elif (raw is None and row["TRANSFORM_ID"] == "scalar-score" and row["REPRESENTATION"] == "observations"
-              and context["compiled_plan"]["options"].get("preserve_null_observations", False)):
+        elif (raw is None and (params.get("preserve_null") or (
+              row["TRANSFORM_ID"] == "scalar-score" and row["REPRESENTATION"] == "observations"
+              and context["compiled_plan"]["options"].get("preserve_null_observations", False)))):
             value = None
         else:
             value = _metadata_transform(row, raw, context)
@@ -465,13 +466,15 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             continue
         field, target = row["SOURCE_FIELD_NAME"], _metadata_target(row)
         if operator in {"properties", "observations"}:
-            values = [None] if operator == "observations" and value is None else _oscal_property_values(value)
-            if operator == "observations" and len(values) != 1:
-                raise ValueError("One scalar value is required per observation")
+            values = [None] if value is None else _oscal_property_values(value)
+            field_identity = (operator == "observations" or
+                              parameters["registry_contract"].get("instance_key_rule") == "SOURCE_FIELD_NAME")
+            if field_identity and len(values) != 1:
+                raise ValueError("One scalar value is required per field identity")
             for item in values:
                 prop = {"name": _metadata_text(_stable_property_name(field), "Property name"), "value": item}
                 item_payload = {"props": [prop]} if operator == "observations" else prop
-                key = field if operator == "observations" else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
+                key = field if field_identity else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
                 _append_unique_collection_instance(instances, {"instance_key": key, "payload": item_payload,
                                                                "parent_instance_key": parent})
         elif operator == "values":
@@ -552,7 +555,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v3":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v4":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     if (config["OSCAL_MODEL"], config["SOURCE_SYSTEM_NAME"], config["SOURCE_TABLE_NAME"]) != (model_key, source_system, source_table):
