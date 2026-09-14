@@ -10,11 +10,11 @@ original nine registry columns. Only `OPERATOR`, `UUID_POLICY` and
 visible deployment settings. No JSON catalog upload or extra daily runtime cell
 is required.
 
-The runtime totals 1,865 lines across seven cells. SSP and AR mapped graphs
-are committed and verified. Current work is the
-[POA&M reference mapping](../../docs/POAM_NEXT_RUN.md) from the same Source One.
-Use that guide's table/registry preparation and target-aware PREVIEW.
-POAM uses the owner-confirmed SSP/AR layout with POAM table and PK names. No SSP/AR rerun is needed.
+The runtime totals 1,875 lines across seven cells. Current work preserves explicit
+AR source nulls in warehouse observation properties. Follow [AR next run](../../docs/AR_NEXT_RUN.md):
+replace Cells One, Three and Four together, then preview all seven cells.
+The current AR32 CSV, registry and tables need no changes. Existing SSP/AR
+committed checkpoints and POAM's accepted preview remain recorded separately.
 
 Developers edit these files once, then use `python tools/sync_notebook_cells.py`;
 `--check` reports generated-page drift. This is a packaging tool, not a

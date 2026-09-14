@@ -170,8 +170,8 @@ class AR30ExtensionTests(unittest.TestCase):
             {"SOURCE_RECORD_ID": "synthetic-thresholds", "CURATED_JSON": aliases_only}])
         self.assertEqual((2, 1), (len(nodes.rows), len(edges.rows)))
 
-    def test_absent_values_and_parked_fields_do_not_create_observations(self):
-        for value in (None, "", []):
+    def test_empty_values_and_parked_fields_do_not_create_observations(self):
+        for value in ("", [], {}):
             source = {field: value for field in (*AR_ADDITIONS, *AR_THRESHOLD_ADDITIONS)}
             source.update(RISK_ACCEPTANCE_RBDS={"ContentId": 1}, RISK_ASSESSMENT_REPORT=[1, 2])
             source["_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD"] = 7

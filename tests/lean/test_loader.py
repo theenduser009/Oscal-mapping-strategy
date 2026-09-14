@@ -201,6 +201,32 @@ class LoadBehavior(unittest.TestCase):
             if sql == "BEGIN TRANSACTION": active = True
             elif sql in ("COMMIT", "ROLLBACK"): active = False
             elif active: self.assertFalse(sql.startswith(("CREATE", "ALTER", "DROP")))
+    def test_json_null_property_survives_value_changes_and_retry(self):
+        nodes, edges = graph()
+        stable_facts = None
+        for index, value in enumerate((None, "0", None)):
+            with self.subTest(value=value, step=index):
+                payload = {"uuid": nodes[2]["OSCAL_UUID"],
+                           "props": [{"name": "synthetic-score", "value": value}]}
+                nodes[2]["METADATA_JSON"] = json.dumps(payload)
+                result = self.run_loader(True, nodes, edges)
+                self.assertEqual("COMMITTED_AND_VERIFIED", result["status"])
+                expected_dim = (3, 0, 0) if index == 0 else (0, 1, 2)
+                self.assertEqual(dict(zip(("INSERTS", "UPDATES", "UNCHANGED"), expected_dim)),
+                                 result["expected_changes"]["D"])
+                saved = self.s.query("SELECT * FROM DEV.DEMO.DIM WHERE ELEMENT_TYPE='items'")[0]
+                self.assertEqual(payload, json.loads(saved["METADATA_JSON"]))
+                self.assertEqual(bytes.fromhex(nodes[2]["NODE_KEY"]), saved["PK_NODE"])
+                self.assertEqual(nodes[2]["OSCAL_UUID"].replace("-", ""), saved["OSCAL_UUID"])
+                facts = self.s.query("SELECT * FROM DEV.DEMO.FACT ORDER BY PK_EDGE")
+                if stable_facts is None:
+                    stable_facts = facts
+                self.assertEqual(stable_facts, facts)
+                repeated = self.run_loader(True, nodes, edges)
+                self.assertEqual({"D": {"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 3},
+                                  "F": {"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 2}},
+                                 repeated["expected_changes"])
+
     def test_wrong_live_schema_blocks_before_temporary_ddl(self):
         self.s.schema["DEV.DEMO.DIM"][0]["type"] = "VARCHAR(32)"
         with self.assertRaisesRegex(Error, "TARGET_SCHEMA_MISMATCH"): self.run_loader(True)

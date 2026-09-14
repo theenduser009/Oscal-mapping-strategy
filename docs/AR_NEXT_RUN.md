@@ -1,78 +1,71 @@
-# Assessment Results - preview the two additional threshold fields
+# Assessment Results - preserve explicit nulls in warehouse observations
 
-Use the existing seven cells on simplify-metadata-boundary and the updated
-[ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
+The 32 approved AR scalar-score mappings retain one observation per source field
+when its exact source key is present with JSON null or a supported populated value.
+The source binding remains Source One, and the target remains
+`assessment-results.results[].observations[]` with an inline named property.
 
-## What changes
+| Source state | Result |
+| --- | --- |
+| Key present, JSON null | Observation with `props[].value: null` |
+| Supported non-null value, including zero/false | Existing string-valued property |
+| Key absent | No observation; no alias or invented null |
+| Empty string/list/object | Existing omission behavior |
+| Unsupported populated value | Run blocks before writing |
 
-| Archer source field | Runtime target | Transform |
-| --- | --- | --- |
-| CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD | assessment-results.results[].observations[] | scalar-score |
-| CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD | assessment-results.results[].observations[] | scalar-score |
+For example, source `INITIAL_RISK_ASSESSMENT: null` retains a property named
+`initial-risk-assessment` with actual JSON null. The observation key, UUID and
+parent link stay the same when the value changes later. The string "null" is
+never substituted. Deferred mappings remain deferred.
 
-## Clean visible paths
+## Replace three cells, then preview
 
-OSCAL_ELEMENT_PATH now contains one exact path for every approved AR row.
-RISK_ASSESSMENT and fourteen other resolved alternatives now show
-`assessment-results.results[].observations[]` directly. Three unresolved
-alternative mappings stay DEFERRED with blank path cells. The old alternatives
-are retained in EXECUTION_NOTE; no new columns or mapping choices are introduced.
-A regression checks clean paths, note provenance and identical graph output.
-Local checks ran 195 tests with three unavailable-Snowpark class skips.
-[CI passed all 208 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34790204914)
-on commit 1a028da39aecbd7ce3dc10e826bd0d79fdff5b60, including the clean-path
-acceptance test and unchanged graph/routing check.
+1. Replace these files in the existing notebook:
+   - [Cell One](../notebooks/cells/01_initialization_and_configuration.py)
+   - [Cell Three](../notebooks/cells/03_canonical_mapping_contract.py)
+   - [Cell Four](../notebooks/cells/04_parsing_transform_payload_helpers.py)
+2. Keep the current [AR32 mapping CSV](../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
+   This null-policy change does not modify it. Keep the other four cells from
+   the same simplification branch; no registry setup, DDL or table reset is needed.
+3. Set `SELECTED_MODELS = ("ASSESSMENT_RESULTS",)` in Cell One and retain
+   `CONFIG["EXECUTE_WRITES"] = False`. Its AR runtime options now include
+   `preserve_null_observations: True`.
+4. Set Cell Seven's `OSCAL_LOAD_MODE = "PREVIEW"`, then run Cells One through
+   Seven in order. Matching compiler/helper release is `lean-csv-registry-v3`;
+   old compiled plans reject instead of silently losing the new behavior.
+5. Review Cell Three's 32 selected rows and Cell Seven's complete preview report.
+   Newly represented nulls create observations and their parent links. Existing
+   score-to-null changes update the same DIM identity without changing FACT links.
+   Counts depend on the selected source snapshot; no fixed live count is assumed.
 
-Both fields use their exact unprefixed Excel names. A populated scalar creates
-one observation with one named inline property. Zero is preserved, empty values
-are omitted, and multiple values or unsupported objects fail. No threshold is calculated and no
-underscore/PCT aliases are added. Original Notes remain unchanged, and former
-path alternatives are retained in execution notes. Both path columns show the
-same single destination for approved AR mappings.
+Expected completion: `PREVIEW_COMPLETE` / `PREVIEW_PASSED_NO_TARGET_DML`, with
+validation and storage checks passed and writes/commit false. After reviewing
+those differences, use Cell Seven COMMIT for the planned write and retain its
+committed readback. No live run of this null-preserving release is accepted yet.
 
-The 13 additions already enabled on this branch stay in place with their ar30
-rule IDs. This increment adds two rows' execution metadata, yielding **32 enabled
-AR rows and 13 deferred rows**. Existing SSP and POAM mappings are preserved.
-No new notebook logic, registry rows, tables or DDL are required.
+## Warehouse fidelity and validation
 
-## Run the expanded preview
+The [NIST OSCAL property definition](https://pages.nist.gov/OSCAL-Reference/models/v1.2.2/assessment-results/json-reference/)
+requires a string property value. Literal null is the owner's warehouse
+representation, not a schema-valid OSCAL property. Graph/storage success does
+not establish a valid complete OSCAL export; `FULL_MODEL_COMPLETE` and
+`SCHEMA_VALIDATED` remain false.
 
-1. Upload this branch's updated CSV to notebook Files, replacing the existing
-   mapping file used by Cell Two.
-2. In Cell One set `SELECTED_MODELS = ("ASSESSMENT_RESULTS",)`.
-   Keep `CONFIG["EXECUTE_WRITES"] = False`.
-3. In Cell Seven set `OSCAL_LOAD_MODE = "PREVIEW"`.
-4. Run matching Cells One through Seven in order to reload and compile the CSV.
-   The current POAM-capable cell code needs no replacement.
-5. Post Cell Three's routing summary and the complete pipeline report.
+Local checks ran 203 tests without failures, with three unavailable-Snowpark
+class skips. Focused regressions cover explicit null versus absent keys, all 32
+approved null fields, stable UUID/hash/link identities, preserved zero and false,
+invalid inputs, old plans, JSON-null insert/readback and unchanged retries. A
+seven-cell null/readback test is included in the installed-Snowpark CI suite;
+its full result is pending publication. The SQL boundary uses the explicit
+local relational adapter, not a live Snowflake connection.
 
-Expected: Cell Three is READY with SELECTED_ROWS = 32. Cell Seven reports
-PREVIEW_COMPLETE and PREVIEW_PASSED_NO_TARGET_DML, with graph, storage and
-pre-write validation true and writes/commit false. Inspect actual counts;
-missing or null threshold fields may produce no new observations. An approved
-mapping and an unchanged preview do not prove populated-field coverage.
+Four readable private source score examples still produce identical payloads,
+identities and links. They were tested as independent partial excerpts, not a
+complete source dataset. The newly reported initial-risk null is owner-reported;
+its behavior is covered by a synthetic null fixture, not a newly fetched export.
+No private source values or identifiers are published.
 
-The existing [AR COMMIT/readback](checkpoints/2026-09-13-assessment-results-commit-completed-and-verified.md)
-accepted 73,189 DIM elements and 70,376 FACT relationships for 2,813 source
-records. Preserve that checkpoint and populated tables. This preview reviews
-the changed mapping scope, not a repeat of an unchanged acceptance run.
-After reviewing its differences, select COMMIT in Cell Seven for the planned
-write and retain the committed readback report.
-
-## Validation and remaining scope
-
-Local checks ran 194 tests without failures; three Snowpark classes were
-unavailable locally. The new regression proves exactly two added observations,
-unchanged AR30 keys/payloads, preserved zero and no underscore aliasing.
-[CI passed all 207 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34789244811)
-on code commit 2e215d3867e4a0e0f3881d451fbe3c4e9212b097, including AR
-insert/update/readback and POAM isolation. CI uses installed Snowpark and an
-explicit relational SQL adapter; it is not a live Snowflake write. Saved private excerpts do not
-contain these two threshold fields, so their populated-source coverage remains
-a live verification gap.
-
-The 13 deferred AR rows remain: two average-compliance fields, RISK_ACCEPTANCE_RBDS,
-RISK_ASSESSMENT_REPORT, TOTAL_PACKAGE_INHERENT_RISK, FINDINGS and seven workflow
-audit rows. Their unresolved semantics are not changed by this increment.
-The [POAM preview](https://github.com/theenduser009/Oscal-mapping-strategy/blob/f5677398faf9da2c9919e6fa29d0db0264816d4e/docs/checkpoints/2026-09-13-poam-preview-complete.md)
-is accepted; POAM committed readback is still pending verification.
+The existing SSP and AR committed-readback checkpoints remain accepted. POAM's
+2,821-node / eight-edge preview is accepted; POAM committed readback remains
+unverified. The 13 deferred AR mappings and unresolved exact threshold-source
+names are separate from this null policy.

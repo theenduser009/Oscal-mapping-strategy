@@ -1,8 +1,8 @@
 # Seven copy-ready mapper cells
 
 These pages contain the lean seven-cell implementation and are generated from
-[notebooks/cells](../cells/README.md). Replace all seven cells together; older
-compiled contexts and field-report APIs are not supported.
+[notebooks/cells](../cells/README.md). Keep a matching release; older compiled
+contexts and field-report APIs are not supported.
 
 Field mappings come from [ARCHER_OSCAL_MAPPINGS.csv](../../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
 The original nine registry columns own structure and identity, with three sparse
@@ -11,11 +11,11 @@ catalog or test fixtures are uploaded to the notebook.
 
 ## Setup and run
 
-SSP and AR mapped graphs are committed and verified. Current work is
-[POA&M references](../../docs/POAM_NEXT_RUN.md) from the same Source One.
-Follow that guide's table/registry preparation and target-aware PREVIEW.
-POAM uses the SSP/AR layout with its own table and PK names.
-No SSP/AR reload or whole-registry reset is needed.
+Current work preserves explicit AR source nulls in warehouse observation
+properties. Follow [AR next run](../../docs/AR_NEXT_RUN.md): replace Cells One,
+Three and Four together, then preview all seven cells. CSV, registry and table
+definitions are unchanged. Existing SSP/AR committed checkpoints and POAM's
+accepted preview remain recorded separately.
 
 1. [Configuration](01_initialization_and_configuration.py)
 2. [Source, mapping and registry inputs](02_source_mapping_registry_inputs.py)
@@ -33,9 +33,9 @@ both. Keep `CONFIG["EXECUTE_WRITES"] = False` and Cell Seven's
 Cell Seven calls `run_oscal_pipeline(SOURCE_INPUTS, MAPPING_CONTEXTS,
 OSCAL_LOAD_MODE)`. It publishes `MODEL_GRAPHS` and `PIPELINE_REPORT`, printing the
 aggregate report after `OSCAL_PIPELINE_REPORT`. A successful preview reports
-`PREVIEW_COMPLETE`; SSP's load status is `PREVIEW_PASSED_NO_TARGET_DML`.
-AR's expected status is `MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING` because
-it has no verified destination.
+`PREVIEW_COMPLETE`; the configured SSP/AR/POAM destinations expect
+`PREVIEW_PASSED_NO_TARGET_DML`. A deliberately unbound model instead reports
+`MAPPED_GRAPH_VALIDATED_TARGET_CONTRACT_PENDING` and cannot commit.
 
 The lower-level `run_oscal_mapping(source_df, canonical_mapping_df,
 element_registry_df, config, context)` returns nodes, edges and the load result.

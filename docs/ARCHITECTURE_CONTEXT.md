@@ -5,7 +5,17 @@
 One reusable metadata-driven ingestion template for current and future OSCAL
 models and approved source tables. Do not create a separate mapper per model.
 
-## Current lean registry-backed release
+## Explicit-null warehouse policy
+
+The AR model runtime option `preserve_null_observations` retains explicit JSON
+null for approved scalar-score observation properties. It adds no field/model
+branch to the shared engine. Missing paths use a sentinel and still skip; other
+transforms and models retain their existing behavior. Matching Cell Three/Four
+release is `lean-csv-registry-v3`; the seven cells total 1,875 lines. Warehouse
+null properties are not conformant OSCAL string properties. No full document
+export/schema validation is claimed. See [AR next run](AR_NEXT_RUN.md).
+
+## Previous lean registry-backed release
 
 Field mappings, status, transforms and Notes are maintained once in
 [ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv). The original

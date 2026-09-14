@@ -80,7 +80,8 @@ MODEL_CONTRACTS = {
     "ASSESSMENT_RESULTS": {
         "MODEL_KEY": "ASSESSMENT_RESULTS", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
         "MODEL_ALIASES": ("Assessment Results", "AR"), "LOOKUP_GROUPS": (),
-        "RUNTIME_OPTIONS": {"parse_decimal": True, "null_source_as_empty": False},
+        "RUNTIME_OPTIONS": {"parse_decimal": True, "null_source_as_empty": False,
+                            "preserve_null_observations": True},
         # Owner-confirmed SSP physical layout; only AR model/table/key names differ.
         "STORAGE_CONTRACT": {
             "VERIFIED": True, "PHYSICAL_PROFILE": "BINARY16_UUID32", "MODEL_KEY": "ASSESSMENT_RESULTS",

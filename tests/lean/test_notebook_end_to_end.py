@@ -245,6 +245,24 @@ class NotebookEndToEndTests(unittest.TestCase):
             self.assertFalse(any(sql.startswith("MERGE INTO " + table + " ") for sql in self.session.events))
         self.assertFalse(ns["CONFIG"]["EXECUTE_WRITES"])
 
+    def test_all_seven_cells_preserve_an_explicit_ar_null_through_readback(self):
+        source = dict(self.source, INITIAL_RISK_ASSESSMENT=None)
+        self.session.sources[self.profile["RAW_TABLE"]] = self.frame([
+            {"CONTENT_ID": "synthetic-record", "CURATED_JSON": json.dumps(source)}])
+        ns = self.run_notebook(("ASSESSMENT_RESULTS",))
+        self.assertEqual("PREVIEW_COMPLETE", ns["PIPELINE_REPORT"]["status"])
+        self.assertEqual(34, ns["PIPELINE_REPORT"]["groups"][0]["load"]["nodes"])
+        with self.notebook_transport():
+            _, result = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
+        self.assertEqual("COMMITTED_AND_VERIFIED", result["status"])
+        dim = ns["MAPPING_CONTEXTS"][0]["config"]["STORAGE_CONTRACT"]["TARGET_DIM"]
+        payloads = [json.loads(row["METADATA_JSON"]) for row in self.session.query("SELECT * FROM " + dim)]
+        matching = [payload for payload in payloads if any(
+            prop["name"] == "initial-risk-assessment" for prop in payload.get("props", []))]
+        self.assertEqual(1, len(matching))
+        self.assertEqual([{"name": "initial-risk-assessment", "value": None}], matching[0]["props"])
+        self.assertTrue(matching[0]["uuid"])
+
     def test_ar_schema_must_match_shared_ssp_layout_before_any_commit(self):
         ns = self.run_notebook(("ASSESSMENT_RESULTS",))
         dim = ns["MAPPING_CONTEXTS"][0]["config"]["STORAGE_CONTRACT"]["TARGET_DIM"]

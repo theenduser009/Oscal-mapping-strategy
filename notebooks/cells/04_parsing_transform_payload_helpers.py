@@ -23,21 +23,21 @@ def _has_value(value):
     return value not in (None, "", [], {})
 
 
-def resolve_json_path(source_obj, field_path):
+def resolve_json_path(source_obj, field_path, default=None):
     """Read a literal source key first, then a dotted/slash path or list index."""
     if not field_path:
-        return None
+        return default
     if isinstance(source_obj, dict) and field_path in source_obj:
         return _to_python(source_obj[field_path])
     current = source_obj
     for token in filter(None, re.split(r"[./]", str(field_path))):
         current = _to_python(current)
         if isinstance(current, dict):
-            current = current.get(token, current.get(token.upper()))
+            current = current.get(token, current.get(token.upper(), default))
         elif isinstance(current, list) and token.isdigit() and int(token) < len(current):
             current = current[int(token)]
         else:
-            return None
+            return default
     return _to_python(current)
 
 
@@ -245,9 +245,16 @@ def _metadata_transform(row, value, context):
 
 def _metadata_mapped_value(row, source_obj, context):
     field, params = row["SOURCE_FIELD_NAME"], _metadata_params(row)
-    raw = context["config"].get(field) if params.get("value_source") == "CONFIG" else resolve_json_path(source_obj, field)
+    raw = (context["config"].get(field) if params.get("value_source") == "CONFIG"
+           else resolve_json_path(source_obj, field, default=SKIP_VALUE))
     try:
-        value = _metadata_transform(row, raw, context)
+        if raw is SKIP_VALUE:
+            value = SKIP_VALUE
+        elif (raw is None and row["TRANSFORM_ID"] == "scalar-score" and row["REPRESENTATION"] == "observations"
+              and context["compiled_plan"]["options"].get("preserve_null_observations", False)):
+            value = None
+        else:
+            value = _metadata_transform(row, raw, context)
         if params.get("required") and (value is SKIP_VALUE or not _has_value(value)):
             raise ValueError("Required mapped value is absent after conversion")
     except (TypeError, ValueError, ArithmeticError):
@@ -458,7 +465,7 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             continue
         field, target = row["SOURCE_FIELD_NAME"], _metadata_target(row)
         if operator in {"properties", "observations"}:
-            values = _oscal_property_values(value)
+            values = [None] if operator == "observations" and value is None else _oscal_property_values(value)
             if operator == "observations" and len(values) != 1:
                 raise ValueError("One scalar value is required per observation")
             for item in values:
@@ -545,7 +552,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v2":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v3":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     if (config["OSCAL_MODEL"], config["SOURCE_SYSTEM_NAME"], config["SOURCE_TABLE_NAME"]) != (model_key, source_system, source_table):

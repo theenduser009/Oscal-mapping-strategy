@@ -7,7 +7,19 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
-## Active scope - AR32 metadata extension; POAM preview accepted
+## Active scope - explicit AR source nulls must be preserved
+
+The owner's current requirement supersedes null-skipping for the 32 approved AR
+scalar-score observation mappings. Cell One enables preserve_null_observations;
+Cells Three/Four require matching lean-csv-registry-v3 plans. Keep actual JSON
+null in the observation property. Missing keys remain absent; empty containers
+and text retain existing behavior. Do not create string "null", infer aliases,
+change CSV/registry/DDL, or enable deferred mappings. The existing graph identity
+and loader stay unchanged. This is warehouse preservation, not OSCAL document
+conformance: official property values require strings. Follow AR_NEXT_RUN.md and
+check its current CI/live acceptance before advising a run.
+
+## Previous scope - AR32 metadata extension; POAM preview accepted
 
 The owner requested the remaining AR mapping changes discussed in the other
 chat. Enable the exact unprefixed CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD and

@@ -1,6 +1,36 @@
 # Project handoff - read this before resuming
 
-## Current action - clean AR path cells; AR32 preview pending
+## Current action - preserve explicit AR null observations
+
+The owner requires approved AR fields to remain represented when their exact
+source key has JSON null. Cell One enables `preserve_null_observations` for AR;
+matching Cells Three and Four use `lean-csv-registry-v3`. A null now creates an
+observation with the existing field identity and `props[].value: null`. Missing
+keys and empty strings/containers still skip; invalid populated values still
+block. No string "null", underscore alias, CSV change, registry change or DDL is
+introduced. All 32 approved AR rows use the policy; 13 deferred rows stay deferred.
+SSP/POAM behavior and the shared loader are unchanged. Seven cells total 1,875 lines.
+
+This is source-faithful warehouse JSON, not a schema-valid OSCAL export: the
+[NIST property definition](https://pages.nist.gov/OSCAL-Reference/models/v1.2.2/assessment-results/json-reference/)
+requires a string value. Existing FULL_MODEL_COMPLETE and SCHEMA_VALIDATED remain
+false. Do not describe successful graph/storage checks as full OSCAL conformance.
+
+Local checks: 203 tests passed with three unavailable-Snowpark class skips.
+Null-versus-missing, all 32 null fields, stable identities, invalid inputs, old
+plan rejection, JSON-null readback and unchanged retries are covered. Four real
+private scalar examples passed as two independent fragments with unchanged
+payloads/identities; no private data is published. A seven-cell null/readback test
+is added for CI, whose full installed-Snowpark result is pending publication.
+No live null-preserving preview or database write has been accepted.
+
+**Next action:** after CI passes, follow [AR_NEXT_RUN.md](AR_NEXT_RUN.md): replace
+Cells One, Three and Four from this release, retain the current AR32 CSV, select
+AR and run matching Cells One through Seven in PREVIEW. Review the new null
+observations and changes to existing payloads before the planned COMMIT. Missing
+exact threshold names remain a separate source-key investigation, not aliases.
+
+## Previous action - clean AR path cells; AR32 preview pending
 
 ### Visible OSCAL path correction
 

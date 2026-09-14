@@ -5,7 +5,7 @@ import math
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v2"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v3"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -405,7 +405,9 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                     if len({row["RULE_ID"] for row in selected}) != len(selected) or len(set(identities)) != len(selected):
                         raise ValueError("Duplicate mapping rule or field target")
                     options = {key: value for key, value in settings.get("RUNTIME_OPTIONS", {}).items()
-                               if key in {"parse_decimal", "null_source_as_empty"}}
+                               if key in {"parse_decimal", "null_source_as_empty", "preserve_null_observations"}}
+                    if type(options.get("preserve_null_observations", False)) is not bool:
+                        raise ValueError("preserve_null_observations must be true or false")
                     plan = dict(version=1, release=LEAN_MAPPER_RELEASE, elements=elements, mappings=selected,
                                 reference_groups=groups, options=options, report=report)
                 except ValueError as error:
