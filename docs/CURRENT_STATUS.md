@@ -1,5 +1,18 @@
 # Current Status
 
+## Current action - Profile source discovery, September 14
+
+The owner selected Profile next and posted the expanded notes on main at
+847cfa09f406a850cb1c857f611a093a26219431. They confirm conditional overlay
+imports/merge/modify and an illustrative baseline import. The notes are read;
+do not request them again. Actual ADD_OVERLAY/BASELINE_RECOMMENDATION values,
+approved catalog/profile references and control selection are still unresolved.
+Follow [PROFILE_NEXT_RUN](PROFILE_NEXT_RUN.md) and its small read-only source
+query. Both mapping rows remain deferred; no Profile model route, registry,
+runtime or target writes have been activated. The query is prepared, not run.
+This owner choice supersedes the suggested SAP-first order; prior acceptance
+and pending SAP/POAM/live added-field verification are unchanged.
+
 ## Documentation and project traceability - September 14
 
 The owner requires a durable explanation from the initial SSP work through

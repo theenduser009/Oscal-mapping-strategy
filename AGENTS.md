@@ -1,5 +1,16 @@
 # Project continuity instructions
 
+## Current owner-selected scope - Profile
+
+The owner selected Profile after the initial ChatGPT handoff. Expanded notes
+are posted at main commit 847cfa09f406a850cb1c857f611a093a26219431 in
+Mapping/PROFILE_NOTES_EVIDENCE.md; read them through the link in PROFILE_NEXT_RUN
+and do not ask for them again. Their import/merge/modify cases are conditional,
+not actual source values or approved resource URLs. Keep the two Profile rows
+deferred until source values and intended catalog/control selection are known.
+Use the small read-only discovery query; no field-specific Profile engine or
+invented URI/default import. Prior SAP/POAM/live-verification gaps stay recorded.
+
 ## Start here on every task
 
 1. Read [docs/PROJECT_HANDOFF.md](docs/PROJECT_HANDOFF.md), then the current-action section of [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md).
