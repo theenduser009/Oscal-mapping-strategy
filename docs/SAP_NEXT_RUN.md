@@ -147,3 +147,10 @@ seven-cell SAP run with installed Snowpark, JSON-null readback, stable-key
 updates, existing-model isolation, registry decision tests and generated-page
 checks. The SQL boundary uses the local adapter; first live SAP setup/preview
 and committed readback remain pending.
+
+## Registry correction CI checkpoint
+
+[All 237 CI tests passed with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34855613652)
+on setup-fix commit `4f7dd440fa5bca979cee8ae7c19e0489b37b1237`. This includes the
+required-column insert/retry regression, root graph parity and installed
+Snowpark tests with the local SQL adapter. Live setup/preview remains pending.

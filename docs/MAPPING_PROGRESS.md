@@ -20,6 +20,11 @@ MERGE source tuples and a constrained local table; the corrected insert and
 retry pass. A separate graph comparison proves the root metadata correction
 leaves node hashes, UUIDs and edges unchanged. Full CI is tracked in SAP_NEXT_RUN.
 
+[All 237 CI tests passed with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34855613652)
+on setup-fix commit `4f7dd440fa5bca979cee8ae7c19e0489b37b1237`. This includes the
+required-column insert/retry regression, root graph parity and installed
+Snowpark tests with the local SQL adapter. Live setup/preview remains pending.
+
 ## Previous action - enable SSP daily loss through CSV metadata
 
 The owner enabled DAILY_LOSS_AMOUNT_FROM_OUTAGE as a named property under
