@@ -20,11 +20,13 @@ Local checks: 203 tests passed with three unavailable-Snowpark class skips.
 Null-versus-missing, all 32 null fields, stable identities, invalid inputs, old
 plan rejection, JSON-null readback and unchanged retries are covered. Four real
 private scalar examples passed as two independent fragments with unchanged
-payloads/identities; no private data is published. A seven-cell null/readback test
-is added for CI, whose full installed-Snowpark result is pending publication.
+payloads/identities; no private data is published.
+[CI passed all 217 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34793258107)
+on code commit 8a598cf64fbb54f23bc4f024b78bc3375fc98b19, including the seven-cell
+null/readback test with installed Snowpark and the local relational SQL adapter.
 No live null-preserving preview or database write has been accepted.
 
-**Next action:** after CI passes, follow [AR_NEXT_RUN.md](AR_NEXT_RUN.md): replace
+**Next action:** follow [AR_NEXT_RUN.md](AR_NEXT_RUN.md): replace
 Cells One, Three and Four from this release, retain the current AR32 CSV, select
 AR and run matching Cells One through Seven in PREVIEW. Review the new null
 observations and changes to existing payloads before the planned COMMIT. Missing

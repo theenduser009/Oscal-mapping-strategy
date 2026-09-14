@@ -55,9 +55,10 @@ Local checks ran 203 tests without failures, with three unavailable-Snowpark
 class skips. Focused regressions cover explicit null versus absent keys, all 32
 approved null fields, stable UUID/hash/link identities, preserved zero and false,
 invalid inputs, old plans, JSON-null insert/readback and unchanged retries. A
-seven-cell null/readback test is included in the installed-Snowpark CI suite;
-its full result is pending publication. The SQL boundary uses the explicit
-local relational adapter, not a live Snowflake connection.
+seven-cell null/readback test passed with installed Snowpark.
+[CI passed all 217 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34793258107)
+on code commit 8a598cf64fbb54f23bc4f024b78bc3375fc98b19. The SQL boundary uses the
+explicit local relational adapter, not a live Snowflake connection.
 
 Four readable private source score examples still produce identical payloads,
 identities and links. They were tested as independent partial excerpts, not a

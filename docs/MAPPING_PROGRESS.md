@@ -20,11 +20,13 @@ Local checks: 203 tests passed with three unavailable-Snowpark class skips.
 Null-versus-missing, all 32 null fields, stable identities, invalid inputs, old
 plan rejection, JSON-null readback and unchanged retries are covered. Four real
 private scalar examples passed as two independent fragments with unchanged
-payloads/identities; no private data is published. A seven-cell null/readback test
-is added for CI, whose full installed-Snowpark result is pending publication.
+payloads/identities; no private data is published.
+[CI passed all 217 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34793258107)
+on code commit 8a598cf64fbb54f23bc4f024b78bc3375fc98b19, including the seven-cell
+null/readback test with installed Snowpark and the local relational SQL adapter.
 No live null-preserving preview or database write has been accepted.
 
-**Next action:** after CI passes, follow [AR_NEXT_RUN.md](AR_NEXT_RUN.md): replace
+**Next action:** follow [AR_NEXT_RUN.md](AR_NEXT_RUN.md): replace
 Cells One, Three and Four from this release, retain the current AR32 CSV, select
 AR and run matching Cells One through Seven in PREVIEW. Review the new null
 observations and changes to existing payloads before the planned COMMIT. Missing
@@ -261,7 +263,7 @@ AR persistence and full conformance remain separate pending milestones;
 no daily COMMIT has been executed or approved by this preview. Historical
 instructions and counts below remain dated evidence.
 
-## Previous action �?" corrected SSP PREVIEW (now accepted)
+## Previous action — corrected SSP PREVIEW (now accepted)
 
 The [live value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
 proves all 36 impact-node changes are `low` to `Low`, with matching source
@@ -287,7 +289,7 @@ differences should be removed on identical inputs, but zero updates are not
 guaranteed. Do not repeat diagnostics, registry work or the full DEV reload.
 Daily COMMIT/readback and AR storage remain pending; COMMIT is not approved.
 
-## Historical September 11 action �?" daily SSP preview in existing Cells 6 and 7
+## Historical September 11 action — daily SSP preview in existing Cells 6 and 7
 
 **Today's report:** [September 11 manager summary](daily/2026-09-11.md).
 Latest status below supersedes the historical pilot instructions and earlier
@@ -329,7 +331,7 @@ AR inventory stays **45 rows = 17 accepted in memory + 15 candidate-only +
 2 remaining review**. Seven accepted fields have missing source values.
 The three entirely empty candidate fields do not count as populated-input proof.
 
-## Historical one-record SSP DEV pilot �?" superseded
+## Historical one-record SSP DEV pilot — superseded
 
 The following was the earlier pilot handoff. It is retained as history, not a
 current run instruction. One-record and ten-record persistence subsequently
@@ -352,7 +354,7 @@ deferred + 2 duplicate-score deferred + 2 remaining review = 45 rows**.
 The parked/deferred history below remains in force; no unchanged AR rerun is
 requested. Persistence is a distinct pending milestone, not a new mapped field.
 
-## Current direction �?" workflow fields and duplicate score deferred
+## Current direction — workflow fields and duplicate score deferred
 
 On September 11, the owner confirmed **skip the seven workflow audit fields for
 now**, then also directed us to **defer both Average Security Compliance Score
@@ -384,7 +386,7 @@ The field meanings and output rules remain parked. No rerun is requested.
 The blocked 34-field batch is not accepted. SSP, mapper code, registry and the
 original CSV remain unchanged.
 
-## Latest attempted AR run �?" blocked, not accepted
+## Latest attempted AR run — blocked, not accepted
 
 The [v3 thirty-four-field checkpoint](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) passed mapping/registry contracts
 and candidate key integrity, but has 100 rejected field values: 1 in
@@ -427,7 +429,7 @@ Rejection does not prove defective source data.
   inline-property representation and are implemented, pending live [E19].
   Conditional workflow and finding-reference groups remain separate [E15, E16].
 
-- Start with [SSP �?" done and next](SSP_DONE_AND_NEXT.md) for the short summary.
+- Start with [SSP — done and next](SSP_DONE_AND_NEXT.md) for the short summary.
   Clearer Excel Notes supersede the old helper classification: `HELPER_PTA_CALC`
   should map to SC `props[]` but is skipped. `PACKAGE_TYPE` has a property-name
   discrepancy. Neither correction has been coded; Control Implementation is parked.
@@ -475,7 +477,7 @@ an Excel-row count. "Done in scope" means the stated implementation/release is
 accepted, not full model completeness or independent proof of every value.
 No business question and no field-level test evidence are different things.
 
-### SSP �?" accepted work preserved; remaining corrections parked
+### SSP — accepted work preserved; remaining corrections parked
 
 | OSCAL model | Full OSCAL element path | Field / scope | Status | Why / evidence | Additional information or clarification needed |
 | --- | --- | --- | --- | --- | --- |
@@ -500,7 +502,7 @@ No business question and no field-level test evidence are different things.
 | SSP | `system-security-plan.system-characteristics.props[]` | Seven approved fields other than `PACKAGE_TYPE`, listed below | Done in routing scope | Property routes included in accepted release [E5, E13]; not every field's exact Notes/value agreement is proven. | No newly identified question for these seven; retain field-level review separately. |
 | SSP | `system-security-plan.system-characteristics.props[]` | `PACKAGE_TYPE` | Pending correction; parked | Code name is `package-type`; Notes example says `authorization-package-type`. | No additional source table needed for naming correction. The sample value is not a constant. |
 | SSP | `system-security-plan.system-characteristics.props[]` | `HELPER_PTA_CALC` | Not implemented; parked | Calculated/custom-property row is incorrectly skipped. | Full Notes and expected property name/value rule if not available in the artifact. Do not invent a PTA formula. |
-| SSP | `system-security-plan.system-characteristics.props[]` | `PACKAGE_TYPE_HELPER_CALC` | Intentionally excluded | Notes explicitly say transient calculation field �?" do not map. | None; exclusion is not a completed mapping. |
+| SSP | `system-security-plan.system-characteristics.props[]` | `PACKAGE_TYPE_HELPER_CALC` | Intentionally excluded | Notes explicitly say transient calculation field — do not map. | None; exclusion is not a completed mapping. |
 | SSP | `system-security-plan.system-characteristics.security-impact-level` | Eleven CIA source-to-member mappings below | Done in complete-only assembly scope | Conversion and omission of incomplete CIA assemblies accepted [E6, E7, E13]. | Missing objectives are source gaps; no invented defaults or precedence. |
 | SSP | `system-security-plan.system-characteristics.security-impact-level` | `RECOMMENDED_SECURITY_CATEGORY` | Deferred | All Nulls does not define a populated-value rule [E12]. | Approved destination and transform/value policy. |
 | SSP | `system-security-plan.system-characteristics.security-sensitivity-level` | `SECURITY_CATEGORY` | Direct restoration accepted in corrected live PREVIEW | Documented Direct row restored through the existing CSV transform. The [corrected preview](checkpoints/2026-09-13-ssp-preview-no-target-changes.md) has zero DIM/FACT inserts or updates across all 2,813 records. Earlier [value reconciliation](checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md) explains the 1,958 previous removals. | Direct source preservation is not a derived FIPS rating. Daily write/readback and full conformance remain pending; no COMMIT approval follows from this preview. |
@@ -577,7 +579,7 @@ names do not authorize calculating scores, averages, totals or grades.
 | `AVG_COMPUTER_PASSWORD_AGE_SCORE` | Live accepted; source gap | 2,800 emitted; 13 missing; 0 invalid [E18]. |
 | `AVG_VULNERABILITY_REPORTING_SCORE` | Live accepted; source gap | 2,800 emitted; 13 missing; 0 invalid [E18]. |
 
-### Approved alternative-path additions �?" pending live
+### Approved alternative-path additions — pending live
 
 Model **Assessment Results**. Original input path:
 `assessment-results.results[].observations[] or props[]`. Original Notes:
@@ -693,9 +695,9 @@ All six reference fields below target SI:
 | Archer field | Implemented mapping / remaining work |
 | --- | --- |
 | `SUBSYSTEMS` | Type `system`, stable reference identity/UUID; no observed active references; hydration deferred. |
-| `SOFTWARE` | Type `software`; approved RAW lookup `SOFTWARE_NAME` �+' `title`, `DESCRIPTION` �+' `description`; 7/7 descriptions. Status deferred. |
+| `SOFTWARE` | Type `software`; approved RAW lookup `SOFTWARE_NAME` → `title`, `DESCRIPTION` → `description`; 7/7 descriptions. Status deferred. |
 | `HARDWARE` | Type `hardware`, stable reference identity/UUID; one reference has no proved hydration source. |
-| `INTERCONNECTIONS` | Type `interconnection`; approved RAW lookup `INTERCONNECTION_NAME` �+' `title`, populated `DESCRIPTION` �+' `description`; status source absent. |
+| `INTERCONNECTIONS` | Type `interconnection`; approved RAW lookup `INTERCONNECTION_NAME` → `title`, populated `DESCRIPTION` → `description`; status source absent. |
 | `INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM` | Same approved interconnection hydration; duplicates merge by governed identity/type. |
 | `SAP_INTAKE_FORM_INTERCONNECTIONS` | Type `interconnection`, stable reference identity/UUID; no observed active references; hydration deferred. |
 
@@ -782,13 +784,13 @@ addressing the already evidenced corrections.
 
 ## Evidence index
 
-- [E1: Excel screenshot transcription](MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md) �?" filtered view, not full workbook.
-- [E2: Metadata field-level checks](checkpoints/2026-09-09_CELL7_CELL8_OUTPUT_CHECKPOINT.md) �?" exact document ID and configured OSCAL version proof.
-- [E3: Timestamp source/readiness audit](checkpoints/2026-09-09_SSP_METADATA_LAST_MODIFIED_READINESS_AUDIT.md) �?" historical timezone findings; later preservation decision in E7.
+- [E1: Excel screenshot transcription](MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md) — filtered view, not full workbook.
+- [E2: Metadata field-level checks](checkpoints/2026-09-09_CELL7_CELL8_OUTPUT_CHECKPOINT.md) — exact document ID and configured OSCAL version proof.
+- [E3: Timestamp source/readiness audit](checkpoints/2026-09-09_SSP_METADATA_LAST_MODIFIED_READINESS_AUDIT.md) — historical timezone findings; later preservation decision in E7.
 - [E4: Accepted partial hydration run](checkpoints/2026-09-10_ssp_component_hydration_run.md).
 - [E5: Property routing correction and local verification](checkpoints/2026-09-10_ssp_property_routing_fix.md).
 - [E6: Accepted system-characteristics release](checkpoints/2026-09-09-ssp-system-characteristics-contract-run.md).
-- [E7: Consolidated status and owner decisions](CURRENT_STATUS.md) �?" historical sections retain their original context.
+- [E7: Consolidated status and owner decisions](CURRENT_STATUS.md) — historical sections retain their original context.
 - [E8: Executable field/role/component contracts](../notebooks/cells/04_parsing_transform_payload_helpers.py).
 - [E9: Component route reconciliation](checkpoints/2026-09-10_ssp_component_source_routing_audit.md).
 - [E10: Historical artifact scope/progress audit](checkpoints/2026-09-09_SSP_MAPPING_ARTIFACT_PROGRESS_AUDIT.md).
@@ -796,19 +798,19 @@ addressing the already evidenced corrections.
 - [E12: Authorization-date contract and implementation checkpoint](checkpoints/2026-09-10_ssp_authorization_date_mapping.md).
 - [E13: Successful date/property release and next-ten scope](checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
 - [E14: Successful mapped-scope SSP JSON assembly](checkpoints/2026-09-10_ssp_mapped_scope_assembly_accepted.md).
-- [E15: Newly posted mapping CSV transcription](transcribed_mapping_rows.csv) �?" reviewed at source commit `3533260a0c739444b02b0fc88a25cd0c3c456c87`; 51 records, not the complete original workbook.
-- [E16: Assessment Results score mappings and accepted release](ASSESSMENT_RESULTS_START_HERE.md) �?" seventeen live-accepted fields; exact exclusions and source gaps; no repeat run required.
-- [E17: Uploaded Assessment Results batch-one run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/683b0de290334cdc82675cda302f4244b10c9e0e/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10) �?" all four fields emitted for 2,813 records; 16,878 nodes, 14,065 edges, zero contract/key errors and no writes. Snapshot at source commit `683b0de290334cdc82675cda302f4244b10c9e0e`.
+- [E15: Newly posted mapping CSV transcription](transcribed_mapping_rows.csv) — reviewed at source commit `3533260a0c739444b02b0fc88a25cd0c3c456c87`; 51 records, not the complete original workbook.
+- [E16: Assessment Results score mappings and accepted release](ASSESSMENT_RESULTS_START_HERE.md) — seventeen live-accepted fields; exact exclusions and source gaps; no repeat run required.
+- [E17: Uploaded Assessment Results batch-one run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/683b0de290334cdc82675cda302f4244b10c9e0e/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-10) — all four fields emitted for 2,813 records; 16,878 nodes, 14,065 edges, zero contract/key errors and no writes. Snapshot at source commit `683b0de290334cdc82675cda302f4244b10c9e0e`.
 
-- [E18: Uploaded seventeen-field AR run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11) �?" 2,813 records; 52,586 nodes; 49,773 edges; 17 fields with populated evidence, seven with source gaps; zero contract/key errors or writes.
+- [E18: Uploaded seventeen-field AR run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/05fdb9e25bd7e28661f6fbd2d868d360c8d9e0bd/docs/ssp_mapping_progress_checkpoint.md#assessment-results-mapped-scope-checkpoint--2026-09-11) — 2,813 records; 52,586 nodes; 49,773 edges; 17 fields with populated evidence, seven with source gaps; zero contract/key errors or writes.
 
-- [E19: Approved seventeen alternative-path additions](ASSESSMENT_RESULTS_START_HERE.md#approved-alternative-path-batch--seventeen-more-fields-pending-live) �?" owner approved the existing inline-property-per-observation representation on September 11; release `ar-observation-scores-v3-34-fields` is implemented but its live attempt was blocked [E20, E21]. Original Excel/CSV unchanged; no registry or DIM/FACT writes.
+- [E19: Approved seventeen alternative-path additions](ASSESSMENT_RESULTS_START_HERE.md#approved-alternative-path-batch--seventeen-more-fields-pending-live) — owner approved the existing inline-property-per-observation representation on September 11; release `ar-observation-scores-v3-34-fields` is implemented but its live attempt was blocked [E20, E21]. Original Excel/CSV unchanged; no registry or DIM/FACT writes.
 
-- [E20: Blocked v3 thirty-four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) �?" mapping/registry checks pass; 73,408 candidate nodes and 70,595 candidate edges with zero duplicate/dangling keys; two fields have 100 rejected values; outputs and writes false. Field totals reconcile; the later two-field diagnostic established shapes [E21], not approved conversion semantics.
+- [E20: Blocked v3 thirty-four-field run](https://github.com/theenduser009/Oscal-mapping-strategy/blob/c4279208c3d13554c5fe667755f0e8a2b6cabba5/docs/ssp_mapping_progress_checkpoint.md) — mapping/registry checks pass; 73,408 candidate nodes and 70,595 candidate edges with zero duplicate/dangling keys; two fields have 100 rejected values; outputs and writes false. Field totals reconcile; the later two-field diagnostic established shapes [E21], not approved conversion semantics.
 
-- [E21: Two-field AR shape diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11) �?" one reference-shaped rejection and 99 multi-number-list rejections; no writes. Field meanings remain parked.
-- [E22: Accepted full SSP DEV reload](SSP_FULL_DEV_RELOAD_2026-09-11.md) �?" 2,813 records, 70,102 DIM / 67,289 FACT, committed and verified; old-row reduction remains unexplained.
-- [E23: Existing Cells 6-7 daily-loading release](SSP_DAILY_LOADING.md) �?" 407 local tests passed, including 28 focused checks; PREVIEW/COMMIT integration implemented, live acceptance pending.
+- [E21: Two-field AR shape diagnostic](https://github.com/theenduser009/Oscal-mapping-strategy/blob/ac3e8b348eabc708960ccdd51f00e3a0383613dc/docs/ssp_mapping_progress_checkpoint.md#assessment-results-rejected-value-shape-diagnostic--2026-09-11) — one reference-shaped rejection and 99 multi-number-list rejections; no writes. Field meanings remain parked.
+- [E22: Accepted full SSP DEV reload](SSP_FULL_DEV_RELOAD_2026-09-11.md) — 2,813 records, 70,102 DIM / 67,289 FACT, committed and verified; old-row reduction remains unexplained.
+- [E23: Existing Cells 6-7 daily-loading release](SSP_DAILY_LOADING.md) — 407 local tests passed, including 28 focused checks; PREVIEW/COMMIT integration implemented, live acceptance pending.
 
 ### Shared-engine design status
 
