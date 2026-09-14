@@ -33,11 +33,13 @@ class LeanCompilerTests(unittest.TestCase):
         ], key=lambda row: tuple(row[:3]))
         restored = ['SSP', 'SECURITY_CATEGORY', 'system-security-plan.system-characteristics',
                     'object', 'direct', {}, {'target': 'security-sensitivity-level'}, 'APPROVED', {}]
+        daily_loss = ['SSP', 'DAILY_LOSS_AMOUNT_FROM_OUTAGE', 'system-security-plan.system-characteristics.props[]',
+                      'properties', 'direct', {}, {'preserve_null': True}, 'APPROVED', {}]
         additions = [['ASSESSMENT_RESULTS', field, OBSERVATION_PATH, 'observations',
                       'scalar-score', {}, {}, 'APPROVED', {}] for field in (*AR_ADDITIONS, *AR_THRESHOLD_ADDITIONS)]
-        self.assertEqual(sorted([*_frozen_semantics(frozen), restored, *additions],
+        self.assertEqual(sorted([*_frozen_semantics(frozen), restored, daily_loss, *additions],
                                 key=lambda row: tuple(row[:3])), compiled)
-        self.assertEqual({'SSP':48, 'ASSESSMENT_RESULTS':32},
+        self.assertEqual({'SSP':49, 'ASSESSMENT_RESULTS':32},
                          {ctx['config']['OSCAL_MODEL']: len(ctx['mapping_rows']) for ctx in candidate})
         for context in candidate:
             report = context['routing_report']

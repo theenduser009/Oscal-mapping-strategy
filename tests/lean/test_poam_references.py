@@ -186,7 +186,7 @@ class PoamReferenceTests(unittest.TestCase):
         contexts = deployed["compile_mapping_contexts"](
             {"source-one": self.rows}, release_registry(), deployed["SOURCE_PROFILES"],
             deployed["MODEL_CONTRACTS"], deployed["ROUTING_METADATA"])
-        self.assertEqual({"SSP": 48, "ASSESSMENT_RESULTS": 32},
+        self.assertEqual({"SSP": 49, "ASSESSMENT_RESULTS": 32},
                          {ctx["config"]["OSCAL_MODEL"]: len(ctx["mapping_rows"]) for ctx in contexts})
         for context in contexts:
             self.assertEqual("READY", context["routing_report"]["STATUS"], context["routing_report"])

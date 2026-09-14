@@ -53,7 +53,11 @@ class AR30ExtensionTests(unittest.TestCase):
         actual_by_id = {row["ORIGINAL_ROW_ID"]: row for row in self.rows}
         corrected_sources = dict(zip(("131", "132"), AR_THRESHOLD_ADDITIONS))
         for row in original:
-            self.assertEqual({key: row[key] for key in original_columns},
+            expected = {key: row[key] for key in original_columns}
+            if row["ORIGINAL_ROW_ID"] == "96":
+                expected["MAPPING_TYPE"] = "Extension Property"
+                self.assertIn("Original mapping type: TBD.", actual_by_id["96"]["EXECUTION_NOTE"])
+            self.assertEqual(expected,
                              {key: actual_by_id[row["ORIGINAL_ROW_ID"]][key] for key in original_columns})
             actual = actual_by_id[row["ORIGINAL_ROW_ID"]]
             self.assertEqual(corrected_sources.get(row["ORIGINAL_ROW_ID"], row["SOURCE_FIELD_NAME"]),

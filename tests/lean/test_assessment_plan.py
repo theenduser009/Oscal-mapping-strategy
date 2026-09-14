@@ -162,7 +162,7 @@ class AssessmentPlanTests(unittest.TestCase):
         deployed = namespace(models=("SSP", "ASSESSMENT_RESULTS", "POAM"))
         contexts = deployed["compile_mapping_contexts"]({"source-one": self.rows}, release_registry() + poam_registry(),
             deployed["SOURCE_PROFILES"], deployed["MODEL_CONTRACTS"], deployed["ROUTING_METADATA"])
-        self.assertEqual({"SSP": 48, "ASSESSMENT_RESULTS": 32, "POAM": 1},
+        self.assertEqual({"SSP": 49, "ASSESSMENT_RESULTS": 32, "POAM": 1},
                          {context["config"]["OSCAL_MODEL"]: len(context["mapping_rows"]) for context in contexts})
         self.assertTrue(all(context["routing_report"]["STATUS"] == "READY" for context in contexts))
 

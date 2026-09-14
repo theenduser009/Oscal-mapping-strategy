@@ -84,7 +84,7 @@ class TransformTests(unittest.TestCase):
                                          outcome(self.ns, row, value, context))
                     bucket = "ar_additions" if row["RULE_ID"].startswith(("ar30:", "ar-alt:")) else "baseline"
                     counts[bucket] += 1
-        self.assertEqual({"baseline": 1403, "ar_additions": 345}, counts)
+        self.assertEqual({"baseline": 1426, "ar_additions": 345}, counts)
 
     def test_required_values_fail_after_transform_without_exposing_source_value(self):
         context = self.contexts[0]

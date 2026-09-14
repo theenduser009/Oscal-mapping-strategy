@@ -1,6 +1,31 @@
 # Current Status
 
-## Current action — first Security Assessment Plan preview
+## Current action - enable SSP daily loss through CSV metadata
+
+The owner enabled DAILY_LOSS_AMOUNT_FROM_OUTAGE as a named property under
+system-security-plan.system-characteristics.props[]. Its existing CSV row now
+uses direct transformation and NULL_POLICY=preserve. INFORMATION_CLASSIFICATION
+was already enabled. The original All Nulls note is provenance, not a current
+deferral. SSP now selects 49 rows; the CSV still contains 153 rows overall.
+
+This release changes no notebook runtime, registry, or table definitions.
+It reuses the published generic null handler (matching v4 compiler/helpers).
+Explicit JSON null produces a property; a missing source key remains omitted.
+Follow [SSP_DAILY_LOSS_NEXT_RUN.md](SSP_DAILY_LOSS_NEXT_RUN.md) for the CSV-only
+upload and fresh SSP preview. No live load of this added field is claimed.
+
+The existing SSP property identity includes its value. Initial insertion and
+unchanged retries pass; changing a previously stored amount or null changes
+its key and the loader blocks obsolete rows before target writes. That existing
+restriction is documented and tested, not bypassed by this mapping release.
+Local validation passed 220 tests with three unavailable-Snowpark class skips,
+plus the private explicit-null screenshot excerpt. CI is recorded in the guide.
+
+SAP first live preview remains pending; AR source-name correction is resolved.
+The 42 Control Implementation rows remain deferred. Prior SSP/AR acceptance
+stands; the posted POAM preview is not proof of a committed POAM load.
+
+## Previous action — first Security Assessment Plan preview
 
 The owner confirmed the AR leading-underscore correction is resolved and moved
 to Security Assessment Plan. Do not request another unchanged AR run. That

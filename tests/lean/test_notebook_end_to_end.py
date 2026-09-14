@@ -161,7 +161,7 @@ class NotebookEndToEndTests(unittest.TestCase):
         ns = self.run_notebook()
         self.assertEqual("PREVIEW_COMPLETE", ns["PIPELINE_REPORT"]["status"])
         self.assertFalse(ns["PIPELINE_REPORT"]["writes_executed"])
-        self.assertEqual(48, len(ns["MAPPING_CONTEXTS"][0]["mapping_rows"]))
+        self.assertEqual(49, len(ns["MAPPING_CONTEXTS"][0]["mapping_rows"]))
         dim = self.contract["TARGET_DIM"]
         self.assertEqual([], self.session.query("SELECT * FROM " + dim))
         graph = ns["MODEL_GRAPHS"][("source-one", "SSP")]
@@ -183,7 +183,7 @@ class NotebookEndToEndTests(unittest.TestCase):
     def test_both_models_preview_and_explicitly_targetless_ar_blocks_all_commits(self):
         ns = self.run_notebook(("SSP", "ASSESSMENT_RESULTS"))
         self.assertEqual(2, len(ns["MODEL_GRAPHS"]))
-        self.assertEqual([48, 32], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
+        self.assertEqual([49, 32], [len(context["mapping_rows"]) for context in ns["MAPPING_CONTEXTS"]])
         self.assertTrue(all(group["load"]["storage_verified"] for group in ns["PIPELINE_REPORT"]["groups"]))
         ns["MAPPING_CONTEXTS"][1]["config"]["STORAGE_CONTRACT"] = None
         with self.notebook_transport():

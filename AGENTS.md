@@ -7,7 +7,20 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
-## Active scope - Security Assessment Plan
+## Active scope - SSP daily-loss CSV enablement
+
+The owner explicitly enabled DAILY_LOSS_AMOUNT_FROM_OUTAGE under existing SSP
+system-characteristics properties, including actual source nulls. Reuse direct
+and CSV NULL_POLICY=preserve; no notebook, registry, or table changes are needed.
+Preserve original Notes and the old mapping type as provenance. SSP selects 49
+rows. Missing keys remain absent. Existing SSP property identities include values;
+a later value change triggers the existing obsolete-row block. Do not silently
+change that shared identity or claim ordinary in-place amount updates work.
+Use docs/SSP_DAILY_LOSS_NEXT_RUN.md and relevant private screenshot regression
+examples; never publish private source data. No live added-field run is accepted.
+Existing authorization covers publication on the current simplification branch.
+
+## Previous scope - Security Assessment Plan
 
 The owner reports the AR source-key correction resolved and selected SAP next.
 Enable only the three reviewed SAP fields plus two structural task support rows.
