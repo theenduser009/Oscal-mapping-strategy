@@ -30,6 +30,11 @@ with the pinned NIST SSP definition; no control mapping was enabled. The user
 chose SAP as the current focus. Existing accepted SSP/AR runs stand, and the
 posted POAM preview remains distinct from an unverified COMMIT outcome.
 
+
+[CI passed all 231 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34801165627)
+on the SAP code commit b65dc9bea88670179b0874b4f757ed25aa28835c, including the
+full seven-cell Snowpark/local-adapter test. First live SAP preview is pending.
+
 ## Previous action - correct the two AR threshold source names
 
 The owner confirmed the source-name mismatch, and direct review of the private

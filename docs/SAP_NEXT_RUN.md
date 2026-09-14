@@ -117,3 +117,12 @@ scenarios. This is not live Snowflake scripting, MERGE or transaction acceptance
 The CI package also includes a full seven-cell Assessment Plan test with
 installed Snowpark and the local SQL adapter. Its result is recorded below
 after execution.
+
+## Passing CI checkpoint
+
+[All 231 CI tests passed with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34801165627)
+on code commit b65dc9bea88670179b0874b4f757ed25aa28835c. This includes the full
+seven-cell SAP run with installed Snowpark, JSON-null readback, stable-key
+updates, existing-model isolation, registry decision tests and generated-page
+checks. The SQL boundary uses the local adapter; first live SAP setup/preview
+and committed readback remain pending.
