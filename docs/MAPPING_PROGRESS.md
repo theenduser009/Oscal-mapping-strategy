@@ -25,7 +25,9 @@ replacement nulls are invented. Thirteen AR mappings remain deferred.
 Local validation ran 204 tests without failures, with three unavailable-Snowpark
 class skips. All seven focused AR extension tests pass. The exact private
 two-key excerpt produced two observations, four nodes and three valid edges;
-repeat identities matched. Generated notebook checks pass. CI is pending.
+repeat identities matched. Generated notebook checks pass.
+[CI passed all 218 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34798321269)
+on the corrected CSV commit 2a567ec6eef54e668122aa385a243a2d0e044f95.
 No private source values are published.
 No live corrected-threshold preview or committed readback is accepted yet.
 

@@ -54,7 +54,9 @@ PCT fields are separate. If absent from the source, they remain absent in output
 Local validation ran 204 tests without failures, with three unavailable-Snowpark
 class skips. All seven focused AR extension tests pass, including nulls, exact
 keys, unchanged AR30 identities and PCT separation. Generated notebook checks
-pass. CI is pending. The directly readable private two-key fragment produced
+pass. [CI passed all 218 tests with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34798321269)
+on corrected CSV commit 2a567ec6eef54e668122aa385a243a2d0e044f95.
+The directly readable private two-key fragment produced
 two observations, four nodes and three valid edges with stable repeat identities,
 using a synthetic record ID.
 It is a partial excerpt, not the complete live dataset. Private source data
