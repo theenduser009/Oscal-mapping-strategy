@@ -18,12 +18,18 @@ The existing SSP property identity includes its value. Initial insertion and
 unchanged retries pass; changing a previously stored amount or null changes
 its key and the loader blocks obsolete rows before target writes. That existing
 restriction is documented and tested, not bypassed by this mapping release.
-Local validation passed 220 tests with three unavailable-Snowpark class skips,
+Local validation completed 220 tests with three unavailable-Snowpark class skips,
 plus the private explicit-null screenshot excerpt. CI is recorded in the guide.
 
 SAP first live preview remains pending; AR source-name correction is resolved.
 The 42 Control Implementation rows remain deferred. Prior SSP/AR acceptance
 stands; the posted POAM preview is not proof of a committed POAM load.
+
+
+[All 235 CI tests passed with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34851300280)
+on mapping commit `ff366b00b0a6a73644129dbb55c760c85845d19b`. All seven runtime
+files match the preceding published version. CI includes installed Snowpark and
+the local relational adapter; it does not establish a live Snowflake load.
 
 ## Previous action — first Security Assessment Plan preview
 

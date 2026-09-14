@@ -57,10 +57,17 @@ recorded; prior SSP acceptance does not cover this new mapping.
 
 ## Validation
 
-Local suite: 220 tests passed with three unavailable-Snowpark class skips.
+Local suite: 220 tests completed, with three unavailable-Snowpark class skips.
 Generated notebook pages remain synchronized and the runtime stays at 1,903
 lines. Four dedicated regressions cover mapping selection, missing/null/zero
 and scalar values, parent links, malformed shapes, initial load/readback,
 unchanged retry, and the existing changed-value block using a local SQL adapter.
 The private readable screenshot's exact null excerpt also passed graph checks;
 the source screenshot and excerpt remain private. CI results follow below.
+
+## Passing CI checkpoint
+
+[All 235 CI tests passed with no skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34851300280)
+on mapping commit `ff366b00b0a6a73644129dbb55c760c85845d19b`. All seven runtime
+files match the preceding published version. CI includes installed Snowpark and
+the local relational adapter; it does not establish a live Snowflake load.
