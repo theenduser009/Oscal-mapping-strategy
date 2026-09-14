@@ -2,6 +2,7 @@
 -- Run the whole statement outside a transaction, with no concurrent registry writer.
 -- Retires only unconfigured legacy SAP paths and the unconfigured remarks leaf.
 -- Remarks is a task member, not a separate graph node. Conflicting configured rows stop.
+-- Root SINGLETON satisfies the registry's required INSTANCE_KEY_RULE column.
 EXECUTE IMMEDIATE $$
 DECLARE
   tx NUMBER;
@@ -21,7 +22,7 @@ BEGIN
   -- Existing canonical rows must have one owner and no conflicting execution rules.
   WITH expected(path, operator, uuid_policy, identity_rule, item_path) AS (
     SELECT * FROM VALUES
-      ('assessment-plan', 'object', 'node', NULL, NULL),
+      ('assessment-plan', 'object', 'node', 'SINGLETON', NULL),
       ('assessment-plan.tasks[]', 'record', 'node', 'SOURCE_RECORD_ID', NULL),
       ('assessment-plan.tasks[].props[]', 'properties', 'omit', 'SOURCE_FIELD_NAME', '$')
   )
@@ -65,7 +66,7 @@ BEGIN
            column4 AS collection, column5 AS identity_rule, column6 AS item_path,
            column7 AS process_order, column8 AS operator, column9 AS uuid_policy
     FROM VALUES
-      ('assessment-plan', NULL, 'assessment-plan', FALSE, NULL, NULL, 1, 'object', 'node'),
+      ('assessment-plan', NULL, 'assessment-plan', FALSE, 'SINGLETON', NULL, 1, 'object', 'node'),
       ('assessment-plan.tasks[]', 'assessment-plan', 'tasks', TRUE, 'SOURCE_RECORD_ID', NULL, 2, 'record', 'node'),
       ('assessment-plan.tasks[].props[]', 'assessment-plan.tasks[]', 'props', TRUE, 'SOURCE_FIELD_NAME', '$', 3, 'properties', 'omit')
   ) s ON TRIM(t.NODE_PATH) = s.path

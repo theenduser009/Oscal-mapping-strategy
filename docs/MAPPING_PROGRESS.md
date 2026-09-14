@@ -1,6 +1,26 @@
 # Archer to OSCAL mapping progress
 
-## Current action - enable SSP daily loss through CSV metadata
+## Current action - repair SAP registry setup root identity
+
+The owner's live registry setup failed because INSTANCE_KEY_RULE is NOT NULL,
+while the published SAP MERGE supplied NULL for the root. The corrected script
+uses SINGLETON in both the expected-row preflight and the MERGE source. Tasks
+remain SOURCE_RECORD_ID; properties remain SOURCE_FIELD_NAME. No runtime,
+CSV, registry DDL, DIM/FACT schema, or existing-model metadata changes.
+
+Rerun the complete corrected [SAP registry setup](../sql/registry/ENABLE_ASSESSMENT_PLAN_METADATA.sql)
+outside an open transaction, then confirm SAP_METADATA_VERIFIED / ACTIVE_ROWS=3.
+Rerun Cells One through Seven in PREVIEW so Cell Two reloads the registry.
+The reported pre-commit failure goes through the script's rollback handler;
+the actual rollback/setup result is not verified remotely. No table reset or
+nullable-column alteration is needed. First live SAP preview remains pending.
+
+The new regression reproduced the original NOT NULL failure using the actual
+MERGE source tuples and a constrained local table; the corrected insert and
+retry pass. A separate graph comparison proves the root metadata correction
+leaves node hashes, UUIDs and edges unchanged. Full CI is tracked in SAP_NEXT_RUN.
+
+## Previous action - enable SSP daily loss through CSV metadata
 
 The owner enabled DAILY_LOSS_AMOUNT_FROM_OUTAGE as a named property under
 system-security-plan.system-characteristics.props[]. Its existing CSV row now
@@ -30,6 +50,7 @@ stands; the posted POAM preview is not proof of a committed POAM load.
 on mapping commit `ff366b00b0a6a73644129dbb55c760c85845d19b`. All seven runtime
 files match the preceding published version. CI includes installed Snowpark and
 the local relational adapter; it does not establish a live Snowflake load.
+
 
 ## Previous action — first Security Assessment Plan preview
 

@@ -1,5 +1,26 @@
 # Security Assessment Plan — three-field mapping
 
+## Registry setup correction - September 14
+
+The first reported setup failed on the required INSTANCE_KEY_RULE column.
+The script incorrectly inserted NULL for the root. The corrected SQL uses
+SINGLETON in its root preflight and MERGE row. This is a setup-SQL correction
+only; the mapping CSV, seven cells, registry columns and target tables do not
+change. Other model registry entries are untouched.
+
+Run the complete corrected [registry script](../sql/registry/ENABLE_ASSESSMENT_PLAN_METADATA.sql)
+outside an open transaction. Expect SAP_METADATA_VERIFIED, ACTIVE_ROWS=3 and
+COMMITTED=true, then rerun all seven cells in PREVIEW to reload the registry.
+Do not drop a constraint or reset the registry. The failed MERGE occurred before
+COMMIT and the script handles that error with ROLLBACK; no live rollback or
+successful setup result has been inspected here.
+
+The new test first reproduced the required-column failure with the actual SQL
+source rows. Fixed rows pass constrained insert and retry checks; root identity
+metadata leaves existing graph hashes, UUIDs and links unchanged. These are
+local tests, not execution of Snowflake scripting or proof of live acceptance.
+
+
 ## What is enabled
 
 The owner requested all three reviewed Source One Assessment Plan fields.

@@ -14,7 +14,7 @@ def registry_row(path="assessment-plan", **overrides):
 
 
 def canonical_rows():
-    return [registry_row(OPERATOR="object", UUID_POLICY="node"),
+    return [registry_row(OPERATOR="object", UUID_POLICY="node", INSTANCE_KEY_RULE="SINGLETON"),
             registry_row("assessment-plan.tasks[]", OPERATOR="record", UUID_POLICY="node",
                          INSTANCE_KEY_RULE="SOURCE_RECORD_ID"),
             registry_row("assessment-plan.tasks[].props[]", OPERATOR="properties", UUID_POLICY="omit",
@@ -28,6 +28,7 @@ class AssessmentPlanRegistrySqlTests(unittest.TestCase):
         self.preflight = sql[sql.index("  WITH expected"):sql.index("  IF (COALESCE(conflicts")].strip().rstrip(";")
         self.duplicates = re.search(r"  SELECT COUNT\(\*\) INTO :conflicts FROM \(.*?\n  \);", sql, re.S)[0]
         self.retirement = re.search(r"  UPDATE " + re.escape(table) + r".*?;", sql, re.S)[0]
+        self.merge_values = re.search(r"FROM VALUES\s*(.*?)\n  \) s ON", sql.split("MERGE INTO", 1)[1], re.S)[1]
         for name in ("preflight", "duplicates", "retirement"):
             setattr(self, name, getattr(self, name).replace("SELECT * FROM VALUES", "VALUES")
                     .replace(" INTO :conflicts", "").replace(table, "registry"))
@@ -51,6 +52,8 @@ class AssessmentPlanRegistrySqlTests(unittest.TestCase):
         cases = [
             ("empty", [], False),
             ("canonical", canonical_rows(), False),
+            ("older nullable root", [registry_row(OPERATOR="object", UUID_POLICY="node")], False),
+            ("conflicting root identity", [registry_row(INSTANCE_KEY_RULE="VALUE")], True),
             ("legacy unconfigured", [registry_row("security-assessment-plan"),
                                      registry_row("security-assessment-plan.tasks[]")], False),
             ("canonical unconfigured", [registry_row()], False),
@@ -82,6 +85,28 @@ class AssessmentPlanRegistrySqlTests(unittest.TestCase):
         expected = {(row["OSCAL_MODEL_KEY"], row["NODE_PATH"], False) for row in legacy}
         expected.update((row["OSCAL_MODEL_KEY"], row["NODE_PATH"], True) for row in canonical_rows() + other)
         self.assertEqual(expected, actual)
+
+    def test_merge_source_insert_and_retry_respect_required_instance_key(self):
+        # Use the actual MERGE values and the live-reported NOT NULL constraint.
+        # This checks row data, not Snowflake scripting/transaction execution.
+        columns = ("NODE_PATH", "PARENT_NODE_PATH", "ELEMENT_TYPE", "IS_COLLECTION",
+                   "INSTANCE_KEY_RULE", "ITEM_PATH", "PROCESS_ORDER", "OPERATOR", "UUID_POLICY")
+        rows = self.db.execute("VALUES " + self.merge_values).fetchall()
+        self.db.execute("CREATE TABLE destination (NODE_PATH TEXT PRIMARY KEY, PARENT_NODE_PATH TEXT, "
+                        "ELEMENT_TYPE TEXT, IS_COLLECTION BOOLEAN, INSTANCE_KEY_RULE TEXT NOT NULL, "
+                        "ITEM_PATH TEXT, PROCESS_ORDER INTEGER, OPERATOR TEXT, UUID_POLICY TEXT)")
+        insert = ("INSERT INTO destination VALUES (" + ",".join("?" for _ in columns) + ") "
+                  "ON CONFLICT(NODE_PATH) DO UPDATE SET " +
+                  ",".join(column + "=excluded." + column for column in columns[1:]))
+        for attempt in range(2):
+            with self.subTest(attempt=attempt):
+                self.db.executemany(insert, rows)
+                self.assertEqual(3, self.db.execute("SELECT COUNT(*) FROM destination").fetchone()[0])
+        root = self.db.execute("SELECT INSTANCE_KEY_RULE FROM destination WHERE NODE_PATH='assessment-plan'").fetchone()
+        self.assertEqual(("SINGLETON",), root)
+        # A rerun must also pass the SQL's compatibility preflight.
+        self.load([registry_row(**dict(zip(columns, row))) for row in rows])
+        self.assertFalse(self.db.execute(self.preflight).fetchone()[0])
 
 
 if __name__ == "__main__":

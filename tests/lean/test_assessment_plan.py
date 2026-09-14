@@ -26,7 +26,7 @@ def sap_registry():
                  OPERATOR=operator, UUID_POLICY=uuid_policy, REQUIRED_MEMBERS=None)
             for order, (path, parent, element, collection, operator, identity, item_path, uuid_policy)
             in enumerate([
-                (ROOT_PATH, None, ROOT_PATH, False, "object", None, None, "node"),
+                (ROOT_PATH, None, ROOT_PATH, False, "object", "SINGLETON", None, "node"),
                 (TASK_PATH, ROOT_PATH, "tasks", True, "record", "SOURCE_RECORD_ID", None, "node"),
                 (PROP_PATH, TASK_PATH, "props", True, "properties", "SOURCE_FIELD_NAME", "$", "omit"),
             ], 1)]
@@ -124,6 +124,20 @@ class AssessmentPlanTests(unittest.TestCase):
         self.assertEqual(business(null_graph[1]), business(value_graph[1]))
         reordered = self.graph(dict(reversed(list(source.items()))))
         self.assertEqual(tuple(map(business, value_graph)), tuple(map(business, reordered)))
+
+    def test_nonnull_root_registry_identity_preserves_previous_graph(self):
+        previous_registry = sap_registry()
+        previous_registry[0]["INSTANCE_KEY_RULE"] = None
+        previous = self.compile(registry=release_registry() + previous_registry)
+        source = {REQUEST: {"ValuesListIds": [101]}, APPROVAL: None, COMMENTS: "Synthetic review"}
+        before = self.graph(source, context=previous)
+        after = self.graph(source)
+        self.assertEqual(tuple(map(business, before)), tuple(map(business, after)))
+        root = next(row for row in after[0].rows if row["ELEMENT_PATH"] == ROOT_PATH)
+        self.assertEqual("singleton", root["INSTANCE_KEY"])
+        self.assertNotIn("instance_key_rule",
+            self.context["compiled_plan"]["elements"][ROOT_PATH]["parameters"]["registry_contract"])
+        self.ns["_load_graph"](*after, self.context["config"])
 
     def test_unknown_picklists_multiselect_and_bad_remarks_fail_without_source_values(self):
         cases = ({REQUEST: {"ValuesListIds": [999999]}}, {APPROVAL: {"ValuesListIds": [101, 102]}},

@@ -7,7 +7,17 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
-## Active scope - SSP daily-loss CSV enablement
+## Active scope - SAP registry NOT NULL setup correction
+
+The owner reports SAP setup MERGE failed because root INSTANCE_KEY_RULE was
+NULL in a nonnullable column. Correct only setup SQL to SINGLETON in preflight
+and MERGE; preserve task/property identity and all runtime/CSV/table definitions.
+The actual constrained-row regression reproduces the failure; graph-parity
+coverage protects hashes and UUIDs. Follow docs/SAP_NEXT_RUN.md and verify the
+live setup success before claiming SAP preview/load acceptance. No registry
+reset or column-nullability change is authorized or needed for this repair.
+
+## Previous scope - SSP daily-loss CSV enablement
 
 The owner explicitly enabled DAILY_LOSS_AMOUNT_FROM_OUTAGE under existing SSP
 system-characteristics properties, including actual source nulls. Reuse direct
