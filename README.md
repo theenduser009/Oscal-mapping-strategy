@@ -1,204 +1,60 @@
 # OSCAL Mapping Strategy
 
-This repository is the durable checkpoint for the metadata-driven Archer-to-OSCAL mapper.
+Archer-to-OSCAL mapping through one metadata-driven, seven-cell Snowflake notebook.
 
-**Start here: [Project handoff](docs/PROJECT_HANDOFF.md).** Accepted runs,
-cell responsibilities, unresolved gaps and the next action are recorded there.
+**Start with [the project walkthrough](docs/PROJECT_WALKTHROUGH.md).** It explains
+the full journey from SSP to Assessment Plan, each cell/function, field mappings,
+keys and relationships, testing, accepted loads and remaining work.
 
-**Live SSP preview accepted:** 2,813 records, 70,102 nodes and 67,289 edges;
-validation, pre-write and storage checks passed with no target writes. DIM
-proposes 1,994 updates, zero inserts and 68,108 unchanged rows; all 67,289 FACT
-rows are unchanged. See the [live checkpoint](docs/checkpoints/2026-09-13-oscal-lean-daily-v3.1-preview-accepted.md).
-The [live value review](docs/checkpoints/2026-09-13-ssp-read-only-value-reconciliation.md)
-resolved all 36 impact-node changes as `low` to `Low` and matched all 1,958
-removed sensitivity members to direct source text after diagnostic trimming.
-The correction restores the documented `SECURITY_CATEGORY` Direct CSV mapping
-and lowercases FIPS lookup labels. The prior release passed
-[185 CI tests](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34761907759).
-Local regression tests for the CSV restoration pass; corrected live preview
-acceptance remains pending.
+## Current package
 
-**Next:** upload the updated CSV, replace [Cell Two](notebooks/cells/02_source_mapping_registry_inputs.py),
-and run all seven cells in PREVIEW with existing Cell One deployment settings
-and `EXECUTE_WRITES = False`. Cell One creates a new run ID. Do not repeat
-registry setup, cleanup, diagnostics or the full reload. Require the new report;
-raw whitespace, the other 855 sensitivity records or source/target changes
-mean zero updates are not guaranteed. COMMIT is not approved.
+The seven maintained cells total **1,903 lines**. The mapping CSV contains 153
+rows; selected execution rows are SSP 49, Assessment Results 32, POAM one and
+Assessment Plan five. These are mapping-row counts, not distinct source fields
+or complete OSCAL models. See the [field index](docs/MAPPING_FIELD_INDEX.md).
 
-**Current lean rebuild:** 1,838 lines across the same
-[seven cells](notebooks/cells_v2/README.md), down from 3,700. One mapping CSV and
-the original nine registry columns plus three execution columns drive the
-mapper. Alternate metadata formats, cached plans and repeated validations have
-been removed. The earlier expanded audit fixed eleven reproduced gaps and NumPy
-integer compatibility. [GitHub CI](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34758711257)
-passed all 158 tests, including eight installed Snowpark checks and complete
-seven-cell executions. See the [full validation record](docs/checkpoints/2026-09-13-full-validation.md).
+SSP and AR have accepted historical COMMIT/readback reports. The new SSP
+daily-loss field still needs live acceptance. POAM's accepted report is a preview,
+not a committed load. Assessment Plan's registry setup root-identity defect is
+fixed; a successful live setup/preview/load report remains unverified.
 
-Run release tests with `python -m unittest discover -s tests/lean -v` and verify
-generated files with `python tools/sync_notebook_cells.py --check`.
-[Test instructions](tests/lean/README.md) distinguish local tests, installed
-Snowpark API checks and live Snowflake evidence. Daily COMMIT and committed
-readback acceptance remain pending; follow
-[current status](docs/CURRENT_STATUS.md).
+The owner acknowledged the Assessment Plan DDL step. That acknowledgement is
+recorded separately from a full run report. Use [current status](docs/CURRENT_STATUS.md)
+and the [SAP run guide](docs/SAP_NEXT_RUN.md) for the active setup/preview step.
+No SSP/AR/POAM reload or registry reset is implied.
 
-Normal writes stay disabled. SSP's accepted full DEV reload is not repeated;
-AR remains seventeen accepted in-memory mappings without verified storage.
-The completed review compared retained `MODEL_GRAPHS` with the current target;
-matching counts did not prove the old baseline was unchanged. Its trimmed
-source comparison did not establish raw-whitespace equality. Passing
-mapped-scope tests does not establish full OSCAL
-document conformance.
+## Code, metadata and explanation
 
-## Authoritative files
+- [Seven maintained source cells](notebooks/cells/README.md) and [generated copy pages](notebooks/cells_v2/README.md).
+- [Cells One through Four explained](docs/CELLS_1_TO_4_EXPLAINED.md): configuration, reads, compilation, transformations.
+- [Cells Five through Seven explained](docs/CELLS_5_TO_7_EXPLAINED.md): graph, storage, validation and execution.
+- [Mapping CSV](Mapping/ARCHER_OSCAL_MAPPINGS.csv): exact field names, one chosen execution path and approved behavior.
+- [Architecture](docs/ARCHITECTURE_CONTEXT.md): registry ownership, configuration and common runtime boundaries.
+- [Handoff](docs/PROJECT_HANDOFF.md), [mapping progress](docs/MAPPING_PROGRESS.md), [decision log](docs/DECISION_LOG.md).
+- [Assessment Plan table DDL](sql/CREATE_ASSESSMENT_PLAN_TABLES.sql) and [corrected registry SQL](sql/registry/ENABLE_ASSESSMENT_PLAN_METADATA.sql).
 
-- [`notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py`](notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py) - the complete seven-cell Snowflake/Snowpark notebook source.
-- [`notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py`](notebooks/setup/SETUP_SSP_METADATA_ROLE_PARTY_REGISTRY.py) - the guarded, insert-only setup cell for the governed metadata role and party registry paths.
-- [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) - verified state, safety gate, and the single next action.
-- [`docs/MAPPING_PROGRESS.md`](docs/MAPPING_PROGRESS.md) - Archer field-to-OSCAL mapping register: implementation, live evidence, and pending gaps.
-- [Today's manager report](docs/daily/2026-09-10.md) - daily change and cumulative progress; reports are scheduled for 5 PM Eastern.
-- [`docs/ARCHITECTURE_CONTEXT.md`](docs/ARCHITECTURE_CONTEXT.md) - design guardrails that must survive future edits.
-- [`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) - dated project decisions and GitHub checkpoints.
-- [`docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md`](docs/OSCAL_SSP_1_2_3_MINIMUM_CONTRACT.md) - pinned version sources and the first-tier required SSP contract.
-- [`docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md`](docs/SSP_MAPPER_BUSINESS_LOGIC_AND_TEST_GUIDE.md) - tester-facing business rules, field-to-node expectations, PK/FK checks, known gaps, and complete acceptance procedure.
-- [`notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py`](notebooks/validation/RUN_AFTER_07_ssp_mapped_scope_assembly.py) - the read-only post-Cell-7 assembler for one transient mapped-scope SSP document per Archer record.
-- [`notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py`](notebooks/validation/RUN_AFTER_04_ssp_mapping_dispatch_coverage.py) - the one-pass, aggregate-only diagnostic for populated Excel rows that lack an approved Cell 4 handler.
-- [`docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md`](docs/MAPPING_ARTIFACT_SCREENSHOT_EVIDENCE_2026-09-09.md) - filtered visual evidence from the SSP mapping workbook; it is not a replacement for the complete workbook.
+## Testing and operation
 
-The earlier three-cell `ssp_props_read_only_cells.py` and its copy pages were temporary diagnostics. They have been removed to prevent them from being mistaken for the production mapper.
+[All 237 implementation CI tests passed with zero skips](https://github.com/theenduser009/Oscal-mapping-strategy/actions/runs/34855613652).
+These include installed Snowpark APIs and local SQL-adapter tests; they do not
+replace live Snowflake acceptance. Relevant private screenshot excerpts are
+checked separately without publishing private source data.
 
-## Safety
-
-The committed notebook always starts with:
-
-```python
-"EXECUTE_WRITES": False
+```shell
+python tools/sync_notebook_cells.py --check
+python -m unittest discover -s tests/lean -v
 ```
 
-Cell 6 already defines graph validation and insert/update MERGE loading; Cell 7
-orchestrates the normal notebook. The updated daily writer defaults to PREVIEW,
-uses an explicit Cell 7 mode for approved SSP DEV commits. Its live PREVIEW is
-accepted; daily COMMIT and committed readback remain pending.
-The separate DEV persistence cells have their own explicitly scoped modes.
+Keep shared EXECUTE_WRITES false and select PREVIEW or COMMIT in Cell Seven.
+PREVIEW does not write the target DIM/FACT tables; temporary staging is used.
+COMMIT previews all routes first, then uses a separate transaction per route.
+Recorded readback establishes a batch result, not full OSCAL conformance.
+SSP Control Implementation's 42 rows remain deferred.
 
-## Accepted full DEV reload - historical write evidence
+## Historical evidence
 
-The [full SSP DEV reload](docs/SSP_FULL_DEV_RELOAD_2026-09-11.md) committed and
-verified **2,813 records, 70,102 DIM elements and 67,289 FACT dependencies**.
-No reload rerun is needed. The old-row reduction remains unreconciled; full SSP
-completeness and the normal daily writer are not established by this milestone.
-See [current status](docs/CURRENT_STATUS.md) for the active action.
-
-## Historical checkpoints - not current run instructions
-
-The following entries retain earlier evidence. Their old next-step requests and
-"latest" labels do not override the dated project handoff.
-
-The latest accepted read-only Snowflake run passed graph and pre-write
-validation with 67,671 nodes, 64,858 edges, zero duplicate or dangling keys,
-and no writes. It also confirmed 1,435 approved component hydration rows: 7
-software and 1,428 interconnections, with 7 software descriptions and 968
-interconnection descriptions. The exact graph stability proves hydration
-changed payload content without changing node or edge identity.
-
-The earlier 67,683-node / 64,870-edge graph was confirmed after the
-system-characteristics collection-contract release. That release remains
-accepted; no further metadata or system-characteristics rerun is pending.
-Work now moves to the next evidence-backed downstream SSP branch, with writes
-still disabled.
-
-The component source contract is now captured: all 4,804 populated references
-use either `ContentId,LevelId` objects or scalar content IDs. The mapper now
-uses the registry-governed content ID as component identity, emits the declared
-component type and deterministic UUID, and rejects cross-type identity
-conflicts. The owner-approved partial hydration release now adds software title
-and description plus interconnection title and populated description from the
-two proved RAW lookup sources. Status, missing interconnection descriptions,
-and hardware hydration remain explicit gaps and are not defaulted.
-
-The earlier 2,585 aggregate was corrected: under pinned OSCAL SSP 1.2.3,
-2,453 no-objective security-impact assemblies are optional absences. Cell 4
-now also omits the 90 partial assemblies, while retaining complete C-I-A
-assemblies; Cell 5 no longer recreates omitted security-impact data as empty
-structural nodes. The live read-only rerun passed and the graph decreased by
-exactly those 2,543 nodes and edges. The 42 missing required `status.state`
-values remain a source-data gap.
-
-The complete Excel-first
-[mapping-artifact progress audit](docs/checkpoints/2026-09-09_SSP_MAPPING_ARTIFACT_PROGRESS_AUDIT.md)
-was executed next. It retained 104 SSP rows: 17 are presence-reconciled, 80
-need more information, 5 have no source data, and 2 are not applicable. No row
-is explicitly marked complete, the loaded 608 rows still differ from the
-spreadsheet screenshot's 609, and no global completion claim is allowed. It
-selected `system-security-plan.metadata.last-modified` as the next
-implementation-ready path because its Transform handler is missing.
-
-The subsequent metadata audit found that the package-prefixed candidate is
-empty and `LAST_UPDATED` supplies all 2,813 current values. Those timestamps
-are parseable but timezone-naive. The user chose to preserve them unchanged
-for now, so timestamp normalization remains a final conformance gap. Cell 5
-now safely injects the already-pinned OSCAL version into every singleton
-metadata payload; a live Snowflake rerun is now complete. The rerun retained
-the healthy 51,500-node / 48,687-edge graph,
-passed all structural and pre-write gates, and made no writes. A direct
-aggregate payload check was then run and recorded `PASSED` for all 2,813
-metadata nodes, with every failure count at zero and no writes.
-The direct `TRACKING_ID` document-ID mapping is also now closed: all 2,813
-generated identifiers exactly match their transformed source values with zero
-failures and no writes.
-
-Cell 4 now contains production timestamp resolution for the Excel-defined
-`metadata.published` and `metadata.last-modified` source clusters. It preserves
-the selected source string exactly, accepts a single populated value or
-identical populated values, and fails closed when populated sources disagree.
-It does not infer or attach a timezone.
-
-The same release makes the optional `security-impact-level` branch atomic:
-only payloads containing all three confidentiality, integrity, and
-availability objectives are emitted. Missing values are never invented.
-
-## Historical mapped-scope follow-up
-
-The component hydration and hardened mapper release is accepted. Cell 4
-enforces the Excel-defined mapping contracts: the four approved SSP
-text mappings and the eleven security-impact source/objective pairs are exact,
-unresolved Archer select IDs fail closed, unsupported transformation types no
-longer fall through as raw direct values, and the reviewed legacy security
-vocabulary is synchronized across the mapper and validators.
-
-The same release's read-only mapped-scope assembler has also passed in Snowflake.
-It assembled **2,813 transient SSP JSON documents**, consuming **70,102 nodes**
-and **67,289 edges**, with **zero writes**. No repeat mapper or assembly run is
-needed. It does not claim complete or schema-valid OSCAL and adds no write path.
-
-The latest runtime identified `INFORMATION_SYSTEM_TYPE` incorrectly owned by
-the system-characteristics parent. This routing defect is corrected in
-[Cell 3](notebooks/cells/03_canonical_mapping_contract.py): the eight
-screenshot-confirmed extension-property fields now use the existing `props[]`
-collection while retaining the original artifact path. Unknown transformations
-still fail; no database changes or new registry rows are needed.
-
-The subsequent report supplied the exact `ATOIATO_DATE`  `date-authorized`
-contract: Transform, Notes `Convert timestamp to DateDatatype`. Cell 4 now
-implements ISO timestamp/date to `YYYY-MM-DD`, retaining the source calendar
-date and leaving metadata timestamps untouched. Invalid or ambiguous formats
-still fail; the all-null security-category mapping is not implicitly approved.
-
-The latest run is **accepted: 70,102 nodes, 67,289 edges, zero duplicate/dangling
-keys, pre-write checks passed, no writes**.
-[Accepted checkpoint](docs/checkpoints/2026-09-10_ssp_date_property_run_accepted.md).
-**Assembly accepted:** Model **SSP**, root `system-security-plan`, all currently
-mapped branches including `system-security-plan.system-implementation.components[]`.
-[Assembly checkpoint](docs/checkpoints/2026-09-10_ssp_mapped_scope_assembly_accepted.md).
-The graph-to-JSON handoff is complete for mapped scope. Keep writes disabled;
-do not rerun the notebook, registry setup, diagnostic reports or assembler for
-this accepted result.
-Additional mapping rows need approved source-to-path contracts; see the
-[mapping register](docs/MAPPING_PROGRESS.md).
-
-## Read-only inspection SQL
-
-- [Show full OSCAL paths, DIM payloads, and FACT relationships for one SSP](sql/show_oscal_path_and_payload.sql)
-- [Drill into `system-characteristics` and all descendant payloads](sql/drill_down_system_characteristics.sql)
-
-- [Inspect security-impact-level and extract confidentiality, integrity, and availability](sql/drill_down_security_impact_level.sql)
-
+The [walkthrough timeline](docs/PROJECT_WALKTHROUGH.md#how-we-got-here) links the
+SSP milestones, simplification, FIPS reconciliation, AR, POAM and SAP changes.
+Older dated checkpoints retain their original evidence; their old next-step
+instructions do not override current status. The [previous README](https://github.com/theenduser009/Oscal-mapping-strategy/blob/08ab607cc288d868549c6fb62aa945d51c55f017/README.md)
+is retained in Git history. No source data or screenshot transcript is published.

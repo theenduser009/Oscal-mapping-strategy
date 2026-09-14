@@ -1,5 +1,23 @@
 # Current Status
 
+## Documentation and project traceability - September 14
+
+The owner requires a durable explanation from the initial SSP work through
+Assessment Plan, including the purpose of code blocks and mapping decisions.
+[PROJECT_WALKTHROUGH.md](PROJECT_WALKTHROUGH.md) is the consolidated entry point;
+it links both code walkthroughs, the 153-row field index and dated evidence.
+The README now points there instead of presenting superseded SSP/AR instructions
+as current. This documentation release changes no runtime, CSV, registry or DDL.
+
+The owner acknowledged the Assessment Plan DDL step; no complete new SAP
+preview/commit report accompanied that acknowledgement. Keep the actual setup
+and run result separate from code publication and test success. Current SAP
+setup recovery remains the operational next step until evidence updates it.
+
+For future changes record source/model/path, rationale, changed files, null and
+identity behavior, tests, live outcome and remaining work. Retain prior decisions
+as dated history and keep private source excerpts out of published documentation.
+
 ## Current action - repair SAP registry setup root identity
 
 The owner's live registry setup failed because INSTANCE_KEY_RULE is NOT NULL,

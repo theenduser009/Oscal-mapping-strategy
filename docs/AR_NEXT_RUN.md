@@ -1,5 +1,11 @@
 # Assessment Results - corrected threshold source names
 
+> Current package: matching v4 compiler/helpers, 1,903 runtime lines.
+> Use [the project walkthrough](PROJECT_WALKTHROUGH.md) and [current status](CURRENT_STATUS.md)
+> for the latest acceptance and next action. Older release sizes, replacement lists
+> and first-preview steps below are historical where superseded. This guide alone
+> is not a request to repeat a completed run.
+
 Upload the updated [ARCHER_OSCAL_MAPPINGS.csv](../Mapping/ARCHER_OSCAL_MAPPINGS.csv).
 Only two existing source names and their provenance notes changed:
 

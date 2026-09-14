@@ -1,5 +1,11 @@
 # POA&M reference mapping
 
+> Current package: matching v4 compiler/helpers, 1,903 runtime lines.
+> Use [the project walkthrough](PROJECT_WALKTHROUGH.md) and [current status](CURRENT_STATUS.md)
+> for the latest acceptance and next action. Older release sizes, replacement lists
+> and first-preview steps below are historical where superseded. This guide alone
+> is not a request to repeat a completed run.
+
 ## Accepted live preview
 
 The [posted preview](https://github.com/theenduser009/Oscal-mapping-strategy/blob/f5677398faf9da2c9919e6fa29d0db0264816d4e/docs/checkpoints/2026-09-13-poam-preview-complete.md)

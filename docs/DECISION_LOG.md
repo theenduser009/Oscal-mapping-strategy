@@ -1,5 +1,23 @@
 # Decision Log
 
+## Documentation and project traceability - September 14
+
+The owner requires a durable explanation from the initial SSP work through
+Assessment Plan, including the purpose of code blocks and mapping decisions.
+[PROJECT_WALKTHROUGH.md](PROJECT_WALKTHROUGH.md) is the consolidated entry point;
+it links both code walkthroughs, the 153-row field index and dated evidence.
+The README now points there instead of presenting superseded SSP/AR instructions
+as current. This documentation release changes no runtime, CSV, registry or DDL.
+
+The owner acknowledged the Assessment Plan DDL step; no complete new SAP
+preview/commit report accompanied that acknowledgement. Keep the actual setup
+and run result separate from code publication and test success. Current SAP
+setup recovery remains the operational next step until evidence updates it.
+
+For future changes record source/model/path, rationale, changed files, null and
+identity behavior, tests, live outcome and remaining work. Retain prior decisions
+as dated history and keep private source excerpts out of published documentation.
+
 ## 2026-09-10 — Control Notes example reviewed; standard-compatible proposal only
 
 The user did not approve implementing Option 1 as a custom extension and asked

@@ -7,6 +7,18 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
+## Persistent owner requirement - explainable project history
+
+Maintain docs/PROJECT_WALKTHROUGH.md as the end-user entry point, the two
+cell/function walkthroughs with verified source line references, and the current
+CSV field index. For each change record the source/model/path, reason, code or
+metadata touched, identity/null behavior, tests, live evidence and next step in
+the dated continuity records. Refresh the field index when the CSV changes and
+the source links when runtime code changes. Keep prior evidence as history;
+do not present old next-step instructions as current. Do not publish private
+screenshots, source excerpts or record values. Acknowledgements and test passes
+do not establish a new live committed batch. No recurring automation is implied.
+
 ## Active scope - SAP registry NOT NULL setup correction
 
 The owner reports SAP setup MERGE failed because root INSTANCE_KEY_RULE was
