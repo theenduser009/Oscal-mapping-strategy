@@ -1,6 +1,41 @@
 # Project handoff - read this before resuming
 
-## Current action - preserve explicit AR null observations
+## Current action - correct the two AR threshold source names
+
+The owner confirmed the source-name mismatch, and direct review of the private
+source screenshot verified both leading underscores. Two existing CSV rows now
+read `_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD` and
+`_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD`. Each still targets
+`assessment-results.results[].observations[]` with `scalar-score`.
+Original names are retained in EXECUTION_NOTE; rule IDs, mapping count (32),
+all other mapping cells, seven runtime cells, registry and DDL are unchanged.
+
+The existing null policy now reaches those exact source keys. Property names stay
+`current-average-device-risk-threshold` and `current-highest-device-risk-threshold`.
+Collection instance keys use the corrected source names, so these two fields'
+hashes/UUIDs differ from hypothetical rows generated from the old unprefixed
+names. Previously accepted AR30 identities remain unchanged. The owner's missing
+field query reports these two properties absent; this release is not a migration
+or deletion of any historical rows. Preview against the actual targets before commit.
+
+PCT mappings remain separate and unchanged. The owner reports no percentage keys
+in the inspected source. Absent keys remain omitted; neither percentages nor
+replacement nulls are invented. Thirteen AR mappings remain deferred.
+
+Local validation ran 204 tests without failures, with three unavailable-Snowpark
+class skips. All seven focused AR extension tests pass. The exact private
+two-key excerpt produced two observations, four nodes and three valid edges;
+repeat identities matched. Generated notebook checks pass. CI is pending.
+No private source values are published.
+No live corrected-threshold preview or committed readback is accepted yet.
+
+**Next action:** upload the corrected [CSV](../Mapping/ARCHER_OSCAL_MAPPINGS.csv),
+keep the already updated null-preserving cells, select AR and run Cells One
+through Seven in PREVIEW. This reloads the CSV in Cell Two and recompiles it in
+Cell Three. See [AR_NEXT_RUN.md](AR_NEXT_RUN.md). No cell replacement or setup
+change accompanies this CSV correction.
+
+## Previous action - preserve explicit AR null observations
 
 The owner requires approved AR fields to remain represented when their exact
 source key has JSON null. Cell One enables `preserve_null_observations` for AR;

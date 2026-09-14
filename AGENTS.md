@@ -7,7 +7,19 @@
 3. Read [docs/ARCHITECTURE_CONTEXT.md](docs/ARCHITECTURE_CONTEXT.md) for design contracts and [docs/MAPPING_PROGRESS.md](docs/MAPPING_PROGRESS.md) for field-level scope. Historical run instructions do not override the dated current checkpoint.
 4. If evidence is unavailable, state what is unverified; do not ask the owner to repeat context already stored here.
 
-## Active scope - explicit AR source nulls must be preserved
+## Active scope - owner-confirmed AR threshold source-name correction
+
+The owner requested a CSV correction after comparing the actual curated source
+with the mapping. SOURCE_FIELD_NAME now begins with an underscore for the two
+ordinary current average/highest device risk threshold rows. Preserve their
+ar-alt rule IDs, original-name notes, targets and transforms. This supersedes the
+earlier exact-unprefixed-name requirement for those two rows only. No runtime
+override column, inferred alias, PCT substitution, registry or table change.
+The two corrected instance keys intentionally use the real source names; preserve
+all other identities. Follow the current AR_NEXT_RUN.md. Test the private exact
+threshold excerpt alongside synthetic regressions, without publishing it.
+
+## Previous scope - explicit AR source nulls must be preserved
 
 The owner's current requirement supersedes null-skipping for the 32 approved AR
 scalar-score observation mappings. Cell One enables preserve_null_observations;

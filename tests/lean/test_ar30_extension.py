@@ -20,7 +20,7 @@ AR_ADDITIONS = (
 )
 
 AR_THRESHOLD_ADDITIONS = (
-    "CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD", "CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD",
+    "_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD", "_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD",
 )
 
 
@@ -45,16 +45,24 @@ class AR30ExtensionTests(unittest.TestCase):
         return context
 
     def test_exact_approved_scope_preserves_original_mapping_provenance(self):
-        original_columns = ("SOURCE_FIELD_NAME", "OSCAL_MODEL",
+        original_columns = ("OSCAL_MODEL",
                             "MAPPING_TYPE", "NOTES", "ORIGINAL_ROW_ID", "SOURCE_DOCUMENT",
                             "SOURCE_LINE", "ORIGINAL_EXCEL_ROW")
         with (ROOT / "tests/fixtures/mappings_pre_registry.csv").open(encoding="utf-8", newline="") as handle:
             original = list(csv.DictReader(handle))
         actual_by_id = {row["ORIGINAL_ROW_ID"]: row for row in self.rows}
+        corrected_sources = dict(zip(("131", "132"), AR_THRESHOLD_ADDITIONS))
         for row in original:
             self.assertEqual({key: row[key] for key in original_columns},
                              {key: actual_by_id[row["ORIGINAL_ROW_ID"]][key] for key in original_columns})
             actual = actual_by_id[row["ORIGINAL_ROW_ID"]]
+            self.assertEqual(corrected_sources.get(row["ORIGINAL_ROW_ID"], row["SOURCE_FIELD_NAME"]),
+                             actual["SOURCE_FIELD_NAME"])
+            if row["ORIGINAL_ROW_ID"] in corrected_sources:
+                self.assertEqual("_" + row["SOURCE_FIELD_NAME"], actual["SOURCE_FIELD_NAME"])
+                self.assertEqual("ar-alt:" + row["SOURCE_FIELD_NAME"], actual["RULE_ID"])
+                self.assertIn("Original source field: " + row["SOURCE_FIELD_NAME"] + ".",
+                              actual["EXECUTION_NOTE"])
             old_path = row["OSCAL_ELEMENT_PATH"]
             if row["OSCAL_MODEL"] == "Assessment Results" and " or " in old_path:
                 expected_path = actual["RUNTIME_TARGET_PATH"] if actual["EXECUTION_STATUS"] == "APPROVED" else ""
@@ -72,7 +80,7 @@ class AR30ExtensionTests(unittest.TestCase):
         self.assertEqual({"ar30:" + field for field in AR_ADDITIONS}, {row["RULE_ID"] for row in additions})
         thresholds = [row for row in self.context["mapping_rows"]
                       if row["SOURCE_FIELD_NAME"] in AR_THRESHOLD_ADDITIONS]
-        self.assertEqual({"ar-alt:" + field for field in AR_THRESHOLD_ADDITIONS},
+        self.assertEqual({"ar-alt:" + field.removeprefix("_") for field in AR_THRESHOLD_ADDITIONS},
                          {row["RULE_ID"] for row in thresholds})
         self.assertEqual({("scalar-score", OBSERVATION_PATH)},
                          {(row["TRANSFORM_ID"], row["OWNER_ELEMENT_PATH"]) for row in thresholds})
@@ -144,10 +152,10 @@ class AR30ExtensionTests(unittest.TestCase):
         previous = self.compile([row for row in self.rows
                                  if row["SOURCE_FIELD_NAME"] not in AR_THRESHOLD_ADDITIONS])
         source = {row["SOURCE_FIELD_NAME"]: 1 for row in previous["mapping_rows"]}
-        source.update(CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD=0,
-                      CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD=7.25,
-                      _CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD=99,
-                      _CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD=88)
+        source.update(_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD=0,
+                      _CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD=7.25,
+                      CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD=99,
+                      CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD=88)
         records = [{"SOURCE_RECORD_ID": "synthetic-thresholds", "CURATED_JSON": source}]
         old_nodes, old_edges = build(self.ns, previous, records)
         nodes, edges = build(self.ns, self.context, records)
@@ -159,23 +167,50 @@ class AR30ExtensionTests(unittest.TestCase):
         additions = {row["INSTANCE_KEY"]: json.loads(row["METADATA_JSON"])["props"]
                      for row in nodes.rows if row["NODE_KEY"] not in old_keys}
         self.assertEqual({
-            "CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD": [
+            "_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD": [
                 {"name": "current-average-device-risk-threshold", "value": "0"}],
-            "CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD": [
+            "_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD": [
                 {"name": "current-highest-device-risk-threshold", "value": "7.25"}],
         }, additions)
         self.ns["_load_graph"](nodes, edges, self.context["config"])
-        aliases_only = {key: value for key, value in source.items() if key.startswith("_")}
+        aliases_only = {field.removeprefix("_"): source[field.removeprefix("_")]
+                        for field in AR_THRESHOLD_ADDITIONS}
         nodes, edges = build(self.ns, self.context, [
             {"SOURCE_RECORD_ID": "synthetic-thresholds", "CURATED_JSON": aliases_only}])
         self.assertEqual((2, 1), (len(nodes.rows), len(edges.rows)))
+
+    def test_corrected_threshold_nulls_keep_identity_and_do_not_supply_percentage_fields(self):
+        source = dict.fromkeys(AR_THRESHOLD_ADDITIONS)
+        source.update(CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD=99,
+                      CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD=88)
+        records = [{"SOURCE_RECORD_ID": "synthetic-thresholds", "CURATED_JSON": source}]
+        null_nodes, null_edges = build(self.ns, self.context, records)
+        self.assertEqual((4, 3), (len(null_nodes.rows), len(null_edges.rows)))
+        observations = [row for row in null_nodes.rows if row["ELEMENT_TYPE"] == "observations"]
+        self.assertEqual(set(AR_THRESHOLD_ADDITIONS), {row["INSTANCE_KEY"] for row in observations})
+        self.assertTrue(all(json.loads(row["METADATA_JSON"])["props"][0]["value"] is None
+                            for row in observations))
+        source.update(dict(zip(AR_THRESHOLD_ADDITIONS, (0, 7.25))))
+        nodes, edges = build(self.ns, self.context, records)
+        self.assertEqual({row["NODE_KEY"]: row["OSCAL_UUID"] for row in null_nodes.rows},
+                         {row["NODE_KEY"]: row["OSCAL_UUID"] for row in nodes.rows})
+        self.assertEqual(business(null_edges), business(edges))
+        source.update(dict.fromkeys(AR_THRESHOLD_ADDITIONS))
+        repeated = build(self.ns, self.context, records)
+        self.assertEqual([business(null_nodes), business(null_edges)], [business(frame) for frame in repeated])
+        percentage_fields = {"PCT_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD",
+                             "PCT_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD"}
+        nodes, edges = build(self.ns, self.context, [{
+            "SOURCE_RECORD_ID": "synthetic-thresholds", "CURATED_JSON": dict.fromkeys(percentage_fields, 1)}])
+        self.assertEqual(percentage_fields, {row["INSTANCE_KEY"] for row in nodes.rows
+                                            if row["ELEMENT_TYPE"] == "observations"})
 
     def test_empty_values_and_parked_fields_do_not_create_observations(self):
         for value in ("", [], {}):
             source = {field: value for field in (*AR_ADDITIONS, *AR_THRESHOLD_ADDITIONS)}
             source.update(RISK_ACCEPTANCE_RBDS={"ContentId": 1}, RISK_ASSESSMENT_REPORT=[1, 2])
-            source["_CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD"] = 7
-            source["_CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD"] = 8
+            source["CURRENT_AVERAGE_DEVICE_RISK_THRESHOLD"] = 7
+            source["CURRENT_HIGHEST_DEVICE_RISK_THRESHOLD"] = 8
             with self.subTest(value=value):
                 nodes, edges = build(self.ns, self.context, [{"SOURCE_RECORD_ID": "100", "CURATED_JSON": source}])
                 self.assertEqual((2, 1), (len(nodes.rows), len(edges.rows)))
