@@ -16,97 +16,81 @@
 --       FieldId 23190 / LevelId 350 (Subsystems)
 --       FieldId 25941 / LevelId 102 (Task Management)
 --   No metadata relationship table was found by SHOW TABLES LIKE '%RELATION%'.
+--   Owner-provided ingestion SQL shows physical Archer content names are derived from
+--   cleaned MODULE_NAME and, when a module has multiple levels, cleaned LEVEL_NAME.
 --
--- Goal now: identify the physical Archer content table containing LevelId 355 records,
+-- Goal now: derive/confirm the physical Archer content table containing LevelId 355 records,
 -- then read ContentId 573482 and inspect the actual control payload.
-
 
 -- ============================================================
 -- 1. Reconfirm the ALLOCATED_CONTROLS field definitions
 -- ============================================================
-SELECT
-    FIELD_ID,
-    LEVEL_ID,
-    SQL_FIELD_NAME
+SELECT FIELD_ID, LEVEL_ID, SQL_FIELD_NAME
 FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD
 WHERE UPPER(SQL_FIELD_NAME) = 'ALLOCATED_CONTROLS'
 ORDER BY LEVEL_ID, FIELD_ID;
 
-
 -- ============================================================
 -- 2. Resolve the relevant source/target Archer levels
--- Expected:
---   353 = AUTHORIZATION PACKAGE
---   355 = CONTROL / module ALLOCATED CONTROLS
 -- ============================================================
 SELECT *
 FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_LEVEL
 WHERE LEVEL_ID IN (353, 355, 350, 102)
 ORDER BY LEVEL_ID;
 
-
 -- ============================================================
--- 3. Reconfirm the referenced ContentId -> LevelId
--- Expected: 573482 -> 355
+-- 3. Reconfirm referenced ContentId -> LevelId
 -- ============================================================
 SELECT *
 FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_CONTENT
 WHERE CONTENT_ID = 573482;
 
-
 -- ============================================================
--- 4. List all Archer content tables in the schema
--- Use this result to identify candidate physical source tables.
+-- 4. IMPORTANT NEXT QUERY: check how many levels Module 549 has.
+-- In the owner-provided ingestion SQL:
+--   module count = 1  -> ARCHER_CONTENT_<MODULE_NAME>
+--   module count > 1  -> ARCHER_CONTENT_<MODULE_NAME>_<LEVEL_NAME>
+-- Run this next.
 -- ============================================================
 SELECT
-    TABLE_NAME
+    LEVEL_ID,
+    LEVEL_NAME,
+    MODULE_ID,
+    MODULE_NAME,
+    COUNT(*) OVER (PARTITION BY MODULE_ID) AS MODULE_COUNT
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_LEVEL
+WHERE MODULE_ID = 549
+ORDER BY LEVEL_ID;
+
+-- ============================================================
+-- 5. List all Archer content tables if physical confirmation is still needed
+-- ============================================================
+SELECT TABLE_NAME
 FROM RTX_RAW_DEV.INFORMATION_SCHEMA.TABLES
 WHERE TABLE_SCHEMA = 'ES_ESC_GRC'
   AND TABLE_NAME ILIKE 'ARCHER_CONTENT%'
 ORDER BY TABLE_NAME;
-
-
--- ============================================================
--- 5. Narrow to control-related Archer content tables
--- This is discovery only; a name match does NOT prove ownership of LevelId 355.
--- ============================================================
-SELECT
-    TABLE_NAME
-FROM RTX_RAW_DEV.INFORMATION_SCHEMA.TABLES
-WHERE TABLE_SCHEMA = 'ES_ESC_GRC'
-  AND TABLE_NAME ILIKE 'ARCHER_CONTENT%'
-  AND TABLE_NAME ILIKE '%CONTROL%'
-ORDER BY TABLE_NAME;
-
 
 -- ============================================================
 -- 6. Inspect LevelId 355 field signatures
--- These fields help identify the correct physical source table.
 -- ============================================================
-SELECT
-    FIELD_ID,
-    SQL_FIELD_NAME
+SELECT FIELD_ID, SQL_FIELD_NAME
 FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD
 WHERE LEVEL_ID = 355
 ORDER BY FIELD_ID;
 
-
 -- ============================================================
--- 7. After a candidate RAW table is identified, test ContentId 573482
--- DO NOT run until <CANDIDATE_RAW_TABLE> is replaced with a real table name.
--- ============================================================
--- SELECT *
--- FROM RTX_RAW_DEV.ES_ESC_GRC.<CANDIDATE_RAW_TABLE>
--- WHERE CONTENT_ID = '573482';
-
-
--- ============================================================
--- 8. Once the correct table is confirmed, inspect only the JSON keys first
--- to avoid making mapping assumptions from field names alone.
+-- 7. After the physical RAW table is confirmed, test ContentId 573482.
 -- Replace <CONFIRMED_RAW_TABLE> before running.
 -- ============================================================
--- SELECT DISTINCT
---     f.key::STRING AS FIELD_NAME
+-- SELECT *
+-- FROM RTX_RAW_DEV.ES_ESC_GRC.<CONFIRMED_RAW_TABLE>
+-- WHERE CONTENT_ID = '573482';
+
+-- ============================================================
+-- 8. Then inspect the referenced record's JSON keys.
+-- ============================================================
+-- SELECT DISTINCT f.key::STRING AS FIELD_NAME
 -- FROM RTX_RAW_DEV.ES_ESC_GRC.<CONFIRMED_RAW_TABLE> r,
 -- LATERAL FLATTEN(INPUT => r.CURATED_JSON) f
 -- WHERE r.CONTENT_ID = '573482'
