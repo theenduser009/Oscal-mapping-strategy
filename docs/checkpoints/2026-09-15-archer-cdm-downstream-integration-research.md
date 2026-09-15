@@ -2,103 +2,102 @@
 
 Date: 2026-09-15
 Repository branch: `simplify-metadata-boundary`
-Branch head inspected before the original checkpoint: `2a0e018c6222b39d8f0d28800ba58373684aed64`
+Sanitization: company and individual names are intentionally replaced with `Company XYZ` or role-neutral wording.
 
-## Purpose
+## Purpose and evidence boundary
 
-Preserve the Archer CDM research discussed in the OSCAL project so later modeling work does not depend on chat memory alone. This document is architectural/research evidence only. It does not approve new OSCAL mappings, change runtime code, change registry rows, or prove any Snowflake execution.
+Preserve the Company XYZ Archer CDM research and business-process walkthrough so later OSCAL work can refer to durable repository evidence instead of chat memory. This is architectural/research evidence only. It does not approve OSCAL mappings, change mapper code or registry rows, establish Snowflake state, or prove physical cardinalities that have not been verified from source metadata.
 
-This checkpoint also preserves the detailed Company XYZ Archer business-process explanation derived from the company walkthrough and the follow-up synthesis supplied by the owner on September 15, 2026. That material clarifies business meaning and workflow but does not replace source metadata or establish physical relationship cardinalities by itself.
+Public Archer documentation supports conceptual architecture. Company XYZ Archer metadata is authoritative for actual field direction, FK/XREF design, single-versus-multi-value behavior, and cardinality.
 
-## Core Archer CDM context
+## Core Archer CDM
 
-The current Archer conceptual model under discussion contains a core Assessment & Testing area around Business/SBU/Entity/Facility context, Compliance Engagement, Control Procedure, Control Testing Result, Control Standard, Evidence, and policy/authoritative-source context.
+Core Assessment & Testing concepts:
 
-Company XYZ-specific policy relationships currently under review are:
+- Business
+- SBU
+- Entity
+- Facility
+- Compliance Engagement
+- Control Procedure
+- Control Testing Result
+- Control Standard
+- Evidence Repository
+- Policy Level 1 / 2 / 3
+- Authoritative Source / Topic / Section / Sub-section
+
+Relationships under review:
 
 - Control Procedure -> Policy Level 3
 - Policy Level 3 -> Control Standard
-- Direct Control Procedure <-> Control Standard only if Company XYZ Archer stores that relationship independently
-- Control Testing Result -> Control Standard for the specific standard evaluated/failed, if the company source stores that relationship
+- Direct Control Procedure <-> Control Standard only when Company XYZ Archer stores it independently
+- Control Testing Result -> Control Standard for the specific evaluated/failed standard only when stored by the source
 
-These relationships must remain semantically distinct. A Procedure -> Standard path derivable through Policy Level 3 should not automatically be duplicated as a physical relationship unless Archer stores it independently.
+A Procedure -> Standard relationship derivable through Policy Level 3 should not automatically be duplicated physically. Explicit source relationships may remain independent even when another path is derivable.
 
-## Important version distinction
+## Company-specific policy hierarchy
 
-The Company XYZ implementation appears to use a Policy Level 1 -> Policy Level 2 -> Policy Level 3 hierarchy. That hierarchy should be modeled as a Company XYZ/current-client implementation detail, not as a claim about the newest generic Archer Core Compliance architecture.
+The company implementation uses:
 
-Current public Archer material has evolved toward flatter policy structures and regulatory constructs such as authoritative sources/citations/obligations/sub-obligations around Control Standards. Public Archer documentation is useful for conceptual architecture, but Company XYZ Archer metadata is authoritative for actual physical relationships, field direction, and cardinality.
+`Policy Level 1 -> Policy Level 2 -> Policy Level 3`
 
-# Company XYZ Archer business story preserved from the September 15 walkthrough synthesis
+The levels have their own hierarchy and should not be described as connected only through Control Standards. This hierarchy is a Company XYZ implementation fact under review, not a claim about the newest generic Archer Core product structure.
+
+The external-requirement hierarchy discussed is:
+
+`Source -> Topic -> Section -> Sub-section`
+
+Authoritative Source is the umbrella concept. Requirement/version specificity matters, not only the source name.
 
 ## Business objective
 
-The business goal is to connect three questions:
+The assessment process connects three questions:
 
 1. What is the organization required to do?
 2. Is it actually doing those things?
-3. What needs to happen when a gap is found?
+3. What happens when a gap is found?
 
-For the Company XYZ site-assessment process demonstrated in the company walkthrough, the business story is:
+Site-assessment story:
 
-`Choose a facility -> plan its assessment -> select the relevant tests -> perform them -> document the results -> manage anything that needs fixing.`
+`Choose a facility -> plan its assessment -> select relevant tests -> perform them -> document results -> manage gaps.`
 
-Two distinctions are foundational:
+Foundational distinctions:
 
-- Generating a test does not mean the test has been performed.
-- Mapping a requirement does not mean the requirement has been satisfied.
+- Generated test != performed test.
+- Requirement mapping != requirement satisfaction.
+- Completed testing != complete compliance.
+- Closed assessment != all discovered issues remediated.
 
 The business needs traceability from requirement -> assessment -> evidence -> gap -> response.
 
-## Plain-language GRC framing
+## Plain-language business concepts
 
-- Governance: who sets expectations, makes decisions, and is accountable?
-- Risk: what could go wrong and how serious could it be?
-- Compliance: are the applicable requirements being met?
+Illustrative access-review example:
 
-A simple illustrative access-review example can be used across the model:
+- Control: the actual safeguard/business activity, such as reviewing user access and removing unnecessary permissions.
+- Control Standard: the specific requirement or expectation being supported.
+- Control Procedure: reusable definition describing what to inspect/test.
+- Compliance Engagement: assessment wrapper for a target and period.
+- Control Testing Result: engagement-specific working/test/result record generated from a procedure.
+- Evidence: information supporting the assessor's conclusion.
 
-- Control: managers review user access and remove unnecessary permissions.
-- Control Standard: access must be reviewed according to the applicable requirement.
-- Control Procedure: inspect access-review records and check whether required follow-up occurred.
-- Compliance Engagement: the access/security assessment for a facility during a particular period.
-- Control Testing Result: the engagement-specific test record for that assessment.
-- Evidence: review records, approvals, account lists, and completed access-removal requests.
+Control = what the business does. Procedure = what to check. Testing Result = engagement-specific assessment work/result.
 
-The control is what the business does. The procedure explains what to check. The testing result is the engagement-specific working/result record.
+## Assessment lifecycle
 
-# Assessment lifecycle from the company walkthrough
+### A. Compliance Engagement
 
-## A. Create the Compliance Engagement
+The engagement is the assessment wrapper/envelope. It organizes target, people, dates, scope, tests, and conclusions. One engagement can contain many Control Testing Results.
 
-The Compliance Engagement acts as the wrapper/envelope/assessment folder. It organizes the target, people, dates, scope, tests, and conclusions.
+### B. Business context and facility
 
-Business question answered:
+The walkthrough selected Business, SBU, Entity, and Facility. For the site-assessment flow, Facility is the assessment target and Compliance Engagement is the assessment of that target.
 
-`What assessment are we carrying out, and what does it cover?`
+Business selection filtering facility choices is application behavior; it does not by itself prove the entire enterprise hierarchy. Demo selections are not certified hierarchy evidence.
 
-It is not one individual test. One engagement can contain many Control Testing Result records.
+### C. Scope
 
-## B. Identify business context and facility
-
-The walkthrough selected Business, SBU, Entity, and Facility.
-
-Their business roles are:
-
-- Business: which business unit does the assessment relate to?
-- SBU: which strategic business subdivision does it relate to?
-- Entity: which organizational entity provides further context?
-- Facility: which site is being assessed?
-
-For the site-assessment workflow shown, Facility is the assessment target and Compliance Engagement is the assessment of that target.
-
-The walkthrough showed business selection filtering the available facility choices. That is an application-selection behavior; it is not by itself proof of the entire enterprise hierarchy. Demo selections should not be treated as certified hierarchy relationships.
-
-## C. Decide the scope
-
-Scope means: what will be assessed this time?
-
-The company walkthrough described several possible starting routes:
+Scoping routes discussed:
 
 - Previous engagement
 - Control set/library
@@ -106,269 +105,133 @@ The company walkthrough described several possible starting routes:
 - Authoritative source
 - Tier 1 / pre-assessment information
 
-Tier 1 details were not established in the walkthrough and should not be invented.
+Tier 1 details were not established and must not be invented. A screenshot reportedly mentioned four options while the walkthrough discussed five; resolve that discrepancy against the actual company application.
 
-A documentation discrepancy was noted: an instruction screenshot reportedly mentioned four scoping options while the walkthrough discussed five. This is a documentation/configuration question to resolve against the actual Company XYZ application, not a reason to alter the overall business model.
+### D. Control Set / version
 
-## D. Choose the control-set version
+A Control Set is a collection of procedures. Its version identifies the edition used for an assessment. Changes in procedure/test counts between engagements may reflect scope or version changes and are not automatically data defects. Demonstrated counts such as 176/177 are examples, not universal rules.
 
-A Control Set is a collection of procedures used together. A version identifies which edition of that collection applies.
+### E. Refine scope
 
-Business meaning:
+Available in master library != selected for this engagement. The initial checklist can be adjusted for the engagement.
 
-`We are using this edition of the assessment checklist.`
+### F. Generate tests
 
-The assessment scope can change between versions. Therefore a difference in the number of tests between engagements is not automatically a data defect.
+Control Procedure is reusable/master. Archer creates an engagement-specific Control Testing Result from it. Generation creates the assessment work item; it does not mean testing has already occurred.
 
-The 176/177 test counts seen in demonstrations are examples from those records, not universal business rules.
+### G. Perform/review tests
 
-## E. Refine the scope
+Outcomes discussed include Implemented, Partially implemented, Not implemented, Not tested, and Not applicable where used.
 
-The selected procedures can be reviewed, added, or removed for the specific engagement.
+`Not tested` is not a pass. `Not applicable` is not automatically equivalent to Implemented. Testing progress and testing outcome are separate concepts.
 
-Important distinction:
+### H. Close/wrap up
 
-- Available in the master library != selected for this engagement.
-- Standard starting checklist != final engagement-specific checklist.
+Entering conclusions and closing the engagement means the assessment activity has reached its workflow end. It does not prove every resulting issue is fixed. Exact company closure rules with outstanding issues were not established by the walkthrough.
 
-## F. Generate test records
+## Background processing
 
-This is a critical modeling point.
+Save/close/wait/reopen behavior can reflect asynchronous Archer processing for activities such as scoping or generating test records. That processing is not the assessor performing the test.
 
-The company walkthrough described Control Procedure as the reusable/master definition. Archer then creates an engagement-specific Control Testing Result from that procedure.
-
-Example:
-
-- Master: `Check user-access reviews.`
-- Generated test: `Check user-access reviews for Facility A in this engagement.`
-
-At generation time the test record exists, but the assessor may not yet have performed the assessment work.
-
-Therefore `Control Testing Result` is also a working assessment record; its name does not imply that a completed conclusion already exists.
-
-## G. Perform and review tests
-
-The assessor examines information, reviews evidence, records observations, and selects an outcome.
-
-Outcomes discussed in the walkthrough include:
-
-- Implemented
-- Partially implemented
-- Not implemented
-- Not tested
-- Not applicable, where used
-
-Important distinctions:
-
-- `Not tested` is not a pass.
-- `Not applicable` is not automatically the same as implemented.
-- Testing progress and testing outcome are separate concepts.
-- A test can be completed while identifying a compliance gap.
-- Completed testing does not mean complete compliance.
-
-## H. Wrap up the engagement
-
-The workflow ends with conclusions and engagement closure.
-
-Business distinction:
-
-`We finished assessing the facility` is not the same as `every issue found at the facility has been fixed.`
-
-The walkthrough did not establish the exact Company XYZ business rules for closing an engagement with outstanding findings/issues, so those rules must not be inferred from status labels alone.
-
-# Background processing / asynchronous Archer behavior
-
-The walkthrough showed save/close/wait/reopen behavior for some operations. Selecting Ready and saving can trigger background activities such as scoping or generating test records.
-
-Business meaning:
-
-`The user submitted the selection and the application is processing it.`
-
-This background processing is not the same as the assessor performing the test.
-
-Keep the downstream systems separate:
+Keep system stages separate:
 
 - Archer creates/updates business records.
 - Matillion moves data into Snowflake.
 - Power BI consumes reporting data.
 
-Delay or failure in one stage does not automatically prove failure in the others.
+A delay/failure in one stage does not prove failure in another. Demonstration timing is environment-specific, not an SLA.
 
-Any timing mentioned for demonstration jobs running every few minutes should be treated as environment-specific, not a contractual SLA.
+## Evidence
 
-# Evidence business meaning
+Evidence answers: `Why should someone trust this result?`
 
-Evidence answers:
-
-`Why should someone trust this result?`
-
-For an access-review example, evidence might include account listings, documented reviews, approvals, and records proving unnecessary access was removed.
-
-Evidence can be reusable only when its scope, target, and time period make that reuse valid.
-
-Retain these business questions:
+Reuse is valid only when target, scope, period, and conclusion context support reuse. Preserve these questions:
 
 - What does the evidence demonstrate?
 - Which target does it cover?
-- Which time period does it cover?
+- Which period does it cover?
 - Which assessment conclusion does it support?
 
-The walkthrough establishes evidence as part of the process but does not establish every physical Evidence-to-Test cardinality in the Company XYZ data model.
+Evidence Repository is cross-cutting and may support control implementation, testing, engagement evidence requests, remediation, or exception decisions depending on the company implementation. Do not assume it belongs only beneath Control Testing Result.
 
-# Issues / gap-management flow from the company walkthrough
+## Gap / Issues Management flow
 
-The owner's supplied synthesis records the Company XYZ demonstrated flow as:
+The company walkthrough supports the business flow:
 
 `Test identifies a gap -> Deviation records the specific failure -> Finding manages the issue -> Remediation and/or Exception addresses the response.`
 
-This is important Company XYZ-specific business evidence and qualifies the earlier conservative note that Deviation was unverified in generic Archer documentation.
+### Deviation
 
-## Deviation
+Deviation represents the specific requirement-level failure connected to an assessment result and the Control Standard requirement that was not met. It identifies what specifically failed rather than declaring an entire policy/control area failed.
 
-In the company walkthrough, Deviation represents the specific requirement-level failure connected to the assessment result and the Control Standard requirement that was not met.
-
-Illustrative example:
-
-`Required follow-up from the access review was not completed.`
-
-Business purpose:
-
-- identify the specific failed requirement
-- avoid an imprecise statement such as `access management failed`
-- connect the test-specific gap to the relevant standard/requirement
-
-The walkthrough establishes the business connection, but it does not prove one-to-one cardinality between Test Result, Deviation, Finding, or Control Standard.
-
-Therefore the conceptual Company XYZ flow may include:
+Conceptually:
 
 `Control Testing Result -> Deviation -> Finding`
 
-and
+and potentially:
 
 `Deviation -> Control Standard`
 
-but physical cardinalities must still come from actual relationship metadata.
+The walkthrough establishes the business connection but not universal 1:1 cardinality. Physical relationships remain metadata-verification items.
 
-## Finding
+### Finding
 
-Finding is the managed issue/deficiency.
+Finding is the managed issue/deficiency. It can carry affected area, description, ownership, status, and response context. Findings may originate from assessment/control testing but also from audits or manual identification. Control Testing Result therefore must not be the mandatory sole source of every Finding.
 
-It may contain business context such as affected area, issue description, ownership, status, and required response.
+Deviation = what specifically failed in the test/requirement context. Finding = the broader issue the organization manages.
 
-Findings can originate from assessments and control testing, but may also originate from audits or manual identification. Therefore Control Testing Result should not be modeled as the only possible Finding source.
+### Remediation Plan
 
-Business distinction:
+Answers `How will we fix it?` and can document actions, owners, and timing. The research indicates Archer can support many-to-many Finding/Remediation relationships; the actual Company XYZ configuration must be verified.
 
-- Deviation = what specifically failed in the test/requirement context.
-- Finding = the broader issue the organization manages.
+### Remediation Plan Status Update
 
-## Remediation Plan
+Tracks progress/status of remediation activity and remains distinct from the Remediation Plan itself.
 
-Remediation Plan answers: `How will we fix it?`
+### Exception Request
 
-It can document actions, ownership, and timing.
+Represents a request to formally accept a departure from normal requirement/remediation expectations. It is subject to review, not automatic approval. An approved exception is not the same as repairing the control; it records an authorized decision and may include rationale, conditions, time limits, or compensating safeguards.
 
-The supplied synthesis notes that Archer can support many-to-many relationships between findings and remediation plans. The exact Company XYZ configured relationship still requires source metadata verification.
+### Risk
 
-## Exception Request
+Finding != Risk.
 
-Exception Request represents a request to formally accept a departure from the normal requirement/remediation expectation.
+- Finding: known issue/deficiency.
+- Risk: possible adverse consequence/exposure.
 
-It is subject to review and is not automatic approval. An approved exception is not the same as fixing the control. It records an authorized decision about the gap, potentially with rationale, conditions, time limits, and compensating safeguards.
-
-## Risk
-
-Finding and Risk are distinct:
-
-- Finding: a known issue/deficiency.
-- Risk: a possible adverse consequence/exposure.
-
-Example:
-
-- Finding: unnecessary access was not removed.
-- Risk: someone could use that access inappropriately.
-
-This distinction supports keeping Risk Register separate from Finding in the CDM.
-
-# Policy and authoritative-source business meaning
-
-## Internal policy hierarchy in Company XYZ
-
-The walkthrough uses:
-
-`Policy Level 1 -> Policy Level 2 -> Policy Level 3`
-
-This is the Company XYZ implementation hierarchy and should be preserved as such.
-
-The levels have their own hierarchy. They should not be described as connected only through Control Standards.
-
-The company walkthrough evidence indicates that the policy levels are represented separately in the Snowflake extract.
-
-## Authoritative Sources
-
-The external-requirement side was described as:
-
-`Source -> Topic -> Section -> Sub-section`
-
-Examples mentioned include NIST, ISO, HIPAA, and CMMC. `Authoritative Source` is the umbrella business term; the underlying instruments are not all the same kind of source.
-
-The important business meaning is requirement and version specificity, not just source name.
+Keep Risk Register as a separate domain. Do not add a direct Finding <-> Risk Register relationship unless company metadata confirms it.
 
 ## Control Standards as requirement-level connector
 
-The company walkthrough emphasized Control Standards as a requirement-level linking structure.
-
-In the Company XYZ examples:
+Company examples indicate:
 
 - Procedures link to Policy Level 3.
-- Procedures may also have direct links to Control Standards.
+- Procedures may also link directly to Control Standards.
 - Control Standards connect into the Authoritative Source structure.
 
 Business meaning:
 
 `This test/procedure supports this internal requirement, which is related to these external requirements.`
 
-Control Standards also allow the assessor to identify the exact requirement that failed instead of declaring an entire policy area failed.
+Control Standards also allow the assessor to identify the precise failed requirement. If an access-review area has requirements to perform the review, remove unnecessary access, and retain evidence, failure of only the access-removal requirement should not be represented as failure of the whole policy area.
 
-Example:
+## Assess once, comply many
 
-1. Perform access review.
-2. Remove unnecessary access.
-3. Retain evidence.
+The direction is to reduce repeated assessment work where requirements overlap.
 
-If only #2 fails, the useful conclusion is that the access-removal requirement failed, not that the whole policy area failed.
+Keep three concepts separate:
 
-# Assess once, comply many
+- Mapping: documented relationship between requirements/controls.
+- Coverage: selected assessment content addresses relevant requirements.
+- Compliance result: evidence/results support a conclusion about whether requirements are met.
 
-The company direction is to reduce repeated assessment work where requirements overlap.
+Mapping is not proof of compliance. Complete mapping coverage on a chart is not complete compliance. Broader reuse/automation was described as a direction of travel, not proof that every current assessment already achieves it.
 
-Important distinctions:
-
-- Mapping = a documented relationship between requirements/controls.
-- Coverage = the selected assessment content addresses relevant requirements.
-- Compliance result = evidence/results support a conclusion that applicable requirements are met or not met.
-
-A mapping is not itself proof of compliance.
-
-Likewise, an Authoritative Sources mapping chart showing complete mapping coverage should not be read as complete compliance.
-
-The walkthrough indicated that the broader reuse/automation goal is not yet fully realized. Treat it as a direction of travel, not a claim that all Company XYZ assessments already achieve full reuse.
-
-# Explicit cardinality/business rule corrected in the company walkthrough
-
-This is one of the strongest business rules captured in the walkthrough:
+## Strong cardinality/business rule from the walkthrough
 
 - One Control Testing Result belongs to one Compliance Engagement.
 - One Compliance Engagement can contain many Control Testing Results.
 - One reusable Control Procedure can generate many Control Testing Results across engagements and time.
-
-Illustrative example:
-
-| Test record | Engagement | Master procedure | Outcome |
-| --- | --- | --- | --- |
-| Test A | Facility A assessment | Access-review procedure | Implemented |
-| Test B | Facility B assessment | Access-review procedure | Partially implemented |
-| Test C | Facility A later assessment | Access-review procedure | Not tested yet |
 
 Therefore:
 
@@ -376,37 +239,87 @@ Therefore:
 
 `Control Procedure 1 -> N Control Testing Result`
 
-The Control Procedure is reusable. The Control Testing Result is specific to the engagement in which that test was generated/performed.
+Seeing several engagement-specific results on a Control Procedure's Testing tab is expected and does not mean one Control Testing Result belongs to multiple engagements.
 
-Seeing several engagement-specific results on a Control Procedure's Testing tab is expected and does not mean a single Control Testing Result belongs to multiple engagements.
+## A&A / Public Sector branch
+
+Concepts under review:
+
+- Authorization Package
+- Allocated Control
+- Finding
+- POA&M
+- Milestone
+
+Keep Allocated Control distinct from Control Procedure unless company metadata proves otherwise. Their grains differ: Control Procedure is reusable/master testing logic; Allocated Control is closer to an assigned/instantiated control in an authorization context.
+
+Conceptual direction only:
+
+`Authorization Package -> Allocated Control -> assessment/authorization context -> Finding -> POA&M -> Milestone`
+
+Do not lock arrows/cardinalities from generic documentation alone. Company relationship metadata must establish actual cross-reference direction and single/multi-value behavior.
+
+## Legacy DPF crosswalk
+
+Treat legacy DPF Control Standards as a migration/crosswalk concern, not another current-state hierarchy level.
+
+Recommended conceptual pattern:
+
+`LEGACY_DPF_CONTROL_STANDARD -> CONTROL_STANDARD_CROSSWALK -> CURRENT_CONTROL_STANDARD`
+
+Do not contaminate the current Control Standard entity with many legacy identifiers unless a source requirement demands it. Crosswalk cardinality/attributes remain proposals until actual DPF/FCP evidence is reviewed.
+
+## OSCAL intersection
+
+Keep source CDM and OSCAL warehouse models distinct:
+
+`ARCHER CDM -> mapping/transformation -> OSCAL representation`
+
+Relevant current OSCAL evidence:
+
+- `FINDINGS` exists in Assessment Results with proposed target `assessment-results.results[].findings[]`, but remains DEFERRED pending finding identity/reference semantics.
+- SSP Control Implementation contains `ALLOCATED_CONTROLS`, `CONTROL_STANDARDS`, `MASTER_CONTROLS`, `ALLOCATED_CONTROLS_AUTHORIZATION_PACKAGE`, inheritance fields, assessor fields, and POA&M-related counts, but all 42 Control Implementation mappings remain DEFERRED.
+- POA&M is conceptually downstream and has an approved source-reference mapping, but accepted evidence remains PREVIEW only, not verified COMMIT/readback.
+
+## Modeling rules
+
+1. Public Archer documentation supports conceptual architecture, not company physical truth.
+2. Company walkthrough evidence supports business meaning; source metadata still governs physical implementation.
+3. Company Archer metadata determines actual relationships, direction, cardinality, FK/XREF, and single/multi-value behavior.
+4. Explicit source relationships may be modeled independently even when another path derives the association.
+5. Do not materialize derived relationships automatically when doing so creates conflicting truths.
+6. Keep current-state entities clean and isolate legacy crosswalk concerns.
+7. Preserve grain: Finding != Risk; Allocated Control != Control Procedure unless proven; Exception Request != Remediation Plan; Deviation != Finding.
+8. Generated test != performed test.
+9. Requirement mapping != requirement satisfaction.
+10. Completed assessment work != all discovered issues remediated.
+
+## Existing OSCAL evidence boundaries
+
+- Historical SSP committed/read-back acceptance does not prove the later `DAILY_LOSS_AMOUNT_FROM_OUTAGE` mapping.
+- Historical AR30 committed/read-back acceptance does not prove later AR32/null-preservation/leading-underscore changes.
+- POA&M has accepted PREVIEW evidence, not verified COMMIT/readback.
+- Assessment Plan setup code and corrected registry SQL do not prove successful live setup or completed preview/commit.
+- The 42 SSP Control Implementation mappings remain deferred until explicitly reviewed and approved.
+
+## Immediate next checkpoint
+
+Before changing Erwin cardinalities or enabling new OSCAL mappings, inspect Company XYZ Archer metadata for downstream applications and relationships. Capture:
+
+- application/table
+- primary identifier
+- related-record field
+- target application
+- single-value versus multi-value
+- relationship direction
+- directly stored versus derivable
+
+Priority objects:
+
+Business; SBU; Entity; Facility; Compliance Engagement; Control Procedure; Control Set/Version; Policy Levels 1/2/3; Authoritative Source; Topic; Section; Sub-section; Control Standard; Control Testing Result; Evidence Repository; Deviation; Finding; Remediation Plan; Remediation Plan Status Update; Exception Request; Authorization Package; Allocated Control; Risk Register; POA&M; Milestone; Legacy DPF Control Standard.
+
+This is read-only evidence collection. Do not infer missing values or approve mappings from conceptual similarity alone.
 
 ## Source completeness caveat
 
-The owner's pasted September 15 ChatGPT response ended mid-sentence after:
-
-`Also, reading the same result from the fa...`
-
-No missing continuation is reconstructed here. If the remaining text is supplied later, append it as a dated continuation rather than guessing its content.
-
-# Issues Management branch
-
-Treat Issues Management as a downstream domain attached to the core rather than redesigning the core around it.
-
-Primary concepts:
-
-- Deviation (Company XYZ demonstrated business flow; physical metadata/cardinality still to verify)
-- Finding
-- Remediation Plan
-- Remediation Plan Status Update
-- Exception Request
-
-Conceptual workflow now supported by the combined company walkthrough and generic Archer research:
-
-- Control Testing Result may produce one or more Deviations when specific requirements fail.
-- A Deviation may point to the specific Control Standard that was not satisfied.
-- A Finding can be created/managed from the gap context.
-- Findings may also originate from other sources such as audits/manual processes.
-- Remediate path: Finding -> one or more Remediation Plans -> Remediation Plan Status Updates.
-- Accept-risk path: Finding -> Exception Request.
-
-Do not force Control Testing Result to be the mandatory sole parent
+The owner-provided September 15 synthesis ended mid-sentence after `Also, reading the same result from the fa...`. No missing continuation is reconstructed. If supplied later, append it as a dated continuation rather than guessing.
