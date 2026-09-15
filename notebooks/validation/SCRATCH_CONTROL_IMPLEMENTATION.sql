@@ -1,14 +1,20 @@
--- Read-only discovery: follow the ALLOCATED_CONTROLS relationship shape.
--- Prior read-back showed ALLOCATED_CONTROLS contains arrays of objects such as
--- {"ContentId": 573480, "LevelId": 355}, while the other inspected candidate fields were null in those rows.
--- This query extracts the referenced ContentId/LevelId pairs without target writes.
+-- Read-only discovery: trace the Archer metadata relationship for ALLOCATED_CONTROLS.
+-- Goal: resolve the source field to its cross-reference / related-record target application/level.
+-- No target writes.
 
-SELECT DISTINCT
-    r.CONTENT_ID AS AUTHORIZATION_PACKAGE_CONTENT_ID,
-    f.value:ContentId::STRING AS REFERENCED_CONTENT_ID,
-    f.value:LevelId::STRING AS REFERENCED_LEVEL_ID
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW r,
-LATERAL FLATTEN(INPUT => r.CURATED_JSON:ALLOCATED_CONTROLS) f
-WHERE f.value:ContentId IS NOT NULL
-ORDER BY REFERENCED_LEVEL_ID, REFERENCED_CONTENT_ID
-LIMIT 100;
+-- Step 1: identify the ALLOCATED_CONTROLS field metadata.
+SELECT
+    FIELD_ID,
+    LEVEL_ID,
+    SQL_FIELD_NAME
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD
+WHERE UPPER(SQL_FIELD_NAME) = 'ALLOCATED_CONTROLS';
+
+-- Step 2: confirm whether a metadata relationship table exists in this schema.
+SHOW TABLES LIKE '%RELATION%' IN SCHEMA RTX_RAW_DEV.ES_ESC_GRC;
+
+-- If a relationship table is returned, use the FIELD_ID from Step 1 as CR_FIELD_ID.
+-- Example shape only; adjust the physical table/column names to the Step 2 result before running:
+-- SELECT *
+-- FROM RTX_RAW_DEV.ES_ESC_GRC.<ARCHER_META_FIELD_RELATIONSHIP_TABLE>
+-- WHERE CR_FIELD_ID = <FIELD_ID_FROM_STEP_1>;
