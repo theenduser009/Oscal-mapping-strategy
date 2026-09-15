@@ -2,17 +2,10 @@
 # Date: 2026-09-15
 # READ ONLY. Run after Cells 1-7 in SSP PREVIEW mode.
 #
-# Validation 03 handled published/last-modified timestamps (currently DEFERRED_SME).
+# Validation 03 handled published/last-modified timestamps (DEFERRED_SME).
 # Validation 04 handled document-ids[].identifier (PASS on 2026-09-15).
 # This validation handles the remaining executable Metadata targets together:
-#   - direct metadata scalar/text members
-#   - roles[]
-#   - parties[]
-#   - responsible-parties[]
-#
-# It checks mechanical shape, duplicate node identities, and reference integrity.
-# It does NOT claim that an Archer field is semantically the correct OSCAL field;
-# semantic mismatches are reported separately for SME/mapping review.
+# direct metadata members, roles[], parties[], responsible-parties[].
 
 if tuple(SELECTED_MODELS) != ("SSP",):
     raise ValueError("Validation 05 requires SELECTED_MODELS = ('SSP',)")
@@ -28,16 +21,11 @@ if ssp_context is None:
 graph_key = (ssp_context["source_key"], "SSP")
 if not isinstance(MODEL_GRAPHS, dict) or graph_key not in MODEL_GRAPHS:
     raise ValueError("Cell 7 SSP PREVIEW graph is missing from MODEL_GRAPHS")
-
 nodes_df = MODEL_GRAPHS[graph_key]["nodes"]
 edges_df = MODEL_GRAPHS[graph_key]["edges"]
 
-metadata_mappings = [
-    r for r in ssp_context["mapping_rows"]
-    if str(r.get("CANONICAL_ELEMENT_PATH") or "").startswith("system-security-plan.metadata")
-]
-
-# Exclude areas already covered by validations 03/04.
+metadata_mappings = [r for r in ssp_context["mapping_rows"]
+                     if str(r.get("CANONICAL_ELEMENT_PATH") or "").startswith("system-security-plan.metadata")]
 already_tested = {
     "system-security-plan.metadata.published",
     "system-security-plan.metadata.last-modified",
@@ -45,7 +33,6 @@ already_tested = {
 }
 remaining = [r for r in metadata_mappings if r.get("CANONICAL_ELEMENT_PATH") not in already_tested]
 
-# Mechanical mapping contract.
 mapping_failures = []
 for r in remaining:
     if not str(r.get("SOURCE_FIELD_NAME") or "").strip():
@@ -55,17 +42,11 @@ for r in remaining:
     if not str(r.get("TRANSFORM_ID") or "").strip():
         mapping_failures.append(("MISSING_TRANSFORM", r.get("RULE_ID")))
 
-# Pull only Metadata branch candidate nodes.
 metadata_types = {"metadata", "roles", "parties", "responsible-parties"}
-metadata_nodes = [
-    r.as_dict(recursive=True)
-    for r in nodes_df.filter(col("ELEMENT_TYPE").isin(list(metadata_types))).collect()
-]
+metadata_nodes = [r.as_dict(recursive=True)
+                  for r in nodes_df.filter(col("ELEMENT_TYPE").isin(list(metadata_types))).collect()]
 
-# 1) Node identity must be present and unique.
-missing_node_keys = []
-seen_node_keys = set()
-duplicate_node_keys = []
+missing_node_keys, duplicate_node_keys, seen_node_keys = [], [], set()
 for r in metadata_nodes:
     key = r.get("PK_ELEMENT_HASH")
     if not key:
@@ -75,9 +56,8 @@ for r in metadata_nodes:
     else:
         seen_node_keys.add(key)
 
-# 2) Collection instances requiring OSCAL identity should have UUIDs.
-# Registry controls policy; inspect only types whose live registry UUID_POLICY is instance/node.
-registry_rows = [r.as_dict(recursive=True) for r in ELEMENT_REGISTRY_DF.collect()]
+# Cell 2's actual registry contract is REGISTRY_INPUT_ROWS (already read once).
+registry_rows = REGISTRY_INPUT_ROWS
 uuid_required_types = {
     str(r.get("ELEMENT_TYPE"))
     for r in registry_rows
@@ -85,47 +65,35 @@ uuid_required_types = {
     and str(r.get("UUID_POLICY") or "").lower() in {"instance", "node"}
     and str(r.get("ELEMENT_TYPE") or "") in metadata_types
 }
-missing_uuids = [
-    (r.get("SOURCE_RECORD_ID"), r.get("ELEMENT_TYPE"), r.get("PK_ELEMENT_HASH"))
-    for r in metadata_nodes
-    if r.get("ELEMENT_TYPE") in uuid_required_types and not r.get("OSCAL_UUID")
-]
+missing_uuids = [(r.get("SOURCE_RECORD_ID"), r.get("ELEMENT_TYPE"), r.get("PK_ELEMENT_HASH"))
+                 for r in metadata_nodes
+                 if r.get("ELEMENT_TYPE") in uuid_required_types and not r.get("OSCAL_UUID")]
 
-# 3) Payloads must be objects for emitted Metadata branch nodes.
 invalid_payloads = []
 for r in metadata_nodes:
     payload = r.get("METADATA_JSON")
     if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except Exception:
-            payload = None
+        try: payload = json.loads(payload)
+        except Exception: payload = None
     if not isinstance(payload, dict):
         invalid_payloads.append((r.get("SOURCE_RECORD_ID"), r.get("ELEMENT_TYPE"), r.get("PK_ELEMENT_HASH")))
 
-# 4) Every Metadata-branch edge must resolve to candidate nodes.
 node_keys = {r.get("PK_ELEMENT_HASH") for r in metadata_nodes if r.get("PK_ELEMENT_HASH")}
 all_node_keys = {r["PK_ELEMENT_HASH"] for r in nodes_df.select("PK_ELEMENT_HASH").collect() if r["PK_ELEMENT_HASH"]}
 edge_rows = [r.as_dict(recursive=True) for r in edges_df.collect()]
-metadata_edge_rows = [
-    r for r in edge_rows
-    if r.get("FK_SOURCE_ELEMENT_HASH") in node_keys or r.get("FK_TARGET_ELEMENT_HASH") in node_keys
-]
+metadata_edge_rows = [r for r in edge_rows
+                      if r.get("FK_SOURCE_ELEMENT_HASH") in node_keys or r.get("FK_TARGET_ELEMENT_HASH") in node_keys]
 missing_edge_sources = [r for r in metadata_edge_rows if r.get("FK_SOURCE_ELEMENT_HASH") not in all_node_keys]
 missing_edge_targets = [r for r in metadata_edge_rows if r.get("FK_TARGET_ELEMENT_HASH") not in all_node_keys]
 
-# 5) Role/party reference sanity: collect payload samples and identify UUID-like refs
-# that do not resolve to emitted Metadata UUIDs. This is deliberately conservative.
 metadata_uuids = {str(r.get("OSCAL_UUID")) for r in metadata_nodes if r.get("OSCAL_UUID")}
 unresolved_uuid_refs = []
 uuid_re = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
 for r in metadata_nodes:
     payload = r.get("METADATA_JSON")
     if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except Exception:
-            payload = None
+        try: payload = json.loads(payload)
+        except Exception: payload = None
     if not isinstance(payload, dict):
         continue
     text = json.dumps(payload, default=str)
@@ -134,7 +102,6 @@ for r in metadata_nodes:
         if uuid_re.fullmatch(ref) and ref != str(r.get("OSCAL_UUID")) and ref not in metadata_uuids:
             unresolved_uuid_refs.append((r.get("SOURCE_RECORD_ID"), r.get("ELEMENT_TYPE"), ref))
 
-# Summaries by target/type.
 from collections import Counter
 mapping_targets = Counter(r.get("CANONICAL_ELEMENT_PATH") for r in remaining)
 node_types = Counter(r.get("ELEMENT_TYPE") for r in metadata_nodes)
@@ -160,10 +127,8 @@ print("INVALID_PAYLOAD_SAMPLES:", invalid_payloads[:10])
 print("UNRESOLVED_UUID_REF_SAMPLES:", unresolved_uuid_refs[:10])
 print("NODE_SAMPLES:", [(r.get("SOURCE_RECORD_ID"), r.get("ELEMENT_TYPE"), r.get("OSCAL_UUID")) for r in metadata_nodes[:12]])
 
-failures = (
-    mapping_failures or missing_node_keys or duplicate_node_keys or missing_uuids
-    or invalid_payloads or missing_edge_sources or missing_edge_targets or unresolved_uuid_refs
-)
+failures = (mapping_failures or missing_node_keys or duplicate_node_keys or missing_uuids
+            or invalid_payloads or missing_edge_sources or missing_edge_targets or unresolved_uuid_refs)
 status = "PASS" if remaining and not failures else "FAIL"
 print("STATUS:", status)
 if status == "PASS":
