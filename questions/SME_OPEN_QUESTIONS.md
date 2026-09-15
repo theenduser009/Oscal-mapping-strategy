@@ -1,142 +1,88 @@
 # OSCAL / Archer SME Open Questions
 
-Date: 2026-09-14
+Updated: 2026-09-15
 Branch: `simplify-metadata-boundary`
 
-Purpose: keep the current unresolved SME questions in one place so they can be copied directly into chat/email and answered without losing the technical context.
+Purpose: keep the current unresolved SME questions in one place so they can be copied directly into chat/email and answered without losing the technical context. Newer verified evidence supersedes older assumptions below where stated.
 
 ## 1. Profile `imports[]` / `href`
 
-In Archer, `BASELINE_RECOMMENDATION` is the candidate source for OSCAL `profile.imports[]`.
+`BASELINE_RECOMMENDATION -> profile.imports[].href` is **not approved**. Source-owner discussion on 2026-09-15 identified Baseline Recommendation as an LOE/control-scope concept; Control Set / authoritative-source information is a stronger candidate, but final OSCAL Profile semantics require SME/compliance confirmation.
 
-We verified that `BASELINE_RECOMMENDATION` is a **Values List field**, not a URL or cross-reference. Observed values resolve as:
-
-- `162398` -> `LOE A`
-- `162399` -> `LOE B`
-- `162400` -> `LOE C`
-- `162401` -> `LOE D`
-- `162402` -> `DFARS`
-- `162403` -> `GS Labs`
-- `177494` -> `Basic`
-
-OSCAL `profile.imports[]` requires an `href` identifying the Catalog/Profile being imported.
+Observed Baseline Recommendation values include LOE A/B/C/D, DFARS, GS Labs, and Basic.
 
 **Question for SME:**
 
-> For values such as `DFARS`, `LOE A`, `LOE C`, `GS Labs`, etc., where do we get the actual Catalog/Profile reference that should become OSCAL `profile.imports[].href`? Is there another Archer field/application or an approved lookup that maps these Baseline Recommendation values to a specific Catalog/Profile resource?
-
-Also confirm whether the import should use `include-all` or `include-controls`, and what Archer source determines that selection.
+> What RTX Archer source identifies the actual Catalog/Profile resource that should become OSCAL `profile.imports[].href`? Is Control Set, Authoritative Source, or another relationship the authoritative source? Also, what determines `include-all` versus `include-controls`?
 
 ---
 
 ## 2. What exactly is Archer `Import Profile`?
 
-The Archer relationship diagram shows `System Security Plan (SSP)` connected to `Import Profile`.
-
 **Question for SME:**
 
-> What Archer application/field/relationship does `Import Profile` represent? Is it a cross-reference to another Archer record, and if so, which application and field contain the actual Profile/Catalog identifier or location?
-
-If possible, provide the Archer application name, field name, FieldId, field type, and referenced application.
+> What Archer application/field/relationship represents the source concept corresponding to OSCAL Profile/import behavior? If it is a cross-reference, which application and field contain the authoritative Catalog/Profile identifier/location?
 
 ---
 
-## 3. Control Implementation source table / LevelId 355
+## 3. Allocated Controls / Control Implementation source
 
-For SSP Control Implementation, the Authorization Package field `ALLOCATED_CONTROLS` was read back as Archer cross-reference objects such as:
+Newer 2026-09-15 evidence established that the Authorization Package `ALLOCATED_CONTROLS` field is a cross-reference and that Archer metadata can resolve its LevelId to the Allocated Controls module/Control level. Source-owner discussion also described Allocated Controls as copies of Control Standards assigned specifically to an Authorization Package.
 
-```json
-{
-  "ContentId": 573482,
-  "LevelId": 355
-}
-```
-
-We verified that `ARCHER_META_FIELD` contains many control-oriented fields for `LEVEL_ID = 355`, including examples such as:
-
-- `CONTROL_NUMBER`
-- `CONTROL_NAME`
-- `IMPLEMENTATION_DETAILS`
-- `OVERALL_IMPLEMENTATION_DETAILS`
-- `IMPLEMENTATION_STATUS`
-- `CONTROL_PARAMETERS`
-- `RESPONSIBLE_ROLE`
-- `CONTROL_ENTITY`
-- `CONTROL_SET`
+The physical/new source-table delivery for Allocated Controls and the final field-by-field OSCAL Control Implementation mapping remain deferred until that dataset and semantics are validated.
 
 **Question for SME:**
 
-> What Archer application/module does `LevelId = 355` belong to, and which physical RAW table contains the referenced `ContentId` records such as `573482`?
-
-If there is a standard metadata relationship, please explain how to resolve:
-
-`LevelId -> Level Name / Module Name -> RAW table`
-
-We currently see these metadata tables in Snowflake:
-
-- `ARCHER_META_CONTENT`
-- `ARCHER_META_FIELD`
-- `ARCHER_META_LEVEL`
-- `ARCHER_META_VALUE`
-
-If one of these is the authoritative way to resolve LevelId to the source application/table, please identify the join path and key columns.
+> For an Allocated Control record assigned to an Authorization Package, which fields are authoritative for OSCAL `control-implementation.implemented-requirements[]` (control identifier, implementation narrative/status, responsible roles, parameters, by-component details), and which fields are workflow/helper data that should not be mapped?
 
 ---
 
-## 4. How should Level 355 control records map into OSCAL SSP Control Implementation?
+## 4. Generic `{ContentId, LevelId}` cross-reference routing
 
-NIST OSCAL SSP expects the major branch:
+2026-09-15 metadata read-back showed that `ARCHER_META_LEVEL` can identify the module/level behind a LevelId, and existing source naming logic can derive Archer content names from module/level metadata. This supersedes the earlier assumption that no LevelId-to-source information was available.
+
+**Question for SME / source owner:**
+
+> Is `ARCHER_META_LEVEL` plus the standard Archer content naming convention the authoritative generic routing rule for all `{ContentId, LevelId}` cross-references, or are there RTX exceptions/overrides we must maintain explicitly?
+
+---
+
+## 5. Archer Date/Date-Time timezone semantics for OSCAL
+
+SSP Validation 03 on 2026-09-15 tested the current executable Metadata timestamp mappings (`FIRST_PUBLISHED` / `LAST_UPDATED` and their prefixed equivalents). The mapping contract itself passed, but all **5,626 populated generated timestamp values** lacked an explicit timezone and therefore failed the current OSCAL timezone-bearing date-time lexical check.
+
+Example source/generated shape:
 
 ```text
-system-security-plan
-  -> control-implementation
-     -> implemented-requirements[]
+2022-06-22 18:34:18.577
 ```
 
-with native structures such as `control-id`, `responsible-roles[]`, statements/by-components, parameter settings, and `props[]` for supplemental properties.
+Cell 4 currently treats `timestamp` like nonblank text; it does not add/convert timezone information.
 
-**Question for SME:**
+Public Archer product documentation indicates Date/Date-Time values are stored as UTC and converted for user display, but that does **not by itself prove** whether the RTX extraction/data-feed preserves the database UTC value or performs another conversion before `CURATED_JSON`.
 
-> For the Level 355 Archer control record, which fields are considered authoritative for the actual implemented control and implementation response?
+**Question for SME / Archer source owner:**
 
-In particular, should we treat fields such as:
+> Are the `FIRST_PUBLISHED`, `LAST_UPDATED`, and other Archer Date/Date-Time values delivered into our Snowflake `CURATED_JSON` preserved as UTC database values? If yes, may the OSCAL transform safely serialize a value such as `2022-06-22 18:34:18.577` as `2022-06-22T18:34:18.577Z`? If not, what timezone/conversion rule does the RTX extraction apply?
 
-- `CONTROL_NUMBER` as the control identifier,
-- `IMPLEMENTATION_DETAILS` / `OVERALL_IMPLEMENTATION_DETAILS` as implementation narrative,
-- `RESPONSIBLE_ROLE` as responsibility,
-- `CONTROL_PARAMETERS` as parameter settings,
-- and fields like allocation status / helper flags / workflow data as supplemental `props[]`?
-
-Please confirm the intended business meaning before we finalize the OSCAL mapping.
+**Status:** DEFERRED_SME. Do not change Cell 4 timestamp semantics until this source contract is confirmed.
 
 ---
 
-## 5. Cross-reference routing pattern
+## Current evidence status — 2026-09-15
 
-The current mapper already supports ContentId-based hydration when the lookup/source binding is known. What is still missing for this Control Implementation branch is the source binding for `LevelId 355`.
+Confirmed/read-back:
 
-**Question for SME:**
+- SSP Validation 01: live registry mechanical structure passed.
+- SSP Validation 02: current executable SSP CSV mappings compile cleanly against the live registry.
+- SSP Validation 03: mapping contract passed, but 5,626/5,626 populated Metadata timestamp values lacked explicit timezone under the current transform.
+- Authorization Package `ALLOCATED_CONTROLS` uses `{ContentId, LevelId}` cross-reference objects.
+- LevelId metadata can identify the related Archer module/level.
+- Source-owner discussion identifies Allocated Controls as package-specific copies of Control Standards.
 
-> Is there an existing Archer metadata/API rule that maps every `{ContentId, LevelId}` cross-reference to its source application/module, or are these source bindings maintained manually/configured elsewhere?
+Deferred / requires SME confirmation:
 
-If there is an existing registry, lookup, API operation, or metadata table for this, please point us to it so we can reuse the same approach generically rather than hardcoding Level 355.
-
----
-
-## Current evidence status
-
-Confirmed from owner-provided Snowflake read-back on 2026-09-14:
-
-- `BASELINE_RECOMMENDATION` is a values-list field with the labels listed above.
-- `ADD_OVERLAY` was null across the inspected Authorization Package snapshot.
-- `ALLOCATED_CONTROLS` contains `{ContentId, LevelId}` reference objects.
-- the observed control reference `LevelId` is `355`.
-- `ARCHER_META_FIELD` returned 210 fields for `LEVEL_ID = 355`.
-
-Not yet confirmed:
-
-- Profile `href` source.
-- Exact meaning/source of Archer `Import Profile`.
-- Physical RAW table for Level 355 control records.
-- Generic `LevelId -> source table` resolution rule.
-- Final field-by-field OSCAL mapping for the Level 355 control record.
+- Profile/import `href` authoritative source.
+- Final Allocated Control -> OSCAL Control Implementation field semantics.
+- Whether generic LevelId routing has RTX-specific exceptions.
+- RTX extraction timezone semantics for Archer Date/Date-Time fields.
