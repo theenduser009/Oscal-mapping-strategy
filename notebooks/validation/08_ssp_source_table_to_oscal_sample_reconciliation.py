@@ -9,12 +9,11 @@
 #
 # IMPORTANT:
 #   Wide-table vs CURATED_JSON differences are SOURCE SNAPSHOT / NORMALIZATION diagnostics.
-#   They do NOT by themselves fail OSCAL mapping validation. The mapper actually consumes
-#   CURATED_JSON, so pass/fail is determined by CURATED_JSON -> expected OSCAL -> actual OSCAL.
+#   They DO NOT by themselves fail OSCAL mapping validation. The mapper consumes CURATED_JSON,
+#   so pass/fail is determined by CURATED_JSON -> expected OSCAL -> actual OSCAL.
 #
-# This validator is mapping-driven. It does NOT compare all ~610 source columns blindly; it compares
-# only source fields that are currently APPROVED SSP mappings and physically exist in the wide table.
-# Complex/list source values are reported separately when direct wide-column equality is not safe.
+# The validator does not compare all ~610 source columns blindly. It checks only current APPROVED
+# SSP source fields that physically exist in the wide table.
 
 import datetime as _v08_datetime
 import json as _v08_json
@@ -118,7 +117,6 @@ def _v08_compare_wide_to_curated(wide_value, curated_value):
         return 'COMPLEX_REPRESENTATION_NOT_DIRECTLY_COMPARABLE'
     if w == c:
         return 'MATCH'
-    # Calendar-date normalization is expected for date-targeted mappings.
     if w and c and len(w) >= 10 and len(c) == 10 and w[:10] == c:
         return 'NORMALIZATION_EQUIVALENT'
     return 'SOURCE_SNAPSHOT_OR_NORMALIZATION_DIFFERENCE'
@@ -180,7 +178,6 @@ def _v08_check(namespace, context, nodes, source_rows):
                     'CURATED_JSON_VALUE': _v08_python(_v08_source_value(curated, field)),
                 })
 
-        # Rebuild expected OSCAL instances from the same CURATED_JSON and current approved mappings.
         expected_ctx = dict(context)
         expected_ctx['graph_report'] = {'SOURCE_RECORDS': 0, 'INVALID_SOURCE_RECORDS': 0,
                                         'DUPLICATE_SOURCE_RECORDS': 0, 'MAPPED_VALUES': 0,
@@ -190,14 +187,13 @@ def _v08_check(namespace, context, nodes, source_rows):
         canonical_registry = namespace['_canonical_registry_rows'](None, 'SSP', expected_ctx)
         registry_by_path = {r['element_path']: r for r in canonical_registry}
         owner_paths = sorted({r['OWNER_ELEMENT_PATH'] for r in approved if r.get('OWNER_ELEMENT_PATH')})
-        source_obj = curated
 
         for path in owner_paths:
             if path not in registry_by_path:
                 continue
             owner_paths_checked.add(path)
             try:
-                expected = namespace['_metadata_instances'](source_obj, sid, registry_by_path[path], expected_ctx)
+                expected = namespace['_metadata_instances'](curated, sid, registry_by_path[path], expected_ctx)
             except Exception:
                 oscal_failures['EXPECTED_MAPPING_REBUILD_ERROR'] += 1
                 continue
@@ -218,6 +214,9 @@ def _v08_check(namespace, context, nodes, source_rows):
         'VALIDATION': '08_SSP_SOURCE_TABLE_TO_OSCAL_SAMPLE_RECONCILIATION',
         'VALIDATOR_VERSION': '2026-09-16-r2',
         'STATUS': 'FAIL' if oscal_failures else 'PASS',
+        'OSCAL_MAPPING_STATUS': 'FAIL' if oscal_failures else 'PASS',
+        'SOURCE_RECONCILIATION_STATUS': ('DIFFERENCES_FOUND' if any(k not in {'MATCH', 'NORMALIZATION_EQUIVALENT'}
+                                                                  for k in diag_counts) else 'CLEAN_OR_NORMALIZED'),
         'WIDE_SOURCE_TABLE': _V08_WIDE_TABLE,
         'RAW_SOURCE_TABLE': context['config'].get('RAW_TABLE'),
         'SAMPLE_SOURCE_RECORD_IDS': list(wanted),
