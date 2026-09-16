@@ -46,4 +46,4 @@ Wide-table differences are now categorized separately, including `NORMALIZATION_
 
 ## Next action
 
-Run the revised Validation 08 (`r2`) against the same sample record. If OSCAL failures remain empty while source diagnostics persist, preserve the mapping PASS and investigate the source-table/CURATED_JSON differences separately.
+Run the revised Validation 08 (`r2`) against the same sample record. If `OSCAL_FAILURE_COUNTS` is empty while source diagnostics persist, preserve the mapping PASS and investigate the source-table/CURATED_JSON differences separately.
