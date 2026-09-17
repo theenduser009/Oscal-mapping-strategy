@@ -31,6 +31,8 @@ jobs:
           python - <<'PY'
           import runpy
           ns = runpy.run_path('notebooks/cells/04_parsing_transform_payload_helpers.py')
+          ns['_metadata_params'] = lambda row: row.get('REPRESENTATION_PARAMS') or {}
+          ns['_metadata_descendant_has_value'].__globals__['_metadata_params'] = ns['_metadata_params']
           assert ns['_extract_reference_ids']({'ContentId': 123}) == 123
           assert ns['_extract_reference_ids']([1, 2, 3]) == [1, 2, 3]
           context = {
