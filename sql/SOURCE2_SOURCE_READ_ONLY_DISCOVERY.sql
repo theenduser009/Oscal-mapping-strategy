@@ -1,37 +1,34 @@
--- Source 2 / Source -> Catalog Metadata: physical-source discovery only.
--- Prepared: 2026-09-17. Reviewed repository base: 5379fcf4e3fadcd1cfb1fddc8f1f636e82aa70c2.
--- Run this SELECT in a Snowflake SQL worksheet; do not run the seven cells yet.
--- The initial pilot fields are SOURCE_NAME and SOURCE_VERSION. Doubtful mappings stay pending.
--- Search starts in the existing RAW schema; Source 2 location is not assumed proven.
--- This query reads object/column metadata only: no source payloads, DDL or DML.
--- Names are candidates, not approved bindings; do not pick a RAW object by name alone.
--- Empty results mean no matching object is visible in this schema to your current role,
--- not proof that the Source table does not exist elsewhere or under another name.
--- Return this result for review. The single-record JSON check follows after binding review.
+-- Source 2 / Source -> Catalog Metadata: exact RAW-source read-only discovery.
+-- Corrected: 2026-09-17 after owner clarification that the physical source is the
+-- same Archer content name with _RAW appended, and mapped fields are in CURATED_JSON.
+-- No DDL/DML. Do not run the seven cells yet.
 
-WITH candidate_objects AS (
-    SELECT TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE
-    FROM RTX_RAW_DEV.INFORMATION_SCHEMA.TABLES
-    WHERE TABLE_SCHEMA = 'ES_ESC_GRC'
-      AND POSITION('AUTHORITATIVE_SOURCES_SOURCE' IN UPPER(TABLE_NAME)) > 0
-)
+-- Expected physical source for the Source level:
+-- RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SOURCE_RAW
+
+-- 1) Confirm the exact RAW object and the columns the seven-cell framework needs.
 SELECT
     CURRENT_TIMESTAMP() AS INSPECTED_AT,
-    t.TABLE_CATALOG AS DATABASE_NAME,
-    t.TABLE_SCHEMA AS SCHEMA_NAME,
-    t.TABLE_NAME,
-    t.TABLE_TYPE,
-    c.ORDINAL_POSITION,
-    c.COLUMN_NAME,
-    c.DATA_TYPE,
-    c.CHARACTER_MAXIMUM_LENGTH,
-    c.NUMERIC_PRECISION,
-    c.NUMERIC_SCALE,
-    c.DATETIME_PRECISION,
-    c.IS_NULLABLE
-FROM candidate_objects AS t
-LEFT JOIN RTX_RAW_DEV.INFORMATION_SCHEMA.COLUMNS AS c
-    ON c.TABLE_CATALOG = t.TABLE_CATALOG
-   AND c.TABLE_SCHEMA = t.TABLE_SCHEMA
-   AND c.TABLE_NAME = t.TABLE_NAME
-ORDER BY t.TABLE_CATALOG, t.TABLE_SCHEMA, t.TABLE_NAME, c.ORDINAL_POSITION;
+    TABLE_CATALOG AS DATABASE_NAME,
+    TABLE_SCHEMA AS SCHEMA_NAME,
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    ORDINAL_POSITION,
+    IS_NULLABLE
+FROM RTX_RAW_DEV.INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'ES_ESC_GRC'
+  AND TABLE_NAME = 'ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SOURCE_RAW'
+ORDER BY ORDINAL_POSITION;
+
+-- 2) Read only a very small sample from the RAW CURATED_JSON payload.
+-- This checks the first two clear Catalog Metadata pilot fields without using
+-- the non-RAW/wide table as the mapping source.
+SELECT
+    CONTENT_ID,
+    TYPEOF(CURATED_JSON) AS CURATED_JSON_TYPE,
+    CURATED_JSON:"SOURCE_NAME"::STRING AS SOURCE_NAME,
+    CURATED_JSON:"SOURCE_VERSION"::STRING AS SOURCE_VERSION
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORITATIVE_SOURCES_SOURCE_RAW
+WHERE CURATED_JSON IS NOT NULL
+LIMIT 5;
