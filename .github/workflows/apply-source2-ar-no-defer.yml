@@ -1,0 +1,240 @@
+name: Apply Source 2 Assessment Results no-defer runtime
+
+on:
+  push:
+    branches: [simplify-metadata-boundary]
+    paths:
+      - '.github/workflows/apply-source2-ar-no-defer.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: simplify-metadata-boundary
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Make full Assessment Results runtime executable
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              text = path.read_text(encoding='utf-8')
+              if old in text:
+                  path.write_text(text.replace(old, new, 1), encoding='utf-8')
+                  return
+              if new in text:
+                  return
+              raise SystemExit(f'Patch anchor not found in {path}: {old!r}')
+
+          cell3 = Path('notebooks/cells/03_canonical_mapping_contract.py')
+          replace_once(cell3,
+              '    "record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",\n',
+              '    "record": "SOURCE_RECORD_ID", "optional-record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",\n')
+          replace_once(cell3,
+              '"skip", "canonical-text",\n',
+              '"skip", "canonical-text", "reference-ids",\n')
+          replace_once(cell3,
+              'None if operator in {"record", "observations"} else\n',
+              'None if operator in {"record", "optional-record", "observations"} else\n')
+          replace_once(cell3,
+              '            if _registry_operator(by_path[parent]) != "record":\n',
+              '            if _registry_operator(by_path[parent]) not in {"record", "optional-record"}:\n')
+          replace_once(cell3,
+              '        elif operator == "record":\n            parameters["parent_instance_rule"] = "singleton"\n',
+              '        elif operator in {"record", "optional-record"}:\n            parameters["parent_instance_rule"] = "singleton"\n')
+          replace_once(cell3,
+              '        if operator not in {"object", "record", "values"} or not re.fullmatch',
+              '        if operator not in {"object", "record", "optional-record", "values"} or not re.fullmatch')
+          replace_once(cell3,
+              'source == "CONFIG" and (operator not in {"object", "record"} or not target)',
+              'source == "CONFIG" and (operator not in {"object", "record", "optional-record"} or not target)')
+          replace_once(cell3,
+              'operator not in {"object", "record", "properties", "observations"}',
+              'operator not in {"object", "record", "optional-record", "properties", "observations"}')
+
+          cell4 = Path('notebooks/cells/04_parsing_transform_payload_helpers.py')
+          replace_once(cell4,
+              'for key in ("UserList", "ValuesListIds", "ValueListIds", "ContentIds", "Ids", "Value"):',
+              'for key in ("UserList", "ValuesListIds", "ValueListIds", "ContentId", "ContentIds", "Ids", "Value"):')
+          replace_once(cell4,
+              '    if transform == "archer-select":\n        result = resolve_archer_select_value(value, context)\n        return result if _has_value(result) else SKIP_VALUE\n',
+              '    if transform == "archer-select":\n        result = resolve_archer_select_value(value, context)\n        return result if _has_value(result) else SKIP_VALUE\n    if transform == "reference-ids":\n        result = _extract_reference_ids(value)\n        return result if _has_value(result) else SKIP_VALUE\n')
+          marker = '\ndef _metadata_instances(source_obj, source_id, registry_row, context):\n'
+          helper = '''\ndef _metadata_descendant_has_value(path, source_obj, context):\n    prefix = path + "."\n    for mapped_path, rows in context["mappings_by_path"].items():\n        if mapped_path != path and not mapped_path.startswith(prefix):\n            continue\n        for row in rows:\n            params = _metadata_params(row)\n            raw = (context["config"].get(row["SOURCE_FIELD_NAME"], SKIP_VALUE)\n                   if params.get("value_source") == "CONFIG"\n                   else resolve_json_path(source_obj, row["SOURCE_FIELD_NAME"], default=SKIP_VALUE))\n            if raw is not SKIP_VALUE and _has_value(raw):\n                return True\n    return False\n\n\ndef _metadata_instances(source_obj, source_id, registry_row, context):\n'''
+          replace_once(cell4, marker, helper)
+          replace_once(cell4,
+              '    if operator in {"object", "record"} and (payload or parameters.get("materialize_empty") or operator == "record"):\n        instances.append({"instance_key": source_id if operator == "record" else "singleton",\n                          "payload": payload, "parent_instance_key": parent})\n',
+              '    if operator == "optional-record":\n        if payload or _metadata_descendant_has_value(path, source_obj, context):\n            instances.append({"instance_key": source_id, "payload": payload, "parent_instance_key": parent})\n    elif operator in {"object", "record"} and (payload or parameters.get("materialize_empty") or operator == "record"):\n        instances.append({"instance_key": source_id if operator == "record" else "singleton",\n                          "payload": payload, "parent_instance_key": parent})\n')
+
+          runtime = Path('Mapping/sources_source_runtime.csv')
+          with runtime.open(encoding='utf-8-sig', newline='') as handle:
+              reader = csv.DictReader(handle)
+              fields = reader.fieldnames
+              rows = list(reader)
+          if not fields or 'PROPERTY_NAME' not in fields:
+              raise SystemExit('Runtime mapping header is invalid')
+          for row in rows:
+              extras = row.pop(None, None)
+              if extras and any(str(v or '').strip() for v in extras):
+                  raise SystemExit('Runtime mapping has values beyond header')
+
+          updates = {
+              'COMPLIANCE_RATING': dict(
+                  OSCAL_ELEMENT_PATH="assessment-results.result.reviewed-controls.control-selection.reviewed-control[@control-id].prop[@name='compliance-rating']",
+                  EXECUTION_STATUS='APPROVED', TRANSFORM_ID='archer-select',
+                  RUNTIME_TARGET_PATH='assessment-results.results[].props[]',
+                  RULE_ID='assessment-results:COMPLIANCE_RATING:property', PROPERTY_NAME='compliance-rating',
+                  EXECUTION_NOTE='Executable at the Source assessment-result grain as a named result property. This preserves the source-level aggregate without fabricating a reviewed-control control-id.'),
+              'FINDINGS': dict(
+                  OSCAL_ELEMENT_PATH='assessment-results.result.finding[@uuid]', EXECUTION_STATUS='APPROVED',
+                  TRANSFORM_ID='reference-ids', RUNTIME_TARGET_PATH='assessment-results.results[].findings[].props[]',
+                  RULE_ID='assessment-results:FINDINGS:finding-property', PROPERTY_NAME='source-finding-reference',
+                  EXECUTION_NOTE='Executable on the finding branch. Stable source references are preserved as finding extension properties; no duplicate finding identity is fabricated.'),
+              'FINDINGS_AUTHORITATIVE_SOURCES': dict(
+                  OSCAL_ELEMENT_PATH='assessment-results.result.finding.related-observation', EXECUTION_STATUS='APPROVED',
+                  TRANSFORM_ID='reference-ids', RUNTIME_TARGET_PATH='assessment-results.results[].findings[].props[]',
+                  RULE_ID='assessment-results:FINDINGS_AUTHORITATIVE_SOURCES:finding-property', PROPERTY_NAME='authoritative-source-finding-reference',
+                  EXECUTION_NOTE='Executable on the finding branch as a named extension property until richer observation identity is present; no separate duplicate observation node is created.'),
+              'CONTROL_TESTING_RESULTS_FAILED_EXTERNAL_CONTROL_REQUIREMENT': dict(
+                  OSCAL_ELEMENT_PATH="assessment-results.result.finding.collected.prop[@name='test-result']", EXECUTION_STATUS='APPROVED',
+                  TRANSFORM_ID='direct', RUNTIME_TARGET_PATH='assessment-results.results[].findings[].props[]',
+                  RULE_ID='assessment-results:CONTROL_TESTING_RESULTS_FAILED_EXTERNAL_CONTROL_REQUIREMENT:finding-property', PROPERTY_NAME='test-result',
+                  EXECUTION_NOTE='Executable on the finding branch as named property test-result. Empty source values emit nothing.'),
+              'DEVIATIONS_AUTHORITATIVE_SOURCES': dict(
+                  OSCAL_ELEMENT_PATH="assessment-results.result.finding[@uuid].prop[@name='deviation']", EXECUTION_STATUS='APPROVED',
+                  TRANSFORM_ID='direct', RUNTIME_TARGET_PATH='assessment-results.results[].findings[].props[]',
+                  RULE_ID='assessment-results:DEVIATIONS_AUTHORITATIVE_SOURCES:finding-property', PROPERTY_NAME='deviation',
+                  EXECUTION_NOTE='Executable on the finding branch as named property deviation. Empty source values emit nothing.'),
+              'DEVIATIONS_AUTHORITATIVE_SOURCES_LINKED_TO_CONTROL_STANDARDS': dict(
+                  OSCAL_ELEMENT_PATH='assessment-results.result.finding.related-observation.relevant-evidence.link', EXECUTION_STATUS='APPROVED',
+                  TRANSFORM_ID='reference-ids', RUNTIME_TARGET_PATH='assessment-results.results[].findings[].props[]',
+                  RULE_ID='assessment-results:DEVIATIONS_AUTHORITATIVE_SOURCES_LINKED_TO_CONTROL_STANDARDS:finding-property', PROPERTY_NAME='linked-control-standard',
+                  EXECUTION_NOTE='Executable on the finding branch. Each source control-standard identifier becomes one named finding extension property; identifiers are not serialized as hrefs and no duplicate control nodes are created.'),
+              'EVIDENCE_REPOSITORY': dict(
+                  OSCAL_ELEMENT_PATH='assessment-results.result.finding.relevant-evidence.link.href', EXECUTION_STATUS='APPROVED',
+                  TRANSFORM_ID='direct', RUNTIME_TARGET_PATH='assessment-results.results[].findings[].props[]',
+                  RULE_ID='assessment-results:EVIDENCE_REPOSITORY:finding-property', PROPERTY_NAME='evidence-repository',
+                  EXECUTION_NOTE='Executable on the finding branch as named evidence-repository extension property. Empty source values emit nothing.'),
+          }
+          seen = set()
+          for row in rows:
+              field = row['SOURCE_FIELD_NAME']
+              if row['OSCAL_MODEL'] == 'Assessment Results' and field in updates:
+                  row.update(updates[field])
+                  seen.add(field)
+          missing = set(updates) - seen
+          if missing:
+              raise SystemExit(f'Missing Assessment Results runtime rows: {sorted(missing)}')
+
+          with runtime.open('w', encoding='utf-8-sig', newline='') as handle:
+              writer = csv.DictWriter(handle, fieldnames=fields, quoting=csv.QUOTE_ALL, lineterminator='\n')
+              writer.writeheader(); writer.writerows(rows)
+
+          contract = Path('Mapping/sources_source_assessment_results_mapping.csv')
+          with contract.open(encoding='utf-8-sig', newline='') as handle:
+              reader = csv.DictReader(handle)
+              cfields = reader.fieldnames
+              crows = list(reader)
+          ready = {
+              'COMPLIANCE_RATING': ('assessment-results.results[].props[]', 'RUNTIME_READY_RESULT_EXTENSION', 'Runtime uses a result-level compliance-rating extension to preserve the source aggregate without fabricating a control-id.'),
+              'FINDINGS': ('assessment-results.results[].findings[].props[]', 'RUNTIME_READY_FINDING_EXTENSION', 'Finding references are executable as finding-branch extension properties; empty current values emit nothing.'),
+              'FINDINGS_AUTHORITATIVE_SOURCES': ('assessment-results.results[].findings[].props[]', 'RUNTIME_READY_FINDING_EXTENSION', 'Executable as finding-branch authoritative-source-finding-reference extension property.'),
+              'CONTROL_TESTING_RESULTS_FAILED_EXTERNAL_CONTROL_REQUIREMENT': ('assessment-results.results[].findings[].props[]', 'RUNTIME_READY_FINDING_EXTENSION', 'Executable as finding property test-result.'),
+              'DEVIATIONS_AUTHORITATIVE_SOURCES': ('assessment-results.results[].findings[].props[]', 'RUNTIME_READY_FINDING_EXTENSION', 'Executable as finding property deviation.'),
+              'DEVIATIONS_AUTHORITATIVE_SOURCES_LINKED_TO_CONTROL_STANDARDS': ('assessment-results.results[].findings[].props[]', 'RUNTIME_READY_FINDING_EXTENSION', 'Executable as one linked-control-standard finding property per referenced control identifier; no duplicate control node is created.'),
+              'EVIDENCE_REPOSITORY': ('assessment-results.results[].findings[].props[]', 'RUNTIME_READY_FINDING_EXTENSION', 'Executable as evidence-repository finding property; empty current values emit nothing.'),
+          }
+          for row in crows:
+              field = row['source_field_name']
+              if field in ready:
+                  target, status, decision = ready[field]
+                  row['canonical_runtime_target'] = target
+                  row['runtime_status'] = status
+                  row['decision'] = decision
+          with contract.open('w', encoding='utf-8-sig', newline='') as handle:
+              writer = csv.DictWriter(handle, fieldnames=cfields, quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
+              writer.writeheader(); writer.writerows(crows)
+          PY
+
+      - name: Validate no-defer Assessment Results contract
+        run: |
+          python - <<'PY'
+          import ast, csv
+          from pathlib import Path
+
+          for path in ['notebooks/cells/03_canonical_mapping_contract.py', 'notebooks/cells/04_parsing_transform_payload_helpers.py']:
+              ast.parse(Path(path).read_text(encoding='utf-8'))
+
+          c3 = Path('notebooks/cells/03_canonical_mapping_contract.py').read_text(encoding='utf-8')
+          c4 = Path('notebooks/cells/04_parsing_transform_payload_helpers.py').read_text(encoding='utf-8')
+          assert '"optional-record": "SOURCE_RECORD_ID"' in c3
+          assert '"reference-ids"' in c3
+          assert '_metadata_descendant_has_value' in c4
+          assert 'if operator == "optional-record"' in c4
+          assert 'if transform == "reference-ids"' in c4
+
+          with Path('Mapping/sources_source_runtime.csv').open(encoding='utf-8-sig', newline='') as handle:
+              rows = [r for r in csv.DictReader(handle) if r['OSCAL_MODEL'] == 'Assessment Results']
+          assert len(rows) == 10, len(rows)
+          by_field = {r['SOURCE_FIELD_NAME']: r for r in rows}
+          assert len(by_field) == 10
+          assert by_field['_OF_NONCOMPLIANT_CONTROLS']['EXECUTION_STATUS'] == 'EXCLUDED'
+          for field, row in by_field.items():
+              if field != '_OF_NONCOMPLIANT_CONTROLS':
+                  assert row['EXECUTION_STATUS'] == 'APPROVED', (field, row['EXECUTION_STATUS'])
+                  assert row['TRANSFORM_ID']
+                  assert row['RUNTIME_TARGET_PATH']
+                  assert row['RULE_ID']
+          active_noncompliant = [r for r in rows if r['EXECUTION_STATUS'] == 'APPROVED' and r['PROPERTY_NAME'] == 'noncompliant-count']
+          assert [r['SOURCE_FIELD_NAME'] for r in active_noncompliant] == ['COUNT_OF_NONCOMPLIANT_CONTROLS']
+          assert not any(r['EXECUTION_STATUS'] == 'DEFERRED' for r in rows)
+
+          sql = Path('sql/registry/ENABLE_ASSESSMENT_RESULTS_FINDING_BRANCH_FULL.sql').read_text(encoding='utf-8')
+          assert 'assessment-results.results[].findings[]' in sql
+          assert 'assessment-results.results[].findings[].props[]' in sql
+          assert "'optional-record'" in sql
+          print('SOURCE2_AR_NO_DEFER_STATIC_CHECK_PASSED')
+          PY
+
+      - name: Run focused mapper tests
+        run: |
+          python -m pip install -q pytest
+          pytest -q tests/test_cell3_in_memory_metadata.py tests/test_compiled_metadata_boundary.py
+
+      - name: Synchronize generated notebook files
+        run: python tools/sync_notebook_cells.py
+
+      - name: Verify generated notebook synchronization
+        run: python tools/sync_notebook_cells.py --check
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Commit no-defer Assessment Results runtime
+        run: |
+          if git diff --quiet; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add notebooks/cells/03_canonical_mapping_contract.py \
+                  notebooks/cells/04_parsing_transform_payload_helpers.py \
+                  notebooks/cells_v2/03_canonical_mapping_contract.py \
+                  notebooks/cells_v2/04_parsing_transform_payload_helpers.py \
+                  notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py \
+                  Mapping/sources_source_runtime.csv \
+                  Mapping/sources_source_assessment_results_mapping.csv
+          git commit -m 'Make full Source 2 Assessment Results runtime executable'
+          git push origin HEAD:simplify-metadata-boundary
