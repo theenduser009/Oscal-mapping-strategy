@@ -78,6 +78,7 @@ jobs:
           """Optional explicit property-name support without changing legacy defaults."""
           import unittest
 
+          import lean_support  # Adds tests/ to sys.path before importing shared fixtures.
           import test_metadata_driven_contract as base
 
 
