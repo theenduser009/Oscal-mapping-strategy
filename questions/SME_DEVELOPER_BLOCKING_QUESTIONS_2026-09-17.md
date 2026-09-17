@@ -1,104 +1,117 @@
-# SME Questions That Actually Block OSCAL Mapping
+# SME Questions — Technical OSCAL Mapping Blockers Only
 
 Date: 2026-09-17
 Branch reviewed: `simplify-metadata-boundary`
-Baseline reviewed before this question pass: `e802f04d3c0767b2d0eea28934699366e0f18559`
+Baseline reviewed before this question pass: `001615b38642266d203e54bd7f0031cae7b77b80`
 
-Purpose: this is the short, email-ready list of questions where the developer cannot complete the mapping without a business/mapping decision. It is intentionally narrower than `SME_OPEN_QUESTIONS.md`.
+This supersedes the earlier wording in this file. The questions below are intentionally limited to places where the current mapping document cannot be compiled or emitted safely by the Python mapper because the target path is missing, ambiguous, duplicated, or inconsistent with the NIST OSCAL schema. They are not requests for general business-process explanation.
 
-NIST references used for this review:
-- SSP Control Implementation v1.2.x reference: https://pages.nist.gov/OSCAL-Reference/models/v1.2.0/system-security-plan/json-definitions/
-- SSP index showing implemented-requirement, responsible-role, and by-component structure: https://pages.nist.gov/OSCAL-Reference/models/v1.2.0/system-security-plan/json-index/
-- Profile v1.2.3 reference: https://pages.nist.gov/OSCAL-Reference/models/v1.2.3/profile/json-definitions/
-- Assessment Results concepts: https://pages.nist.gov/OSCAL/learn/concepts/layer/assessment/assessment-results/
-- Assessment Results observation reference: https://pages.nist.gov/OSCAL-Reference/models/v1.2.1/assessment-results/json-definitions/
-- Catalog reference: https://pages.nist.gov/OSCAL-Reference/models/v1.2.0/catalog/json-definitions/
-- Component Definition v1.2.3 reference: https://pages.nist.gov/OSCAL-Reference/models/v1.2.3/component-definition/json-reference/
+NIST references used:
+- SSP: https://pages.nist.gov/OSCAL-Reference/models/v1.2.0/system-security-plan/json-definitions/
+- Profile: https://pages.nist.gov/OSCAL-Reference/models/v1.2.3/profile/json-definitions/
+- Assessment Results: https://pages.nist.gov/OSCAL-Reference/models/v1.2.1/assessment-results/json-definitions/
+- Catalog: https://pages.nist.gov/OSCAL-Reference/models/v1.2.0/catalog/json-definitions/
 
-## 1. Allocated Controls -> SSP Control Implementation
+## 1. Allocated Controls -> SSP `implemented-requirements[]`
 
-The mapping document identifies Allocated Controls / Control Implementation, but it does not identify the exact Archer fields needed to build an OSCAL `implemented-requirement`.
+The mapping document identifies Allocated Controls / Control Implementation, but it does not provide the exact source-field-to-OSCAL-path mapping needed to construct an `implemented-requirement`.
 
-**Ask the SME:**
+**Question:**
 
-> For each Allocated Control assigned to an Authorization Package, which Archer fields contain: (a) the actual control identifier, (b) the implementation narrative, (c) implementation status/origination, (d) responsible role/person, and (e) component-specific implementation details? Please identify the exact Archer field names we should use for the OSCAL `implemented-requirements[]`, `responsible-roles[]`, and `by-components[]` structure.
+> For an Allocated Control record, please provide the exact Archer field names and OSCAL target paths for the control identifier and the fields that should populate `control-implementation.implemented-requirements[]`, including any statement, `responsible-roles[]`, and `by-components[]` mappings that are intended.
 
-**Why this blocks development:** NIST models control implementation around an individual `implemented-requirement` that references a control and can carry statements, responsible roles, parameters, and by-component implementation. We cannot safely build those objects from summary/helper fields alone.
+**Technical blocker:** NIST models Control Implementation around individual `implemented-requirement` objects tied to controls. The current mapping does not provide enough exact field/path metadata for the Python compiler to build that structure without inventing mappings.
 
-## 2. Control Implementation fields with no OSCAL path in the mapping sheet
+## 2. Control Implementation rows with blank/unspecified OSCAL paths
 
-The Control Implementation section contains many fields where the mapping document gives no exact OSCAL element path. Examples include `COUNT_OF_CONTROLS`, `COUNT_OF_FULLY_IMPLEMENTED_CONTROLS`, `COUNT_OF_CONTROLS_WITHOUT_IMPLEMENTATION_DETAILS`, `INHERITED_CONTROL_SELECTION`, `INHERITABLE_CONTROLS`, `CONTROL_STANDARDS`, `MASTER_CONTROLS`, `CONTROL_SET_TO_ASSESS`, and similar fields.
+The Control Implementation mapping contains many rows with no exact OSCAL element path, including `COUNT_OF_CONTROLS`, `COUNT_OF_FULLY_IMPLEMENTED_CONTROLS`, `COUNT_OF_CONTROLS_WITHOUT_IMPLEMENTATION_DETAILS`, `INHERITED_CONTROL_SELECTION`, `INHERITABLE_CONTROLS`, `CONTROL_STANDARDS`, `MASTER_CONTROLS`, `CONTROL_SET_TO_ASSESS`, and others.
 
-**Ask the SME:**
+**Question:**
 
-> For the Control Implementation fields where the mapping sheet has no OSCAL element path, which ones are supposed to become actual OSCAL data, which ones should be calculated from `implemented-requirements[]`, and which ones are Archer-only summary/workflow values that should not be mapped? For any field that must be stored in OSCAL, please provide the intended OSCAL object/path.
+> For every Control Implementation row whose OSCAL path is blank or marked `Unspecified`, please provide one exact OSCAL target path and mapping type, or mark the row as not mapped/derived-only. If a value is intended to be calculated from `implemented-requirements[]` rather than stored, please mark it as calculated rather than assigning a new OSCAL path.
 
-**Why this blocks development:** NIST `control-implementation` is not a general container for arbitrary summary fields; its core structure is the implementation description, parameter settings, and `implemented-requirements[]`. We should not invent a `props[]` location when the mapping document does not specify one.
+**Technical blocker:** the Python mapping contract requires one executable target path and transform/representation decision. It cannot compile `Unspecified` into a deterministic OSCAL node or property.
 
-## 3. Profile `imports[].href` and control selection
+## 3. Profile `imports[].href`
 
-The mapping document currently points `BASELINE_RECOMMENDATION` toward `profile.imports[]`, but the observed values are business labels such as LOE/baseline recommendations, not a resolvable Catalog/Profile reference.
+The mapping document points `BASELINE_RECOMMENDATION` toward `profile.imports[]`, but it does not provide a value that can be emitted as `imports[].href`.
 
-**Ask the SME:**
+**Question:**
 
-> What exact Archer field or relationship gives us the actual Catalog or Profile resource that should populate OSCAL `profile.imports[].href`? Please identify the source field that contains or can resolve to the Catalog/Profile URI/reference. Also, what Archer field tells us whether that import should use `include-all` or specific `include-controls`?
+> Please identify the exact Archer source field/relationship and transformation that should populate `profile.imports[].href`, and the source mapping that supplies `include-all` or the specific `include-controls` selection.
 
-**Why this blocks development:** NIST defines `import.href` as a resolvable reference to the Catalog/Profile being tailored, and the import must then select controls using `include-all`, `include-controls`, and/or exclusions. A baseline recommendation label by itself is not enough to construct that structure.
+**Technical blocker:** NIST defines `import.href` as a URI reference to the Catalog/Profile being imported, and the import contains the control-selection directives. A label alone cannot be emitted as a valid Profile import reference. citeturn678067view1
 
-## 4. Profile `ADD_OVERLAY` -> import vs merge vs modify
+## 4. Profile `ADD_OVERLAY` has multiple possible OSCAL destinations
 
-The mapping document says `ADD_OVERLAY` may affect Profile import, merge behavior, or modify/alters, but it does not define which source values mean which behavior.
+The mapping document says `ADD_OVERLAY` may route to Profile import, merge, or modify/alters, but it does not provide a deterministic value-to-path rule.
 
-**Ask the SME:**
+**Question:**
 
-> For `ADD_OVERLAY`, what are the possible Archer values and what does each value mean? Specifically, which values mean “select/import controls,” which mean “restructure/merge controls,” and which mean “modify/tailor control content or parameters”?
+> Please provide the exact mapping rule for `ADD_OVERLAY`: for each source value, which OSCAL path should be populated — `imports[]`, `merge`, or `modify`/`alters` — and what transform should be applied?
 
-**Why this blocks development:** NIST treats Profile `import`, `merge`, and `modify` as different operations. We cannot route one Archer field among them without an explicit business rule.
+**Technical blocker:** NIST treats `import`, `merge`, and `modify` as separate Profile structures. The mapper cannot route one source field to multiple structural destinations without an explicit rule. citeturn678067view0 citeturn920150view2 citeturn920150view3
 
-## 5. `AUTHORIZATION_DECISION` conflicts with OSCAL operational status
+## 5. Two SSP source fields target the same singleton `status.state`
 
-The mapping document points both `OPERATIONAL_STATUS` and `AUTHORIZATION_DECISION` toward `system-security-plan.system-characteristics.status.state`.
+The mapping document maps both `OPERATIONAL_STATUS` and `AUTHORIZATION_DECISION` to `system-security-plan.system-characteristics.status.state`.
 
-**Ask the SME:**
+**Question:**
 
-> Is `AUTHORIZATION_DECISION` intended to represent the system's operational lifecycle state, or an authorization/ATO decision? If it is an authorization decision, where do you want that decision represented in OSCAL instead of `system-characteristics.status.state`?
+> Please provide one canonical target decision for these two rows: which field owns `system-security-plan.system-characteristics.status.state`, and what exact OSCAL path should the other field use (or should it be marked not mapped)? If both are intentionally mapped to `status.state`, please provide the deterministic precedence/crosswalk rule.
 
-**Why this blocks development:** NIST defines `system-characteristics.status.state` as the system's current operating status (for example operational, under-development, under-major-modification, disposition, or other). We should not write two different business concepts into the same singleton OSCAL field.
+**Technical blocker:** NIST defines System Characteristics `status` as the system's operational status and exposes one `state` value. The mapper cannot safely write two independently populated source fields into the same singleton member. citeturn454619view1
 
-## 6. Assessment Results rows where the mapping sheet gives alternative meanings
+## 6. SSP Metadata rows still marked TBD
 
-The mapping document still leaves `RISK_ACCEPTANCE_RBDS` as `observations[]` **or** `props[]`, and `RISK_ASSESSMENT_REPORT` is not defined as an observation, property, link, or report/evidence reference.
+The mapping document leaves `ARCHER_CONTENT_AUTHORIZATION_PACKAGE_CONFIRMED_IN_ARCHER` as a generic metadata property with no property name, and leaves the following responsible-party mappings as TBD: `SENIOR_INFORMATION_SYSTEMS_SECURITY_OFFICER_SISSO`, `INFORMATION_SYSTEM_SECURITY_ENGINEER_ISSE`, `INFORMATION_SYSTEM_ADMINISTRATOR_ISA`, and `AUTHORIZING_OFFICIAL_DESIGNATED_REPRESENTATIVE_AODR`.
 
-**Ask the SME:**
+**Question:**
 
-> For `RISK_ACCEPTANCE_RBDS`, is this an actual assessment observation produced by an assessment activity, or is it a package/result-level business value? For `RISK_ASSESSMENT_REPORT`, is the source value the report itself, a URL/document reference to the report, or a result/score? Please confirm the intended OSCAL representation for these two fields.
+> Please provide the exact property name for `ARCHER_CONTENT_AUTHORIZATION_PACKAGE_CONFIRMED_IN_ARCHER`. For each of the four TBD responsible-party rows, please provide the exact OSCAL `role-id` to use, or mark the row not mapped.
 
-**Why this blocks development:** NIST uses an Observation for an individual assessment observation/evidence and gives observations their own description, method, subject/origin, and evidence structure. A package-level value or report reference should not be promoted to an Observation just because `observations[]` is available.
+**Technical blocker:** the mapper can already create metadata properties and responsible-party relationships, but these rows are missing the target metadata needed to compile them deterministically. The source document itself marks them TBD. fileciteturn471file0L2-L6
 
-## 7. Source 2 `SOURCE_DESCRIPTION` and `INFORMATION` both target Catalog metadata remarks
+## 7. Assessment Results rows with alternative or missing target paths
 
-The Source 2 mapping document maps both `SOURCE_DESCRIPTION` and `INFORMATION` to `catalog.metadata.remarks`.
+The mapping document gives `RISK_ACCEPTANCE_RBDS` as `assessment-results.results[].observations[]` **or** `props[]`. `RISK_ASSESSMENT_REPORT` also does not have one resolved executable target.
 
-**Ask the SME:**
+**Question:**
 
-> Which field should be the authoritative value for `catalog.metadata.remarks`: `SOURCE_DESCRIPTION` or `INFORMATION`? Where should the other field be represented if both need to be retained?
+> Please replace the alternative/blank mappings for `RISK_ACCEPTANCE_RBDS` and `RISK_ASSESSMENT_REPORT` with one exact OSCAL target path and mapping type for each. If either row is intended to create an `observations[]` object, please also provide the source mapping for the NIST-required observation content needed to build a valid observation; otherwise provide the exact `props[]`/link/resource target.
 
-**Why this blocks development:** these are two separate source fields targeting one singleton OSCAL member. We cannot safely overwrite, concatenate, or choose precedence without an explicit decision. NIST also states that `remarks` should not be used as a general bucket for arbitrary data.
+**Technical blocker:** the Python contract requires one target representation. NIST defines an Observation as an object representing an individual observation and requires its description, so a bare scalar cannot simply be routed to `observations[]` without the required structure. fileciteturn473file0L2-L6 citeturn920150view7
 
-## 8. Source 2 `CONTROL_PROCEDURES` is ambiguous between Catalog and Component Definition
+## 8. Source 2 `SOURCE_DESCRIPTION` and `INFORMATION` collide on one singleton path
 
-The Source 2 mapping document labels `CONTROL_PROCEDURES` as `Catalog or Component Definition`, and the supplied path text is incomplete.
+The Source 2 mapping document maps both fields to `catalog.metadata.remarks`.
 
-**Ask the SME:**
+**Question:**
 
-> What does `CONTROL_PROCEDURES` represent in Archer: the actual requirement/procedure text that is part of a control, or a separate documented procedure that implements/supports controls? If it is control requirement text, confirm the Catalog control/part mapping. If it is a separate documented procedure, confirm that it should be modeled as a documentary component in Component Definition.
+> `SOURCE_DESCRIPTION` and `INFORMATION` are separate source fields, but both are mapped to `catalog.metadata.remarks`. Please provide a separate exact OSCAL target path for each field, or provide an explicit combination/precedence rule if both are intentionally meant to populate the same `remarks` member.
 
-**Why this blocks development:** NIST Catalog represents controls and their statement/part content, while Component Definition explicitly supports documentary components such as processes, procedures, and policies. We need the business meaning before choosing the model.
+**Technical blocker:** `remarks` is a single `[0..1]` member and the current Python mapper intentionally rejects two different populated values assigned to one singleton target. NIST also advises using `prop` or `link` for additional data rather than using `remarks` as a general data bucket. fileciteturn474file0L2-L6 citeturn920150view6
 
-## Mapping-document text needed
+## 9. Source 2 `CONTROL_PROCEDURES` has two different model/path choices
 
-For any Source 2 row where the supplied worksheet transcription is visibly clipped or the OSCAL model/path is incomplete, please provide the original untruncated row from the authoritative mapping workbook. We should not reconstruct a missing path from a screenshot.
+The mapping document maps `CONTROL_PROCEDURES` to `Catalog or Component Definition` and supplies both a Catalog path and a Component Definition path.
 
-## Deliberately not included in this email
+**Question:**
 
-This short list does **not** ask about generic ContentId/LevelId routing, warehouse/system helper fields, timestamps/timezones, routine links/back-matter handling, or already-resolved implementation mechanics. Those are not the current SME decisions preventing the developer from mapping the fields above.
+> For `CONTROL_PROCEDURES`, please specify the single intended OSCAL model/path, or explicitly confirm that the field must be emitted to both models and provide the rule for each output. The current alternatives are `catalog.control[@id].part[@name='statement']` and `component-definition.component.control-implementation.implemented-requirement.statement`.
+
+**Technical blocker:** the executable mapping contract needs a deterministic model binding and target path; `Catalog or Component Definition` is not directly compilable as one runtime mapping. fileciteturn474file0L2-L6
+
+## 10. Incomplete/clipped mapping rows
+
+Several Source 2 transcriptions explicitly contain `[CLIPPED]` or `NEEDS SOURCE TEXT` for the OSCAL model/path or source field text.
+
+**Question:**
+
+> Please provide the original untruncated mapping row for any entry where the OSCAL model, OSCAL element path, Archer field name, or required mapping note is clipped/incomplete. We will use the authoritative row rather than reconstructing missing mapping syntax from screenshots.
+
+**Technical blocker:** the mapper should not infer a missing model/path from partial screenshot text.
+
+## Not included
+
+This technical blocker list does not ask for general business-process definitions, generic ContentId/LevelId routing, timestamps/timezones, helper/system metadata, routine links/back-matter handling, or other mappings that the developer can resolve from the current source plus the NIST schema.
