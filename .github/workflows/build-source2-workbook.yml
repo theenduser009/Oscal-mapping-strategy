@@ -1,0 +1,45 @@
+name: Build Source 2 mapping workbook
+
+on:
+  push:
+    branches: [simplify-metadata-boundary]
+    paths:
+      - '.github/workflows/build-source2-workbook.yml'
+      - 'tools/build_source2_workbook.py'
+      - 'Mapping/SOURCE2_SOURCE_MAPPING.csv'
+      - 'Mapping/SOURCE2_TOPIC_MAPPING.csv'
+      - 'Mapping/SOURCE2_SECTION_MAPPING.csv'
+      - 'Mapping/SOURCE2_SUB_SECTION_MAPPING.csv'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: simplify-metadata-boundary
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install workbook dependency
+        run: python -m pip install openpyxl==3.1.5
+      - name: Build workbook
+        run: python tools/build_source2_workbook.py
+      - name: Commit workbook when changed
+        shell: bash
+        run: |
+          if git diff --quiet -- Mapping/archer_authoritative_sources_oscal_mappings.xlsx; then
+            echo 'Workbook already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Mapping/archer_authoritative_sources_oscal_mappings.xlsx
+          git commit -m 'Refresh Source 2 mapping workbook'
+          git push origin HEAD:simplify-metadata-boundary
