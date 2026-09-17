@@ -37,22 +37,18 @@ jobs:
           elif '"MODEL_BINDINGS": ("CATALOG", "ASSESSMENT_RESULTS"),' not in text:
               raise SystemExit('Source 2 binding anchor not found')
 
-          def clean_dictreader_rows(path, encoding):
-              with path.open(encoding=encoding, newline='') as handle:
-                  reader = csv.DictReader(handle)
-                  fields = reader.fieldnames
-                  rows = list(reader)
-              if not fields:
-                  raise SystemExit(f'{path} has no header')
-              for row in rows:
-                  extras = row.pop(None, None)
-                  if extras and any(str(value or '').strip() for value in extras):
-                      raise SystemExit(f'{path} has nonblank values beyond its header')
-              return fields, rows
-
           runtime = Path('Mapping/sources_source_runtime.csv')
-          fields, rows = clean_dictreader_rows(runtime, 'utf-8-sig')
-          assert 'PROPERTY_NAME' in fields
+          with runtime.open(encoding='utf-8-sig', newline='') as handle:
+              reader = csv.DictReader(handle)
+              fields = reader.fieldnames
+              rows = list(reader)
+          if not fields or 'PROPERTY_NAME' not in fields:
+              raise SystemExit('Runtime mapping header is invalid')
+          for row in rows:
+              extras = row.pop(None, None)
+              if extras and any(str(value or '').strip() for value in extras):
+                  raise SystemExit('Runtime mapping has nonblank values beyond its header')
+
           key = 'COUNT_OF_NONCOMPLIANT_CONTROLS'
           if not any(r['SOURCE_FIELD_NAME'] == key and r['OSCAL_MODEL'] == 'Assessment Results' for r in rows):
               row = {name: '' for name in fields}
@@ -80,23 +76,6 @@ jobs:
               writer = csv.DictWriter(handle, fieldnames=fields, quoting=csv.QUOTE_ALL, lineterminator='\n')
               writer.writeheader()
               writer.writerows(rows)
-
-          disposition = Path('Mapping/sources_source_final_disposition.csv')
-          dfields, drows = clean_dictreader_rows(disposition, 'utf-8')
-          found = False
-          for row in drows:
-              if row['source_field_name'] == key:
-                  found = True
-                  row['final_status'] = 'RUNTIME_PROMOTED_PREVIEW_PENDING'
-                  row['runtime_or_review_target'] = 'assessment-results.results[].props[]'
-                  row['decision'] = ('Promoted as named result property noncompliant-count because the live Assessment Results '
-                                     'registry has one results[] record per SOURCE_RECORD_ID. Live Source 2 PREVIEW/COMMIT remains pending.')
-          if not found:
-              raise SystemExit('Source disposition row 20 is missing')
-          with disposition.open('w', encoding='utf-8', newline='') as handle:
-              writer = csv.DictWriter(handle, fieldnames=dfields, lineterminator='\n')
-              writer.writeheader()
-              writer.writerows(drows)
           PY
 
       - name: Static Source 2 Assessment Results route check
@@ -151,7 +130,6 @@ jobs:
           git add notebooks/cells/01_initialization_and_configuration.py \
                   notebooks/cells_v2/01_initialization_and_configuration.py \
                   notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py \
-                  Mapping/sources_source_runtime.csv \
-                  Mapping/sources_source_final_disposition.csv
+                  Mapping/sources_source_runtime.csv
           git commit -m 'Add Source 2 Assessment Results runtime route'
           git push origin HEAD:simplify-metadata-boundary
