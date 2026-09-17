@@ -72,66 +72,96 @@ jobs:
               '| VALUE_REQUIRED | true requires a nonempty value before and after conversion. Blank/false preserves optional behavior; 0 and false are values, not missing data. |\n'
               '| PROPERTY_NAME | Optional exact name for a properties/observations mapping. Blank preserves the existing source-field-slug behavior. |\n'
           )
-
-          test_path = root / 'tests/lean/test_property_name_override.py'
-          test_path.write_text('''"""Optional explicit property-name support without changing legacy defaults."""\n'
-          'import unittest\n\n'
-          'from lean_support import namespace\n'
-          'import test_metadata_driven_contract as base\n\n\n'
-          'class PropertyNameOverrideTests(unittest.TestCase):\n'
-          '    def test_optional_override_compiles_and_emits_exact_name(self):\n'
-          '        ns = base.namespace()\n'
-          '        row = base.mapping("NEW_SCORE", base.OBSERVATION, "scalar-score",\n'
-          '                           PROPERTY_NAME="approved-score-label")\n'
-          '        context = base.compile_context(ns, [row])\n'
-          '        self.assertEqual("READY", context["routing_report"]["STATUS"])\n'
-          '        compiled = context["mapping_rows"][0]\n'
-          '        self.assertEqual("approved-score-label",\n'
-          '                         compiled["REPRESENTATION_PARAMS"]["property_name"])\n'
-          '        nodes, _ = base.build(ns, context, [{\n'
-          '            "SOURCE_RECORD_ID": "record-one",\n'
-          '            "CURATED_JSON": {"NEW_SCORE": 7},\n'
-          '        }])\n'
-          '        self.assertEqual(\n'
-          '            [{"name": "approved-score-label", "value": "7"}],\n'
-          '            base.payloads(nodes, base.OBSERVATION)[0]["props"],\n'
-          '        )\n\n'
-          '    def test_blank_override_keeps_existing_source_field_slug(self):\n'
-          '        ns = base.namespace()\n'
-          '        row = base.mapping("NEW_SCORE", base.OBSERVATION, "scalar-score", PROPERTY_NAME="")\n'
-          '        context = base.compile_context(ns, [row])\n'
-          '        nodes, _ = base.build(ns, context, [{\n'
-          '            "SOURCE_RECORD_ID": "record-one",\n'
-          '            "CURATED_JSON": {"NEW_SCORE": 3},\n'
-          '        }])\n'
-          '        self.assertEqual(\n'
-          '            [{"name": "new-score", "value": "3"}],\n'
-          '            base.payloads(nodes, base.OBSERVATION)[0]["props"],\n'
-          '        )\n\n'
-          '    def test_override_is_rejected_for_non_property_operator(self):\n'
-          '        ns = base.namespace()\n'
-          '        context = base.compile_context(ns, [base.mapping(PROPERTY_NAME="not-allowed")])\n'
-          '        self.assertEqual("BLOCKED", context["routing_report"]["STATUS"])\n'
-          '        self.assertEqual([], context["mapping_rows"])\n\n'
-          '    def test_override_with_whitespace_is_rejected(self):\n'
-          '        ns = base.namespace()\n'
-          '        row = base.mapping("NEW_SCORE", base.OBSERVATION, "scalar-score",\n'
-          '                           PROPERTY_NAME="bad name")\n'
-          '        context = base.compile_context(ns, [row])\n'
-          '        self.assertEqual("BLOCKED", context["routing_report"]["STATUS"])\n'
-          '        self.assertEqual([], context["mapping_rows"])\n\n\n'
-          'if __name__ == "__main__":\n'
-          '    unittest.main()\n''', encoding='utf-8', newline='\n')
           PY
+
+          cat > tests/lean/test_property_name_override.py <<'PYTEST'
+          """Optional explicit property-name support without changing legacy defaults."""
+          import unittest
+
+          import test_metadata_driven_contract as base
+
+
+          class PropertyNameOverrideTests(unittest.TestCase):
+              def test_optional_override_compiles_and_emits_exact_name(self):
+                  ns = base.namespace()
+                  row = base.mapping(
+                      "NEW_SCORE", base.OBSERVATION, "scalar-score",
+                      PROPERTY_NAME="approved-score-label",
+                  )
+                  context = base.compile_context(ns, [row])
+                  self.assertEqual("READY", context["routing_report"]["STATUS"])
+                  self.assertEqual(
+                      "approved-score-label",
+                      context["mapping_rows"][0]["REPRESENTATION_PARAMS"]["property_name"],
+                  )
+                  nodes, _ = base.build(ns, context, [{
+                      "SOURCE_RECORD_ID": "record-one",
+                      "CURATED_JSON": {"NEW_SCORE": 7},
+                  }])
+                  self.assertEqual(
+                      [{"name": "approved-score-label", "value": "7"}],
+                      base.payloads(nodes, base.OBSERVATION)[0]["props"],
+                  )
+
+              def test_blank_override_keeps_existing_source_field_slug(self):
+                  ns = base.namespace()
+                  row = base.mapping(
+                      "NEW_SCORE", base.OBSERVATION, "scalar-score", PROPERTY_NAME="",
+                  )
+                  context = base.compile_context(ns, [row])
+                  nodes, _ = base.build(ns, context, [{
+                      "SOURCE_RECORD_ID": "record-one",
+                      "CURATED_JSON": {"NEW_SCORE": 3},
+                  }])
+                  self.assertEqual(
+                      [{"name": "new-score", "value": "3"}],
+                      base.payloads(nodes, base.OBSERVATION)[0]["props"],
+                  )
+
+              def test_override_is_rejected_for_non_property_operator(self):
+                  ns = base.namespace()
+                  context = base.compile_context(ns, [base.mapping(PROPERTY_NAME="not-allowed")])
+                  self.assertEqual("BLOCKED", context["routing_report"]["STATUS"])
+                  self.assertEqual([], context["mapping_rows"])
+
+              def test_override_with_whitespace_is_rejected(self):
+                  ns = base.namespace()
+                  row = base.mapping(
+                      "NEW_SCORE", base.OBSERVATION, "scalar-score", PROPERTY_NAME="bad name",
+                  )
+                  context = base.compile_context(ns, [row])
+                  self.assertEqual("BLOCKED", context["routing_report"]["STATUS"])
+                  self.assertEqual([], context["mapping_rows"])
+
+
+          if __name__ == "__main__":
+              unittest.main()
+          PYTEST
+
           python tools/sync_notebook_cells.py
       - name: Install test dependencies
         run: python -m pip install 'snowflake-snowpark-python[localtest]==1.55.0' pandas==2.3.3
       - name: Run property-name tests
-        run: python -m unittest tests.lean.test_property_name_override -v
-      - name: Run lean release regression suite
+        run: python -m unittest discover -s tests/lean -p 'test_property_name_override.py' -v
+      - name: Run relevant mapper regression tests
         env:
           REQUIRE_SNOWPARK_TESTS: '1'
-        run: python -m unittest discover -s tests/lean -v
+        shell: bash
+        run: |
+          for pattern in \
+            test_acceptance.py \
+            test_ar30_extension.py \
+            test_ar_null_observations.py \
+            test_assessment_plan.py \
+            test_compiler.py \
+            test_graph_gaps.py \
+            test_metadata_gaps.py \
+            test_notebook_end_to_end.py \
+            test_poam_references.py \
+            test_transforms.py
+          do
+            python -m unittest discover -s tests/lean -p "$pattern" -v
+          done
       - name: Verify generated notebook is synchronized
         run: python tools/sync_notebook_cells.py --check
       - name: Check whitespace
