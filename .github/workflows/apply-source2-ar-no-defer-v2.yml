@@ -1,0 +1,95 @@
+name: Apply Source 2 Assessment Results no-defer runtime v2
+
+on:
+  push:
+    branches: [simplify-metadata-boundary]
+    paths:
+      - '.github/workflows/apply-source2-ar-no-defer-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: simplify-metadata-boundary
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Apply full Assessment Results runtime patch
+        run: python tools/apply_source2_ar_no_defer.py
+
+      - name: Validate Python syntax and runtime smoke checks
+        run: |
+          python -m py_compile notebooks/cells/03_canonical_mapping_contract.py notebooks/cells/04_parsing_transform_payload_helpers.py
+          python - <<'PY'
+          import runpy
+          ns = runpy.run_path('notebooks/cells/04_parsing_transform_payload_helpers.py')
+          assert ns['_extract_reference_ids']({'ContentId': 123}) == 123
+          assert ns['_extract_reference_ids']([1, 2, 3]) == [1, 2, 3]
+          context = {
+              'mappings_by_path': {
+                  'assessment-results.results[].findings[].props[]': [
+                      {'SOURCE_FIELD_NAME': 'X', 'REPRESENTATION_PARAMS': {}}
+                  ]
+              },
+              'config': {},
+          }
+          assert ns['_metadata_descendant_has_value'](
+              'assessment-results.results[].findings[]', {'X': [9]}, context
+          ) is True
+          assert ns['_metadata_descendant_has_value'](
+              'assessment-results.results[].findings[]', {'X': None}, context
+          ) is False
+          print('SOURCE2_AR_OPTIONAL_RECORD_SMOKE_CHECK_PASSED')
+          PY
+
+      - name: Validate ten-field Assessment Results contract
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+          with Path('Mapping/sources_source_runtime.csv').open(encoding='utf-8-sig', newline='') as handle:
+              rows = [r for r in csv.DictReader(handle) if r['OSCAL_MODEL'] == 'Assessment Results']
+          assert len(rows) == 10
+          by_field = {r['SOURCE_FIELD_NAME']: r for r in rows}
+          assert len(by_field) == 10
+          assert by_field['_OF_NONCOMPLIANT_CONTROLS']['EXECUTION_STATUS'] == 'EXCLUDED'
+          assert sum(r['EXECUTION_STATUS'] == 'APPROVED' for r in rows) == 9
+          assert not any(r['EXECUTION_STATUS'] == 'DEFERRED' for r in rows)
+          owners = [r['SOURCE_FIELD_NAME'] for r in rows if r['EXECUTION_STATUS'] == 'APPROVED' and r['PROPERTY_NAME'] == 'noncompliant-count']
+          assert owners == ['COUNT_OF_NONCOMPLIANT_CONTROLS']
+          print('SOURCE2_AR_TEN_FIELD_NO_DEFER_CHECK_PASSED')
+          PY
+
+      - name: Synchronize generated notebook files
+        run: python tools/sync_notebook_cells.py
+
+      - name: Verify generated notebook synchronization
+        run: python tools/sync_notebook_cells.py --check
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Commit full Assessment Results runtime
+        run: |
+          if git diff --quiet; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add notebooks/cells/03_canonical_mapping_contract.py \
+                  notebooks/cells/04_parsing_transform_payload_helpers.py \
+                  notebooks/cells_v2/03_canonical_mapping_contract.py \
+                  notebooks/cells_v2/04_parsing_transform_payload_helpers.py \
+                  notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py \
+                  Mapping/sources_source_runtime.csv
+          git commit -m 'Make all nonduplicate Source 2 Assessment Results mappings executable'
+          git push origin HEAD:simplify-metadata-boundary
