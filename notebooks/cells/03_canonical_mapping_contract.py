@@ -228,6 +228,12 @@ def _compile_mapping(row, elements):
     if transform == "skip" and representation.get("required"):
         raise ValueError("Skip transform cannot supply a required value")
     allowed = {"VALUE_SOURCE", "VALUE_REQUIRED"}
+    if operator in {"properties", "observations"} and row.get("PROPERTY_NAME") not in (None, ""):
+        allowed.add("PROPERTY_NAME")
+        property_name = _metadata_column_text(row, "PROPERTY_NAME", True)
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", property_name):
+            raise ValueError("PROPERTY_NAME contains unsupported characters")
+        representation["property_name"] = property_name
     if transform == "security-objective":
         allowed.add("ALLOWED_VALUES")
         if row.get("ALLOWED_VALUES"):
@@ -267,7 +273,8 @@ def _compile_mapping(row, elements):
                 raise ValueError("DESCRIPTION_REQUIRED needs LOOKUP_KEY")
             representation["description_required"] = _registry_meta_bool(row, "DESCRIPTION_REQUIRED")
     columns = {"ALLOWED_VALUES", "VALUE_MAP", "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE",
-               "REFERENCE_TYPE", "LOOKUP_KEY", "DESCRIPTION_REQUIRED", "VALUE_SOURCE", "VALUE_REQUIRED"}
+               "REFERENCE_TYPE", "LOOKUP_KEY", "DESCRIPTION_REQUIRED", "VALUE_SOURCE", "VALUE_REQUIRED",
+               "PROPERTY_NAME"}
     if any(row.get(key) not in (None, "") for key in columns - allowed):
         raise ValueError("CSV parameter does not apply to the selected operation")
     return dict(row, TRANSFORM_PARAMS=params, REPRESENTATION=operator, REPRESENTATION_PARAMS=representation,

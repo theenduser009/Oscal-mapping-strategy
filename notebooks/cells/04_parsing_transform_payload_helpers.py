@@ -472,7 +472,8 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             if field_identity and len(values) != 1:
                 raise ValueError("One scalar value is required per field identity")
             for item in values:
-                prop = {"name": _metadata_text(_stable_property_name(field), "Property name"), "value": item}
+                property_name = _metadata_params(row).get("property_name") or _stable_property_name(field)
+                prop = {"name": _metadata_text(property_name, "Property name"), "value": item}
                 item_payload = {"props": [prop]} if operator == "observations" else prop
                 key = field if field_identity else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
                 _append_unique_collection_instance(instances, {"instance_key": key, "payload": item_payload,

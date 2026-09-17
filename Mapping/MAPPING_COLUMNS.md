@@ -28,6 +28,7 @@ compilation snapshot; it is not a second executable mapping input.
 | REFERENCE_TYPE / LOOKUP_KEY / DESCRIPTION_REQUIRED | Reference kind, approved lookup binding and required-description flag. |
 | VALUE_SOURCE | FIELD (default) reads the named source path; CONFIG reads the explicitly named Cell One setting. There is no fallback between them. |
 | VALUE_REQUIRED | true requires a nonempty value before and after conversion. Blank/false preserves optional behavior; 0 and false are values, not missing data. |
+| PROPERTY_NAME | Optional exact name for a properties/observations mapping. Blank preserves the existing source-field-slug behavior. |
 
 Blank optional operation columns mean no extra option. They are not JSON.
 Notes remain evidence, not executable code. Changing prose alone does not
