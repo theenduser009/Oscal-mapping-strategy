@@ -2,7 +2,7 @@ worksheet_row,source_field_name,workbook_model,live_populated_rows,live_shape,fi
 2,SOURCE_NAME,Catalog - Metadata,148,VARCHAR,IMPLEMENTED_COMMITTED,catalog.metadata.title,Already committed and read-back verified.
 3,SOURCE_VERSION,Catalog - Metadata,148,VARCHAR,IMPLEMENTED_COMMITTED,catalog.metadata.version,Already committed and read-back verified.
 4,SOURCE_DESCRIPTION,Catalog - Metadata,148,VARCHAR,PENDING_SHARED_TARGET_DECISION,catalog.metadata.remarks,Leave unresolved with INFORMATION because both workbook rows target the same singleton remarks member; do not overwrite or concatenate silently.
-5,SOURCE_TRACKING_ID,Catalog - Metadata,148,INTEGER,READY_FOR_RUNTIME_PROMOTION,catalog.metadata.props[],Promote as property name tracking-id; preserve scalar identifier and do not coerce it to OSCAL UUID.
+5,SOURCE_TRACKING_ID,Catalog - Metadata,148,INTEGER,RUNTIME_PROMOTED_PREVIEW_PENDING,catalog.metadata.props[],Promoted as property name tracking-id; preserve scalar identifier and do not coerce it to OSCAL UUID. Live preview/commit of this new row is still pending.
 6,SOURCE_LINKS,Catalog - Back Matter,62,"ARRAY, NULL_VALUE",DEFER_SOURCE_SHAPE,catalog.back-matter.resources[],Array is populated but item contract/href semantics were not proven by the current evidence; retain for Back Matter follow-up.
 7,INFORMATION,Catalog - Metadata,0,NULL_VALUE,PENDING_SHARED_TARGET_DECISION,catalog.metadata.remarks,Leave paired with SOURCE_DESCRIPTION pending the shared-target decision; current snapshot is unpopulated.
 8,DISCLAIMER,Catalog - Metadata,140,"VARCHAR, NULL_VALUE",IMPLEMENTED_COMMITTED,catalog.metadata.props[],Already committed as property disclaimer.
