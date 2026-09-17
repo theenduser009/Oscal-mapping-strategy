@@ -411,14 +411,14 @@ LEAN_MAPPER_RELEASE = "lean-csv-registry-v4"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
-    "skip", "canonical-text",
+    "skip", "canonical-text", "reference-ids",
 }
 METADATA_INSTANCE_RULES = {
-    "record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
+    "record": "SOURCE_RECORD_ID", "optional-record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
     "properties": "SOURCE_FIELD_NAME+VALUE", "values": "VALUE", "references": "CONTENT_ID",
     "roles": "SOURCE_FIELD_NAME", "parties": "ID", "assignments": "SOURCE_FIELD_NAME+ID",
 }
-METADATA_ITEM_PATHS = {operator: (None if operator in {"record", "observations"} else
+METADATA_ITEM_PATHS = {operator: (None if operator in {"record", "optional-record", "observations"} else
                                 "UserList[]" if operator in {"parties", "assignments"} else "$")
                        for operator in METADATA_INSTANCE_RULES}
 
@@ -569,10 +569,10 @@ def _registry_elements(rows, selected, profile, model):
                 raise ValueError("Registry identity conflicts with OPERATOR")
             parameters["registry_contract"].update(instance_key_rule=identity[0], item_path=identity[1])
         if parent and _registry_meta_bool(by_path[parent], "IS_COLLECTION"):
-            if _registry_operator(by_path[parent]) != "record":
+            if _registry_operator(by_path[parent]) not in {"record", "optional-record"}:
                 raise ValueError("Nested collection requires a record parent identity")
             parameters["parent_instance_rule"] = "source-record"
-        elif operator == "record":
+        elif operator in {"record", "optional-record"}:
             parameters["parent_instance_rule"] = "singleton"
         policy = _metadata_column_text(row, "UUID_POLICY", required=bool(row.get("OPERATOR"))) or "omit"
         if policy not in {"omit", "node", "instance"} or (policy == "instance") != (operator == "parties"):
@@ -610,11 +610,11 @@ def _compile_mapping(row, elements):
     target = row["FIELD_RELATIVE_PATH"]
     params, representation = {}, {}
     if target:
-        if operator not in {"object", "record", "values"} or not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", target):
+        if operator not in {"object", "record", "optional-record", "values"} or not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", target):
             raise ValueError("Member target conflicts with its element operator")
         representation["target"] = target
     source = row.get("VALUE_SOURCE") or "FIELD"
-    if source not in {"FIELD", "CONFIG"} or source == "CONFIG" and (operator not in {"object", "record"} or not target):
+    if source not in {"FIELD", "CONFIG"} or source == "CONFIG" and (operator not in {"object", "record", "optional-record"} or not target):
         raise ValueError("CONFIG values require an explicit object member target")
     if source == "CONFIG":
         representation["value_source"] = source
@@ -622,7 +622,7 @@ def _compile_mapping(row, elements):
     if null_policy not in {"omit", "preserve"}:
         raise ValueError("NULL_POLICY must be omit or preserve")
     if null_policy == "preserve":
-        if source != "FIELD" or transform not in {"direct", "text", "archer-select", "scalar-score"} or operator not in {"object", "record", "properties", "observations"}:
+        if source != "FIELD" or transform not in {"direct", "text", "archer-select", "scalar-score"} or operator not in {"object", "record", "optional-record", "properties", "observations"}:
             raise ValueError("Null preservation requires a scalar member or property mapping")
         representation["preserve_null"] = True
     if row.get("VALUE_REQUIRED") not in (None, ""):
@@ -934,7 +934,7 @@ def _oscal_property_values(value):
 def _extract_reference_ids(value):
     value = _to_python(value)
     if isinstance(value, dict):
-        for key in ("UserList", "ValuesListIds", "ValueListIds", "ContentIds", "Ids", "Value"):
+        for key in ("UserList", "ValuesListIds", "ValueListIds", "ContentId", "ContentIds", "Ids", "Value"):
             if key in value and _has_value(value[key]):
                 return _extract_reference_ids(value[key])
         for key, item in value.items():
@@ -1075,6 +1075,9 @@ def _metadata_transform(row, value, context):
         return transform_document_identifier(value)
     if transform == "archer-select":
         result = resolve_archer_select_value(value, context)
+        return result if _has_value(result) else SKIP_VALUE
+    if transform == "reference-ids":
+        result = _extract_reference_ids(value)
         return result if _has_value(result) else SKIP_VALUE
     if transform == "scalar-score":
         return _score_value(value, context)
@@ -1307,6 +1310,21 @@ def _metadata_reference_instances(source_obj, source_id, rows, parameters, conte
     return result
 
 
+def _metadata_descendant_has_value(path, source_obj, context):
+    prefix = path + "."
+    for mapped_path, rows in context["mappings_by_path"].items():
+        if mapped_path != path and not mapped_path.startswith(prefix):
+            continue
+        for row in rows:
+            params = _metadata_params(row)
+            raw = (context["config"].get(row["SOURCE_FIELD_NAME"], SKIP_VALUE)
+                   if params.get("value_source") == "CONFIG"
+                   else resolve_json_path(source_obj, row["SOURCE_FIELD_NAME"], default=SKIP_VALUE))
+            if raw is not SKIP_VALUE and _has_value(raw):
+                return True
+    return False
+
+
 def _metadata_instances(source_obj, source_id, registry_row, context):
     path = registry_row["element_path"]
     specification = context["compiled_plan"]["elements"].get(path)
@@ -1362,7 +1380,10 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
         if parameters.get("optional_assembly"):
             return []
         raise ValueError("Required payload member is missing")
-    if operator in {"object", "record"} and (payload or parameters.get("materialize_empty") or operator == "record"):
+    if operator == "optional-record":
+        if payload or _metadata_descendant_has_value(path, source_obj, context):
+            instances.append({"instance_key": source_id, "payload": payload, "parent_instance_key": parent})
+    elif operator in {"object", "record"} and (payload or parameters.get("materialize_empty") or operator == "record"):
         instances.append({"instance_key": source_id if operator == "record" else "singleton",
                           "payload": payload, "parent_instance_key": parent})
     return instances

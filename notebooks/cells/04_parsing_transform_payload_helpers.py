@@ -75,7 +75,7 @@ def _oscal_property_values(value):
 def _extract_reference_ids(value):
     value = _to_python(value)
     if isinstance(value, dict):
-        for key in ("UserList", "ValuesListIds", "ValueListIds", "ContentIds", "Ids", "Value"):
+        for key in ("UserList", "ValuesListIds", "ValueListIds", "ContentId", "ContentIds", "Ids", "Value"):
             if key in value and _has_value(value[key]):
                 return _extract_reference_ids(value[key])
         for key, item in value.items():
@@ -216,6 +216,9 @@ def _metadata_transform(row, value, context):
         return transform_document_identifier(value)
     if transform == "archer-select":
         result = resolve_archer_select_value(value, context)
+        return result if _has_value(result) else SKIP_VALUE
+    if transform == "reference-ids":
+        result = _extract_reference_ids(value)
         return result if _has_value(result) else SKIP_VALUE
     if transform == "scalar-score":
         return _score_value(value, context)
@@ -448,6 +451,21 @@ def _metadata_reference_instances(source_obj, source_id, rows, parameters, conte
     return result
 
 
+def _metadata_descendant_has_value(path, source_obj, context):
+    prefix = path + "."
+    for mapped_path, rows in context["mappings_by_path"].items():
+        if mapped_path != path and not mapped_path.startswith(prefix):
+            continue
+        for row in rows:
+            params = _metadata_params(row)
+            raw = (context["config"].get(row["SOURCE_FIELD_NAME"], SKIP_VALUE)
+                   if params.get("value_source") == "CONFIG"
+                   else resolve_json_path(source_obj, row["SOURCE_FIELD_NAME"], default=SKIP_VALUE))
+            if raw is not SKIP_VALUE and _has_value(raw):
+                return True
+    return False
+
+
 def _metadata_instances(source_obj, source_id, registry_row, context):
     path = registry_row["element_path"]
     specification = context["compiled_plan"]["elements"].get(path)
@@ -503,7 +521,10 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
         if parameters.get("optional_assembly"):
             return []
         raise ValueError("Required payload member is missing")
-    if operator in {"object", "record"} and (payload or parameters.get("materialize_empty") or operator == "record"):
+    if operator == "optional-record":
+        if payload or _metadata_descendant_has_value(path, source_obj, context):
+            instances.append({"instance_key": source_id, "payload": payload, "parent_instance_key": parent})
+    elif operator in {"object", "record"} and (payload or parameters.get("materialize_empty") or operator == "record"):
         instances.append({"instance_key": source_id if operator == "record" else "singleton",
                           "payload": payload, "parent_instance_key": parent})
     return instances
