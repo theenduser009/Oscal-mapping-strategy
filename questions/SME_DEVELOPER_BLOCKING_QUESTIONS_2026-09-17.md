@@ -1,6 +1,6 @@
 # SME Questions — Technical OSCAL Mapping Blockers Only
 
-Date: 2026-09-17
+Date: 2026-09-18
 Branch reviewed: `simplify-metadata-boundary`
 Baseline reviewed before this question pass: `001615b38642266d203e54bd7f0031cae7b77b80`
 
@@ -102,7 +102,17 @@ The mapping document maps `CONTROL_PROCEDURES` to `Catalog or Component Definiti
 
 **Technical blocker:** the executable mapping contract needs a deterministic model binding and target path; `Catalog or Component Definition` is not directly compilable as one runtime mapping. fileciteturn474file0L2-L6
 
-## 10. Incomplete/clipped mapping rows
+## 10. Component Definition required component members are missing
+
+The Source 2 mapping sheet routes policy-related rows under `component-definition.components[]`, but it does not provide an approved mapping for the required Component members `type`, `title`, and `description`.
+
+**Question:**
+
+> For the Source-level Component Definition mapping, please provide the exact Archer source field and target mapping for `component-definition.components[].type`, `component-definition.components[].title`, and `component-definition.components[].description`. The mapper will generate the component UUID. If existing fields such as `SOURCE_NAME` or `SOURCE_DESCRIPTION` are intended to populate these members, please state that explicitly, and provide the intended component `type`.
+
+**Technical blocker:** NIST OSCAL Component Definition v1.2.3 requires each Component to have `uuid`, `type`, `title`, and `description`. The current registry branch is ready, but the Python mapper cannot create a schema-complete Component from the current worksheet rows without inventing these required mappings.
+
+## 11. Incomplete/clipped mapping rows
 
 Several Source 2 transcriptions explicitly contain `[CLIPPED]` or `NEEDS SOURCE TEXT` for the OSCAL model/path or source field text.
 
