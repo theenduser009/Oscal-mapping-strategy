@@ -92,15 +92,17 @@ The Source 2 mapping document maps both fields to `catalog.metadata.remarks`.
 
 **Technical blocker:** `remarks` is a single `[0..1]` member and the current Python mapper intentionally rejects two different populated values assigned to one singleton target. NIST also advises using `prop` or `link` for additional data rather than using `remarks` as a general data bucket. fileciteturn474file0L2-L6 citeturn920150view6
 
-## 9. Source 2 `CONTROL_PROCEDURES` has two different model/path choices
+## 9. Source 2 `CONTROL_PROCEDURES` has two target choices and the Component Definition path is not executable as written
 
-The mapping document maps `CONTROL_PROCEDURES` to `Catalog or Component Definition` and supplies both a Catalog path and a Component Definition path.
+Owner-provided original-workbook evidence on 2026-09-18 confirms the row is `VARCHAR / Single`, model `Catalog or Component Definition`, with the two targets:
+- `catalog.control[@id].part[@name='statement']`
+- `component-definition.component.control-implementation.implemented-requirement.statement`
 
 **Question:**
 
-> For `CONTROL_PROCEDURES`, please specify the single intended OSCAL model/path, or explicitly confirm that the field must be emitted to both models and provide the rule for each output. The current alternatives are `catalog.control[@id].part[@name='statement']` and `component-definition.component.control-implementation.implemented-requirement.statement`.
+> Please provide the one executable OSCAL target for `CONTROL_PROCEDURES`. If Component Definition is intended, please provide the exact v1.2.3 JSON path and the required parent mappings needed to build it, including the control-implementation `source`, implemented-requirement `control-id`, and whether the procedure text belongs in the implemented-requirement `description` or a specific `statements[].description`.
 
-**Technical blocker:** the executable mapping contract needs a deterministic model binding and target path; `Catalog or Component Definition` is not directly compilable as one runtime mapping. fileciteturn474file0L2-L6
+**Technical blocker:** NIST OSCAL v1.2.3 uses `components[].control-implementations[].implemented-requirements[]`; a control-implementation set requires a `source`, and an implemented requirement requires `control-id` and `description`. A `statement` is a structured child object, not a scalar destination for a single VARCHAR. The workbook's Component Definition path therefore cannot be compiled literally without the missing parent/identity mappings. fileciteturn474file0L2-L6
 
 ## 10. Component Definition required component members are missing
 
