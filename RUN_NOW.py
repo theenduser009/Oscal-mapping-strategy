@@ -1,161 +1,54 @@
-# RUN NOW — Source One SSP System Characteristics deferred-field evidence check
+# RUN NOW — Source One SSP System Characteristics final compile check
 # Date: 2026-09-21
-# READ ONLY. Run after Cells 1-3 with SSP selected.
+# READ ONLY. Run after replacing ARCHER_OSCAL_MAPPINGS.csv and rerunning Cells 1-3 with SSP selected.
 #
-# Current remaining SSP System Characteristics deferred rows:
-#   AUTHORIZATION_DECISION
-#   FULL_CONTROL_ASSESSMENT_HELPER
-#
-# Purpose:
-# 1) inspect live payload shapes and Archer metadata;
-# 2) resolve distinct Archer select labels without printing record IDs;
-# 3) compare AUTHORIZATION_DECISION with approved OPERATIONAL_STATUS semantics;
-# 4) compare FULL_CONTROL_ASSESSMENT_HELPER with approved security-objective fields.
-#
-# No target DML.
+# Expected:
+# - AUTHORIZATION_DECISION compiles as archer-select -> system-characteristics.props[]
+# - FULL_CONTROL_ASSESSMENT_HELPER is EXCLUDED / not compiled
+# - selected SSP runtime rows increase from 53 to 54
 
-import json
-from collections import Counter
-
-FIELDS = (
-    "AUTHORIZATION_DECISION",
-    "FULL_CONTROL_ASSESSMENT_HELPER",
-    "OPERATIONAL_STATUS",
-    "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY",
-    "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE",
-    "CNSS_CONFIDENTIALITY_RATING",
+context = next(
+    (
+        c for c in MAPPING_CONTEXTS
+        if c["source_key"] == "source-one"
+        and c["config"]["OSCAL_MODEL"] == "SSP"
+    ),
+    None,
 )
+if context is None:
+    raise ValueError("Source One SSP context is not loaded; select SSP and rerun Cells 1-3.")
 
-def to_python(value):
-    if hasattr(value, "as_dict"):
-        return value.as_dict(recursive=True)
-    if hasattr(value, "as_list"):
-        return value.as_list()
-    return value
+rows = {row["SOURCE_FIELD_NAME"]: row for row in context["mapping_rows"]}
 
-def shape(value):
-    value = to_python(value)
-    if value is None:
-        return "NULL"
-    if isinstance(value, bool):
-        return "BOOL"
-    if isinstance(value, str):
-        return "STRING"
-    if isinstance(value, (int, float)):
-        return "NUMBER"
-    if isinstance(value, dict):
-        return "OBJECT"
-    if isinstance(value, list):
-        return "ARRAY"
-    return type(value).__name__.upper()
+print("SOURCE_ONE_SSP_SYSTEM_CHARACTERISTICS_FINAL_COMPILE_CHECK")
+print("ROUTE_STATUS:", context["routing_report"]["STATUS"])
+print("SELECTED_ROWS_TOTAL:", context["routing_report"]["SELECTED_ROWS"])
 
-def normalized_key(key):
-    return "".join(ch for ch in str(key).lower() if ch.isalnum())
+row = rows.get("AUTHORIZATION_DECISION")
+if row is None:
+    raise ValueError("AUTHORIZATION_DECISION is not compiled")
 
-def select_ids(value):
-    value = to_python(value)
-    if not isinstance(value, dict):
-        return []
-    for key, item in value.items():
-        if normalized_key(key) in {"valuelistid","valuelistids","valueslistid","valueslistids"}:
-            item = to_python(item)
-            if item is None:
-                return []
-            return item if isinstance(item, list) else [item]
-    return []
+actual = (
+    row["TRANSFORM_ID"],
+    row["CANONICAL_ELEMENT_PATH"],
+)
+expected = (
+    "archer-select",
+    "system-security-plan.system-characteristics.props[]",
+)
+if actual != expected:
+    raise ValueError("AUTHORIZATION_DECISION compiled differently: " + repr(actual))
 
-source_df = SOURCE_INPUTS["source-one"]["source_df"]
-lookup = SOURCE_INPUTS["source-one"]["lookups"].get("archer_values", {})
+print("AUTHORIZATION_DECISION |", actual[0], "|", actual[1])
 
-stats = {
-    field: {
-        "shapes": Counter(),
-        "object_keys": Counter(),
-        "select_cardinality": Counter(),
-        "labels": Counter(),
-        "unresolved_select_ids": 0,
-        "scalar_values": Counter(),
-    }
-    for field in FIELDS
-}
+if "FULL_CONTROL_ASSESSMENT_HELPER" in rows:
+    raise ValueError("FULL_CONTROL_ASSESSMENT_HELPER must be excluded from runtime compilation")
 
-for record in source_df.to_local_iterator():
-    payload = to_python(record["CURATED_JSON"])
-    if isinstance(payload, str):
-        payload = json.loads(payload)
-    if payload is None:
-        payload = {}
-    if not isinstance(payload, dict):
-        raise ValueError("Source One CURATED_JSON must resolve to an object")
-
-    for field in FIELDS:
-        if field not in payload:
-            continue
-        value = to_python(payload[field])
-        s = stats[field]
-        s["shapes"][shape(value)] += 1
-
-        if isinstance(value, dict):
-            s["object_keys"][",".join(sorted(str(k) for k in value.keys()))] += 1
-            ids = select_ids(value)
-            if ids:
-                s["select_cardinality"][len(ids)] += 1
-                for item in ids:
-                    key = str(item).strip()
-                    label = lookup.get(key)
-                    if label is None:
-                        s["unresolved_select_ids"] += 1
-                    else:
-                        s["labels"][str(label).strip()] += 1
-        elif isinstance(value, (str, int, float, bool)):
-            text = str(value).strip()
-            if text:
-                s["scalar_values"][text] += 1
-
-print("SOURCE_ONE_SSP_SYSTEM_CHARACTERISTICS_EVIDENCE")
-
-for field in FIELDS:
-    s = stats[field]
-    print()
-    print(field)
-    print("  SHAPES:", dict(sorted(s["shapes"].items())))
-    if s["object_keys"]:
-        print("  OBJECT_KEY_SIGNATURES:", dict(s["object_keys"]))
-    if s["select_cardinality"]:
-        print("  SELECT_CARDINALITY:", dict(sorted(s["select_cardinality"].items())))
-    if s["labels"]:
-        print("  RESOLVED_LABEL_COUNTS:")
-        for label, count in sorted(s["labels"].items()):
-            print("   ", label, "=", count)
-    if s["scalar_values"]:
-        print("  SCALAR_VALUE_COUNTS:")
-        for value, count in sorted(s["scalar_values"].items()):
-            print("   ", value, "=", count)
-    print("  UNRESOLVED_SELECT_IDS:", s["unresolved_select_ids"])
-
-names = ", ".join("'" + f.replace("'", "''") + "'" for f in FIELDS)
-meta = session.sql(f"""
-SELECT
-    UPPER(TRIM(SQL_FIELD_NAME)) AS SQL_FIELD_NAME,
-    FIELD_TYPE_ID,
-    LEVEL_ID,
-    MODULE_ID,
-    SELECT_ID
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD
-WHERE UPPER(TRIM(SQL_FIELD_NAME)) IN ({names})
-ORDER BY SQL_FIELD_NAME, LEVEL_ID, FIELD_ID
-""").collect()
-
-print()
-print("ARCHER_META_FIELD_SUMMARY")
-for row in meta:
-    print(
-        row["SQL_FIELD_NAME"],
-        "| FIELD_TYPE_ID=", row["FIELD_TYPE_ID"],
-        "| LEVEL_ID=", row["LEVEL_ID"],
-        "| MODULE_ID=", row["MODULE_ID"],
-        "| SELECT_ID=", row["SELECT_ID"],
+if context["routing_report"]["SELECTED_ROWS"] != 54:
+    raise ValueError(
+        "Expected 54 executable Source One SSP mappings after the System Characteristics decision; got "
+        + str(context["routing_report"]["SELECTED_ROWS"])
     )
 
-print()
-print("RESULT: SSP_SYSTEM_CHARACTERISTICS_EVIDENCE_READY_FOR_MAPPING_REVIEW")
+print("FULL_CONTROL_ASSESSMENT_HELPER | EXCLUDED | NOT_COMPILED")
+print("RESULT: SSP_SYSTEM_CHARACTERISTICS_READY_FOR_PREVIEW")
