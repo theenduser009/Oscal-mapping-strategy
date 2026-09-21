@@ -1,96 +1,169 @@
-# RUN NOW — Source One Assessment Results PREVIEW insert reconciliation
+# RUN NOW — Source One SSP Metadata deferred-field shape and Archer metadata check
 # Date: 2026-09-21
-# READ ONLY. Run AFTER Cell 7 PREVIEW in the same Snowflake notebook session.
+# READ ONLY. No DIM/FACT/registry/mapping DML.
+#
+# Context:
+# Source One Assessment Results has just been COMMITTED_AND_VERIFIED.
+# Next Source One backlog area = SSP Metadata (5 deferred rows).
 #
 # Purpose:
-# Reconcile the 16,485 proposed Source One DIM inserts / 16,485 FACT inserts to
-# the 11 newly executable September 21 mappings. No target DML.
+# Compare the four deferred responsible-party fields with the already-approved
+# responsible-party fields, and inspect the shape/metadata of
+# ARCHER_CONTENT_AUTHORIZATION_PACKAGE_CONFIRMED_IN_ARCHER.
+#
+# Privacy:
+# Prints only counts, field/type metadata, and structural key signatures.
+# It does not print user names, IDs, emails, record IDs, or source values.
 
 import json
 from collections import Counter
 
-ROUTE = ("source-one", "ASSESSMENT_RESULTS")
-
-EXPECTED_NAMES = (
-    "avg-security-compliance-reporting-score",
-    "avg-security-compliance-score",
-    "total-package-inherent-risk",
-    "risk-acceptance-rbds",
-    "workflow-current-node",
-    "workflow-process-version",
-    "workflow-job-status",
-    "workflow-status",
-    "due-date",
-    "workflow-current-node-hrtn",
-    "workflow-status-changed",
+DEFERRED_FIELDS = (
+    "ARCHER_CONTENT_AUTHORIZATION_PACKAGE_CONFIRMED_IN_ARCHER",
+    "SENIOR_INFORMATION_SYSTEMS_SECURITY_OFFICER_SISSO",
+    "INFORMATION_SYSTEM_SECURITY_ENGINEER_ISSE",
+    "INFORMATION_SYSTEM_ADMINISTRATOR_ISA",
+    "AUTHORIZING_OFFICIAL_DESIGNATED_REPRESENTATIVE_AODR",
 )
 
-if ROUTE not in MODEL_GRAPHS:
-    raise ValueError("Run Source One Assessment Results PREVIEW through Cell 7 first")
-
-group = next(
-    (
-        g for g in (PIPELINE_REPORT or {}).get("groups", [])
-        if g.get("source") == "source-one"
-        and g.get("model") == "ASSESSMENT_RESULTS"
-    ),
-    None,
+APPROVED_ROLE_COMPARATORS = (
+    "INFORMATION_OWNER_IO",
+    "INFORMATION_SYSTEM_OWNER_ISO",
+    "AUTHORIZING_OFFICIAL_AO",
+    "INFORMATION_SYSTEM_SECURITY_OFFICER_ISSO",
+    "PRIVACY_OFFICER_PO",
 )
-if group is None:
-    raise ValueError("Source One Assessment Results PREVIEW group not found")
 
-load = group["load"]
-if load.get("status") != "PREVIEW_PASSED_NO_TARGET_DML":
-    raise ValueError("Expected a successful no-DML PREVIEW before reconciliation")
-if load.get("target_dml_attempted") is not False or load.get("writes_executed") is not False:
-    raise ValueError("Reconciliation requires a no-write PREVIEW")
+ALL_FIELDS = DEFERRED_FIELDS + APPROVED_ROLE_COMPARATORS
 
-nodes = MODEL_GRAPHS[ROUTE]["nodes"]
 
-counts = Counter()
+def to_python(value):
+    if hasattr(value, "as_dict"):
+        return value.as_dict(recursive=True)
+    if hasattr(value, "as_list"):
+        return value.as_list()
+    return value
 
-for row in nodes.select("ELEMENT_PATH", "METADATA_JSON").to_local_iterator():
-    path = row["ELEMENT_PATH"]
-    if path not in {
-        "assessment-results.results[].observations[]",
-        "assessment-results.results[].props[]",
-    }:
-        continue
 
-    payload = row["METADATA_JSON"]
-    payload = json.loads(payload) if isinstance(payload, str) else payload
+def shape(value):
+    value = to_python(value)
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "BOOL"
+    if isinstance(value, str):
+        return "STRING"
+    if isinstance(value, (int, float)):
+        return "NUMBER"
+    if isinstance(value, dict):
+        return "OBJECT"
+    if isinstance(value, list):
+        return "ARRAY"
+    return type(value).__name__.upper()
+
+
+def signature(obj):
+    return ",".join(sorted(str(k) for k in obj.keys())) or "<EMPTY_OBJECT>"
+
+
+source_df = SOURCE_INPUTS["source-one"]["source_df"]
+
+stats = {
+    field: {
+        "top_shapes": Counter(),
+        "object_keys": Counter(),
+        "array_lengths": Counter(),
+        "array_element_shapes": Counter(),
+        "userlist_lengths": Counter(),
+        "user_object_keys": Counter(),
+    }
+    for field in ALL_FIELDS
+}
+
+for record in source_df.to_local_iterator():
+    payload = to_python(record["CURATED_JSON"])
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    if payload is None:
+        payload = {}
     if not isinstance(payload, dict):
-        continue
+        raise ValueError("Source One CURATED_JSON must resolve to an object")
 
-    if path.endswith("observations[]"):
-        props = payload.get("props") or []
-        if isinstance(props, list):
-            for prop in props:
-                if isinstance(prop, dict) and isinstance(prop.get("name"), str):
-                    counts[prop["name"]] += 1
-    else:
-        name = payload.get("name")
-        if isinstance(name, str):
-            counts[name] += 1
+    for field in ALL_FIELDS:
+        if field not in payload:
+            continue
+        value = to_python(payload[field])
+        s = stats[field]
+        s["top_shapes"][shape(value)] += 1
 
-expected_changes = load.get("expected_changes") or {}
-dim_inserts = int((expected_changes.get("D") or {}).get("INSERTS") or 0)
-fact_inserts = int((expected_changes.get("F") or {}).get("INSERTS") or 0)
+        if isinstance(value, dict):
+            s["object_keys"][signature(value)] += 1
+            user_list = None
+            for key, item in value.items():
+                if str(key).lower() == "userlist":
+                    user_list = to_python(item)
+                    break
+            if isinstance(user_list, list):
+                s["userlist_lengths"][len(user_list)] += 1
+                for user in user_list:
+                    user = to_python(user)
+                    if isinstance(user, dict):
+                        s["user_object_keys"][signature(user)] += 1
 
-print("SOURCE_ONE_AR_PREVIEW_INSERT_RECONCILIATION")
-new_total = 0
-for name in EXPECTED_NAMES:
-    value = counts.get(name, 0)
-    new_total += value
-    print(name, "=", value)
+        elif isinstance(value, list):
+            s["array_lengths"][len(value)] += 1
+            for member in value:
+                member = to_python(member)
+                s["array_element_shapes"][shape(member)] += 1
+                if isinstance(member, dict):
+                    s["object_keys"][signature(member)] += 1
 
-print("NEW_MAPPING_NODE_TOTAL =", new_total)
-print("EXPECTED_DIM_INSERTS =", dim_inserts)
-print("EXPECTED_FACT_INSERTS =", fact_inserts)
-print("DIM_DELTA_NOT_ATTRIBUTED =", dim_inserts - new_total)
-print("FACT_DELTA_NOT_ATTRIBUTED =", fact_inserts - new_total)
 
-if new_total == dim_inserts == fact_inserts:
-    print("RESULT: SOURCE_ONE_AR_INSERTS_FULLY_RECONCILED")
-else:
-    print("RESULT: REVIEW_UNATTRIBUTED_PREVIEW_DELTA_BEFORE_COMMIT")
+print("SOURCE_ONE_SSP_METADATA_SHAPE_CHECK")
+for field in ALL_FIELDS:
+    s = stats[field]
+    print()
+    print(field)
+    print("  TOP_SHAPES:", dict(sorted(s["top_shapes"].items())))
+    if s["array_lengths"]:
+        print("  ARRAY_LENGTHS:", dict(sorted(s["array_lengths"].items())))
+    if s["array_element_shapes"]:
+        print("  ARRAY_ELEMENT_SHAPES:", dict(sorted(s["array_element_shapes"].items())))
+    if s["object_keys"]:
+        print("  OBJECT_KEY_SIGNATURES:")
+        for key_sig, count in s["object_keys"].most_common():
+            print("   ", count, "|", key_sig)
+    if s["userlist_lengths"]:
+        print("  USERLIST_LENGTHS:", dict(sorted(s["userlist_lengths"].items())))
+    if s["user_object_keys"]:
+        print("  USER_OBJECT_KEY_SIGNATURES:")
+        for key_sig, count in s["user_object_keys"].most_common():
+            print("   ", count, "|", key_sig)
+
+names = ", ".join("'" + field.replace("'", "''") + "'" for field in ALL_FIELDS)
+
+rows = session.sql(f"""
+SELECT
+    UPPER(TRIM(SQL_FIELD_NAME)) AS SQL_FIELD_NAME,
+    FIELD_TYPE_ID,
+    LEVEL_ID,
+    MODULE_ID,
+    SELECT_ID
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD
+WHERE UPPER(TRIM(SQL_FIELD_NAME)) IN ({names})
+ORDER BY SQL_FIELD_NAME, LEVEL_ID, FIELD_ID
+""").collect()
+
+print()
+print("ARCHER_META_FIELD_SUMMARY")
+for row in rows:
+    print(
+        row["SQL_FIELD_NAME"],
+        "| FIELD_TYPE_ID=", row["FIELD_TYPE_ID"],
+        "| LEVEL_ID=", row["LEVEL_ID"],
+        "| MODULE_ID=", row["MODULE_ID"],
+        "| SELECT_ID=", row["SELECT_ID"],
+    )
+
+print()
+print("RESULT: SSP_METADATA_EVIDENCE_READY_FOR_MAPPING_REVIEW")
