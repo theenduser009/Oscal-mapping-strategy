@@ -1,11 +1,24 @@
-# RUN NOW — Source One SSP System Characteristics final compile check
+# RUN NOW — Diagnose why AUTHORIZATION_DECISION did not compile
 # Date: 2026-09-21
-# READ ONLY. Run after replacing ARCHER_OSCAL_MAPPINGS.csv and rerunning Cells 1-3 with SSP selected.
+# READ ONLY. Run in the CURRENT notebook session. Do not rerun Cells 1-3 first.
 #
-# Expected:
-# - AUTHORIZATION_DECISION compiles as archer-select -> system-characteristics.props[]
-# - FULL_CONTROL_ASSESSMENT_HELPER is EXCLUDED / not compiled
-# - selected SSP runtime rows increase from 53 to 54
+# This tells us whether the notebook loaded a stale CSV or whether Cell 3 routed
+# the current row out for a registry/metadata reason.
+
+FIELD = "AUTHORIZATION_DECISION"
+
+source_rows = MAPPING_INPUTS.get("source-one", [])
+matches = [row for row in source_rows if row.get("SOURCE_FIELD_NAME") == FIELD]
+
+print("AUTHORIZATION_DECISION_COMPILE_DIAGNOSTIC")
+print("RAW_MAPPING_ROWS_FOUND =", len(matches))
+
+for row in matches:
+    print("RAW_EXECUTION_STATUS =", row.get("EXECUTION_STATUS"))
+    print("RAW_TRANSFORM_ID =", row.get("TRANSFORM_ID"))
+    print("RAW_OSCAL_ELEMENT_PATH =", row.get("OSCAL_ELEMENT_PATH"))
+    print("RAW_RUNTIME_TARGET_PATH =", row.get("RUNTIME_TARGET_PATH"))
+    print("RAW_RULE_ID =", row.get("RULE_ID"))
 
 context = next(
     (
@@ -16,39 +29,35 @@ context = next(
     None,
 )
 if context is None:
-    raise ValueError("Source One SSP context is not loaded; select SSP and rerun Cells 1-3.")
+    raise ValueError("Source One SSP context is not loaded")
 
-rows = {row["SOURCE_FIELD_NAME"]: row for row in context["mapping_rows"]}
+compiled = [
+    row for row in context["mapping_rows"]
+    if row.get("SOURCE_FIELD_NAME") == FIELD
+]
 
-print("SOURCE_ONE_SSP_SYSTEM_CHARACTERISTICS_FINAL_COMPILE_CHECK")
-print("ROUTE_STATUS:", context["routing_report"]["STATUS"])
-print("SELECTED_ROWS_TOTAL:", context["routing_report"]["SELECTED_ROWS"])
+print("COMPILED_ROWS_FOUND =", len(compiled))
+print("ROUTE_STATUS =", context["routing_report"].get("STATUS"))
+print("SELECTED_ROWS_TOTAL =", context["routing_report"].get("SELECTED_ROWS"))
+print("DEFERRED_ROWS =", context["routing_report"].get("DEFERRED_ROWS"))
+print("EXCLUDED_ROWS =", context["routing_report"].get("EXCLUDED_ROWS"))
+print("BLOCKED_ROWS =", context["routing_report"].get("BLOCKED_ROWS"))
+print("REASON_COUNTS =", context["routing_report"].get("REASON_COUNTS"))
 
-row = rows.get("AUTHORIZATION_DECISION")
-if row is None:
-    raise ValueError("AUTHORIZATION_DECISION is not compiled")
+issues = [
+    issue for issue in context["routing_report"].get("ISSUES", [])
+    if issue.get("field") == FIELD
+]
+print("FIELD_ISSUES =", issues)
 
-actual = (
-    row["TRANSFORM_ID"],
-    row["CANONICAL_ELEMENT_PATH"],
-)
-expected = (
-    "archer-select",
-    "system-security-plan.system-characteristics.props[]",
-)
-if actual != expected:
-    raise ValueError("AUTHORIZATION_DECISION compiled differently: " + repr(actual))
-
-print("AUTHORIZATION_DECISION |", actual[0], "|", actual[1])
-
-if "FULL_CONTROL_ASSESSMENT_HELPER" in rows:
-    raise ValueError("FULL_CONTROL_ASSESSMENT_HELPER must be excluded from runtime compilation")
-
-if context["routing_report"]["SELECTED_ROWS"] != 54:
-    raise ValueError(
-        "Expected 54 executable Source One SSP mappings after the System Characteristics decision; got "
-        + str(context["routing_report"]["SELECTED_ROWS"])
-    )
-
-print("FULL_CONTROL_ASSESSMENT_HELPER | EXCLUDED | NOT_COMPILED")
-print("RESULT: SSP_SYSTEM_CHARACTERISTICS_READY_FOR_PREVIEW")
+if compiled:
+    row = compiled[0]
+    print("COMPILED_TRANSFORM_ID =", row.get("TRANSFORM_ID"))
+    print("COMPILED_CANONICAL_PATH =", row.get("CANONICAL_ELEMENT_PATH"))
+    print("RESULT: AUTHORIZATION_DECISION_IS_COMPILED")
+elif matches and matches[0].get("EXECUTION_STATUS") != "APPROVED":
+    print("RESULT: NOTEBOOK_HAS_STALE_MAPPING_CSV")
+elif issues:
+    print("RESULT: CURRENT_ROW_ROUTED_OUT_BY_CELL3")
+else:
+    print("RESULT: REVIEW_CURRENT_MAPPING_INPUT_STATE")
