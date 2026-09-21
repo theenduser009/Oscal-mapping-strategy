@@ -1,109 +1,161 @@
-# RUN NOW — Source One SSP responsible-party run-state + reconciliation
+# RUN NOW — Source One SSP System Characteristics deferred-field evidence check
 # Date: 2026-09-21
-# READ ONLY. Run in the same Snowflake notebook session.
+# READ ONLY. Run after Cells 1-3 with SSP selected.
 #
-# This replaces the earlier PREVIEW-only checker.
-# It first reports what Cell 7 ACTUALLY ran (PREVIEW vs COMMIT), then reconciles
-# the four newly approved responsible-party roles. It performs no target DML.
+# Current remaining SSP System Characteristics deferred rows:
+#   AUTHORIZATION_DECISION
+#   FULL_CONTROL_ASSESSMENT_HELPER
+#
+# Purpose:
+# 1) inspect live payload shapes and Archer metadata;
+# 2) resolve distinct Archer select labels without printing record IDs;
+# 3) compare AUTHORIZATION_DECISION with approved OPERATIONAL_STATUS semantics;
+# 4) compare FULL_CONTROL_ASSESSMENT_HELPER with approved security-objective fields.
+#
+# No target DML.
 
 import json
 from collections import Counter
 
-ROUTE = ("source-one", "SSP")
+FIELDS = (
+    "AUTHORIZATION_DECISION",
+    "FULL_CONTROL_ASSESSMENT_HELPER",
+    "OPERATIONAL_STATUS",
+    "RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY",
+    "CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE",
+    "CNSS_CONFIDENTIALITY_RATING",
+)
 
-EXPECTED = {
-    "senior-information-systems-security-officer": 2104,
-    "information-system-security-engineer": 257,
-    "information-system-administrator": 257,
-    "authorizing-official-designated-representative": 65,
+def to_python(value):
+    if hasattr(value, "as_dict"):
+        return value.as_dict(recursive=True)
+    if hasattr(value, "as_list"):
+        return value.as_list()
+    return value
+
+def shape(value):
+    value = to_python(value)
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "BOOL"
+    if isinstance(value, str):
+        return "STRING"
+    if isinstance(value, (int, float)):
+        return "NUMBER"
+    if isinstance(value, dict):
+        return "OBJECT"
+    if isinstance(value, list):
+        return "ARRAY"
+    return type(value).__name__.upper()
+
+def normalized_key(key):
+    return "".join(ch for ch in str(key).lower() if ch.isalnum())
+
+def select_ids(value):
+    value = to_python(value)
+    if not isinstance(value, dict):
+        return []
+    for key, item in value.items():
+        if normalized_key(key) in {"valuelistid","valuelistids","valueslistid","valueslistids"}:
+            item = to_python(item)
+            if item is None:
+                return []
+            return item if isinstance(item, list) else [item]
+    return []
+
+source_df = SOURCE_INPUTS["source-one"]["source_df"]
+lookup = SOURCE_INPUTS["source-one"]["lookups"].get("archer_values", {})
+
+stats = {
+    field: {
+        "shapes": Counter(),
+        "object_keys": Counter(),
+        "select_cardinality": Counter(),
+        "labels": Counter(),
+        "unresolved_select_ids": 0,
+        "scalar_values": Counter(),
+    }
+    for field in FIELDS
 }
 
-if not isinstance(PIPELINE_REPORT, dict):
-    raise ValueError("PIPELINE_REPORT is unavailable; do not rerun anything yet")
-if ROUTE not in MODEL_GRAPHS:
-    raise ValueError("Source One SSP graph is unavailable in the current session")
-
-group = next(
-    (
-        g for g in PIPELINE_REPORT.get("groups", [])
-        if g.get("source") == "source-one"
-        and g.get("model") == "SSP"
-    ),
-    None,
-)
-if group is None:
-    raise ValueError("Source One SSP group is not present in PIPELINE_REPORT")
-
-load = group["load"]
-
-print("SOURCE_ONE_SSP_RUN_STATE")
-print("PIPELINE_MODE =", PIPELINE_REPORT.get("mode"))
-print("PIPELINE_STATUS =", PIPELINE_REPORT.get("status"))
-print("LOAD_MODE =", load.get("mode"))
-print("LOAD_STATUS =", load.get("status"))
-print("WRITES_EXECUTED =", load.get("writes_executed"))
-print("PERSISTED =", load.get("persisted"))
-print("COMMITTED =", load.get("committed"))
-print("TARGET_DML_ATTEMPTED =", load.get("target_dml_attempted"))
-print("NODES =", load.get("nodes"))
-print("EDGES =", load.get("edges"))
-print("EXPECTED_CHANGES =", load.get("expected_changes"))
-print("VERIFICATION =", load.get("verification"))
-
-nodes = MODEL_GRAPHS[ROUTE]["nodes"]
-role_counts = Counter()
-assignment_counts = Counter()
-party_count = 0
-
-for row in nodes.select("ELEMENT_PATH", "METADATA_JSON").to_local_iterator():
-    path = row["ELEMENT_PATH"]
-    payload = row["METADATA_JSON"]
-    payload = json.loads(payload) if isinstance(payload, str) else payload
+for record in source_df.to_local_iterator():
+    payload = to_python(record["CURATED_JSON"])
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    if payload is None:
+        payload = {}
     if not isinstance(payload, dict):
-        continue
+        raise ValueError("Source One CURATED_JSON must resolve to an object")
 
-    if path == "system-security-plan.metadata.roles[]":
-        role_id = payload.get("id")
-        if isinstance(role_id, str):
-            role_counts[role_id] += 1
-    elif path == "system-security-plan.metadata.responsible-parties[]":
-        role_id = payload.get("role-id")
-        if isinstance(role_id, str):
-            assignment_counts[role_id] += 1
-    elif path == "system-security-plan.metadata.parties[]":
-        party_count += 1
+    for field in FIELDS:
+        if field not in payload:
+            continue
+        value = to_python(payload[field])
+        s = stats[field]
+        s["shapes"][shape(value)] += 1
+
+        if isinstance(value, dict):
+            s["object_keys"][",".join(sorted(str(k) for k in value.keys()))] += 1
+            ids = select_ids(value)
+            if ids:
+                s["select_cardinality"][len(ids)] += 1
+                for item in ids:
+                    key = str(item).strip()
+                    label = lookup.get(key)
+                    if label is None:
+                        s["unresolved_select_ids"] += 1
+                    else:
+                        s["labels"][str(label).strip()] += 1
+        elif isinstance(value, (str, int, float, bool)):
+            text = str(value).strip()
+            if text:
+                s["scalar_values"][text] += 1
+
+print("SOURCE_ONE_SSP_SYSTEM_CHARACTERISTICS_EVIDENCE")
+
+for field in FIELDS:
+    s = stats[field]
+    print()
+    print(field)
+    print("  SHAPES:", dict(sorted(s["shapes"].items())))
+    if s["object_keys"]:
+        print("  OBJECT_KEY_SIGNATURES:", dict(s["object_keys"]))
+    if s["select_cardinality"]:
+        print("  SELECT_CARDINALITY:", dict(sorted(s["select_cardinality"].items())))
+    if s["labels"]:
+        print("  RESOLVED_LABEL_COUNTS:")
+        for label, count in sorted(s["labels"].items()):
+            print("   ", label, "=", count)
+    if s["scalar_values"]:
+        print("  SCALAR_VALUE_COUNTS:")
+        for value, count in sorted(s["scalar_values"].items()):
+            print("   ", value, "=", count)
+    print("  UNRESOLVED_SELECT_IDS:", s["unresolved_select_ids"])
+
+names = ", ".join("'" + f.replace("'", "''") + "'" for f in FIELDS)
+meta = session.sql(f"""
+SELECT
+    UPPER(TRIM(SQL_FIELD_NAME)) AS SQL_FIELD_NAME,
+    FIELD_TYPE_ID,
+    LEVEL_ID,
+    MODULE_ID,
+    SELECT_ID
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD
+WHERE UPPER(TRIM(SQL_FIELD_NAME)) IN ({names})
+ORDER BY SQL_FIELD_NAME, LEVEL_ID, FIELD_ID
+""").collect()
 
 print()
-print("SOURCE_ONE_SSP_RESPONSIBLE_PARTY_RECONCILIATION")
-problems = []
-for role_id, expected in EXPECTED.items():
-    role_actual = role_counts.get(role_id, 0)
-    assignment_actual = assignment_counts.get(role_id, 0)
-    print(role_id, "| ROLES =", role_actual, "| ASSIGNMENTS =", assignment_actual, "| EXPECTED =", expected)
-    if role_actual != expected or assignment_actual != expected:
-        problems.append((role_id, role_actual, assignment_actual, expected))
+print("ARCHER_META_FIELD_SUMMARY")
+for row in meta:
+    print(
+        row["SQL_FIELD_NAME"],
+        "| FIELD_TYPE_ID=", row["FIELD_TYPE_ID"],
+        "| LEVEL_ID=", row["LEVEL_ID"],
+        "| MODULE_ID=", row["MODULE_ID"],
+        "| SELECT_ID=", row["SELECT_ID"],
+    )
 
-print("PARTY_NODES_TOTAL =", party_count)
-
-if problems:
-    print("RESULT: REVIEW_RESPONSIBLE_PARTY_COUNTS")
-    for problem in problems:
-        print("MISMATCH:", problem)
-elif (
-    PIPELINE_REPORT.get("mode") == "PREVIEW"
-    and load.get("status") == "PREVIEW_PASSED_NO_TARGET_DML"
-    and load.get("writes_executed") is False
-    and load.get("target_dml_attempted") is False
-):
-    print("RESULT: SSP_RESPONSIBLE_PARTY_PREVIEW_RECONCILED")
-elif (
-    PIPELINE_REPORT.get("mode") == "COMMIT"
-    and load.get("status") == "COMMITTED_AND_VERIFIED"
-    and load.get("writes_executed") is True
-    and load.get("persisted") is True
-    and load.get("committed") is True
-):
-    print("RESULT: SSP_RESPONSIBLE_PARTY_COMMIT_ALREADY_VERIFIED")
-    print("ACTION: DO_NOT_RERUN_COMMIT")
-else:
-    print("RESULT: REVIEW_SSP_RUN_STATE_BEFORE_ANY_RERUN")
+print()
+print("RESULT: SSP_SYSTEM_CHARACTERISTICS_EVIDENCE_READY_FOR_MAPPING_REVIEW")
