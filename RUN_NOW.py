@@ -1,81 +1,236 @@
-# RUN NOW — Source One SSP authorization-decision PREVIEW reconciliation
+# RUN NOW — Source One SSP Control Implementation bulk evidence inventory
 # Date: 2026-09-21
-# READ ONLY. Run AFTER Cell 7 PREVIEW in the same Snowflake notebook session.
+# READ ONLY. No DIM/FACT/registry/mapping DML.
 #
-# Purpose:
-# Verify the newly approved AUTHORIZATION_DECISION mapping materializes as exactly
-# 2,308 authorization-decision properties and reconcile that with the loader delta.
-# FULL_CONTROL_ASSESSMENT_HELPER is excluded and should emit nothing.
+# This is the first bulk pass over the CURRENT deferred SSP Control Implementation
+# backlog. It intentionally profiles all unique deferred source fields together so
+# we can map by reusable semantic/shape classes instead of one field at a time.
 #
-# No target DML.
+# Historical Level-355 evidence remains relevant for cross-reference targets, but
+# this check uses the current Source One RAW/CURATED_JSON plus live Archer metadata.
+#
+# Privacy:
+# - no ContentIds, user IDs, attachment IDs, record IDs, or payload values printed
+# - select labels are printed only as aggregate label counts
+# - cross-reference LevelIds are printed only as aggregate counts
 
 import json
+from collections import Counter
 
-ROUTE = ("source-one", "SSP")
-EXPECTED_AUTHORIZATION_DECISION_COUNT = 2308
-
-if not isinstance(PIPELINE_REPORT, dict):
-    raise ValueError("PIPELINE_REPORT is unavailable")
-if ROUTE not in MODEL_GRAPHS:
-    raise ValueError("Run Source One SSP PREVIEW through Cell 7 first")
-
-group = next(
-    (
-        g for g in PIPELINE_REPORT.get("groups", [])
-        if g.get("source") == "source-one"
-        and g.get("model") == "SSP"
-    ),
-    None,
+FIELDS = (
+    "COUNT_OF_CONTROLS",
+    "ALLOCATE_BASELINE_CONTROLS",
+    "CONTROL_SET_VERSION_NUMBER",
+    "COUNT_OF_CONTROLS_WITHOUT_IMPLEMENTATION_DETAILS",
+    "COUNT_OF_CONTROLS_WITH_OPEN_POAMS_ANDOR_RBDS",
+    "NUMBER_OF_CONTROLS_BEING_INHERITED_BY_OTHERS",
+    "ARCHIVE_CONTROLS",
+    "CONTROL_OWNER_CO",
+    "SECURITY_CONTROL_ASSESSOR_SCA",
+    "ADD_ADDITIONAL_CONTROLS",
+    "ALLOCATED_CONTROLS",
+    "ARCHIVED_CONTROLS",
+    "INHERITED_CONTROL_SELECTION",
+    "INHERITABLE_CONTROLS",
+    "LINK_CNSS_CONTROLS_BY_CONFIDENTIALITY_RATING",
+    "LINK_CNSS_CONTROLS_BY_INTEGRITY_RATING",
+    "LINK_CNSS_CONTROLS_BY_AVAILABILITY_RATING",
+    "HELPER_ALLOCATED_CONTROLS",
+    "PRECONTROL_ALLOCATION_PROGRESS_VIEW",
+    "COUNT_OF_FULLY_IMPLEMENTED_CONTROLS",
+    "CONTROL_SET_VERSION_NUMBER_HRC",
+    "GS_LAB_CONTROL_ENTITY",
+    "CONTROL_STANDARDS",
+    "MASTER_CONTROLS",
+    "ALLOCATED_CONTROLS_PARTIAL_CONTROL_PROVIDERS",
+    "ALTERNATE_SECURITY_CONTROL_ASSESSOR_SCA_TEXT",
+    "EXPORT_CONTROL_ASSESSOR_ECA_TEXT",
+    "SECURITY_CONTROL_ASSESSOR_SCA_TEXT",
+    "EXPORT_CONTROLLED_DATA_ITARAR_IF_APPLICABLE",
+    "COUNT_OF_CONTROLS_WITH_OPEN_POAMS",
+    "COUNT_OF_CONTROLS_MISSING_POAMRBD",
+    "ALTERNATE_SECURITY_CONTROL_ASSESSOR_SCA",
+    "ALLOCATED_CONTROLS_AUTHORIZATION_PACKAGE",
+    "CONTROL_SET_TO_ASSESS",
+    "CHANGE_CONTROL",
+    "HELPER_OTS_CONTROLS",
+    "COUNT_OF_INHERITED_CONTROLS",
+    "COUNT_OF_ACTUAL_CONTROLS_IMPLEMENTED",
+    "DATE_CONTINUE_TO_CONTROL_IMPLEMENTATION",
+    "CURRENT_CONTROL_RISK_THRESHOLD",
+    "OF_SATISFIED_CONTROLS",
 )
-if group is None:
-    raise ValueError("Source One SSP PREVIEW group not found")
 
-load = group["load"]
+def to_python(value):
+    if hasattr(value, "as_dict"):
+        return value.as_dict(recursive=True)
+    if hasattr(value, "as_list"):
+        return value.as_list()
+    return value
 
-print("SOURCE_ONE_SSP_AUTHORIZATION_DECISION_PREVIEW")
-print("PIPELINE_MODE =", PIPELINE_REPORT.get("mode"))
-print("PIPELINE_STATUS =", PIPELINE_REPORT.get("status"))
-print("LOAD_STATUS =", load.get("status"))
-print("WRITES_EXECUTED =", load.get("writes_executed"))
-print("TARGET_DML_ATTEMPTED =", load.get("target_dml_attempted"))
-print("NODES =", load.get("nodes"))
-print("EDGES =", load.get("edges"))
-print("EXPECTED_CHANGES =", load.get("expected_changes"))
+def shape(value):
+    value = to_python(value)
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "BOOL"
+    if isinstance(value, str):
+        return "STRING"
+    if isinstance(value, (int, float)):
+        return "NUMBER"
+    if isinstance(value, dict):
+        return "OBJECT"
+    if isinstance(value, list):
+        return "ARRAY"
+    return type(value).__name__.upper()
 
-count = 0
-helper_nodes = 0
+def key_sig(obj):
+    return ",".join(sorted(str(k) for k in obj.keys())) or "<EMPTY_OBJECT>"
 
-for row in MODEL_GRAPHS[ROUTE]["nodes"].select("ELEMENT_PATH", "METADATA_JSON").to_local_iterator():
-    path = row["ELEMENT_PATH"]
-    payload = row["METADATA_JSON"]
-    payload = json.loads(payload) if isinstance(payload, str) else payload
+def norm(key):
+    return "".join(ch for ch in str(key).lower() if ch.isalnum())
+
+def get_key(obj, wanted):
+    wanted = norm(wanted)
+    for key, value in obj.items():
+        if norm(key) == wanted:
+            return to_python(value)
+    return None
+
+def select_ids(obj):
+    if not isinstance(obj, dict):
+        return []
+    for key, value in obj.items():
+        if norm(key) in {"valuelistid","valuelistids","valueslistid","valueslistids"}:
+            value = to_python(value)
+            if value is None:
+                return []
+            return value if isinstance(value, list) else [value]
+    return []
+
+source_df = SOURCE_INPUTS["source-one"]["source_df"]
+lookup = SOURCE_INPUTS["source-one"]["lookups"].get("archer_values", {})
+
+stats = {
+    field: {
+        "present": 0,
+        "populated": 0,
+        "shapes": Counter(),
+        "object_keys": Counter(),
+        "array_lengths": Counter(),
+        "array_element_shapes": Counter(),
+        "reference_level_ids": Counter(),
+        "select_cardinality": Counter(),
+        "select_labels": Counter(),
+        "unresolved_select_ids": 0,
+    }
+    for field in FIELDS
+}
+
+for record in source_df.to_local_iterator():
+    payload = to_python(record["CURATED_JSON"])
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    if payload is None:
+        payload = {}
     if not isinstance(payload, dict):
-        continue
+        raise ValueError("Source One CURATED_JSON must resolve to an object")
 
-    if path == "system-security-plan.system-characteristics.props[]":
-        if payload.get("name") == "authorization-decision":
-            count += 1
-        if payload.get("name") == "full-control-assessment-helper":
-            helper_nodes += 1
+    for field in FIELDS:
+        if field not in payload:
+            continue
+        s = stats[field]
+        s["present"] += 1
+        value = to_python(payload[field])
+        s["shapes"][shape(value)] += 1
+        if value not in (None, "", [], {}):
+            s["populated"] += 1
 
-print("AUTHORIZATION_DECISION_PROPERTY_COUNT =", count)
-print("EXPECTED_AUTHORIZATION_DECISION_COUNT =", EXPECTED_AUTHORIZATION_DECISION_COUNT)
-print("FULL_CONTROL_ASSESSMENT_HELPER_PROPERTY_COUNT =", helper_nodes)
+        members = value if isinstance(value, list) else [value]
+        if isinstance(value, list):
+            s["array_lengths"][len(value)] += 1
 
-expected_changes = load.get("expected_changes") or {}
-dim = expected_changes.get("D") or {}
-fact = expected_changes.get("F") or {}
+        for member in members:
+            member = to_python(member)
+            if isinstance(value, list):
+                s["array_element_shapes"][shape(member)] += 1
 
-if (
-    PIPELINE_REPORT.get("mode") == "PREVIEW"
-    and load.get("status") == "PREVIEW_PASSED_NO_TARGET_DML"
-    and load.get("writes_executed") is False
-    and load.get("target_dml_attempted") is False
-    and count == EXPECTED_AUTHORIZATION_DECISION_COUNT
-    and helper_nodes == 0
-):
-    print("DIM_CHANGES =", dim)
-    print("FACT_CHANGES =", fact)
-    print("RESULT: SSP_SYSTEM_CHARACTERISTICS_PREVIEW_RECONCILED")
-else:
-    print("RESULT: REVIEW_SSP_SYSTEM_CHARACTERISTICS_BEFORE_COMMIT")
+            if isinstance(member, dict):
+                s["object_keys"][key_sig(member)] += 1
+
+                level_id = get_key(member, "LevelId")
+                if level_id is not None:
+                    s["reference_level_ids"][str(level_id)] += 1
+
+                ids = select_ids(member)
+                if ids:
+                    s["select_cardinality"][len(ids)] += 1
+                    for item in ids:
+                        key = str(item).strip()
+                        label = lookup.get(key)
+                        if label is None:
+                            s["unresolved_select_ids"] += 1
+                        else:
+                            s["select_labels"][str(label).strip()] += 1
+
+print("SOURCE_ONE_SSP_CONTROL_IMPLEMENTATION_BULK_EVIDENCE")
+print("DEFERRED_ROW_COUNT =", 42)
+print("UNIQUE_FIELD_COUNT =", 41)
+print("DUPLICATE_FIELD_NAMES =", ["HELPER_ALLOCATED_CONTROLS"])
+
+# Live Archer metadata for the exact deferred names.
+names = ", ".join("'" + field.replace("'", "''") + "'" for field in FIELDS)
+meta_rows = session.sql(f"""
+SELECT
+    UPPER(TRIM(SQL_FIELD_NAME)) AS SQL_FIELD_NAME,
+    FIELD_TYPE_ID,
+    LEVEL_ID,
+    MODULE_ID,
+    SELECT_ID
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD
+WHERE UPPER(TRIM(SQL_FIELD_NAME)) IN ({names})
+ORDER BY SQL_FIELD_NAME, LEVEL_ID, FIELD_ID
+""").collect()
+
+meta_by_field = {}
+for row in meta_rows:
+    meta_by_field.setdefault(row["SQL_FIELD_NAME"], []).append({
+        "FIELD_TYPE_ID": row["FIELD_TYPE_ID"],
+        "LEVEL_ID": row["LEVEL_ID"],
+        "MODULE_ID": row["MODULE_ID"],
+        "SELECT_ID": row["SELECT_ID"],
+    })
+
+for field in FIELDS:
+    s = stats[field]
+    print()
+    print(field)
+    print("  PRESENT =", s["present"], "| POPULATED =", s["populated"])
+    print("  SHAPES =", dict(sorted(s["shapes"].items())))
+    if s["array_lengths"]:
+        # Keep output compact: print min/max plus exact distribution only when small.
+        lengths = s["array_lengths"]
+        print("  ARRAY_LENGTH_MIN_MAX =", min(lengths), max(lengths))
+        if len(lengths) <= 10:
+            print("  ARRAY_LENGTHS =", dict(sorted(lengths.items())))
+    if s["array_element_shapes"]:
+        print("  ARRAY_ELEMENT_SHAPES =", dict(sorted(s["array_element_shapes"].items())))
+    if s["object_keys"]:
+        print("  OBJECT_KEY_SIGNATURES =")
+        for signature, count in s["object_keys"].most_common(3):
+            print("   ", count, "|", signature)
+    if s["reference_level_ids"]:
+        print("  REFERENCE_LEVEL_IDS =", dict(sorted(s["reference_level_ids"].items())))
+    if s["select_cardinality"]:
+        print("  SELECT_CARDINALITY =", dict(sorted(s["select_cardinality"].items())))
+    if s["select_labels"]:
+        if len(s["select_labels"]) <= 12:
+            print("  SELECT_LABEL_COUNTS =", dict(sorted(s["select_labels"].items())))
+        else:
+            print("  DISTINCT_SELECT_LABELS =", len(s["select_labels"]))
+    if s["unresolved_select_ids"]:
+        print("  UNRESOLVED_SELECT_IDS =", s["unresolved_select_ids"])
+    print("  ARCHER_META =", meta_by_field.get(field, []))
+
+print()
+print("RESULT: SSP_CONTROL_IMPLEMENTATION_BULK_EVIDENCE_READY_FOR_CLASSIFICATION")
