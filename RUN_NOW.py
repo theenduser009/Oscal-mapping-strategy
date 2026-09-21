@@ -1,63 +1,81 @@
-# RUN NOW — Diagnose why AUTHORIZATION_DECISION did not compile
+# RUN NOW — Source One SSP authorization-decision PREVIEW reconciliation
 # Date: 2026-09-21
-# READ ONLY. Run in the CURRENT notebook session. Do not rerun Cells 1-3 first.
+# READ ONLY. Run AFTER Cell 7 PREVIEW in the same Snowflake notebook session.
 #
-# This tells us whether the notebook loaded a stale CSV or whether Cell 3 routed
-# the current row out for a registry/metadata reason.
+# Purpose:
+# Verify the newly approved AUTHORIZATION_DECISION mapping materializes as exactly
+# 2,308 authorization-decision properties and reconcile that with the loader delta.
+# FULL_CONTROL_ASSESSMENT_HELPER is excluded and should emit nothing.
+#
+# No target DML.
 
-FIELD = "AUTHORIZATION_DECISION"
+import json
 
-source_rows = MAPPING_INPUTS.get("source-one", [])
-matches = [row for row in source_rows if row.get("SOURCE_FIELD_NAME") == FIELD]
+ROUTE = ("source-one", "SSP")
+EXPECTED_AUTHORIZATION_DECISION_COUNT = 2308
 
-print("AUTHORIZATION_DECISION_COMPILE_DIAGNOSTIC")
-print("RAW_MAPPING_ROWS_FOUND =", len(matches))
+if not isinstance(PIPELINE_REPORT, dict):
+    raise ValueError("PIPELINE_REPORT is unavailable")
+if ROUTE not in MODEL_GRAPHS:
+    raise ValueError("Run Source One SSP PREVIEW through Cell 7 first")
 
-for row in matches:
-    print("RAW_EXECUTION_STATUS =", row.get("EXECUTION_STATUS"))
-    print("RAW_TRANSFORM_ID =", row.get("TRANSFORM_ID"))
-    print("RAW_OSCAL_ELEMENT_PATH =", row.get("OSCAL_ELEMENT_PATH"))
-    print("RAW_RUNTIME_TARGET_PATH =", row.get("RUNTIME_TARGET_PATH"))
-    print("RAW_RULE_ID =", row.get("RULE_ID"))
-
-context = next(
+group = next(
     (
-        c for c in MAPPING_CONTEXTS
-        if c["source_key"] == "source-one"
-        and c["config"]["OSCAL_MODEL"] == "SSP"
+        g for g in PIPELINE_REPORT.get("groups", [])
+        if g.get("source") == "source-one"
+        and g.get("model") == "SSP"
     ),
     None,
 )
-if context is None:
-    raise ValueError("Source One SSP context is not loaded")
+if group is None:
+    raise ValueError("Source One SSP PREVIEW group not found")
 
-compiled = [
-    row for row in context["mapping_rows"]
-    if row.get("SOURCE_FIELD_NAME") == FIELD
-]
+load = group["load"]
 
-print("COMPILED_ROWS_FOUND =", len(compiled))
-print("ROUTE_STATUS =", context["routing_report"].get("STATUS"))
-print("SELECTED_ROWS_TOTAL =", context["routing_report"].get("SELECTED_ROWS"))
-print("DEFERRED_ROWS =", context["routing_report"].get("DEFERRED_ROWS"))
-print("EXCLUDED_ROWS =", context["routing_report"].get("EXCLUDED_ROWS"))
-print("BLOCKED_ROWS =", context["routing_report"].get("BLOCKED_ROWS"))
-print("REASON_COUNTS =", context["routing_report"].get("REASON_COUNTS"))
+print("SOURCE_ONE_SSP_AUTHORIZATION_DECISION_PREVIEW")
+print("PIPELINE_MODE =", PIPELINE_REPORT.get("mode"))
+print("PIPELINE_STATUS =", PIPELINE_REPORT.get("status"))
+print("LOAD_STATUS =", load.get("status"))
+print("WRITES_EXECUTED =", load.get("writes_executed"))
+print("TARGET_DML_ATTEMPTED =", load.get("target_dml_attempted"))
+print("NODES =", load.get("nodes"))
+print("EDGES =", load.get("edges"))
+print("EXPECTED_CHANGES =", load.get("expected_changes"))
 
-issues = [
-    issue for issue in context["routing_report"].get("ISSUES", [])
-    if issue.get("field") == FIELD
-]
-print("FIELD_ISSUES =", issues)
+count = 0
+helper_nodes = 0
 
-if compiled:
-    row = compiled[0]
-    print("COMPILED_TRANSFORM_ID =", row.get("TRANSFORM_ID"))
-    print("COMPILED_CANONICAL_PATH =", row.get("CANONICAL_ELEMENT_PATH"))
-    print("RESULT: AUTHORIZATION_DECISION_IS_COMPILED")
-elif matches and matches[0].get("EXECUTION_STATUS") != "APPROVED":
-    print("RESULT: NOTEBOOK_HAS_STALE_MAPPING_CSV")
-elif issues:
-    print("RESULT: CURRENT_ROW_ROUTED_OUT_BY_CELL3")
+for row in MODEL_GRAPHS[ROUTE]["nodes"].select("ELEMENT_PATH", "METADATA_JSON").to_local_iterator():
+    path = row["ELEMENT_PATH"]
+    payload = row["METADATA_JSON"]
+    payload = json.loads(payload) if isinstance(payload, str) else payload
+    if not isinstance(payload, dict):
+        continue
+
+    if path == "system-security-plan.system-characteristics.props[]":
+        if payload.get("name") == "authorization-decision":
+            count += 1
+        if payload.get("name") == "full-control-assessment-helper":
+            helper_nodes += 1
+
+print("AUTHORIZATION_DECISION_PROPERTY_COUNT =", count)
+print("EXPECTED_AUTHORIZATION_DECISION_COUNT =", EXPECTED_AUTHORIZATION_DECISION_COUNT)
+print("FULL_CONTROL_ASSESSMENT_HELPER_PROPERTY_COUNT =", helper_nodes)
+
+expected_changes = load.get("expected_changes") or {}
+dim = expected_changes.get("D") or {}
+fact = expected_changes.get("F") or {}
+
+if (
+    PIPELINE_REPORT.get("mode") == "PREVIEW"
+    and load.get("status") == "PREVIEW_PASSED_NO_TARGET_DML"
+    and load.get("writes_executed") is False
+    and load.get("target_dml_attempted") is False
+    and count == EXPECTED_AUTHORIZATION_DECISION_COUNT
+    and helper_nodes == 0
+):
+    print("DIM_CHANGES =", dim)
+    print("FACT_CHANGES =", fact)
+    print("RESULT: SSP_SYSTEM_CHARACTERISTICS_PREVIEW_RECONCILED")
 else:
-    print("RESULT: REVIEW_CURRENT_MAPPING_INPUT_STATE")
+    print("RESULT: REVIEW_SSP_SYSTEM_CHARACTERISTICS_BEFORE_COMMIT")
