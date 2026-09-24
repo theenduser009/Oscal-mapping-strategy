@@ -1,180 +1,73 @@
-# RUN NOW — Empirically identify the Level-355 reverse link to Authorization Package
+# RUN NOW — Diagnose Level-355 SSP graph failure after joined-record changes
 # Date: 2026-09-24
 # READ ONLY. No source, registry, mapping, DIM, or FACT DML.
 #
-# Relationship metadata is not exposed in the current Snowflake schema.
-# Therefore test only the Level-355 fields whose metadata names explicitly
-# indicate Authorization Package linkage, plus CONTROL_TO_INHERIT as a comparison.
+# Current Cell 7 report showed:
+#   mode = COMMIT
+#   status = FAILED_BEFORE_COMMIT
+#   writes_executed = false
+#   commit_attempted = false
+#   failed_route = source-one / SSP
 #
-# Goal:
-# Find which Level-355 field contains {ContentId, LevelId} references whose
-# ContentId values actually match current Authorization Package CONTENT_IDs.
-#
-# Aggregate counts only; no IDs or business values are printed.
+# This helper calls graph construction only so the hidden underlying ValueError
+# is printed directly. It does NOT call validate_and_load_oscal and cannot write
+# target DIM/FACT rows.
 
-AUTH_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
-CONTROL_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW"
+import copy
 
-CANDIDATE_FIELDS = (
-    "AUTHORIZATION_PACKAGE",
-    "AUTHORIZATION_PACKAGE_SELECT_CONTROL",
-    "AUTHORIZATION_PACKAGE_ARCHIVED_CONTROLS",
-    "AUTHORIZATION_PACKAGES_ALLOWED_TO_INHERIT",
-    "CONTROL_TO_INHERIT",
-)
+ROUTE = ("source-one", "SSP")
 
-print("LEVEL355_AUTHORIZATION_PACKAGE_REVERSE_LINK_PROFILE")
+print("LEVEL355_SSP_GRAPH_FAILURE_DIAGNOSTIC")
+print("PIPELINE_MODE =", (PIPELINE_REPORT or {}).get("mode") if isinstance(PIPELINE_REPORT, dict) else None)
+print("PIPELINE_STATUS =", (PIPELINE_REPORT or {}).get("status") if isinstance(PIPELINE_REPORT, dict) else None)
+print("WRITES_EXECUTED =", (PIPELINE_REPORT or {}).get("writes_executed") if isinstance(PIPELINE_REPORT, dict) else None)
+print("COMMIT_ATTEMPTED =", (PIPELINE_REPORT or {}).get("commit_attempted") if isinstance(PIPELINE_REPORT, dict) else None)
 
-# Current Authorization Package identities.
-auth_count = session.sql(f"""
-SELECT COUNT(DISTINCT TRIM(CONTENT_ID::STRING)) AS N
-FROM {AUTH_TABLE}
-WHERE CONTENT_ID IS NOT NULL
-""").collect()[0]["N"]
+contexts = [
+    c for c in MAPPING_CONTEXTS
+    if (c["source_key"], c["config"]["OSCAL_MODEL"]) == ROUTE
+]
 
-print("AUTHORIZATION_PACKAGE_DISTINCT_IDS =", int(auth_count or 0))
+print("MATCHING_CONTEXTS =", len(contexts))
+if len(contexts) != 1:
+    raise ValueError("Expected exactly one source-one / SSP context")
 
-# Latest row per Level-355 top-level control record.
-for field in CANDIDATE_FIELDS:
-    print()
-    print("FIELD =", field)
+context = copy.deepcopy(contexts[0])
+source = SOURCE_INPUTS[ROUTE[0]]
+context["lookups"] = source.get("lookups", {})
 
-    shapes = session.sql(f"""
-    WITH latest AS (
-        SELECT *
-        FROM {CONTROL_TABLE}
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY TRIM(CONTENT_ID::STRING)
-            ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
-        ) = 1
-    )
-    SELECT
-        TYPEOF(GET(CURATED_JSON, '{field}')) AS VALUE_TYPE,
-        COUNT(*) AS ROW_COUNT
-    FROM latest
-    GROUP BY TYPEOF(GET(CURATED_JSON, '{field}'))
-    ORDER BY ROW_COUNT DESC, VALUE_TYPE
-    """).collect()
+print("ROUTING_STATUS =", context["routing_report"].get("STATUS"))
+print("SELECTED_MAPPING_ROWS =", len(context.get("mapping_rows") or []))
+print("SOURCE_SELECTED_ROWS =", source.get("selection", {}).get("SELECTED_ROWS"))
+print("JOINED_LOOKUP_KEYS =", sorted((source.get("lookups", {}).get("joined_sources", {}) or {}).keys()))
 
-    print("SHAPES =", {
-        ("SQL_NULL" if r["VALUE_TYPE"] is None else str(r["VALUE_TYPE"])): int(r["ROW_COUNT"])
-        for r in shapes
-    })
-
-    result = session.sql(f"""
-    WITH auth_ids AS (
-        SELECT DISTINCT TRIM(CONTENT_ID::STRING) AS AUTH_CONTENT_ID
-        FROM {AUTH_TABLE}
-        WHERE CONTENT_ID IS NOT NULL
-    ),
-    latest AS (
-        SELECT *
-        FROM {CONTROL_TABLE}
-        QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY TRIM(CONTENT_ID::STRING)
-            ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
-        ) = 1
-    ),
-    array_refs AS (
-        SELECT DISTINCT
-            TRIM(c.CONTENT_ID::STRING) AS CONTROL_ROW_ID,
-            TRIM(f.VALUE:ContentId::STRING) AS REF_ID,
-            TRIM(f.VALUE:LevelId::STRING) AS REF_LEVEL_ID
-        FROM latest c,
-             LATERAL FLATTEN(INPUT => GET(c.CURATED_JSON, '{field}')) f
-        WHERE f.VALUE:ContentId IS NOT NULL
-    ),
-    object_refs AS (
-        SELECT DISTINCT
-            TRIM(c.CONTENT_ID::STRING) AS CONTROL_ROW_ID,
-            TRIM(GET(GET(c.CURATED_JSON, '{field}'), 'ContentId')::STRING) AS REF_ID,
-            TRIM(GET(GET(c.CURATED_JSON, '{field}'), 'LevelId')::STRING) AS REF_LEVEL_ID
-        FROM latest c
-        WHERE TYPEOF(GET(c.CURATED_JSON, '{field}')) = 'OBJECT'
-          AND GET(GET(c.CURATED_JSON, '{field}'), 'ContentId') IS NOT NULL
-    ),
-    refs AS (
-        SELECT * FROM array_refs
-        UNION
-        SELECT * FROM object_refs
-    )
-    SELECT
-        COUNT(DISTINCT CONTROL_ROW_ID) AS CONTROLS_WITH_REFERENCE,
-        COUNT(DISTINCT REF_ID) AS DISTINCT_REFERENCED_IDS,
-        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, CONTROL_ROW_ID, NULL)) AS CONTROLS_LINKED_TO_AUTH_PACKAGE,
-        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, REF_ID, NULL)) AS MATCHED_AUTH_PACKAGE_IDS,
-        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, REF_LEVEL_ID, NULL)) AS MATCHED_LEVEL_ID_VARIANTS
-    FROM refs r
-    LEFT JOIN auth_ids a
-      ON r.REF_ID = a.AUTH_CONTENT_ID
-    """).collect()[0]
-
-    print("CONTROLS_WITH_REFERENCE =", int(result["CONTROLS_WITH_REFERENCE"] or 0))
-    print("DISTINCT_REFERENCED_IDS =", int(result["DISTINCT_REFERENCED_IDS"] or 0))
-    print("CONTROLS_LINKED_TO_AUTH_PACKAGE =", int(result["CONTROLS_LINKED_TO_AUTH_PACKAGE"] or 0))
-    print("MATCHED_AUTH_PACKAGE_IDS =", int(result["MATCHED_AUTH_PACKAGE_IDS"] or 0))
-    print("MATCHED_LEVEL_ID_VARIANTS =", int(result["MATCHED_LEVEL_ID_VARIANTS"] or 0))
+joined = source.get("lookups", {}).get("joined_sources", {}).get("allocated-controls")
+if joined is not None:
+    print("ALLOCATED_CONTROLS_JOINED_ROWS =", joined.count())
+else:
+    print("ALLOCATED_CONTROLS_JOINED_ROWS = MISSING")
 
 print()
-summary = session.sql(f"""
-WITH auth_ids AS (
-    SELECT DISTINCT TRIM(CONTENT_ID::STRING) AS AUTH_CONTENT_ID
-    FROM {AUTH_TABLE}
-    WHERE CONTENT_ID IS NOT NULL
-),
-latest AS (
-    SELECT *
-    FROM {CONTROL_TABLE}
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY TRIM(CONTENT_ID::STRING)
-        ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
-    ) = 1
-),
-candidates AS (
-    SELECT COLUMN1 AS FIELD_NAME
-    FROM VALUES
-      ('AUTHORIZATION_PACKAGE'),
-      ('AUTHORIZATION_PACKAGE_SELECT_CONTROL'),
-      ('AUTHORIZATION_PACKAGE_ARCHIVED_CONTROLS'),
-      ('AUTHORIZATION_PACKAGES_ALLOWED_TO_INHERIT'),
-      ('CONTROL_TO_INHERIT')
-),
-exploded AS (
-    SELECT
-        c.FIELD_NAME,
-        TRIM(l.CONTENT_ID::STRING) AS CONTROL_ROW_ID,
-        TRIM(f.VALUE:ContentId::STRING) AS REF_ID
-    FROM latest l
-    CROSS JOIN candidates c,
-         LATERAL FLATTEN(INPUT => GET(l.CURATED_JSON, c.FIELD_NAME)) f
-    WHERE f.VALUE:ContentId IS NOT NULL
-),
-scored AS (
-    SELECT
-        e.FIELD_NAME,
-        COUNT(DISTINCT e.CONTROL_ROW_ID) AS CONTROLS_LINKED,
-        COUNT(DISTINCT e.REF_ID) AS DISTINCT_REFS,
-        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, e.CONTROL_ROW_ID, NULL)) AS AUTH_MATCHING_CONTROLS,
-        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, e.REF_ID, NULL)) AS AUTH_IDS_MATCHED
-    FROM exploded e
-    LEFT JOIN auth_ids a
-      ON e.REF_ID = a.AUTH_CONTENT_ID
-    GROUP BY e.FIELD_NAME
-)
-SELECT *
-FROM scored
-ORDER BY AUTH_MATCHING_CONTROLS DESC, AUTH_IDS_MATCHED DESC, FIELD_NAME
-""").collect()
+print("BUILD_GRAPH_DIAGNOSTIC")
 
-print("RANKED_REVERSE_LINK_FIELDS")
-for row in summary:
-    print(row.as_dict())
-
-strong = [r for r in summary if int(r["AUTH_MATCHING_CONTROLS"] or 0) > 0]
-
-if len(strong) == 1:
-    print("RESULT: UNIQUE_LEVEL355_AUTHORIZATION_PACKAGE_REVERSE_LINK_FOUND")
-elif len(strong) > 1:
-    print("RESULT: MULTIPLE_LEVEL355_AUTHORIZATION_PACKAGE_LINKS_FOUND")
-else:
-    print("RESULT: NO_LEVEL355_AUTHORIZATION_PACKAGE_REVERSE_LINK_FOUND")
+try:
+    nodes, edges = build_oscal_graph(
+        source["source_df"],
+        None,
+        None,
+        context["config"]["OSCAL_MODEL"],
+        context["config"]["SOURCE_SYSTEM_NAME"],
+        context["config"]["SOURCE_TABLE_NAME"],
+        context=context,
+    )
+    print("GRAPH_BUILD = PASS")
+    print("NODES =", nodes.count())
+    print("EDGES =", edges.count())
+    print("GRAPH_REPORT =", context.get("graph_report"))
+    print("RESULT: LEVEL355_SSP_GRAPH_BUILD_PASSED")
+except Exception as error:
+    print("GRAPH_BUILD = FAILED")
+    print("UNDERLYING_ERROR_TYPE =", type(error).__name__)
+    print("UNDERLYING_ERROR_MESSAGE =", str(error))
+    print("GRAPH_REPORT =", context.get("graph_report"))
+    print("RESULT: LEVEL355_SSP_GRAPH_FAILURE_IDENTIFIED")
