@@ -87,7 +87,7 @@ def _owner_for_path(path, paths):
 def _registry_operator(row):
     operator = _metadata_column_text(row, "OPERATOR")
     if operator:
-        if operator not in {"object", *METADATA_INSTANCE_RULES}:
+        if operator not in {"object", "joined-records", *METADATA_INSTANCE_RULES}:
             raise ValueError("Unknown registry OPERATOR")
         return operator
     if not _registry_meta_bool(row, "IS_COLLECTION"):
@@ -162,15 +162,20 @@ def _registry_elements(rows, selected, profile, model):
         parameters = {"registry_contract": {"parent_path": parent, "is_collection": collection}}
         if collection:
             identity = (row.get("INSTANCE_KEY_RULE"), _metadata_column_text(row, "ITEM_PATH"))
-            expected = ("VALUE", "$") if operator == "object" else (METADATA_INSTANCE_RULES[operator], METADATA_ITEM_PATHS[operator])
-            if identity != expected and not (operator == "properties" and identity == ("SOURCE_FIELD_NAME", "$")):
-                raise ValueError("Registry identity conflicts with OPERATOR")
+            if operator == "joined-records":
+                if not identity[0] or identity[1] != "$":
+                    raise ValueError("Joined-record collection requires an identity source field and ITEM_PATH=$")
+                parameters["joined_instance_field"] = identity[0]
+            else:
+                expected = ("VALUE", "$") if operator == "object" else (METADATA_INSTANCE_RULES[operator], METADATA_ITEM_PATHS[operator])
+                if identity != expected and not (operator == "properties" and identity == ("SOURCE_FIELD_NAME", "$")):
+                    raise ValueError("Registry identity conflicts with OPERATOR")
             parameters["registry_contract"].update(instance_key_rule=identity[0], item_path=identity[1])
         if parent and _registry_meta_bool(by_path[parent], "IS_COLLECTION"):
-            if _registry_operator(by_path[parent]) not in {"record", "optional-record"}:
+            if _registry_operator(by_path[parent]) not in {"record", "optional-record", "joined-records"}:
                 raise ValueError("Nested collection requires a record parent identity")
             parameters["parent_instance_rule"] = "source-record"
-        elif operator in {"record", "optional-record"}:
+        elif operator in {"record", "optional-record", "joined-records"}:
             parameters["parent_instance_rule"] = "singleton"
         policy = _metadata_column_text(row, "UUID_POLICY", required=bool(row.get("OPERATOR"))) or "omit"
         if policy not in {"omit", "node", "instance"} or (policy == "instance") != (operator == "parties"):
@@ -208,7 +213,7 @@ def _compile_mapping(row, elements):
     target = row["FIELD_RELATIVE_PATH"]
     params, representation = {}, {}
     if target:
-        if operator not in {"object", "record", "optional-record", "values"} or not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", target):
+        if operator not in {"object", "record", "optional-record", "values", "joined-records"} or not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", target):
             raise ValueError("Member target conflicts with its element operator")
         representation["target"] = target
     source = row.get("VALUE_SOURCE") or "FIELD"
@@ -228,6 +233,9 @@ def _compile_mapping(row, elements):
     if transform == "skip" and representation.get("required"):
         raise ValueError("Skip transform cannot supply a required value")
     allowed = {"VALUE_SOURCE", "VALUE_REQUIRED"}
+    if operator == "joined-records":
+        allowed.add("LOOKUP_KEY")
+        representation["joined_lookup"] = _metadata_column_text(row, "LOOKUP_KEY", True)
     if operator in {"properties", "observations"} and row.get("PROPERTY_NAME") not in (None, ""):
         allowed.add("PROPERTY_NAME")
         property_name = _metadata_column_text(row, "PROPERTY_NAME", True)
