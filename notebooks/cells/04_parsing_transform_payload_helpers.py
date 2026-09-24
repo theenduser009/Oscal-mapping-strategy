@@ -389,23 +389,23 @@ def _build_component_hydration_lookups(source_df, mapping_rows, source_dfs, cont
 
 
 def _build_joined_record_lookups(source_df, mapping_rows, context):
-    """Load only joined child records whose top-level CONTENT_ID matches a selected source record."""
+    """Project only mapped child fields before streaming joined records to Python."""
     from snowflake.snowpark import functions as F
 
-    bindings = {}
+    rows_by_binding = {}
     for row in mapping_rows:
         params = _metadata_params(row)
         binding = params.get("joined_lookup")
         if not binding:
             raise ValueError("Joined-record mapping requires LOOKUP_KEY")
-        bindings.setdefault(binding, True)
+        rows_by_binding.setdefault(binding, []).append(row)
 
     source_ids = source_df.select(
         F.trim(F.col("SOURCE_RECORD_ID").cast("string")).alias("_JOIN_ID")
     ).distinct()
 
     result = {}
-    for binding in bindings:
+    for binding, binding_rows in rows_by_binding.items():
         frame = context["lookups"].get("joined_sources", {}).get(binding)
         if frame is None:
             raise ValueError("Joined-record lookup source is unavailable: " + binding)
@@ -414,16 +414,36 @@ def _build_joined_record_lookups(source_df, mapping_rows, context):
         if not {"CONTENT_ID", "CURATED_JSON"}.issubset(columns):
             raise ValueError("Joined-record lookup requires CONTENT_ID and CURATED_JSON")
 
-        joined = frame.select(
-            F.trim(F.col(columns["CONTENT_ID"]).cast("string")).alias("_JOIN_ID"),
-            F.col(columns["CURATED_JSON"]).alias("CURATED_JSON"),
-        ).join(source_ids, "_JOIN_ID", "inner")
+        owner_paths = {row["OWNER_ELEMENT_PATH"] for row in binding_rows}
+        if len(owner_paths) != 1:
+            raise ValueError("Joined-record lookup binding must belong to one collection path")
+        owner_path = next(iter(owner_paths))
+        parameters = context["compiled_plan"]["elements"][owner_path]["parameters"]
+        identity_field = parameters.get("joined_instance_field")
+        if not identity_field:
+            raise ValueError("Joined-record collection requires a registry identity field")
+
+        required_fields = [identity_field]
+        for row in binding_rows:
+            field = row["SOURCE_FIELD_NAME"]
+            if field not in required_fields:
+                required_fields.append(field)
+
+        json_col = F.col(columns["CURATED_JSON"])
+        projected = [
+            F.trim(F.col(columns["CONTENT_ID"]).cast("string")).alias("_JOIN_ID")
+        ]
+        for field in required_fields:
+            projected.append(F.get(json_col, F.lit(field)).alias(field))
+
+        joined = frame.select(*projected).join(source_ids, "_JOIN_ID", "inner")
 
         by_parent = {}
         for record in joined.to_local_iterator():
             parent_id = str(record["_JOIN_ID"]).strip()
-            payload = _metadata_parse(record, context)
+            payload = {field: _to_python(record[field]) for field in required_fields}
             by_parent.setdefault(parent_id, []).append(payload)
+
         result[binding] = by_parent
 
     return result
