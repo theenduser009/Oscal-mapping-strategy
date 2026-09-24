@@ -454,8 +454,12 @@ def _build_joined_record_lookups(source_df, mapping_rows, context):
         by_parent = {}
         for record in joined.to_local_iterator():
             parent_id = str(record["_JOIN_ID"]).strip()
-            payload = {field: _joined_variant_value(record[field], context)
-                       for field in required_fields}
+            payload = {}
+            for field in required_fields:
+                raw = _to_python(record[field])
+                # Preserve the joined child identity exactly as the first accepted
+                # Level-355 batch saw it. Decode mapped payload fields separately.
+                payload[field] = raw if field == identity_field else _joined_variant_value(raw, context)
             by_parent.setdefault(parent_id, []).append(payload)
 
         result[binding] = by_parent
