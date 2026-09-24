@@ -1,149 +1,180 @@
-# RUN NOW — Find ALLOCATED_CONTROLS relationship metadata by FIELD_GUID
+# RUN NOW — Empirically identify the Level-355 reverse link to Authorization Package
 # Date: 2026-09-24
 # READ ONLY. No source, registry, mapping, DIM, or FACT DML.
 #
-# Prior exact FIELD_ID search found only:
-#   ARCHER_META_FIELD.FIELD_ID = 23429
-#   ARCHER_META_FIELD_STG.FIELD_ID = 23429
+# Relationship metadata is not exposed in the current Snowflake schema.
+# Therefore test only the Level-355 fields whose metadata names explicitly
+# indicate Authorization Package linkage, plus CONTROL_TO_INHERIT as a comparison.
 #
-# The same metadata row exposes:
-#   FIELD_GUID = E84D64F5-668F-47B5-AC50-89B6F6E67692
+# Goal:
+# Find which Level-355 field contains {ContentId, LevelId} references whose
+# ContentId values actually match current Authorization Package CONTENT_IDs.
 #
-# Relationship/config metadata may store GUIDs instead of FIELD_ID values.
-# This helper searches only GUID-like columns for that exact FIELD_GUID.
-# It prints metadata-like columns only.
+# Aggregate counts only; no IDs or business values are printed.
 
-FIELD_GUID = "E84D64F5-668F-47B5-AC50-89B6F6E67692"
-SCHEMA = "ES_ESC_GRC"
+AUTH_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
+CONTROL_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW"
 
-def norm(text):
-    return "".join(ch for ch in str(text).upper() if ch.isalnum())
+CANDIDATE_FIELDS = (
+    "AUTHORIZATION_PACKAGE",
+    "AUTHORIZATION_PACKAGE_SELECT_CONTROL",
+    "AUTHORIZATION_PACKAGE_ARCHIVED_CONTROLS",
+    "AUTHORIZATION_PACKAGES_ALLOWED_TO_INHERIT",
+    "CONTROL_TO_INHERIT",
+)
 
-print("ALLOCATED_CONTROLS_RELATIONSHIP_GUID_DISCOVERY")
-print("FIELD_GUID =", FIELD_GUID)
+print("LEVEL355_AUTHORIZATION_PACKAGE_REVERSE_LINK_PROFILE")
 
-# ------------------------------------------------------------------
-# 1) Find GUID-like columns in current schema.
-# ------------------------------------------------------------------
-guid_columns = session.sql(f"""
-SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION
-FROM RTX_RAW_DEV.INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = '{SCHEMA}'
-  AND UPPER(COLUMN_NAME) LIKE '%GUID%'
-ORDER BY TABLE_NAME, ORDINAL_POSITION
-""").collect()
+# Current Authorization Package identities.
+auth_count = session.sql(f"""
+SELECT COUNT(DISTINCT TRIM(CONTENT_ID::STRING)) AS N
+FROM {AUTH_TABLE}
+WHERE CONTENT_ID IS NOT NULL
+""").collect()[0]["N"]
 
-print("GUID_LIKE_COLUMNS =", len(guid_columns))
+print("AUTHORIZATION_PACKAGE_DISTINCT_IDS =", int(auth_count or 0))
 
-matches = []
-for row in guid_columns:
-    table = row["TABLE_NAME"]
-    column = row["COLUMN_NAME"]
-    full = f"RTX_RAW_DEV.{SCHEMA}.{table}"
-    try:
-        n = session.sql(f"""
-        SELECT COUNT(*) AS N
-        FROM {full}
-        WHERE UPPER(TRIM({column}::STRING)) = '{FIELD_GUID}'
-        """).collect()[0]["N"]
-    except Exception:
-        continue
-    if int(n or 0) > 0:
-        matches.append((table, column, int(n)))
-
-print("MATCHING_GUID_TABLE_COLUMNS =", len(matches))
-for table, column, count in matches:
-    print("GUID_MATCH =", table, "| COLUMN =", column, "| ROWS =", count)
-
-# ------------------------------------------------------------------
-# 2) Print metadata-like columns from matching rows.
-# ------------------------------------------------------------------
-all_columns = session.sql(f"""
-SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, ORDINAL_POSITION
-FROM RTX_RAW_DEV.INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = '{SCHEMA}'
-ORDER BY TABLE_NAME, ORDINAL_POSITION
-""").collect()
-
-by_table = {}
-for row in all_columns:
-    by_table.setdefault(row["TABLE_NAME"], []).append(
-        (row["COLUMN_NAME"], row["DATA_TYPE"], row["ORDINAL_POSITION"])
-    )
-
-for table, match_col, count in matches:
-    safe_cols = []
-    for col, dtype, ordinal in by_table.get(table, []):
-        token = norm(col)
-        if (
-            "FIELD" in token
-            or "GUID" in token
-            or "LEVEL" in token
-            or "MODULE" in token
-            or "RELATION" in token
-            or "REFERENCE" in token
-            or "XREF" in token
-            or "SOURCE" in token
-            or "TARGET" in token
-            or token.endswith("ID")
-            or token in {"ID", "TYPE", "NAME", "DESCRIPTION"}
-        ):
-            safe_cols.append(col)
-
-    if match_col not in safe_cols:
-        safe_cols.append(match_col)
-
-    full = f"RTX_RAW_DEV.{SCHEMA}.{table}"
-    select_list = ", ".join(safe_cols)
-
+# Latest row per Level-355 top-level control record.
+for field in CANDIDATE_FIELDS:
     print()
-    print("MATCHING_GUID_TABLE =", table)
-    print("MATCHED_ON_COLUMN =", match_col)
-    print("SAFE_COLUMNS =", safe_cols)
+    print("FIELD =", field)
 
-    rows = session.sql(f"""
-    SELECT {select_list}
-    FROM {full}
-    WHERE UPPER(TRIM({match_col}::STRING)) = '{FIELD_GUID}'
-    LIMIT 20
+    shapes = session.sql(f"""
+    WITH latest AS (
+        SELECT *
+        FROM {CONTROL_TABLE}
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY TRIM(CONTENT_ID::STRING)
+            ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
+        ) = 1
+    )
+    SELECT
+        TYPEOF(GET(CURATED_JSON, '{field}')) AS VALUE_TYPE,
+        COUNT(*) AS ROW_COUNT
+    FROM latest
+    GROUP BY TYPEOF(GET(CURATED_JSON, '{field}'))
+    ORDER BY ROW_COUNT DESC, VALUE_TYPE
     """).collect()
 
-    for row in rows:
-        print("GUID_METADATA_ROW =", row.as_dict())
+    print("SHAPES =", {
+        ("SQL_NULL" if r["VALUE_TYPE"] is None else str(r["VALUE_TYPE"])): int(r["ROW_COUNT"])
+        for r in shapes
+    })
 
-# ------------------------------------------------------------------
-# 3) If GUID only appears in the field tables, inspect metadata-like table
-#    schemas for source/target/related/reference columns so we know the next
-#    exact metadata object to query without another broad source search.
-# ------------------------------------------------------------------
-interesting = []
-for table, cols in by_table.items():
-    table_token = norm(table)
-    if not (
-        table_token.startswith("ARCHERMETA")
-        or "RELATION" in table_token
-        or "REFERENCE" in table_token
-        or "XREF" in table_token
-    ):
-        continue
+    result = session.sql(f"""
+    WITH auth_ids AS (
+        SELECT DISTINCT TRIM(CONTENT_ID::STRING) AS AUTH_CONTENT_ID
+        FROM {AUTH_TABLE}
+        WHERE CONTENT_ID IS NOT NULL
+    ),
+    latest AS (
+        SELECT *
+        FROM {CONTROL_TABLE}
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY TRIM(CONTENT_ID::STRING)
+            ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
+        ) = 1
+    ),
+    array_refs AS (
+        SELECT DISTINCT
+            TRIM(c.CONTENT_ID::STRING) AS CONTROL_ROW_ID,
+            TRIM(f.VALUE:ContentId::STRING) AS REF_ID,
+            TRIM(f.VALUE:LevelId::STRING) AS REF_LEVEL_ID
+        FROM latest c,
+             LATERAL FLATTEN(INPUT => GET(c.CURATED_JSON, '{field}')) f
+        WHERE f.VALUE:ContentId IS NOT NULL
+    ),
+    object_refs AS (
+        SELECT DISTINCT
+            TRIM(c.CONTENT_ID::STRING) AS CONTROL_ROW_ID,
+            TRIM(GET(GET(c.CURATED_JSON, '{field}'), 'ContentId')::STRING) AS REF_ID,
+            TRIM(GET(GET(c.CURATED_JSON, '{field}'), 'LevelId')::STRING) AS REF_LEVEL_ID
+        FROM latest c
+        WHERE TYPEOF(GET(c.CURATED_JSON, '{field}')) = 'OBJECT'
+          AND GET(GET(c.CURATED_JSON, '{field}'), 'ContentId') IS NOT NULL
+    ),
+    refs AS (
+        SELECT * FROM array_refs
+        UNION
+        SELECT * FROM object_refs
+    )
+    SELECT
+        COUNT(DISTINCT CONTROL_ROW_ID) AS CONTROLS_WITH_REFERENCE,
+        COUNT(DISTINCT REF_ID) AS DISTINCT_REFERENCED_IDS,
+        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, CONTROL_ROW_ID, NULL)) AS CONTROLS_LINKED_TO_AUTH_PACKAGE,
+        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, REF_ID, NULL)) AS MATCHED_AUTH_PACKAGE_IDS,
+        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, REF_LEVEL_ID, NULL)) AS MATCHED_LEVEL_ID_VARIANTS
+    FROM refs r
+    LEFT JOIN auth_ids a
+      ON r.REF_ID = a.AUTH_CONTENT_ID
+    """).collect()[0]
 
-    names = [c for c, _, _ in cols]
-    tokens = [norm(c) for c in names]
-    if any(
-        ("SOURCE" in t or "TARGET" in t or "RELAT" in t or "REFER" in t or "XREF" in t)
-        and ("FIELD" in t or "GUID" in t or "ID" in t)
-        for t in tokens
-    ):
-        interesting.append((table, names))
+    print("CONTROLS_WITH_REFERENCE =", int(result["CONTROLS_WITH_REFERENCE"] or 0))
+    print("DISTINCT_REFERENCED_IDS =", int(result["DISTINCT_REFERENCED_IDS"] or 0))
+    print("CONTROLS_LINKED_TO_AUTH_PACKAGE =", int(result["CONTROLS_LINKED_TO_AUTH_PACKAGE"] or 0))
+    print("MATCHED_AUTH_PACKAGE_IDS =", int(result["MATCHED_AUTH_PACKAGE_IDS"] or 0))
+    print("MATCHED_LEVEL_ID_VARIANTS =", int(result["MATCHED_LEVEL_ID_VARIANTS"] or 0))
 
 print()
-print("RELATIONSHIP_SCHEMA_CANDIDATES =", len(interesting))
-for table, names in interesting:
-    print("SCHEMA_CANDIDATE =", table, "| COLUMNS =", names)
+summary = session.sql(f"""
+WITH auth_ids AS (
+    SELECT DISTINCT TRIM(CONTENT_ID::STRING) AS AUTH_CONTENT_ID
+    FROM {AUTH_TABLE}
+    WHERE CONTENT_ID IS NOT NULL
+),
+latest AS (
+    SELECT *
+    FROM {CONTROL_TABLE}
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY TRIM(CONTENT_ID::STRING)
+        ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
+    ) = 1
+),
+candidates AS (
+    SELECT COLUMN1 AS FIELD_NAME
+    FROM VALUES
+      ('AUTHORIZATION_PACKAGE'),
+      ('AUTHORIZATION_PACKAGE_SELECT_CONTROL'),
+      ('AUTHORIZATION_PACKAGE_ARCHIVED_CONTROLS'),
+      ('AUTHORIZATION_PACKAGES_ALLOWED_TO_INHERIT'),
+      ('CONTROL_TO_INHERIT')
+),
+exploded AS (
+    SELECT
+        c.FIELD_NAME,
+        TRIM(l.CONTENT_ID::STRING) AS CONTROL_ROW_ID,
+        TRIM(f.VALUE:ContentId::STRING) AS REF_ID
+    FROM latest l
+    CROSS JOIN candidates c,
+         LATERAL FLATTEN(INPUT => GET(l.CURATED_JSON, c.FIELD_NAME)) f
+    WHERE f.VALUE:ContentId IS NOT NULL
+),
+scored AS (
+    SELECT
+        e.FIELD_NAME,
+        COUNT(DISTINCT e.CONTROL_ROW_ID) AS CONTROLS_LINKED,
+        COUNT(DISTINCT e.REF_ID) AS DISTINCT_REFS,
+        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, e.CONTROL_ROW_ID, NULL)) AS AUTH_MATCHING_CONTROLS,
+        COUNT(DISTINCT IFF(a.AUTH_CONTENT_ID IS NOT NULL, e.REF_ID, NULL)) AS AUTH_IDS_MATCHED
+    FROM exploded e
+    LEFT JOIN auth_ids a
+      ON e.REF_ID = a.AUTH_CONTENT_ID
+    GROUP BY e.FIELD_NAME
+)
+SELECT *
+FROM scored
+ORDER BY AUTH_MATCHING_CONTROLS DESC, AUTH_IDS_MATCHED DESC, FIELD_NAME
+""").collect()
 
-if len(matches) > 2:
-    print("RESULT: FIELD_GUID_FOUND_OUTSIDE_BASE_FIELD_TABLES")
-elif interesting:
-    print("RESULT: RELATIONSHIP_SCHEMA_CANDIDATES_FOUND")
+print("RANKED_REVERSE_LINK_FIELDS")
+for row in summary:
+    print(row.as_dict())
+
+strong = [r for r in summary if int(r["AUTH_MATCHING_CONTROLS"] or 0) > 0]
+
+if len(strong) == 1:
+    print("RESULT: UNIQUE_LEVEL355_AUTHORIZATION_PACKAGE_REVERSE_LINK_FOUND")
+elif len(strong) > 1:
+    print("RESULT: MULTIPLE_LEVEL355_AUTHORIZATION_PACKAGE_LINKS_FOUND")
 else:
-    print("RESULT: RELATIONSHIP_METADATA_NOT_EXPOSED_IN_CURRENT_SCHEMA")
+    print("RESULT: NO_LEVEL355_AUTHORIZATION_PACKAGE_REVERSE_LINK_FOUND")
