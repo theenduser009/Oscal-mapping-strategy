@@ -1,17 +1,21 @@
-# COMMIT NOW — Source One SSP authorization-decision batch
-# Date: 2026-09-21
+# COMMIT NOW — Source One SSP Control Implementation summary batch
+# Date: 2026-09-24
 #
 # INTENTIONAL WRITE CELL.
-# Run only after the accepted PREVIEW + RUN_NOW.py reconciliation in the SAME session.
-# This uses the existing guarded Cell 6/7 loader and commits only source-one / SSP.
+# Run only after the accepted PREVIEW in the SAME notebook session.
 #
-# Expected accepted PREVIEW:
-#   nodes = 89629
-#   edges = 86816
-#   DIM  = 2308 inserts / 0 updates / 87321 unchanged
-#   FACT = 2308 inserts / 0 updates / 84508 unchanged
+# Accepted PREVIEW:
+#   source-one / SSP only
+#   nodes = 120536
+#   edges = 117723
+#   DIM  = 30907 inserts / 0 updates / 89629 unchanged
+#   FACT = 30907 inserts / 0 updates / 86816 unchanged
 #
-# On success, the existing loader must return COMMITTED_AND_VERIFIED.
+# The 30,907-node/edge delta is fully reconciled to the 11 newly approved
+# package-level Control Implementation summary properties.
+#
+# This does NOT implement the Level-355 per-control implemented-requirements[]
+# branch. That remains separate.
 
 import json
 
@@ -48,13 +52,15 @@ if group is None:
 
 load = group["load"]
 expected_changes = load.get("expected_changes") or {}
-expected_dim = {"INSERTS": 2308, "UPDATES": 0, "UNCHANGED": 87321}
-expected_fact = {"INSERTS": 2308, "UPDATES": 0, "UNCHANGED": 84508}
+expected_dim = {"INSERTS": 30907, "UPDATES": 0, "UNCHANGED": 89629}
+expected_fact = {"INSERTS": 30907, "UPDATES": 0, "UNCHANGED": 86816}
 
 if load.get("status") != "PREVIEW_PASSED_NO_TARGET_DML":
     raise ValueError("Accepted SSP route is not a successful no-DML PREVIEW")
-if load.get("nodes") != 89629 or load.get("edges") != 86816:
+if load.get("nodes") != 120536 or load.get("edges") != 117723:
     raise ValueError("SSP graph counts differ from the accepted PREVIEW")
+if load.get("source_records") != 2813:
+    raise ValueError("Source record count differs from the accepted PREVIEW")
 if (expected_changes.get("D") or {}) != expected_dim:
     raise ValueError("DIM delta differs from the accepted PREVIEW")
 if (expected_changes.get("F") or {}) != expected_fact:
@@ -64,7 +70,7 @@ if load.get("target_dml_attempted") is not False or load.get("writes_executed") 
 if CONFIG.get("EXECUTE_WRITES") is not False:
     raise ValueError("Shared EXECUTE_WRITES must remain False")
 
-print("SOURCE_ONE_SSP_COMMIT_AUTHORIZED_BY_ACCEPTED_PREVIEW")
+print("SOURCE_ONE_SSP_CONTROL_SUMMARY_COMMIT_AUTHORIZED_BY_ACCEPTED_PREVIEW")
 print("ROUTE =", ROUTE)
 print("PREVIEW_NODES =", load.get("nodes"))
 print("PREVIEW_EDGES =", load.get("edges"))
@@ -96,6 +102,6 @@ if (
     or commit_group["load"].get("persisted") is not True
     or commit_group["load"].get("committed") is not True
 ):
-    raise ValueError("SSP COMMIT did not return COMMITTED_AND_VERIFIED")
+    raise ValueError("SSP Control Implementation summary COMMIT did not return COMMITTED_AND_VERIFIED")
 
-print("RESULT: SOURCE_ONE_SSP_COMMIT_AND_READBACK_VERIFIED")
+print("RESULT: SOURCE_ONE_SSP_CONTROL_SUMMARY_COMMIT_AND_READBACK_VERIFIED")
