@@ -501,9 +501,15 @@ def _metadata_joined_record_instances(source_id, rows, parameters, context):
             for member, value in members.items():
                 _metadata_assign(payload, member, value, preserve_existing=member == "remarks")
 
-        if any(not _has_value(_metadata_get(payload, member))
-               for member in parameters.get("required_members", ())):
-            raise ValueError("Joined-record required payload member is missing")
+        missing_required = [
+            member for member in parameters.get("required_members", ())
+            if not _has_value(_metadata_get(payload, member))
+        ]
+        if missing_required:
+            context["graph_report"]["SKIPPED_JOINED_RECORDS"] = (
+                context["graph_report"].get("SKIPPED_JOINED_RECORDS", 0) + 1
+            )
+            continue
 
         _append_unique_collection_instance(
             instances,
