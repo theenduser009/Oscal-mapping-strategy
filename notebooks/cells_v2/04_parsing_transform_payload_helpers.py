@@ -388,6 +388,19 @@ def _build_component_hydration_lookups(source_df, mapping_rows, source_dfs, cont
     return lookups
 
 
+def _joined_variant_value(value, context):
+    """Decode scalar/object/array VARIANT values returned by Snowpark projection."""
+    value = _to_python(value)
+    if isinstance(value, str):
+        try:
+            return (json.loads(value, parse_float=Decimal)
+                    if context["compiled_plan"].get("options", {}).get("parse_decimal", True)
+                    else json.loads(value))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return value
+    return value
+
+
 def _build_joined_record_lookups(source_df, mapping_rows, context):
     """Project only mapped child fields before streaming joined records to Python."""
     from snowflake.snowpark import functions as F
@@ -441,7 +454,8 @@ def _build_joined_record_lookups(source_df, mapping_rows, context):
         by_parent = {}
         for record in joined.to_local_iterator():
             parent_id = str(record["_JOIN_ID"]).strip()
-            payload = {field: _to_python(record[field]) for field in required_fields}
+            payload = {field: _joined_variant_value(record[field], context)
+                       for field in required_fields}
             by_parent.setdefault(parent_id, []).append(payload)
 
         result[binding] = by_parent
