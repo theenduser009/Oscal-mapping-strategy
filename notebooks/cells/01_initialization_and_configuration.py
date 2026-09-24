@@ -69,6 +69,13 @@ SOURCE_FILES = [
                 "description_field": "DESCRIPTION",
             },
         },
+        "JOINED_LOOKUP_CONTRACTS": {
+            "allocated-controls": {
+                "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW",
+                "join_column": "CONTENT_ID",
+                "json_column": "CURATED_JSON",
+            },
+        },
     },
     {
         "SOURCE_KEY": "source-two-source",
@@ -176,7 +183,7 @@ MODEL_CONTRACTS = {
         "MODEL_KEY": "SSP", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
         "MODEL_ALIASES": ("System Security Plan", "SSP - Metadata", "SSP - System Characteristics",
                           "SSP - System Implementation", "SSP - Control Implementation"),
-        "LOOKUP_GROUPS": ("components",),
+        "LOOKUP_GROUPS": ("components", "joined-records"),
         "RUNTIME_OPTIONS": {"parse_decimal": False, "null_source_as_empty": True},
         "STORAGE_CONTRACT": {
             "VERIFIED": True, "PHYSICAL_PROFILE": "BINARY16_UUID32", "MODEL_KEY": "SSP",
