@@ -25,13 +25,16 @@ FIELDS = (
 )
 
 def populated_case(expr):
+    # Do not call ARRAY_SIZE / OBJECT_KEYS on a mixed-shape VARIANT expression:
+    # Snowflake may evaluate those branches on scalar text and attempt JSON parsing.
+    # TO_JSON is safe for any VARIANT shape and lets us recognize empty containers.
     return f"""
     CASE
       WHEN {expr} IS NULL THEN 0
-      WHEN TYPEOF({expr}) = 'NULL_VALUE' THEN 0
-      WHEN TYPEOF({expr}) = 'VARCHAR' AND NULLIF(TRIM({expr}::STRING), '') IS NULL THEN 0
-      WHEN TYPEOF({expr}) = 'ARRAY' AND ARRAY_SIZE({expr}) = 0 THEN 0
-      WHEN TYPEOF({expr}) = 'OBJECT' AND ARRAY_SIZE(OBJECT_KEYS({expr})) = 0 THEN 0
+      WHEN IS_NULL_VALUE({expr}) THEN 0
+      WHEN TYPEOF({expr}) = 'VARCHAR'
+           AND NULLIF(TRIM(TRY_TO_VARCHAR({expr})), '') IS NULL THEN 0
+      WHEN TO_JSON({expr}) IN ('[]', '{{}}') THEN 0
       ELSE 1
     END
     """
@@ -73,9 +76,9 @@ for field in FIELDS:
         SUM({populated_case(expr)}) AS EFFECTIVE_POPULATED,
         COUNT_IF(TYPEOF({expr}) = 'NULL_VALUE') AS JSON_NULL_ROWS,
         COUNT_IF({expr} IS NULL) AS SQL_NULL_OR_ABSENT_ROWS,
-        COUNT(DISTINCT IFF({populated_case(expr)} = 1, {expr}::STRING, NULL)) AS DISTINCT_POPULATED_VALUES,
-        MIN(IFF({populated_case(expr)} = 1, LENGTH({expr}::STRING), NULL)) AS MIN_POPULATED_LENGTH,
-        MAX(IFF({populated_case(expr)} = 1, LENGTH({expr}::STRING), NULL)) AS MAX_POPULATED_LENGTH
+        COUNT(DISTINCT IFF({populated_case(expr)} = 1, TO_JSON({expr}), NULL)) AS DISTINCT_POPULATED_VALUES,
+        MIN(IFF({populated_case(expr)} = 1, LENGTH(TO_JSON({expr})), NULL)) AS MIN_POPULATED_LENGTH,
+        MAX(IFF({populated_case(expr)} = 1, LENGTH(TO_JSON({expr})), NULL)) AS MAX_POPULATED_LENGTH
     FROM matched
     """).collect()[0]
 
