@@ -186,9 +186,12 @@ def _registry_elements(rows, selected, profile, model):
             parameters["uuid_from_instance"] = True
         members = _metadata_items(row, "REQUIRED_MEMBERS")
         if members:
-            if operator != "object" or collection or any(not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", member) for member in members):
-                raise ValueError("REQUIRED_MEMBERS requires scalar object member paths")
-            parameters.update(required_members=members, optional_assembly=True)
+            invalid_member = any(not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", member) for member in members)
+            if invalid_member or operator not in {"object", "joined-records"} or (operator == "object" and collection):
+                raise ValueError("REQUIRED_MEMBERS requires scalar object or joined-record member paths")
+            parameters["required_members"] = members
+            if operator == "object":
+                parameters["optional_assembly"] = True
         elif operator == "object" and not collection:
             parameters["materialize_empty"] = True
         if operator in {"properties", "observations"}:
