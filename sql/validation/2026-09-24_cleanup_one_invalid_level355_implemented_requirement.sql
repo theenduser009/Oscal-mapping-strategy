@@ -1,21 +1,21 @@
--- ONE-TIME GUARDED CLEANUP — source-derived exact node identity
+-- ONE-TIME GUARDED CLEANUP — deduplicated historical node-key candidates
 -- Date: 2026-09-24
 --
 -- Removes only the previously persisted Level-355 implemented-requirement whose
 -- current source row has no defensible control-id.
 --
--- The previous payload-text filter was too brittle and is superseded.
--- This version derives the exact source record + ALLOCATED_CONTROL_ID, computes
--- both possible historical node-key encodings (decoded vs JSON-serialized
--- identity), and requires exactly one of them to exist in the target.
+-- IMPORTANT CORRECTION:
+-- decoded and JSON-serialized ALLOCATED_CONTROL_ID encodings can produce the
+-- same deterministic node key. Candidate hashes are therefore UNION-deduplicated
+-- before target matching. The prior script counted both encodings separately and
+-- could raise TARGET_IDENTITY_AMBIGUOUS even when both represented one target row.
 --
 -- No broad delete is allowed.
 
 EXECUTE IMMEDIATE $$
 DECLARE
   bad_source_rows NUMBER;
-  decoded_target_rows NUMBER;
-  serialized_target_rows NUMBER;
+  candidate_key_count NUMBER;
   selected_target_rows NUMBER;
   incoming_fact_count NUMBER;
   outgoing_fact_count NUMBER;
@@ -24,7 +24,7 @@ DECLARE
   started BOOLEAN DEFAULT FALSE;
 
   bad_source_shape EXCEPTION (-20931, 'LEVEL355_BAD_SOURCE_SHAPE_CHANGED: expected exactly one matched source row without CONTROL_NUMBER.');
-  target_identity_ambiguous EXCEPTION (-20932, 'LEVEL355_BAD_TARGET_IDENTITY_AMBIGUOUS: expected exactly one historical node-key encoding to match.');
+  target_identity_ambiguous EXCEPTION (-20932, 'LEVEL355_BAD_TARGET_IDENTITY_AMBIGUOUS: expected exactly one distinct persisted target node to match deduplicated historical key candidates.');
   bad_edge_shape EXCEPTION (-20933, 'LEVEL355_BAD_ROW_EDGE_SHAPE_CHANGED: expected one incoming and zero outgoing edges.');
   verify_failed EXCEPTION (-20934, 'LEVEL355_BAD_ROW_CLEANUP_VERIFY_FAILED.');
 BEGIN
@@ -50,7 +50,7 @@ BEGIN
     RAISE bad_source_shape;
   END IF;
 
-  CREATE OR REPLACE TEMP TABLE TMP_LEVEL355_BAD_KEYS AS
+  CREATE OR REPLACE TEMP TABLE TMP_LEVEL355_BAD_KEY_CANDIDATES AS
   SELECT
       TO_BINARY(
         MD5(
@@ -60,7 +60,12 @@ BEGIN
           || ALLOCATED_CONTROL_ID_DECODED
         ),
         'HEX'
-      ) AS DECODED_PK,
+      ) AS PK_OSCAL_SSP_ELEMENT_HASH
+  FROM TMP_LEVEL355_BAD_SOURCE
+
+  UNION
+
+  SELECT
       TO_BINARY(
         MD5(
           'v1_registry_path_instance|ARCHER|ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW|'
@@ -69,37 +74,24 @@ BEGIN
           || ALLOCATED_CONTROL_ID_SERIALIZED
         ),
         'HEX'
-      ) AS SERIALIZED_PK
+      ) AS PK_OSCAL_SSP_ELEMENT_HASH
   FROM TMP_LEVEL355_BAD_SOURCE;
 
-  SELECT COUNT(*) INTO :decoded_target_rows
-  FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT d
-  JOIN TMP_LEVEL355_BAD_KEYS k
-    ON d.PK_OSCAL_SSP_ELEMENT_HASH = k.DECODED_PK
-  WHERE d.ELEMENT_TYPE = 'implemented-requirements';
-
-  SELECT COUNT(*) INTO :serialized_target_rows
-  FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT d
-  JOIN TMP_LEVEL355_BAD_KEYS k
-    ON d.PK_OSCAL_SSP_ELEMENT_HASH = k.SERIALIZED_PK
-  WHERE d.ELEMENT_TYPE = 'implemented-requirements';
-
-  IF ((decoded_target_rows + serialized_target_rows) <> 1) THEN
-    RAISE target_identity_ambiguous;
-  END IF;
+  SELECT COUNT(*) INTO :candidate_key_count
+  FROM TMP_LEVEL355_BAD_KEY_CANDIDATES;
 
   CREATE OR REPLACE TEMP TABLE TMP_LEVEL355_BAD_IR AS
-  SELECT
-      CASE
-        WHEN decoded_target_rows = 1 THEN DECODED_PK
-        ELSE SERIALIZED_PK
-      END AS PK_OSCAL_SSP_ELEMENT_HASH
-  FROM TMP_LEVEL355_BAD_KEYS;
+  SELECT DISTINCT
+      d.PK_OSCAL_SSP_ELEMENT_HASH
+  FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT d
+  JOIN TMP_LEVEL355_BAD_KEY_CANDIDATES k
+    ON d.PK_OSCAL_SSP_ELEMENT_HASH = k.PK_OSCAL_SSP_ELEMENT_HASH
+  WHERE d.ELEMENT_TYPE = 'implemented-requirements'
+    AND d.SOURCE_SYSTEM_NAME = 'ARCHER'
+    AND d.SOURCE_TABLE_NAME = 'ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW';
 
   SELECT COUNT(*) INTO :selected_target_rows
-  FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT d
-  JOIN TMP_LEVEL355_BAD_IR b
-    ON d.PK_OSCAL_SSP_ELEMENT_HASH = b.PK_OSCAL_SSP_ELEMENT_HASH;
+  FROM TMP_LEVEL355_BAD_IR;
 
   IF (selected_target_rows <> 1) THEN
     RAISE target_identity_ambiguous;
@@ -151,8 +143,7 @@ BEGIN
   RETURN OBJECT_CONSTRUCT(
       'STATUS', 'LEVEL355_SINGLE_BAD_IMPLEMENTED_REQUIREMENT_REMOVED',
       'SOURCE_BAD_ROWS', bad_source_rows,
-      'DECODED_KEY_MATCHES', decoded_target_rows,
-      'SERIALIZED_KEY_MATCHES', serialized_target_rows,
+      'DEDUPED_CANDIDATE_KEYS', candidate_key_count,
       'DIM_ROWS_REMOVED', selected_target_rows,
       'FACT_ROWS_REMOVED', incoming_fact_count,
       'READBACK_BAD_DIM', remaining_dim,
