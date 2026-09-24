@@ -112,7 +112,7 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             if key in archer and archer[key] != value:
                 raise ValueError("Archer lookup identity has conflicting labels")
             archer[key] = value
-    components = {}
+    components, joined = {}, {}
     required = {group for key in profile["MODEL_KEYS"]
                 for group in model_contracts[key].get("LOOKUP_GROUPS", ())}
     # Lookup requirements are data in the source profile, not table names in
@@ -128,11 +128,26 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             col(names["CONTENT_ID"]).alias("CONTENT_ID"),
             col(names["CURATED_JSON"]).alias("CURATED_JSON")
         ).cache_result()
+    for name, contract in profile.get("JOINED_LOOKUP_CONTRACTS", {}).items():
+        if "joined-records" not in required:
+            continue
+        table = active_session.table(contract["source_table"])
+        names = _normalized_columns(table.columns)
+        join_name = _input_column(names, contract.get("join_column", "CONTENT_ID"))
+        json_name = _input_column(names, contract.get("json_column", "CURATED_JSON"))
+        if join_name is None or json_name is None:
+            raise ValueError("Configured joined lookup columns are missing")
+        joined[name] = table.select(
+            col(join_name).cast("string").alias("CONTENT_ID"),
+            col(json_name).alias("CURATED_JSON")
+        ).cache_result()
     return {"archer_values": archer,
             "fips_values": {key: value.lower() for key, value in archer.items()
                             if value.lower() in {"low", "moderate", "high"}},
             "component_sources": components,
-            "component_contract": profile.get("LOOKUP_CONTRACTS", {})}
+            "component_contract": profile.get("LOOKUP_CONTRACTS", {}),
+            "joined_sources": joined,
+            "joined_contract": profile.get("JOINED_LOOKUP_CONTRACTS", {})}
 
 
 SOURCE_INPUTS, MAPPING_INPUTS = {}, {}
