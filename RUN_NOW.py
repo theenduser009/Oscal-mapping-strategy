@@ -1,273 +1,199 @@
-# RUN NOW — Source One RISK_ASSESSMENT_REPORT attachment resolution discovery
+# RUN NOW — Level-355 Control Implementation source readiness
 # Date: 2026-09-24
 # READ ONLY. No source, registry, mapping, DIM, or FACT DML.
 #
-# Known evidence:
-# - RISK_ASSESSMENT_REPORT is an Archer attachment field (FIELD_TYPE_ID 11)
-# - prior live review found 316 populated Source One rows / 742 attachment IDs
-# - multi-valued rows exist
-# - mapping stays DEFERRED unless current RAW data exposes a stable identifier or href contract
-#
 # Purpose:
-# 1) reconfirm the current attachment shape/counts;
-# 2) discover current Archer *_RAW tables whose names suggest document/file/attachment/report repositories;
-# 3) search those candidate CURATED_JSON payloads recursively for the attachment IDs;
-# 4) report only aggregate match counts and candidate JSON paths/keys.
+# Confirm the current Level-355 source contract and whether Authorization Package
+# ALLOCATED_CONTROLS references resolve to the actual control records needed for:
+#   system-security-plan.control-implementation.implemented-requirements[]
 #
-# Privacy:
-# - attachment IDs are used internally but never printed
-# - URLs/file names/record values are not printed
-# - output is table names, schema names, counts and JSON paths only
+# Expected source:
+#   RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW
+#
+# This is the only next discovery step. It profiles the actual referenced control
+# records and the existing live registry branch. No broad table search.
 
-from collections import Counter
+CONTROL_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW"
+AUTH_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
 
-SOURCE_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
-FIELD = "RISK_ASSESSMENT_REPORT"
-SOURCE_LEVEL_ID = 353
-SOURCE_MODULE_ID = 547
+KEY_FIELDS = (
+    "CONTROL_NUMBER",
+    "FEED_CONTROL_NUMBER",
+    "CONTROL_NAME",
+    "CONTROL",
+    "IMPLEMENTATION_DETAILS",
+    "OVERALL_IMPLEMENTATION_DETAILS",
+    "IMPLEMENTATION_STATUS",
+    "CONTROL_PARAMETERS",
+    "RESPONSIBLE_ROLE",
+    "CONTROL_ENTITY",
+    "CONTROL_SET",
+    "CONTROL_ORIGINATION",
+    "ALLOCATION_STATUS",
+    "INHERITED_IMPLEMENTATION_DETAILS",
+    "PARTIAL_INHERITED_IMPLEMENTATION_DETAILS",
+    "ASSESSMENT_STATUS",
+    "OVERALL_ASSESSMENT_STATUS",
+)
 
-def py(v):
-    if hasattr(v, "as_dict"):
-        return v.as_dict(recursive=True)
-    if hasattr(v, "as_list"):
-        return v.as_list()
-    return v
-
-# ------------------------------------------------------------------
-# 1) Current Source One attachment profile
-# ------------------------------------------------------------------
-source_rows = session.sql(f"""
-SELECT CONTENT_ID, CURATED_JSON:{FIELD} AS FIELD_VALUE
-FROM {SOURCE_TABLE}
-""").collect()
-
-shape_counts = Counter()
-populated_rows = 0
-total_items = 0
-distinct_ids = set()
-array_lengths = Counter()
-
-for row in source_rows:
-    value = py(row["FIELD_VALUE"])
-    if value is None:
-        shape_counts["NULL"] += 1
-        continue
-
-    if isinstance(value, list):
-        shape_counts["ARRAY"] += 1
-        array_lengths[len(value)] += 1
-        if value:
-            populated_rows += 1
-        total_items += len(value)
-        for item in value:
-            item = py(item)
-            if item not in (None, ""):
-                distinct_ids.add(str(item).strip())
-    else:
-        shape_counts[type(value).__name__.upper()] += 1
-        if value not in ("", {}, []):
-            populated_rows += 1
-            total_items += 1
-            distinct_ids.add(str(value).strip())
-
-print("SOURCE_ONE_RISK_ASSESSMENT_REPORT_ATTACHMENT_DISCOVERY")
-print("SOURCE_RECORDS =", len(source_rows))
-print("SHAPES =", dict(sorted(shape_counts.items())))
-print("POPULATED_ROWS =", populated_rows)
-print("TOTAL_ATTACHMENT_ITEMS =", total_items)
-print("DISTINCT_ATTACHMENT_IDS =", len(distinct_ids))
-if array_lengths:
-    print("ARRAY_LENGTH_MIN_MAX =", min(array_lengths), max(array_lengths))
-    if len(array_lengths) <= 12:
-        print("ARRAY_LENGTH_COUNTS =", dict(sorted(array_lengths.items())))
-
-# Reconfirm authoritative Source One Archer metadata.
-meta = session.sql(f"""
-SELECT FIELD_ID, SQL_FIELD_NAME, FIELD_TYPE_ID, LEVEL_ID, MODULE_ID, SELECT_ID
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD
-WHERE UPPER(TRIM(SQL_FIELD_NAME)) = '{FIELD}'
-  AND LEVEL_ID = {SOURCE_LEVEL_ID}
-  AND MODULE_ID = {SOURCE_MODULE_ID}
-ORDER BY FIELD_ID
-""").collect()
-
-print()
-print("SOURCE_ONE_ATTACHMENT_METADATA")
-for row in meta:
-    print(row.as_dict())
+print("LEVEL355_CONTROL_IMPLEMENTATION_READINESS")
 
 # ------------------------------------------------------------------
-# 2) Discover current RAW candidates by business-relevant table names.
+# 1) Physical source contract
 # ------------------------------------------------------------------
-candidate_rows = session.sql("""
-SELECT TABLE_NAME
-FROM RTX_RAW_DEV.INFORMATION_SCHEMA.TABLES
+table_name = CONTROL_TABLE.split(".")[-1]
+schema_rows = session.sql(f"""
+SELECT ORDINAL_POSITION, COLUMN_NAME, DATA_TYPE
+FROM RTX_RAW_DEV.INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = 'ES_ESC_GRC'
-  AND STARTSWITH(UPPER(TABLE_NAME), 'ARCHER_')
-  AND ENDSWITH(UPPER(TABLE_NAME), '_RAW')
-  AND (
-       UPPER(TABLE_NAME) LIKE '%DOCUMENT%'
-    OR UPPER(TABLE_NAME) LIKE '%ATTACH%'
-    OR UPPER(TABLE_NAME) LIKE '%FILE%'
-    OR UPPER(TABLE_NAME) LIKE '%REPOSIT%'
-    OR UPPER(TABLE_NAME) LIKE '%EVIDENCE%'
-    OR UPPER(TABLE_NAME) LIKE '%REPORT%'
-  )
-ORDER BY TABLE_NAME
+  AND TABLE_NAME = '{table_name}'
+ORDER BY ORDINAL_POSITION
 """).collect()
 
-candidate_tables = [row["TABLE_NAME"] for row in candidate_rows]
-print()
-print("CURRENT_ATTACHMENT_REPOSITORY_CANDIDATES =", len(candidate_tables))
-for table in candidate_tables:
-    print("TABLE =", table)
+print("CONTROL_TABLE =", CONTROL_TABLE)
+print("COLUMN_COUNT =", len(schema_rows))
+print("COLUMNS =", [(r["COLUMN_NAME"], r["DATA_TYPE"]) for r in schema_rows])
 
-# Get schema once for all candidates.
-columns_by_table = {}
-if candidate_tables:
-    names = ", ".join("'" + x.replace("'", "''") + "'" for x in candidate_tables)
-    col_rows = session.sql(f"""
-    SELECT TABLE_NAME, ORDINAL_POSITION, COLUMN_NAME, DATA_TYPE
-    FROM RTX_RAW_DEV.INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = 'ES_ESC_GRC'
-      AND TABLE_NAME IN ({names})
-    ORDER BY TABLE_NAME, ORDINAL_POSITION
-    """).collect()
-    for row in col_rows:
-        columns_by_table.setdefault(row["TABLE_NAME"], []).append(
-            (row["COLUMN_NAME"], row["DATA_TYPE"])
-        )
+columns = {str(r["COLUMN_NAME"]).upper() for r in schema_rows}
+has_contract = {"CONTENT_ID", "CURATED_JSON"}.issubset(columns)
+print("HAS_CONTENT_ID_CURATED_JSON =", has_contract)
 
-print()
-print("CANDIDATE_SCHEMAS")
-for table in candidate_tables:
-    print(table, "|", columns_by_table.get(table, []))
-
-# ------------------------------------------------------------------
-# 3) Recursively match attachment IDs inside candidate CURATED_JSON payloads.
-# ------------------------------------------------------------------
-if distinct_ids:
-    ids_df = session.create_dataframe(
-        [(x,) for x in sorted(distinct_ids)],
-        schema=["ATTACHMENT_ID"]
-    )
-    ids_df.create_or_replace_temp_view("TMP_OSCAL_ATTACHMENT_IDS")
+if not schema_rows:
+    print("RESULT: LEVEL355_CONTROL_TABLE_NOT_FOUND")
+elif not has_contract:
+    print("RESULT: LEVEL355_CONTROL_TABLE_CONTRACT_NEEDS_REVIEW")
 else:
-    ids_df = None
+    # ------------------------------------------------------------------
+    # 2) Row counts and Authorization Package reference coverage
+    # ------------------------------------------------------------------
+    control_stats = session.sql(f"""
+    SELECT
+        COUNT(*) AS RAW_ROWS,
+        COUNT(DISTINCT TRIM(CONTENT_ID::STRING)) AS DISTINCT_CONTENT_IDS,
+        COUNT_IF(CONTENT_ID IS NULL OR LENGTH(TRIM(CONTENT_ID::STRING)) = 0) AS NULL_OR_BLANK_IDS
+    FROM {CONTROL_TABLE}
+    """).collect()[0]
 
-matches = []
-for table in candidate_tables:
-    cols = {str(name).upper(): dtype for name, dtype in columns_by_table.get(table, [])}
-    if "CURATED_JSON" not in cols or not distinct_ids:
-        continue
+    print("CONTROL_RAW_ROWS =", control_stats["RAW_ROWS"])
+    print("CONTROL_DISTINCT_CONTENT_IDS =", control_stats["DISTINCT_CONTENT_IDS"])
+    print("CONTROL_NULL_OR_BLANK_IDS =", control_stats["NULL_OR_BLANK_IDS"])
 
-    full = "RTX_RAW_DEV.ES_ESC_GRC." + table
-    result = session.sql(f"""
-    WITH flattened AS (
-        SELECT
-            f.PATH::STRING AS JSON_PATH,
-            f.KEY::STRING AS JSON_KEY,
-            TRIM(f.VALUE::STRING) AS SCALAR_VALUE
-        FROM {full} t,
-             LATERAL FLATTEN(INPUT => t.CURATED_JSON, RECURSIVE => TRUE) f
-        WHERE TYPEOF(f.VALUE) IN ('INTEGER','DECIMAL','DOUBLE','VARCHAR')
+    coverage = session.sql(f"""
+    WITH refs AS (
+        SELECT DISTINCT TRIM(f.value:ContentId::STRING) AS CONTENT_ID
+        FROM {AUTH_TABLE} a,
+             LATERAL FLATTEN(INPUT => a.CURATED_JSON:ALLOCATED_CONTROLS) f
+        WHERE f.value:LevelId::STRING = '355'
+          AND f.value:ContentId IS NOT NULL
     ),
-    matched AS (
-        SELECT
-            fl.JSON_PATH,
-            fl.JSON_KEY,
-            COUNT(DISTINCT ids.ATTACHMENT_ID) AS MATCHED_ATTACHMENT_IDS
-        FROM flattened fl
-        JOIN TMP_OSCAL_ATTACHMENT_IDS ids
-          ON fl.SCALAR_VALUE = ids.ATTACHMENT_ID
-        GROUP BY fl.JSON_PATH, fl.JSON_KEY
+    controls AS (
+        SELECT DISTINCT TRIM(CONTENT_ID::STRING) AS CONTENT_ID
+        FROM {CONTROL_TABLE}
+        WHERE CONTENT_ID IS NOT NULL
     )
-    SELECT JSON_PATH, JSON_KEY, MATCHED_ATTACHMENT_IDS
-    FROM matched
-    ORDER BY MATCHED_ATTACHMENT_IDS DESC, JSON_PATH
-    """).collect()
+    SELECT
+        COUNT(*) AS REFERENCED_LEVEL355_IDS,
+        COUNT_IF(c.CONTENT_ID IS NOT NULL) AS MATCHED_IDS,
+        COUNT_IF(c.CONTENT_ID IS NULL) AS MISSING_IDS
+    FROM refs r
+    LEFT JOIN controls c USING (CONTENT_ID)
+    """).collect()[0]
 
-    total_matched = sum(int(r["MATCHED_ATTACHMENT_IDS"] or 0) for r in result)
-    max_path_match = max([int(r["MATCHED_ATTACHMENT_IDS"] or 0) for r in result], default=0)
+    print("REFERENCED_LEVEL355_IDS =", coverage["REFERENCED_LEVEL355_IDS"])
+    print("MATCHED_LEVEL355_IDS =", coverage["MATCHED_IDS"])
+    print("MISSING_LEVEL355_IDS =", coverage["MISSING_IDS"])
 
-    # Because one attachment ID could occur at multiple paths, total_matched may double-count.
-    distinct_match = session.sql(f"""
-    WITH flattened AS (
-        SELECT TRIM(f.VALUE::STRING) AS SCALAR_VALUE
-        FROM {full} t,
-             LATERAL FLATTEN(INPUT => t.CURATED_JSON, RECURSIVE => TRUE) f
-        WHERE TYPEOF(f.VALUE) IN ('INTEGER','DECIMAL','DOUBLE','VARCHAR')
-    )
-    SELECT COUNT(DISTINCT ids.ATTACHMENT_ID) AS MATCHED
-    FROM flattened fl
-    JOIN TMP_OSCAL_ATTACHMENT_IDS ids
-      ON fl.SCALAR_VALUE = ids.ATTACHMENT_ID
-    """).collect()[0]["MATCHED"]
-
-    if int(distinct_match or 0) > 0:
-        matches.append((table, int(distinct_match or 0), result))
-        print()
-        print("MATCHING_TABLE =", table)
-        print("MATCHED_DISTINCT_ATTACHMENT_IDS =", int(distinct_match or 0))
-        print("MISSING_ATTACHMENT_IDS =", len(distinct_ids) - int(distinct_match or 0))
-        print("MATCHING_JSON_PATHS =")
-        for r in result[:20]:
-            print(
-                " ", r["MATCHED_ATTACHMENT_IDS"],
-                "| PATH =", r["JSON_PATH"],
-                "| KEY =", r["JSON_KEY"],
-            )
-
-# ------------------------------------------------------------------
-# 4) For matching tables, inventory potential href/identifier metadata paths
-#    on only the rows that contain one of our attachment IDs.
-# ------------------------------------------------------------------
-for table, matched_count, _ in matches:
-    full = "RTX_RAW_DEV.ES_ESC_GRC." + table
-    paths = session.sql(f"""
-    WITH matched_rows AS (
-        SELECT DISTINCT t.CURATED_JSON
-        FROM {full} t,
-             LATERAL FLATTEN(INPUT => t.CURATED_JSON, RECURSIVE => TRUE) f
-        JOIN TMP_OSCAL_ATTACHMENT_IDS ids
-          ON TRIM(f.VALUE::STRING) = ids.ATTACHMENT_ID
-    ),
-    candidate_meta AS (
-        SELECT
-            f.PATH::STRING AS JSON_PATH,
-            f.KEY::STRING AS JSON_KEY,
-            COUNT(*) AS POPULATED_VALUES
-        FROM matched_rows r,
-             LATERAL FLATTEN(INPUT => r.CURATED_JSON, RECURSIVE => TRUE) f
-        WHERE f.VALUE IS NOT NULL
-          AND (
-               REGEXP_LIKE(UPPER(COALESCE(f.KEY::STRING,'')), '.*(URL|URI|HREF|LINK|FILE|NAME|TITLE|IDENTIFIER|ID).*')
-            OR REGEXP_LIKE(UPPER(COALESCE(f.PATH::STRING,'')), '.*(URL|URI|HREF|LINK|FILE|NAME|TITLE|IDENTIFIER|ID).*')
-          )
-        GROUP BY f.PATH::STRING, f.KEY::STRING
-    )
-    SELECT JSON_PATH, JSON_KEY, POPULATED_VALUES
-    FROM candidate_meta
-    ORDER BY POPULATED_VALUES DESC, JSON_PATH
-    LIMIT 50
-    """).collect()
-
+    # ------------------------------------------------------------------
+    # 3) Profile the fields that matter first for implemented-requirements[]
+    #    on only controls currently referenced by Source One.
+    # ------------------------------------------------------------------
     print()
-    print("POTENTIAL_RESOURCE_METADATA_PATHS =", table)
-    for r in paths:
-        print(
-            " ", r["POPULATED_VALUES"],
-            "| PATH =", r["JSON_PATH"],
-            "| KEY =", r["JSON_KEY"],
+    print("REFERENCED_CONTROL_FIELD_PROFILE")
+
+    for field in KEY_FIELDS:
+        rows = session.sql(f"""
+        WITH refs AS (
+            SELECT DISTINCT TRIM(f.value:ContentId::STRING) AS CONTENT_ID
+            FROM {AUTH_TABLE} a,
+                 LATERAL FLATTEN(INPUT => a.CURATED_JSON:ALLOCATED_CONTROLS) f
+            WHERE f.value:LevelId::STRING = '355'
+              AND f.value:ContentId IS NOT NULL
+        ),
+        matched AS (
+            SELECT c.CURATED_JSON
+            FROM {CONTROL_TABLE} c
+            JOIN refs r
+              ON TRIM(c.CONTENT_ID::STRING) = r.CONTENT_ID
+        )
+        SELECT
+            TYPEOF(CURATED_JSON:{field}) AS VALUE_TYPE,
+            COUNT(*) AS ROW_COUNT
+        FROM matched
+        GROUP BY TYPEOF(CURATED_JSON:{field})
+        ORDER BY ROW_COUNT DESC, VALUE_TYPE
+        """).collect()
+
+        type_counts = {
+            ("ABSENT_OR_SQL_NULL" if r["VALUE_TYPE"] is None else str(r["VALUE_TYPE"])): int(r["ROW_COUNT"])
+            for r in rows
+        }
+        populated = sum(
+            n for t, n in type_counts.items()
+            if t not in {"ABSENT_OR_SQL_NULL", "NULL_VALUE"}
         )
 
-print()
-print("MATCHING_TABLE_COUNT =", len(matches))
-print("MATCHING_TABLE_SUMMARY =", [(t, n) for t, n, _ in matches])
+        print(
+            field,
+            "| POPULATED =", populated,
+            "| TYPES =", type_counts,
+        )
 
-if not matches:
-    print("RESULT: ATTACHMENT_IDS_NOT_RESOLVED_IN_CURRENT_CANDIDATE_RAW_TABLES")
-elif any(n == len(distinct_ids) for _, n, _ in matches):
-    print("RESULT: ATTACHMENT_ID_SOURCE_IDENTIFIED_REVIEW_RESOURCE_PATHS")
-else:
-    print("RESULT: ATTACHMENT_ID_SOURCE_PARTIALLY_IDENTIFIED_REVIEW_COVERAGE")
+    # ------------------------------------------------------------------
+    # 4) Existing live SSP control-implementation registry branch
+    # ------------------------------------------------------------------
+    print()
+    print("CONTROL_IMPLEMENTATION_REGISTRY")
+    registry = session.sql("""
+    SELECT
+        NODE_PATH,
+        ELEMENT_TYPE,
+        PARENT_NODE_PATH,
+        IS_COLLECTION,
+        INSTANCE_KEY_RULE,
+        PROCESS_ORDER,
+        IS_ACTIVE,
+        ITEM_PATH,
+        OPERATOR,
+        UUID_POLICY,
+        REQUIRED_MEMBERS
+    FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
+    WHERE UPPER(TRIM(OSCAL_MODEL_KEY)) = 'SSP'
+      AND NODE_PATH LIKE 'system-security-plan.control-implementation%'
+    ORDER BY PROCESS_ORDER, NODE_PATH
+    """).collect()
+
+    for row in registry:
+        print(row.as_dict())
+
+    active_paths = {
+        str(r["NODE_PATH"]).strip()
+        for r in registry
+        if bool(r["IS_ACTIVE"])
+    }
+    has_ci = "system-security-plan.control-implementation" in active_paths
+    has_ir = "system-security-plan.control-implementation.implemented-requirements[]" in active_paths
+
+    print("CONTROL_IMPLEMENTATION_PATH_READY =", has_ci)
+    print("IMPLEMENTED_REQUIREMENTS_PATH_READY =", has_ir)
+
+    missing = int(coverage["MISSING_IDS"] or 0)
+    matched = int(coverage["MATCHED_IDS"] or 0)
+
+    if matched > 0 and missing == 0 and has_ir:
+        print("RESULT: LEVEL355_READY_FOR_IMPLEMENTED_REQUIREMENTS_MAPPING")
+    elif matched > 0 and missing == 0 and not has_ir:
+        print("RESULT: LEVEL355_SOURCE_READY_REGISTRY_BRANCH_NEEDED")
+    elif matched > 0:
+        print("RESULT: LEVEL355_SOURCE_PARTIAL_COVERAGE_REVIEW")
+    else:
+        print("RESULT: LEVEL355_SOURCE_NOT_JOINING_TO_AUTH_PACKAGE")
