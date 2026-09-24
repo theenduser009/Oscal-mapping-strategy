@@ -68,7 +68,8 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
     except BaseException as error:
         details = getattr(error, "details", {})
         report.update(status="COMMIT_FAILED_REVIEW_REQUIRED" if report["commit_attempted"] else "FAILED_BEFORE_COMMIT",
-                      failed_route=active, error_type=type(error).__name__, load_error=details)
+                      failed_route=active, error_type=type(error).__name__,
+                      error_message=str(error), load_error=details)
         report["writes_executed"] |= details.get("writes_executed") is True
         raise PipelineError(report) from None
 
