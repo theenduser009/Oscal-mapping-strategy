@@ -19,6 +19,7 @@
 # Aggregate counts only. Referenced ContentIds are never printed.
 
 from collections import defaultdict
+from snowflake.snowpark import functions as F
 
 SOURCE_KEY = "source-one"
 ROUTE = ("source-one", "SSP")
