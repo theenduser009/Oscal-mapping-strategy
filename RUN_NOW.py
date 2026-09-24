@@ -1,17 +1,23 @@
-# RUN NOW — Level-355 one-row control-id fallback check
+# RUN NOW — Validate CONTROL_NAME prefix as one-row control-id fallback
 # Date: 2026-09-24
 # READ ONLY. No source, registry, mapping, DIM, or FACT DML.
 #
-# Current blocker:
-# - 127,496 matched Level-355 control rows
-# - CONTROL_NUMBER effective on 127,495 rows
-# - exactly 1 row has JSON null CONTROL_NUMBER
+# Proven blocker:
+# - 127,496 matched Level-355 rows
+# - 127,495 have CONTROL_NUMBER
+# - exactly 1 has no CONTROL_NUMBER, FEED_CONTROL_NUMBER, or CONTROL_NUMBER_ONLY
 #
-# Check only whether another control-number field covers that one row.
-# No IDs or source values are printed.
+# This check asks one precise question:
+# Does the leading token of CONTROL_NAME reproduce CONTROL_NUMBER on all rows where
+# CONTROL_NUMBER exists, and can it cover the one missing row?
+#
+# No source values or IDs are printed.
 
 AUTH_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
 CONTROL_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW"
+
+cn = "GET(s.CURATED_JSON, 'CONTROL_NUMBER')"
+name = "GET(s.CURATED_JSON, 'CONTROL_NAME')"
 
 def present(expr):
     return f"""
@@ -23,39 +29,62 @@ def present(expr):
     END
     """
 
-cn = "GET(s.CURATED_JSON, 'CONTROL_NUMBER')"
-feed = "GET(s.CURATED_JSON, 'FEED_CONTROL_NUMBER')"
-only = "GET(s.CURATED_JSON, 'CONTROL_NUMBER_ONLY')"
+# Extract the first whitespace-delimited token from CONTROL_NAME.
+name_prefix = f"SPLIT_PART(TRIM({name}::STRING), ' ', 1)"
 
 row = session.sql(f"""
 SELECT
     COUNT(*) AS MATCHED_ROWS,
-    COUNT_IF({present(cn)} = 0) AS CONTROL_NUMBER_MISSING,
-    COUNT_IF({present(cn)} = 0 AND {present(feed)} = 1) AS FEED_FALLBACK_COVERS,
-    COUNT_IF({present(cn)} = 0 AND {present(only)} = 1) AS CONTROL_NUMBER_ONLY_COVERS,
-    COUNT_IF({present(cn)} = 0 AND ({present(feed)} = 1 OR {present(only)} = 1))
-        AS ANY_FALLBACK_COVERS,
-    COUNT_IF({present(cn)} = 0 AND {present(feed)} = 0 AND {present(only)} = 0)
-        AS MISSING_ALL_CONTROL_NUMBER_CANDIDATES
+    COUNT_IF({present(cn)} = 1) AS CONTROL_NUMBER_PRESENT,
+    COUNT_IF({present(name)} = 1) AS CONTROL_NAME_PRESENT,
+
+    COUNT_IF(
+        {present(cn)} = 1
+        AND {present(name)} = 1
+        AND TRIM({cn}::STRING) = {name_prefix}
+    ) AS EXISTING_ROWS_PREFIX_EQUALS_CONTROL_NUMBER,
+
+    COUNT_IF(
+        {present(cn)} = 1
+        AND {present(name)} = 1
+        AND TRIM({cn}::STRING) <> {name_prefix}
+    ) AS EXISTING_ROWS_PREFIX_MISMATCH,
+
+    COUNT_IF(
+        {present(cn)} = 0
+        AND {present(name)} = 1
+        AND NULLIF({name_prefix}, '') IS NOT NULL
+    ) AS MISSING_CONTROL_NUMBER_WITH_NAME_PREFIX,
+
+    COUNT_IF(
+        {present(cn)} = 0
+        AND (
+            {present(name)} = 0
+            OR NULLIF({name_prefix}, '') IS NULL
+        )
+    ) AS MISSING_CONTROL_NUMBER_WITHOUT_NAME_PREFIX
 FROM {CONTROL_TABLE} s
 JOIN {AUTH_TABLE} p
   ON TRIM(p.CONTENT_ID::STRING) = TRIM(s.CONTENT_ID::STRING)
 """).collect()[0]
 
-print("LEVEL355_CONTROL_ID_FALLBACK_CHECK")
+print("LEVEL355_CONTROL_NAME_PREFIX_FALLBACK_CHECK")
 for key in (
     "MATCHED_ROWS",
-    "CONTROL_NUMBER_MISSING",
-    "FEED_FALLBACK_COVERS",
-    "CONTROL_NUMBER_ONLY_COVERS",
-    "ANY_FALLBACK_COVERS",
-    "MISSING_ALL_CONTROL_NUMBER_CANDIDATES",
+    "CONTROL_NUMBER_PRESENT",
+    "CONTROL_NAME_PRESENT",
+    "EXISTING_ROWS_PREFIX_EQUALS_CONTROL_NUMBER",
+    "EXISTING_ROWS_PREFIX_MISMATCH",
+    "MISSING_CONTROL_NUMBER_WITH_NAME_PREFIX",
+    "MISSING_CONTROL_NUMBER_WITHOUT_NAME_PREFIX",
 ):
     print(key, "=", int(row[key] or 0))
 
-if int(row["CONTROL_NUMBER_MISSING"] or 0) == 0:
-    print("RESULT: CONTROL_NUMBER_COMPLETE")
-elif int(row["ANY_FALLBACK_COVERS"] or 0) == int(row["CONTROL_NUMBER_MISSING"] or 0):
-    print("RESULT: CONTROL_NUMBER_FALLBACK_AVAILABLE")
+if (
+    int(row["EXISTING_ROWS_PREFIX_MISMATCH"] or 0) == 0
+    and int(row["MISSING_CONTROL_NUMBER_WITH_NAME_PREFIX"] or 0) == 1
+    and int(row["MISSING_CONTROL_NUMBER_WITHOUT_NAME_PREFIX"] or 0) == 0
+):
+    print("RESULT: CONTROL_NAME_PREFIX_IS_VALIDATED_ONE_ROW_FALLBACK")
 else:
-    print("RESULT: ONE_OR_MORE_CONTROLS_HAVE_NO_CONTROL_NUMBER")
+    print("RESULT: CONTROL_NAME_PREFIX_FALLBACK_NOT_PROVEN")
