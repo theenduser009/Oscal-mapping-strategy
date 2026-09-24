@@ -388,6 +388,100 @@ def _build_component_hydration_lookups(source_df, mapping_rows, source_dfs, cont
     return lookups
 
 
+def _build_joined_record_lookups(source_df, mapping_rows, context):
+    """Load only joined child records whose top-level CONTENT_ID matches a selected source record."""
+    from snowflake.snowpark import functions as F
+
+    bindings = {}
+    for row in mapping_rows:
+        params = _metadata_params(row)
+        binding = params.get("joined_lookup")
+        if not binding:
+            raise ValueError("Joined-record mapping requires LOOKUP_KEY")
+        bindings.setdefault(binding, True)
+
+    source_ids = source_df.select(
+        F.trim(F.col("SOURCE_RECORD_ID").cast("string")).alias("_JOIN_ID")
+    ).distinct()
+
+    result = {}
+    for binding in bindings:
+        frame = context["lookups"].get("joined_sources", {}).get(binding)
+        if frame is None:
+            raise ValueError("Joined-record lookup source is unavailable: " + binding)
+
+        columns = {str(name).strip('"').upper(): name for name in frame.columns}
+        if not {"CONTENT_ID", "CURATED_JSON"}.issubset(columns):
+            raise ValueError("Joined-record lookup requires CONTENT_ID and CURATED_JSON")
+
+        joined = frame.select(
+            F.trim(F.col(columns["CONTENT_ID"]).cast("string")).alias("_JOIN_ID"),
+            F.col(columns["CURATED_JSON"]).alias("CURATED_JSON"),
+        ).join(source_ids, "_JOIN_ID", "inner")
+
+        by_parent = {}
+        for record in joined.to_local_iterator():
+            parent_id = str(record["_JOIN_ID"]).strip()
+            payload = _metadata_parse(record, context)
+            by_parent.setdefault(parent_id, []).append(payload)
+        result[binding] = by_parent
+
+    return result
+
+
+def _metadata_joined_record_instances(source_id, rows, parameters, context):
+    bindings = {
+        _metadata_params(row).get("joined_lookup")
+        for row in rows
+        if _metadata_params(row).get("joined_lookup")
+    }
+    if len(bindings) != 1:
+        raise ValueError("Joined-record collection requires exactly one lookup binding")
+
+    binding = next(iter(bindings))
+    children = context.get("joined_record_lookups", {}).get(binding, {}).get(source_id, ())
+    identity_field = parameters.get("joined_instance_field")
+    if not identity_field:
+        raise ValueError("Joined-record collection requires a registry identity field")
+
+    instances = []
+    for child in children:
+        identity = resolve_json_path(child, identity_field, default=SKIP_VALUE)
+        if identity is SKIP_VALUE:
+            raise ValueError("Joined-record identity field is absent")
+        key = _scalar_text(identity, "Joined-record identity must be scalar",
+                           "Joined-record identity must be nonblank")
+
+        payload, crosswalks = {}, []
+        for row in rows:
+            value = _metadata_mapped_value(row, child, context)
+            if value is SKIP_VALUE:
+                continue
+            target = _metadata_target(row)
+            if row["TRANSFORM_ID"] == "status-crosswalk":
+                crosswalks.append(value)
+            else:
+                _metadata_assign(payload, target, value)
+
+        for members in crosswalks:
+            for member, value in members.items():
+                _metadata_assign(payload, member, value, preserve_existing=member == "remarks")
+
+        if any(not _has_value(_metadata_get(payload, member))
+               for member in parameters.get("required_members", ())):
+            raise ValueError("Joined-record required payload member is missing")
+
+        _append_unique_collection_instance(
+            instances,
+            {
+                "instance_key": key,
+                "payload": payload,
+                "parent_instance_key": _metadata_parent_key(parameters, source_id),
+            },
+        )
+    return instances
+
+
 def _metadata_party_uuid(group, source_record_id, identifier, context):
     # Cell 3 permits one source namespace per linked model; preserve its accepted seed.
     return _deterministic_uuid(context["config"]["SOURCE_SYSTEM_NAME"], source_record_id, "party", identifier)
@@ -477,6 +571,8 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
         return _metadata_party_instances(path, source_obj, source_id, operator, parameters, context)
     if operator == "references":
         return _metadata_reference_instances(source_obj, source_id, rows, parameters, context)
+    if operator == "joined-records":
+        return _metadata_joined_record_instances(source_id, rows, parameters, context)
     payload, instances, crosswalks = {}, [], []
     for row in rows:
         value = _metadata_mapped_value(row, source_obj, context)
@@ -592,8 +688,12 @@ def _metadata_prepare(source_df, context):
     plan = context["compiled_plan"]
     references = [row for row in plan["mappings"] if row["TRANSFORM_ID"] != "skip"
                   and plan["elements"][row["OWNER_ELEMENT_PATH"]]["operator"] == "references"]
+    joined_records = [row for row in plan["mappings"] if row["TRANSFORM_ID"] != "skip"
+                      and plan["elements"][row["OWNER_ELEMENT_PATH"]]["operator"] == "joined-records"]
     context["component_hydration_lookups"] = _build_component_hydration_lookups(
         source_df, references, context["lookups"].get("component_sources", {}), context) if references else {}
+    context["joined_record_lookups"] = _build_joined_record_lookups(
+        source_df, joined_records, context) if joined_records else {}
 
 
 def _metadata_finish(nodes, edges, context):
