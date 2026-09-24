@@ -1,79 +1,64 @@
-# RUN NOW — Diagnose Source One SSP PREVIEW failure
+# RUN NOW — Diagnose Source One zero-row frozen snapshot
 # Date: 2026-09-24
-# READ ONLY. No registry, DIM, FACT, mapping, or source DML.
+# READ ONLY. No source, registry, DIM, FACT, or mapping DML.
 #
-# The 2026-09-24 fresh SSP PREVIEW stopped with:
-#   status = FAILED_BEFORE_COMMIT
-#   writes_executed = false
-#   commit_attempted = false
-#   failed_route = ("source-one", "SSP")
-#   error_type = ValueError
+# Prior diagnostic showed:
+#   SOURCE_SELECTED_ROWS = 0
+#   GRAPH BUILD = FAILED
+#   UNDERLYING_ERROR_MESSAGE = Graph builder produced no nodes
 #
-# Cell 7 intentionally hides the underlying ValueError message inside PipelineError.
-# This helper reruns only the graph-build stage and prints the original exception.
-# It does NOT call validate_and_load_oscal and therefore cannot write targets.
+# This check compares the live RAW table with the frozen Cell-2 snapshot already
+# present in SOURCE_INPUTS. It tells us whether Cell 2 captured the source while
+# the truncate-and-load RAW table was temporarily empty, or whether the RAW table
+# itself is currently empty.
 
-import copy
-import traceback
+SOURCE_KEY = "source-one"
+RAW_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
 
-ROUTE = ("source-one", "SSP")
+print("SOURCE_ONE_ZERO_ROW_SNAPSHOT_DIAGNOSTIC")
 
-print("SOURCE_ONE_SSP_PREVIEW_FAILURE_DIAGNOSTIC")
-print("PIPELINE_STATUS =", (PIPELINE_REPORT or {}).get("status") if isinstance(PIPELINE_REPORT, dict) else None)
-print("WRITES_EXECUTED =", (PIPELINE_REPORT or {}).get("writes_executed") if isinstance(PIPELINE_REPORT, dict) else None)
-print("COMMIT_ATTEMPTED =", (PIPELINE_REPORT or {}).get("commit_attempted") if isinstance(PIPELINE_REPORT, dict) else None)
+live = session.sql(f"""
+SELECT
+    COUNT(*) AS RAW_ROWS,
+    COUNT(DISTINCT TRIM(CONTENT_ID::STRING)) AS DISTINCT_CONTENT_IDS,
+    COUNT_IF(CONTENT_ID IS NULL OR LENGTH(TRIM(CONTENT_ID::STRING)) = 0) AS NULL_OR_BLANK_CONTENT_IDS
+FROM {RAW_TABLE}
+""").collect()[0]
 
-contexts = [
-    c for c in MAPPING_CONTEXTS
-    if (c["source_key"], c["config"]["OSCAL_MODEL"]) == ROUTE
-]
+print("LIVE_RAW_ROWS =", live["RAW_ROWS"])
+print("LIVE_DISTINCT_CONTENT_IDS =", live["DISTINCT_CONTENT_IDS"])
+print("LIVE_NULL_OR_BLANK_CONTENT_IDS =", live["NULL_OR_BLANK_CONTENT_IDS"])
 
-print("MATCHING_CONTEXTS =", len(contexts))
-if len(contexts) != 1:
-    raise ValueError("Expected exactly one source-one / SSP mapping context")
+source = SOURCE_INPUTS.get(SOURCE_KEY)
+if source is None:
+    print("SOURCE_INPUT_PRESENT = False")
+    print("RESULT: RERUN_CELL_2_REQUIRED")
+else:
+    print("SOURCE_INPUT_PRESENT = True")
+    print("CELL2_SELECTION =", source.get("selection"))
 
-context = copy.deepcopy(contexts[0])
-source = SOURCE_INPUTS[ROUTE[0]]
-context["lookups"] = source.get("lookups", {})
+    try:
+        frozen_rows = source["source_df"].count()
+    except Exception as error:
+        frozen_rows = None
+        print("FROZEN_SOURCE_DF_ERROR =", type(error).__name__, str(error))
 
-print("ROUTING_STATUS =", context["routing_report"].get("STATUS"))
-print("SELECTED_MAPPING_ROWS =", len(context.get("mapping_rows") or []))
-print("SOURCE_SELECTED_ROWS =", source.get("selection", {}).get("SELECTED_ROWS"))
-print("EXECUTE_WRITES =", context["config"].get("EXECUTE_WRITES"))
-print("STORAGE_CONTRACT_VERIFIED =", (context["config"].get("STORAGE_CONTRACT") or {}).get("VERIFIED"))
+    try:
+        snapshot_rows = source["snapshot"].count()
+    except Exception as error:
+        snapshot_rows = None
+        print("FROZEN_SNAPSHOT_ERROR =", type(error).__name__, str(error))
 
-# Surface intentional populated-value guards before graph construction.
-guard_rows = [
-    row for row in (context.get("mapping_rows") or [])
-    if row.get("APPROVAL_STATUS") == "BLOCKED_IF_POPULATED"
-       or row.get("EXECUTION_STATUS") == "BLOCKED_IF_POPULATED"
-]
-print("POPULATED_VALUE_GUARDS =", [
-    (row.get("SOURCE_FIELD_NAME"), row.get("RULE_ID"))
-    for row in guard_rows
-])
+    print("FROZEN_SOURCE_DF_ROWS =", frozen_rows)
+    print("FROZEN_SNAPSHOT_ROWS =", snapshot_rows)
 
-print()
-print("BUILD_GRAPH_DIAGNOSTIC")
-try:
-    nodes, edges = build_oscal_graph(
-        source["source_df"],
-        None,
-        None,
-        context["config"]["OSCAL_MODEL"],
-        context["config"]["SOURCE_SYSTEM_NAME"],
-        context["config"]["SOURCE_TABLE_NAME"],
-        context=context,
-    )
-    print("GRAPH_BUILD = PASS")
-    print("NODES =", nodes.count())
-    print("EDGES =", edges.count())
-    print("RESULT: SSP_GRAPH_BUILD_PASSED_DIAGNOSTIC")
-except Exception as error:
-    print("GRAPH_BUILD = FAILED")
-    print("UNDERLYING_ERROR_TYPE =", type(error).__name__)
-    print("UNDERLYING_ERROR_MESSAGE =", str(error))
-    report = context.get("graph_report") or {}
-    print("GRAPH_REPORT_STATUS =", report.get("STATUS"))
-    print("GRAPH_REPORT =", report)
-    print("RESULT: SSP_GRAPH_BUILD_FAILURE_IDENTIFIED")
+    live_rows = int(live["RAW_ROWS"] or 0)
+
+    if live_rows > 0 and frozen_rows == 0:
+        print("RESULT: LIVE_RAW_REPOPULATED_RERUN_CELL_2_THEN_3_AND_7")
+    elif live_rows == 0:
+        print("RESULT: LIVE_RAW_CURRENTLY_EMPTY_WAIT_FOR_SOURCE_LOAD")
+    elif frozen_rows == live_rows:
+        print("RESULT: FROZEN_SOURCE_MATCHES_LIVE_RAW_RETRY_SSP_PREVIEW")
+    else:
+        print("RESULT: SOURCE_SNAPSHOT_COUNT_MISMATCH_REVIEW")
