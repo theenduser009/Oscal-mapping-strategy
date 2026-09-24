@@ -1,199 +1,212 @@
-# RUN NOW — Level-355 Control Implementation source readiness
+# RUN NOW — Resolve the actual Level-355 join key
 # Date: 2026-09-24
 # READ ONLY. No source, registry, mapping, DIM, or FACT DML.
 #
-# Purpose:
-# Confirm the current Level-355 source contract and whether Authorization Package
-# ALLOCATED_CONTROLS references resolve to the actual control records needed for:
-#   system-security-plan.control-implementation.implemented-requirements[]
+# Known from the prior run:
+# - ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW exists
+# - 160,000 rows / 34,071 distinct top-level CONTENT_ID values
+# - Authorization Package exposes 252,165 distinct Level-355 ContentId references
+# - zero of those references matched top-level CONTROL_RAW.CONTENT_ID
 #
-# Expected source:
-#   RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW
+# This check answers only one question:
+#   Where, if anywhere, do those Authorization Package ContentId values occur
+#   inside the current Level-355 RAW record?
 #
-# This is the only next discovery step. It profiles the actual referenced control
-# records and the existing live registry branch. No broad table search.
+# It uses a deterministic 100-reference sample and prints aggregate/path evidence
+# only. It never prints the reference IDs themselves.
 
 CONTROL_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW"
 AUTH_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW"
+SAMPLE_SIZE = 100
 
-KEY_FIELDS = (
-    "CONTROL_NUMBER",
-    "FEED_CONTROL_NUMBER",
-    "CONTROL_NAME",
-    "CONTROL",
-    "IMPLEMENTATION_DETAILS",
-    "OVERALL_IMPLEMENTATION_DETAILS",
-    "IMPLEMENTATION_STATUS",
-    "CONTROL_PARAMETERS",
-    "RESPONSIBLE_ROLE",
-    "CONTROL_ENTITY",
-    "CONTROL_SET",
-    "CONTROL_ORIGINATION",
-    "ALLOCATION_STATUS",
-    "INHERITED_IMPLEMENTATION_DETAILS",
-    "PARTIAL_INHERITED_IMPLEMENTATION_DETAILS",
-    "ASSESSMENT_STATUS",
-    "OVERALL_ASSESSMENT_STATUS",
+# ------------------------------------------------------------------
+# 1) ID-shape comparison: reference IDs vs top-level control CONTENT_ID.
+# ------------------------------------------------------------------
+ref_stats = session.sql(f"""
+WITH refs AS (
+    SELECT DISTINCT TRIM(f.value:ContentId::STRING) AS REF_ID
+    FROM {AUTH_TABLE} a,
+         LATERAL FLATTEN(INPUT => a.CURATED_JSON:ALLOCATED_CONTROLS) f
+    WHERE f.value:LevelId::STRING = '355'
+      AND f.value:ContentId IS NOT NULL
 )
+SELECT
+    COUNT(*) AS DISTINCT_REFS,
+    MIN(LENGTH(REF_ID)) AS MIN_LEN,
+    MAX(LENGTH(REF_ID)) AS MAX_LEN,
+    COUNT_IF(TRY_TO_NUMBER(REF_ID) IS NOT NULL) AS NUMERIC_REFS
+FROM refs
+""").collect()[0]
 
-print("LEVEL355_CONTROL_IMPLEMENTATION_READINESS")
+control_stats = session.sql(f"""
+SELECT
+    COUNT(DISTINCT TRIM(CONTENT_ID::STRING)) AS DISTINCT_IDS,
+    MIN(LENGTH(TRIM(CONTENT_ID::STRING))) AS MIN_LEN,
+    MAX(LENGTH(TRIM(CONTENT_ID::STRING))) AS MAX_LEN,
+    COUNT(DISTINCT IFF(TRY_TO_NUMBER(TRIM(CONTENT_ID::STRING)) IS NOT NULL,
+                       TRIM(CONTENT_ID::STRING), NULL)) AS NUMERIC_IDS
+FROM {CONTROL_TABLE}
+WHERE CONTENT_ID IS NOT NULL
+""").collect()[0]
+
+print("LEVEL355_JOIN_KEY_DIAGNOSTIC")
+print("REFERENCE_ID_STATS =", ref_stats.as_dict())
+print("TOP_LEVEL_CONTENT_ID_STATS =", control_stats.as_dict())
+
+# Numeric-normalized join test rules out formatting differences like leading zeroes.
+normalized = session.sql(f"""
+WITH refs AS (
+    SELECT DISTINCT TRY_TO_NUMBER(TRIM(f.value:ContentId::STRING)) AS REF_ID
+    FROM {AUTH_TABLE} a,
+         LATERAL FLATTEN(INPUT => a.CURATED_JSON:ALLOCATED_CONTROLS) f
+    WHERE f.value:LevelId::STRING = '355'
+      AND TRY_TO_NUMBER(TRIM(f.value:ContentId::STRING)) IS NOT NULL
+),
+controls AS (
+    SELECT DISTINCT TRY_TO_NUMBER(TRIM(CONTENT_ID::STRING)) AS CONTROL_ID
+    FROM {CONTROL_TABLE}
+    WHERE TRY_TO_NUMBER(TRIM(CONTENT_ID::STRING)) IS NOT NULL
+)
+SELECT COUNT(*) AS NUMERIC_NORMALIZED_MATCHES
+FROM refs r
+JOIN controls c
+  ON r.REF_ID = c.CONTROL_ID
+""").collect()[0]
+
+print("NUMERIC_NORMALIZED_TOP_LEVEL_MATCHES =", normalized["NUMERIC_NORMALIZED_MATCHES"])
 
 # ------------------------------------------------------------------
-# 1) Physical source contract
+# 2) Whole-table Level-355 field sanity, independent of the failed join.
+#    This confirms whether the expected control fields are actually populated.
 # ------------------------------------------------------------------
-table_name = CONTROL_TABLE.split(".")[-1]
-schema_rows = session.sql(f"""
-SELECT ORDINAL_POSITION, COLUMN_NAME, DATA_TYPE
-FROM RTX_RAW_DEV.INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = 'ES_ESC_GRC'
-  AND TABLE_NAME = '{table_name}'
-ORDER BY ORDINAL_POSITION
+field_profile = session.sql(f"""
+WITH latest AS (
+    SELECT *
+    FROM {CONTROL_TABLE}
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY TRIM(CONTENT_ID::STRING)
+        ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
+    ) = 1
+)
+SELECT
+    COUNT(*) AS CURRENT_CONTROL_RECORDS,
+    COUNT_IF(CURATED_JSON:CONTROL_NUMBER IS NOT NULL) AS CONTROL_NUMBER_POPULATED,
+    COUNT_IF(CURATED_JSON:CONTROL_NAME IS NOT NULL) AS CONTROL_NAME_POPULATED,
+    COUNT_IF(CURATED_JSON:IMPLEMENTATION_DETAILS IS NOT NULL) AS IMPLEMENTATION_DETAILS_POPULATED,
+    COUNT_IF(CURATED_JSON:OVERALL_IMPLEMENTATION_DETAILS IS NOT NULL) AS OVERALL_IMPLEMENTATION_DETAILS_POPULATED,
+    COUNT_IF(CURATED_JSON:IMPLEMENTATION_STATUS IS NOT NULL) AS IMPLEMENTATION_STATUS_POPULATED,
+    COUNT_IF(CURATED_JSON:CONTROL_PARAMETERS IS NOT NULL) AS CONTROL_PARAMETERS_POPULATED,
+    COUNT_IF(CURATED_JSON:RESPONSIBLE_ROLE IS NOT NULL) AS RESPONSIBLE_ROLE_POPULATED,
+    COUNT_IF(CURATED_JSON:AUTHORIZATION_PACKAGE IS NOT NULL) AS AUTHORIZATION_PACKAGE_POPULATED,
+    COUNT_IF(CURATED_JSON:ALLOCATED_CONTROL_ID IS NOT NULL) AS ALLOCATED_CONTROL_ID_POPULATED,
+    COUNT_IF(CURATED_JSON:TRACKING_ID IS NOT NULL) AS TRACKING_ID_POPULATED
+FROM latest
+""").collect()[0]
+
+print("LEVEL355_CURRENT_FIELD_SANITY =", field_profile.as_dict())
+
+# ------------------------------------------------------------------
+# 3) Search a deterministic sample of 100 Level-355 reference IDs recursively
+#    inside current/latest CURATED_JSON and RAW_DATA. Output paths only.
+# ------------------------------------------------------------------
+sample_rows = session.sql(f"""
+SELECT DISTINCT TRIM(f.value:ContentId::STRING) AS REF_ID
+FROM {AUTH_TABLE} a,
+     LATERAL FLATTEN(INPUT => a.CURATED_JSON:ALLOCATED_CONTROLS) f
+WHERE f.value:LevelId::STRING = '355'
+  AND f.value:ContentId IS NOT NULL
+ORDER BY REF_ID
+LIMIT {SAMPLE_SIZE}
 """).collect()
 
-print("CONTROL_TABLE =", CONTROL_TABLE)
-print("COLUMN_COUNT =", len(schema_rows))
-print("COLUMNS =", [(r["COLUMN_NAME"], r["DATA_TYPE"]) for r in schema_rows])
+sample_ids = [str(r["REF_ID"]).strip() for r in sample_rows if r["REF_ID"] is not None]
+if not sample_ids:
+    raise ValueError("No Level-355 Authorization Package references found")
 
-columns = {str(r["COLUMN_NAME"]).upper() for r in schema_rows}
-has_contract = {"CONTENT_ID", "CURATED_JSON"}.issubset(columns)
-print("HAS_CONTENT_ID_CURATED_JSON =", has_contract)
+values_sql = ",\n        ".join(
+    "('" + value.replace("'", "''") + "')"
+    for value in sample_ids
+)
 
-if not schema_rows:
-    print("RESULT: LEVEL355_CONTROL_TABLE_NOT_FOUND")
-elif not has_contract:
-    print("RESULT: LEVEL355_CONTROL_TABLE_CONTRACT_NEEDS_REVIEW")
-else:
-    # ------------------------------------------------------------------
-    # 2) Row counts and Authorization Package reference coverage
-    # ------------------------------------------------------------------
-    control_stats = session.sql(f"""
-    SELECT
-        COUNT(*) AS RAW_ROWS,
-        COUNT(DISTINCT TRIM(CONTENT_ID::STRING)) AS DISTINCT_CONTENT_IDS,
-        COUNT_IF(CONTENT_ID IS NULL OR LENGTH(TRIM(CONTENT_ID::STRING)) = 0) AS NULL_OR_BLANK_IDS
-    FROM {CONTROL_TABLE}
-    """).collect()[0]
-
-    print("CONTROL_RAW_ROWS =", control_stats["RAW_ROWS"])
-    print("CONTROL_DISTINCT_CONTENT_IDS =", control_stats["DISTINCT_CONTENT_IDS"])
-    print("CONTROL_NULL_OR_BLANK_IDS =", control_stats["NULL_OR_BLANK_IDS"])
-
-    coverage = session.sql(f"""
-    WITH refs AS (
-        SELECT DISTINCT TRIM(f.value:ContentId::STRING) AS CONTENT_ID
-        FROM {AUTH_TABLE} a,
-             LATERAL FLATTEN(INPUT => a.CURATED_JSON:ALLOCATED_CONTROLS) f
-        WHERE f.value:LevelId::STRING = '355'
-          AND f.value:ContentId IS NOT NULL
+def search_variant(column_name):
+    rows = session.sql(f"""
+    WITH sample_refs(REF_ID) AS (
+        SELECT COLUMN1 FROM VALUES
+        {values_sql}
     ),
-    controls AS (
-        SELECT DISTINCT TRIM(CONTENT_ID::STRING) AS CONTENT_ID
+    latest AS (
+        SELECT *
         FROM {CONTROL_TABLE}
-        WHERE CONTENT_ID IS NOT NULL
-    )
-    SELECT
-        COUNT(*) AS REFERENCED_LEVEL355_IDS,
-        COUNT_IF(c.CONTENT_ID IS NOT NULL) AS MATCHED_IDS,
-        COUNT_IF(c.CONTENT_ID IS NULL) AS MISSING_IDS
-    FROM refs r
-    LEFT JOIN controls c USING (CONTENT_ID)
-    """).collect()[0]
-
-    print("REFERENCED_LEVEL355_IDS =", coverage["REFERENCED_LEVEL355_IDS"])
-    print("MATCHED_LEVEL355_IDS =", coverage["MATCHED_IDS"])
-    print("MISSING_LEVEL355_IDS =", coverage["MISSING_IDS"])
-
-    # ------------------------------------------------------------------
-    # 3) Profile the fields that matter first for implemented-requirements[]
-    #    on only controls currently referenced by Source One.
-    # ------------------------------------------------------------------
-    print()
-    print("REFERENCED_CONTROL_FIELD_PROFILE")
-
-    for field in KEY_FIELDS:
-        rows = session.sql(f"""
-        WITH refs AS (
-            SELECT DISTINCT TRIM(f.value:ContentId::STRING) AS CONTENT_ID
-            FROM {AUTH_TABLE} a,
-                 LATERAL FLATTEN(INPUT => a.CURATED_JSON:ALLOCATED_CONTROLS) f
-            WHERE f.value:LevelId::STRING = '355'
-              AND f.value:ContentId IS NOT NULL
-        ),
-        matched AS (
-            SELECT c.CURATED_JSON
-            FROM {CONTROL_TABLE} c
-            JOIN refs r
-              ON TRIM(c.CONTENT_ID::STRING) = r.CONTENT_ID
-        )
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY TRIM(CONTENT_ID::STRING)
+            ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
+        ) = 1
+    ),
+    matches AS (
         SELECT
-            TYPEOF(CURATED_JSON:{field}) AS VALUE_TYPE,
-            COUNT(*) AS ROW_COUNT
-        FROM matched
-        GROUP BY TYPEOF(CURATED_JSON:{field})
-        ORDER BY ROW_COUNT DESC, VALUE_TYPE
-        """).collect()
-
-        type_counts = {
-            ("ABSENT_OR_SQL_NULL" if r["VALUE_TYPE"] is None else str(r["VALUE_TYPE"])): int(r["ROW_COUNT"])
-            for r in rows
-        }
-        populated = sum(
-            n for t, n in type_counts.items()
-            if t not in {"ABSENT_OR_SQL_NULL", "NULL_VALUE"}
-        )
-
-        print(
-            field,
-            "| POPULATED =", populated,
-            "| TYPES =", type_counts,
-        )
-
-    # ------------------------------------------------------------------
-    # 4) Existing live SSP control-implementation registry branch
-    # ------------------------------------------------------------------
-    print()
-    print("CONTROL_IMPLEMENTATION_REGISTRY")
-    registry = session.sql("""
-    SELECT
-        NODE_PATH,
-        ELEMENT_TYPE,
-        PARENT_NODE_PATH,
-        IS_COLLECTION,
-        INSTANCE_KEY_RULE,
-        PROCESS_ORDER,
-        IS_ACTIVE,
-        ITEM_PATH,
-        OPERATOR,
-        UUID_POLICY,
-        REQUIRED_MEMBERS
-    FROM RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY
-    WHERE UPPER(TRIM(OSCAL_MODEL_KEY)) = 'SSP'
-      AND NODE_PATH LIKE 'system-security-plan.control-implementation%'
-    ORDER BY PROCESS_ORDER, NODE_PATH
+            f.PATH::STRING AS JSON_PATH,
+            f.KEY::STRING AS JSON_KEY,
+            COUNT(DISTINCT s.REF_ID) AS MATCHED_SAMPLE_IDS
+        FROM latest c,
+             LATERAL FLATTEN(INPUT => c.{column_name}, RECURSIVE => TRUE) f
+        JOIN sample_refs s
+          ON TRIM(f.VALUE::STRING) = s.REF_ID
+        WHERE TYPEOF(f.VALUE) IN ('INTEGER','DECIMAL','DOUBLE','VARCHAR')
+        GROUP BY f.PATH::STRING, f.KEY::STRING
+    )
+    SELECT JSON_PATH, JSON_KEY, MATCHED_SAMPLE_IDS
+    FROM matches
+    ORDER BY MATCHED_SAMPLE_IDS DESC, JSON_PATH
+    LIMIT 30
     """).collect()
 
-    for row in registry:
-        print(row.as_dict())
+    distinct_match = session.sql(f"""
+    WITH sample_refs(REF_ID) AS (
+        SELECT COLUMN1 FROM VALUES
+        {values_sql}
+    ),
+    latest AS (
+        SELECT *
+        FROM {CONTROL_TABLE}
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY TRIM(CONTENT_ID::STRING)
+            ORDER BY ETL_LOAD_TS DESC NULLS LAST, LOAD_TIMESTAMP DESC NULLS LAST
+        ) = 1
+    ),
+    flattened AS (
+        SELECT TRIM(f.VALUE::STRING) AS SCALAR_VALUE
+        FROM latest c,
+             LATERAL FLATTEN(INPUT => c.{column_name}, RECURSIVE => TRUE) f
+        WHERE TYPEOF(f.VALUE) IN ('INTEGER','DECIMAL','DOUBLE','VARCHAR')
+    )
+    SELECT COUNT(DISTINCT s.REF_ID) AS MATCHED
+    FROM flattened f
+    JOIN sample_refs s
+      ON f.SCALAR_VALUE = s.REF_ID
+    """).collect()[0]["MATCHED"]
 
-    active_paths = {
-        str(r["NODE_PATH"]).strip()
-        for r in registry
-        if bool(r["IS_ACTIVE"])
-    }
-    has_ci = "system-security-plan.control-implementation" in active_paths
-    has_ir = "system-security-plan.control-implementation.implemented-requirements[]" in active_paths
+    print()
+    print(column_name, "MATCHED_SAMPLE_IDS =", int(distinct_match or 0))
+    print(column_name, "MATCH_PATHS =")
+    for r in rows:
+        print(
+            " ", r["MATCHED_SAMPLE_IDS"],
+            "| PATH =", r["JSON_PATH"],
+            "| KEY =", r["JSON_KEY"],
+        )
+    return int(distinct_match or 0), rows
 
-    print("CONTROL_IMPLEMENTATION_PATH_READY =", has_ci)
-    print("IMPLEMENTED_REQUIREMENTS_PATH_READY =", has_ir)
+curated_matches, curated_paths = search_variant("CURATED_JSON")
+raw_matches, raw_paths = search_variant("RAW_DATA")
 
-    missing = int(coverage["MISSING_IDS"] or 0)
-    matched = int(coverage["MATCHED_IDS"] or 0)
+print()
+print("SAMPLE_SIZE =", len(sample_ids))
+print("CURATED_JSON_MATCHED_SAMPLE_IDS =", curated_matches)
+print("RAW_DATA_MATCHED_SAMPLE_IDS =", raw_matches)
 
-    if matched > 0 and missing == 0 and has_ir:
-        print("RESULT: LEVEL355_READY_FOR_IMPLEMENTED_REQUIREMENTS_MAPPING")
-    elif matched > 0 and missing == 0 and not has_ir:
-        print("RESULT: LEVEL355_SOURCE_READY_REGISTRY_BRANCH_NEEDED")
-    elif matched > 0:
-        print("RESULT: LEVEL355_SOURCE_PARTIAL_COVERAGE_REVIEW")
-    else:
-        print("RESULT: LEVEL355_SOURCE_NOT_JOINING_TO_AUTH_PACKAGE")
+if curated_matches > 0:
+    print("RESULT: LEVEL355_JOIN_KEY_FOUND_IN_CURATED_JSON_REVIEW_PATH")
+elif raw_matches > 0:
+    print("RESULT: LEVEL355_JOIN_KEY_FOUND_IN_RAW_DATA_REVIEW_PATH")
+else:
+    print("RESULT: LEVEL355_REFERENCE_IDS_ABSENT_FROM_CURRENT_CONTROL_RECORDS")
