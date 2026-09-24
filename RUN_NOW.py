@@ -1,79 +1,149 @@
-# RUN NOW — Diagnose Source One SSP PREVIEW failure
+# RUN NOW — Corrected SSP component hydration coverage diagnostic
 # Date: 2026-09-24
-# READ ONLY. No registry, DIM, FACT, mapping, or source DML.
+# READ ONLY. No source, registry, mapping, DIM, or FACT DML.
 #
-# The 2026-09-24 fresh SSP PREVIEW stopped with:
-#   status = FAILED_BEFORE_COMMIT
-#   writes_executed = false
-#   commit_attempted = false
-#   failed_route = ("source-one", "SSP")
-#   error_type = ValueError
+# Correction:
+# The prior aggregate helper did not JSON-decode CURATED_JSON when Snowpark
+# returned the VARIANT as a Python string. That made component-reference counts
+# appear as zero. This version uses the mapper's own _metadata_parse() routine,
+# so it applies the exact same source interpretation as the graph builder.
 #
-# Cell 7 intentionally hides the underlying ValueError message inside PipelineError.
-# This helper reruns only the graph-build stage and prints the original exception.
-# It does NOT call validate_and_load_oscal and therefore cannot write targets.
+# Prior graph-build error:
+#   Component hydration lookup record is missing
+#
+# Current hydrated component contracts:
+#   SOFTWARE -> software -> ARCHER_CONTENT_SOFTWARE_RAW
+#   INTERCONNECTIONS -> interconnection -> ARCHER_CONTENT_INTERCONNECTIONS_RAW
+#   INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM -> interconnection -> same lookup
+#
+# Aggregate counts only. Referenced ContentIds are never printed.
 
-import copy
-import traceback
+from collections import defaultdict
 
+SOURCE_KEY = "source-one"
 ROUTE = ("source-one", "SSP")
 
-print("SOURCE_ONE_SSP_PREVIEW_FAILURE_DIAGNOSTIC")
-print("PIPELINE_STATUS =", (PIPELINE_REPORT or {}).get("status") if isinstance(PIPELINE_REPORT, dict) else None)
-print("WRITES_EXECUTED =", (PIPELINE_REPORT or {}).get("writes_executed") if isinstance(PIPELINE_REPORT, dict) else None)
-print("COMMIT_ATTEMPTED =", (PIPELINE_REPORT or {}).get("commit_attempted") if isinstance(PIPELINE_REPORT, dict) else None)
+HYDRATED_FIELDS = {
+    "SOFTWARE": "software",
+    "INTERCONNECTIONS": "interconnection",
+    "INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM": "interconnection",
+}
+
+LOOKUP_TABLES = {
+    "software": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_SOFTWARE_RAW",
+    "interconnection": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_INTERCONNECTIONS_RAW",
+}
+
+def component_ids(value):
+    value = _to_python(value)
+    if not _has_value(value):
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Hydrated component reference root must be an array")
+    return _component_reference_content_ids(value)
 
 contexts = [
     c for c in MAPPING_CONTEXTS
     if (c["source_key"], c["config"]["OSCAL_MODEL"]) == ROUTE
 ]
-
-print("MATCHING_CONTEXTS =", len(contexts))
 if len(contexts) != 1:
     raise ValueError("Expected exactly one source-one / SSP mapping context")
 
 context = copy.deepcopy(contexts[0])
-source = SOURCE_INPUTS[ROUTE[0]]
+source = SOURCE_INPUTS[SOURCE_KEY]
 context["lookups"] = source.get("lookups", {})
 
-print("ROUTING_STATUS =", context["routing_report"].get("STATUS"))
-print("SELECTED_MAPPING_ROWS =", len(context.get("mapping_rows") or []))
-print("SOURCE_SELECTED_ROWS =", source.get("selection", {}).get("SELECTED_ROWS"))
-print("EXECUTE_WRITES =", context["config"].get("EXECUTE_WRITES"))
-print("STORAGE_CONTRACT_VERIFIED =", (context["config"].get("STORAGE_CONTRACT") or {}).get("VERIFIED"))
+refs_by_kind = defaultdict(set)
+refs_by_field = defaultdict(set)
 
-# Surface intentional populated-value guards before graph construction.
-guard_rows = [
-    row for row in (context.get("mapping_rows") or [])
-    if row.get("APPROVAL_STATUS") == "BLOCKED_IF_POPULATED"
-       or row.get("EXECUTION_STATUS") == "BLOCKED_IF_POPULATED"
-]
-print("POPULATED_VALUE_GUARDS =", [
-    (row.get("SOURCE_FIELD_NAME"), row.get("RULE_ID"))
-    for row in guard_rows
-])
+for record in source["source_df"].to_local_iterator():
+    payload = _metadata_parse(record, context)
+    for field, kind in HYDRATED_FIELDS.items():
+        ids = component_ids(resolve_json_path(payload, field))
+        refs_by_field[field].update(ids)
+        refs_by_kind[kind].update(ids)
+
+print("SOURCE_ONE_COMPONENT_HYDRATION_DIAGNOSTIC_CORRECTED")
+print("SOURCE_SELECTED_ROWS =", source.get("selection", {}).get("SELECTED_ROWS"))
+
+for field, kind in HYDRATED_FIELDS.items():
+    print(
+        "FIELD_REFERENCE_COUNT",
+        field,
+        "| TYPE =", kind,
+        "| DISTINCT_REFERENCES =", len(refs_by_field[field]),
+    )
+
+frozen_sources = source.get("lookups", {}).get("component_sources", {})
+summary = {}
+
+for kind in ("software", "interconnection"):
+    required = refs_by_kind[kind]
+    frozen = frozen_sources.get(kind)
+
+    print()
+    print("COMPONENT_TYPE =", kind)
+    print("REQUIRED_DISTINCT_REFERENCES =", len(required))
+
+    if frozen is None:
+        print("FROZEN_LOOKUP_PRESENT = False")
+        frozen_ids = set()
+        frozen_rows = None
+    else:
+        print("FROZEN_LOOKUP_PRESENT = True")
+        frozen_rows = frozen.count()
+        frozen_ids = {
+            str(r["CONTENT_ID"]).strip()
+            for r in frozen.select("CONTENT_ID").distinct().collect()
+            if r["CONTENT_ID"] is not None
+        }
+        print("FROZEN_LOOKUP_ROWS =", frozen_rows)
+        print("FROZEN_LOOKUP_DISTINCT_IDS =", len(frozen_ids))
+
+    live_table = LOOKUP_TABLES[kind]
+    live_stats = session.sql(f"""
+        SELECT
+            COUNT(*) AS RAW_ROWS,
+            COUNT(DISTINCT TRIM(CONTENT_ID::STRING)) AS DISTINCT_CONTENT_IDS
+        FROM {live_table}
+    """).collect()[0]
+
+    print("LIVE_LOOKUP_TABLE =", live_table)
+    print("LIVE_LOOKUP_ROWS =", live_stats["RAW_ROWS"])
+    print("LIVE_LOOKUP_DISTINCT_IDS =", live_stats["DISTINCT_CONTENT_IDS"])
+
+    if required:
+        required_df = session.create_dataframe([(x,) for x in sorted(required)], schema=["CONTENT_ID"])
+        live_df = session.table(live_table).select(
+            F.trim(F.col("CONTENT_ID").cast("string")).alias("CONTENT_ID")
+        ).distinct()
+        live_match = required_df.join(live_df, "CONTENT_ID", "inner").count()
+    else:
+        live_match = 0
+
+    frozen_match = len(required & frozen_ids)
+    frozen_missing = len(required) - frozen_match
+    live_missing = len(required) - int(live_match or 0)
+
+    print("FROZEN_MATCHED_REFERENCES =", frozen_match)
+    print("FROZEN_MISSING_REFERENCES =", frozen_missing)
+    print("LIVE_MATCHED_REFERENCES =", live_match)
+    print("LIVE_MISSING_REFERENCES =", live_missing)
+
+    summary[kind] = {
+        "required": len(required),
+        "frozen_missing": frozen_missing,
+        "live_missing": live_missing,
+        "frozen_rows": frozen_rows,
+        "live_rows": int(live_stats["RAW_ROWS"] or 0),
+    }
 
 print()
-print("BUILD_GRAPH_DIAGNOSTIC")
-try:
-    nodes, edges = build_oscal_graph(
-        source["source_df"],
-        None,
-        None,
-        context["config"]["OSCAL_MODEL"],
-        context["config"]["SOURCE_SYSTEM_NAME"],
-        context["config"]["SOURCE_TABLE_NAME"],
-        context=context,
-    )
-    print("GRAPH_BUILD = PASS")
-    print("NODES =", nodes.count())
-    print("EDGES =", edges.count())
-    print("RESULT: SSP_GRAPH_BUILD_PASSED_DIAGNOSTIC")
-except Exception as error:
-    print("GRAPH_BUILD = FAILED")
-    print("UNDERLYING_ERROR_TYPE =", type(error).__name__)
-    print("UNDERLYING_ERROR_MESSAGE =", str(error))
-    report = context.get("graph_report") or {}
-    print("GRAPH_REPORT_STATUS =", report.get("STATUS"))
-    print("GRAPH_REPORT =", report)
-    print("RESULT: SSP_GRAPH_BUILD_FAILURE_IDENTIFIED")
+print("SUMMARY =", summary)
+
+if all(v["frozen_missing"] == 0 for v in summary.values()):
+    print("RESULT: FROZEN_COMPONENT_LOOKUPS_COMPLETE_RETRY_GRAPH")
+elif all(v["live_missing"] == 0 for v in summary.values()):
+    print("RESULT: LIVE_LOOKUPS_COMPLETE_RERUN_CELL_2_THEN_3_AND_7")
+else:
+    print("RESULT: LIVE_COMPONENT_LOOKUP_COVERAGE_GAP_IDENTIFIED")
