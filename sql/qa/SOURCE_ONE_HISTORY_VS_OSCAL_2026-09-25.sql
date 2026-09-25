@@ -2,26 +2,24 @@
 -- Date: 2026-09-25
 -- READ ONLY. No DML.
 --
--- Owner-confirmed naming rule for historical structured tables:
---   current RAW name with the trailing _RAW removed.
---
--- Main historical source:
+-- Historical Authorization Package comparison source:
 --   RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE
 -- Current RAW:
 --   RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
 --
--- Level-355 historical source:
---   RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL
--- Current Level-355 RAW:
---   RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW
+-- IMPORTANT CORRECTION 2026-09-25:
+-- Do NOT assume every RAW object has a historical object with "_RAW" removed.
+-- The guessed object ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL does not exist
+-- or is not authorized in the owner's Snowflake session. Level-355 historical
+-- discovery is therefore separated from the executable comparison below.
 --
 -- This file intentionally does not assume every historical column still exists.
 -- Missing historical columns are reported, not treated as mapping failures.
 
 
 -- =====================================================================
--- H00. TABLE EXISTENCE / BASIC COUNTS
--- Expected: objects exist. Differences in row counts are reported for review.
+-- H00. AUTHORIZATION PACKAGE HISTORICAL / RAW BASIC COUNTS
+-- Expected: both objects are readable. Differences are reported, not hidden.
 -- =====================================================================
 SELECT 'HIST_AUTHORIZATION_PACKAGE' OBJECT_NAME, COUNT(*) ROWS,
        COUNT(DISTINCT TRIM(CONTENT_ID::STRING)) DISTINCT_CONTENT_IDS
@@ -30,14 +28,22 @@ UNION ALL
 SELECT 'RAW_AUTHORIZATION_PACKAGE', COUNT(*),
        COUNT(DISTINCT TRIM(CONTENT_ID::STRING))
 FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW
+ORDER BY OBJECT_NAME;
+
+
+-- H00B. Discover the ACTUAL historical Level-355 object, if one exists.
+-- This is discovery only; it prevents another guessed object-name failure.
+SELECT TABLE_NAME AS OBJECT_NAME, TABLE_TYPE AS OBJECT_TYPE
+FROM RTX_RAW_DEV.INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA='ES_ESC_GRC'
+  AND TABLE_NAME ILIKE '%ALLOCATED%CONTROL%'
+  AND TABLE_NAME NOT ILIKE '%_RAW'
 UNION ALL
-SELECT 'HIST_LEVEL355_CONTROL', COUNT(*),
-       COUNT(DISTINCT TRIM(CONTENT_ID::STRING))
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL
-UNION ALL
-SELECT 'RAW_LEVEL355_CONTROL', COUNT(*),
-       COUNT(DISTINCT TRIM(CONTENT_ID::STRING))
-FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW
+SELECT TABLE_NAME, 'VIEW'
+FROM RTX_RAW_DEV.INFORMATION_SCHEMA.VIEWS
+WHERE TABLE_SCHEMA='ES_ESC_GRC'
+  AND TABLE_NAME ILIKE '%ALLOCATED%CONTROL%'
+  AND TABLE_NAME NOT ILIKE '%_RAW'
 ORDER BY OBJECT_NAME;
 
 
@@ -582,57 +588,30 @@ ORDER BY STATUS DESC,FIELD_NAME;
 
 
 -- =====================================================================
--- H06. LEVEL-355: HISTORICAL STRUCTURED CONTROL -> CURRENT RAW -> OSCAL
+-- H06. LEVEL-355 CURRENT RAW -> FINAL OSCAL PARITY
 --
--- This tests the control implementation at the real row grain.
--- Historical/current source fields used:
---   CONTENT_ID (package lineage)
---   ALLOCATED_CONTROL_ID (child identity evidence)
---   CONTROL_NUMBER (OSCAL control-id)
+-- Historical Level-355 structured-table comparison is intentionally NOT
+-- hard-coded until H00B identifies the actual readable historical object.
 --
--- H06A: historical vs RAW control row counts and key coverage.
+-- This current-source test remains valid and production-relevant:
+-- valid Level-355 CONTROL_NUMBER rows must match final SSP
+-- implemented-requirements control-id multiplicities by package.
+-- Expected: zero mismatch rows.
 -- =====================================================================
-WITH h AS (
+WITH source_controls AS (
   SELECT
-    TRIM(CONTENT_ID::STRING) CONTENT_ID,
-    ALLOCATED_CONTROL_ID::STRING ALLOCATED_CONTROL_ID,
-    CONTROL_NUMBER::STRING CONTROL_NUMBER,
+    TRIM(s.CONTENT_ID::STRING) CONTENT_ID,
+    s.CURATED_JSON:CONTROL_NUMBER::STRING CONTROL_ID,
     COUNT(*) N
-  FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL
-  GROUP BY 1,2,3
-),
-r AS (
-  SELECT
-    TRIM(CONTENT_ID::STRING) CONTENT_ID,
-    CURATED_JSON:ALLOCATED_CONTROL_ID::STRING ALLOCATED_CONTROL_ID,
-    CURATED_JSON:CONTROL_NUMBER::STRING CONTROL_NUMBER,
-    COUNT(*) N
-  FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW
-  GROUP BY 1,2,3
-)
-SELECT
-  COUNT(*) UNION_KEYS,
-  COUNT_IF(h.CONTENT_ID IS NOT NULL AND r.CONTENT_ID IS NOT NULL AND h.N=r.N) EXACT_MATCH_KEYS,
-  COUNT_IF(h.CONTENT_ID IS NOT NULL AND r.CONTENT_ID IS NULL) HIST_ONLY_KEYS,
-  COUNT_IF(h.CONTENT_ID IS NULL AND r.CONTENT_ID IS NOT NULL) RAW_ONLY_KEYS,
-  COUNT_IF(h.CONTENT_ID IS NOT NULL AND r.CONTENT_ID IS NOT NULL AND h.N<>r.N) MULTIPLICITY_MISMATCH_KEYS
-FROM h FULL OUTER JOIN r
- ON h.CONTENT_ID=r.CONTENT_ID
-AND EQUAL_NULL(h.ALLOCATED_CONTROL_ID,r.ALLOCATED_CONTROL_ID)
-AND EQUAL_NULL(h.CONTROL_NUMBER,r.CONTROL_NUMBER);
-
-
--- H06B: historical valid control-number rows vs final OSCAL implemented-requirements.
-WITH h AS (
-  SELECT
-    TRIM(CONTENT_ID::STRING) CONTENT_ID,
-    CONTROL_NUMBER::STRING CONTROL_ID,
-    COUNT(*) N
-  FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL
-  WHERE CONTROL_NUMBER IS NOT NULL AND NULLIF(TRIM(CONTROL_NUMBER::STRING),'') IS NOT NULL
+  FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW s
+  JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW p
+    ON TRIM(p.CONTENT_ID::STRING)=TRIM(s.CONTENT_ID::STRING)
+  WHERE s.CURATED_JSON:CONTROL_NUMBER IS NOT NULL
+    AND NOT IS_NULL_VALUE(s.CURATED_JSON:CONTROL_NUMBER)
+    AND NULLIF(TRIM(s.CURATED_JSON:CONTROL_NUMBER::STRING),'') IS NOT NULL
   GROUP BY 1,2
 ),
-t AS (
+target_controls AS (
   SELECT
     TRIM(SOURCE_RECORD_ID::STRING) CONTENT_ID,
     METADATA_JSON:"control-id"::STRING CONTROL_ID,
@@ -644,18 +623,49 @@ t AS (
   GROUP BY 1,2
 )
 SELECT
-  COUNT(*) UNION_CONTROL_KEYS,
-  COUNT_IF(h.CONTENT_ID IS NOT NULL AND t.CONTENT_ID IS NOT NULL AND h.N=t.N) EXACT_MATCH_KEYS,
-  COUNT_IF(h.CONTENT_ID IS NOT NULL AND t.CONTENT_ID IS NULL) HIST_MISSING_IN_OSCAL,
-  COUNT_IF(h.CONTENT_ID IS NULL AND t.CONTENT_ID IS NOT NULL) EXTRA_OSCAL_KEYS,
-  COUNT_IF(h.CONTENT_ID IS NOT NULL AND t.CONTENT_ID IS NOT NULL AND h.N<>t.N) MULTIPLICITY_MISMATCH_KEYS,
+  COALESCE(s.CONTENT_ID,t.CONTENT_ID) CONTENT_ID,
+  COALESCE(s.CONTROL_ID,t.CONTROL_ID) CONTROL_ID,
+  COALESCE(s.N,0) SOURCE_COUNT,
+  COALESCE(t.N,0) TARGET_COUNT,
+  CASE WHEN s.CONTENT_ID IS NULL THEN 'EXTRA_TARGET'
+       WHEN t.CONTENT_ID IS NULL THEN 'MISSING_TARGET'
+       WHEN s.N<>t.N THEN 'COUNT_MISMATCH'
+  END DEFECT
+FROM source_controls s
+FULL OUTER JOIN target_controls t
+  ON s.CONTENT_ID=t.CONTENT_ID
+ AND s.CONTROL_ID=t.CONTROL_ID
+WHERE s.CONTENT_ID IS NULL OR t.CONTENT_ID IS NULL OR s.N<>t.N
+ORDER BY CONTENT_ID, CONTROL_ID
+LIMIT 500;
+
+
+-- H06B. Aggregate current Level-355 -> OSCAL parity.
+WITH source_controls AS (
+  SELECT TRIM(s.CONTENT_ID::STRING) CONTENT_ID,
+         s.CURATED_JSON:CONTROL_NUMBER::STRING CONTROL_ID
+  FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW s
+  JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW p
+    ON TRIM(p.CONTENT_ID::STRING)=TRIM(s.CONTENT_ID::STRING)
+  WHERE s.CURATED_JSON:CONTROL_NUMBER IS NOT NULL
+    AND NOT IS_NULL_VALUE(s.CURATED_JSON:CONTROL_NUMBER)
+    AND NULLIF(TRIM(s.CURATED_JSON:CONTROL_NUMBER::STRING),'') IS NOT NULL
+),
+target_controls AS (
+  SELECT TRIM(SOURCE_RECORD_ID::STRING) CONTENT_ID,
+         METADATA_JSON:"control-id"::STRING CONTROL_ID
+  FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+  WHERE SOURCE_SYSTEM_NAME='ARCHER'
+    AND SOURCE_TABLE_NAME='ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW'
+    AND ELEMENT_TYPE='implemented-requirements'
+)
+SELECT
+  (SELECT COUNT(*) FROM source_controls) SOURCE_VALID_CONTROL_ROWS,
+  (SELECT COUNT(*) FROM target_controls) TARGET_IMPLEMENTED_REQUIREMENTS,
   IFF(
-    COUNT_IF(h.CONTENT_ID IS NULL OR t.CONTENT_ID IS NULL OR h.N<>t.N)=0,
-    'PASS','REVIEW'
-  ) STATUS
-FROM h FULL OUTER JOIN t
- ON h.CONTENT_ID=t.CONTENT_ID
-AND EQUAL_NULL(h.CONTROL_ID,t.CONTROL_ID);
+    (SELECT COUNT(*) FROM source_controls)=(SELECT COUNT(*) FROM target_controls),
+    'PASS','FAIL'
+  ) ROW_COUNT_STATUS;
 
 
 -- =====================================================================
@@ -719,7 +729,9 @@ ORDER BY LAYER;
 --    -> graph integrity, PK/FK, roots, parent-child, cross-model, idempotency
 --
 -- 2) this file
---    -> historical structured source vs current RAW vs final OSCAL values
+--    -> historical Authorization Package vs current RAW vs final OSCAL values
+--    -> current Level-355 RAW vs final OSCAL values
+--    -> historical Level-355 comparison only after H00B proves the real object name
 --
 -- A historical mismatch is not automatically a mapper defect:
 -- historical tables can be a different point-in-time snapshot.
