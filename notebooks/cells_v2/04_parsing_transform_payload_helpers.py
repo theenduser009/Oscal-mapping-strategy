@@ -220,6 +220,11 @@ def _metadata_transform(row, value, context):
     if transform == "reference-ids":
         result = _extract_reference_ids(value)
         return result if _has_value(result) else SKIP_VALUE
+    if transform == "json-text":
+        try:
+            return json.dumps(_to_python(value), sort_keys=True, separators=(",", ":"), allow_nan=False)
+        except (TypeError, ValueError):
+            raise ValueError("Mapped JSON text value is not serializable") from None
     if transform == "scalar-score":
         return _score_value(value, context)
     if transform == "security-objective":
