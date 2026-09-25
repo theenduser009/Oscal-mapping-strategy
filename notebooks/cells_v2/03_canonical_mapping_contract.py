@@ -9,7 +9,7 @@ LEAN_MAPPER_RELEASE = "lean-csv-registry-v4"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
-    "skip", "canonical-text", "reference-ids",
+    "skip", "canonical-text", "reference-ids", "json-text",
 }
 METADATA_INSTANCE_RULES = {
     "record": "SOURCE_RECORD_ID", "optional-record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
