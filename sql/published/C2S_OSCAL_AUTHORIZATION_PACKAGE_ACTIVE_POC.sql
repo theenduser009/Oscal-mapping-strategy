@@ -1,6 +1,10 @@
--- POC ACTIVE view over the OSCAL Authorization Package ALL view.
--- Mirrors the current consumer-side ACTIVE filtering pattern shown in the existing view.
--- Keeps the ACTIVE view thin so every supported OSCAL column from ALL is inherited automatically.
+-- ACTIVE published view over the expanded OSCAL Authorization Package ALL view.
+-- Date: 2026-09-25
+-- Keep this view intentionally thin.
+--
+-- Re-run this CREATE OR REPLACE VIEW after recreating
+-- C2S_OSCAL_AUTHORIZATION_PACKAGE_ALL so SELECT * resolves the expanded
+-- published column set.
 
 CREATE OR REPLACE VIEW
 RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_PUBLISHED.C2S_OSCAL_AUTHORIZATION_PACKAGE_ACTIVE
