@@ -1,0 +1,148 @@
+-- POAM ORPHANS: TRACE OTHER CURRENT OSCAL MODELS - 2026-09-28
+-- SELECT ONLY. Run the entire file as-is. Eleven aggregate result rows.
+-- Reviewed branch: simplify-metadata-boundary
+-- Source version: 91e25c8bbdc73767274e14d6411986a3fa470be7
+-- Bindings: sql/qa/SOURCE_ONE_CONTENT_ID_ALL_ATTRIBUTES_2026-09-28.sql
+--
+-- Tests a possible routing/copy issue; does NOT assume one occurred.
+-- Searches current SSP, Assessment Results and Assessment Plan DIM/FACT tables.
+-- All namespaces in those tables are included; no Content ID filter.
+-- No historical tables, STG tables, Time Travel, catalog or other schemas scanned.
+-- Endpoint hash tests use original BINARY keys. UUID presence tests normalize
+-- case, outer spaces and hyphens only. Exact FACT copies require all six stored
+-- fields to match, including the fact PK and original UUID strings.
+-- Membership indexes use DISTINCT to avoid join fan-out. They do not certify
+-- key uniqueness. Each original orphan FACT row is counted once per check/model,
+-- even when its matching DIM/FACT membership occurs multiple times.
+-- Counts overlap across checks/models: DO NOT sum them as distinct orphans.
+-- A match is a lineage candidate, not proof of intended ownership or a repair.
+-- No match does NOT mean an orphan is obsolete or safe to delete.
+-- No business payloads/private identifiers are returned. No changes performed.
+
+WITH
+models AS (
+    SELECT 'SSP' AS MODEL, 10 AS MODEL_ORDER
+    UNION ALL SELECT 'ASSESSMENT_RESULTS', 20
+    UNION ALL SELECT 'SECURITY_ASSESSMENT_PLAN', 30
+),
+poam_keys AS (
+    SELECT DISTINCT PK_DIM_OSCAL_POAM_ELEMENT_HASH AS NODE_KEY
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_POAM_ELEMENT
+    WHERE PK_DIM_OSCAL_POAM_ELEMENT_HASH IS NOT NULL
+),
+poam_facts AS (
+    SELECT PK_FACT_OSCAL_POAM_DEPENDENCY_HASH AS FACT_KEY,
+           FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH,
+           DEPENDENCY_TYPE, SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_POAM_DEPENDENCY
+),
+orphans AS (
+    SELECT f.*,
+           LOWER(REPLACE(TRIM(f.SOURCE_OSCAL_UUID), '-', '')) AS SOURCE_UUID_KEY,
+           LOWER(REPLACE(TRIM(f.TARGET_OSCAL_UUID), '-', '')) AS TARGET_UUID_KEY
+    FROM poam_facts f
+    LEFT JOIN poam_keys s ON s.NODE_KEY=f.FK_SOURCE_ELEMENT_HASH
+    LEFT JOIN poam_keys t ON t.NODE_KEY=f.FK_TARGET_ELEMENT_HASH
+    WHERE s.NODE_KEY IS NULL OR t.NODE_KEY IS NULL
+),
+other_nodes AS (
+    SELECT 'SSP' AS MODEL, PK_OSCAL_SSP_ELEMENT_HASH AS NODE_KEY,
+           LOWER(REPLACE(TRIM(OSCAL_UUID), '-', '')) AS UUID_KEY
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+    UNION ALL
+    SELECT 'ASSESSMENT_RESULTS', PK_DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT_HASH,
+           LOWER(REPLACE(TRIM(OSCAL_UUID), '-', ''))
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT
+    UNION ALL
+    SELECT 'SECURITY_ASSESSMENT_PLAN', PK_DIM_OSCAL_ASSESSMENT_PLAN_ELEMENT_HASH,
+           LOWER(REPLACE(TRIM(OSCAL_UUID), '-', ''))
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_PLAN_ELEMENT
+),
+other_hashes AS (
+    SELECT DISTINCT MODEL, NODE_KEY FROM other_nodes WHERE NODE_KEY IS NOT NULL
+),
+other_uuids AS (
+    SELECT DISTINCT MODEL, UUID_KEY FROM other_nodes
+    WHERE REGEXP_LIKE(UUID_KEY, '^[0-9a-f]{32}$')
+),
+other_facts AS (
+    SELECT 'SSP' AS MODEL, PK_FACT_OSCAL_DEPENDENCY_HASH AS FACT_KEY,
+           FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH,
+           DEPENDENCY_TYPE, SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY
+    UNION ALL
+    SELECT 'ASSESSMENT_RESULTS', PK_FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY_HASH,
+           FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH,
+           DEPENDENCY_TYPE, SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY
+    UNION ALL
+    SELECT 'SECURITY_ASSESSMENT_PLAN', PK_FACT_OSCAL_ASSESSMENT_PLAN_DEPENDENCY_HASH,
+           FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH,
+           DEPENDENCY_TYPE, SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_PLAN_DEPENDENCY
+),
+other_fact_membership AS (
+    SELECT DISTINCT MODEL, FACT_KEY, FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH,
+                    DEPENDENCY_TYPE, SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM other_facts
+),
+probes AS (
+    SELECT m.MODEL,
+           CASE WHEN hs.NODE_KEY IS NOT NULL OR ht.NODE_KEY IS NOT NULL THEN 1 ELSE 0 END AS HASH_HIT,
+           CASE WHEN us.UUID_KEY IS NOT NULL OR ut.UUID_KEY IS NOT NULL THEN 1 ELSE 0 END AS UUID_HIT,
+           CASE WHEN c.MODEL IS NOT NULL THEN 1 ELSE 0 END AS EXACT_FACT_HIT
+    FROM orphans f CROSS JOIN models m
+    LEFT JOIN other_hashes hs ON hs.MODEL=m.MODEL AND hs.NODE_KEY=f.FK_SOURCE_ELEMENT_HASH
+    LEFT JOIN other_hashes ht ON ht.MODEL=m.MODEL AND ht.NODE_KEY=f.FK_TARGET_ELEMENT_HASH
+    LEFT JOIN other_uuids us ON us.MODEL=m.MODEL AND us.UUID_KEY=f.SOURCE_UUID_KEY
+    LEFT JOIN other_uuids ut ON ut.MODEL=m.MODEL AND ut.UUID_KEY=f.TARGET_UUID_KEY
+    LEFT JOIN other_fact_membership c
+      ON c.MODEL=m.MODEL
+     AND c.FACT_KEY IS NOT DISTINCT FROM f.FACT_KEY
+     AND c.FK_SOURCE_ELEMENT_HASH IS NOT DISTINCT FROM f.FK_SOURCE_ELEMENT_HASH
+     AND c.FK_TARGET_ELEMENT_HASH IS NOT DISTINCT FROM f.FK_TARGET_ELEMENT_HASH
+     AND c.DEPENDENCY_TYPE IS NOT DISTINCT FROM f.DEPENDENCY_TYPE
+     AND c.SOURCE_OSCAL_UUID IS NOT DISTINCT FROM f.SOURCE_OSCAL_UUID
+     AND c.TARGET_OSCAL_UUID IS NOT DISTINCT FROM f.TARGET_OSCAL_UUID
+),
+probe_counts AS (
+    SELECT MODEL, SUM(HASH_HIT) AS HASH_HITS, SUM(UUID_HIT) AS UUID_HITS,
+           SUM(EXACT_FACT_HIT) AS EXACT_FACT_HITS
+    FROM probes GROUP BY MODEL
+),
+model_counts AS (
+    SELECT m.MODEL, m.MODEL_ORDER, COALESCE(p.HASH_HITS,0) AS HASH_HITS,
+           COALESCE(p.UUID_HITS,0) AS UUID_HITS,
+           COALESCE(p.EXACT_FACT_HITS,0) AS EXACT_FACT_HITS
+    FROM models m LEFT JOIN probe_counts p ON p.MODEL=m.MODEL
+),
+report AS (
+    SELECT 1 AS CHECK_ORDER, 'POAM' AS MODEL, 'FACT_ROWS_READ' AS QA_CHECK,
+           COUNT(*) AS OBSERVED_COUNT, 'INFO_CURRENT_SNAPSHOT' AS STATUS,
+           'All current POAM FACT rows, without a source/record filter.' AS DETAIL
+    FROM poam_facts
+    UNION ALL
+    SELECT 2, 'POAM', 'FACT_ROWS_WITH_MISSING_HASH_ENDPOINT', COUNT(*),
+           CASE WHEN COUNT(*)=0 THEN 'NO_ORPHANS_IN_THIS_SNAPSHOT' ELSE 'OPEN_QA_DEFECT' END,
+           'Current orphan FACT rows used by every model trace below; not an assumed prior count.'
+    FROM orphans
+    UNION ALL
+    SELECT MODEL_ORDER+1, MODEL, 'ANY_ENDPOINT_HASH_FOUND', HASH_HITS,
+           CASE WHEN HASH_HITS>0 THEN 'CANDIDATES_REQUIRE_REVIEW' ELSE 'NO_MATCH_IN_THIS_SCOPE' END,
+           'Orphan FACT rows with at least one endpoint hash present in this model DIM; presence is not unique ownership.'
+    FROM model_counts
+    UNION ALL
+    SELECT MODEL_ORDER+2, MODEL, 'ANY_ENDPOINT_UUID_FOUND', UUID_HITS,
+           CASE WHEN UUID_HITS>0 THEN 'CANDIDATES_REQUIRE_REVIEW' ELSE 'NO_MATCH_IN_THIS_SCOPE' END,
+           'Orphan FACT rows with at least one normalized endpoint UUID present in this model DIM; formatting normalization only.'
+    FROM model_counts
+    UNION ALL
+    SELECT MODEL_ORDER+3, MODEL, 'EXACT_STORED_FACT_ROW_FOUND', EXACT_FACT_HITS,
+           CASE WHEN EXACT_FACT_HITS>0 THEN 'IDENTICAL_ROW_REQUIRES_HISTORY_REVIEW' ELSE 'NO_MATCH_IN_THIS_SCOPE' END,
+           'All six stored FACT fields also occur in this model FACT. This cannot establish which write came first.'
+    FROM model_counts
+)
+SELECT CURRENT_TIMESTAMP() AS QA_EXECUTED_AT,
+       CHECK_ORDER, MODEL, QA_CHECK, OBSERVED_COUNT, STATUS, DETAIL
+FROM report
+ORDER BY CHECK_ORDER;
