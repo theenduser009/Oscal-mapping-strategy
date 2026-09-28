@@ -1,0 +1,245 @@
+-- SOURCE ONE: ONE CONTENT ID / ALL STORED OSCAL ELEMENTS AND ATTRIBUTES
+-- Date: 2026-09-28. SELECT ONLY: no SET, CREATE, MERGE, UPDATE, DELETE or TRUNCATE.
+-- Source reviewed: simplify-metadata-boundary @ 0e9ccad4793eff0f598f6f969a005f160f17e539.
+-- Change the single placeholder below in your private Snowflake worksheet.
+-- Do not commit private record IDs or query output to GitHub.
+--
+-- One result grid, filter ROW_KIND:
+--   MODEL_SUMMARY: all four models, including an explicit missing-model row.
+--   ELEMENT: every stored DIM row for this Content ID, including disconnected nodes.
+--   ATTRIBUTE: every nested JSON member/array item, with its relative path and type.
+--   RELATIONSHIP: every FACT touching a selected node, including broken endpoints.
+--   POAM_TABLE_SCOPE: table-wide orphan buckets, NOT attributed to this Content ID.
+--
+-- NODE_HASH/ROW_HASH are display-only HEX; joins use original BINARY keys.
+-- Same Content ID correlates models; this is NOT an invented cross-model FACT link.
+-- Stored payloads are returned unchanged. Empty objects remain in ELEMENT rows.
+-- ATTRIBUTE includes containers AND leaves: do not sum these as a field-coverage metric.
+-- This is a warehouse inspection report, NOT a conformant OSCAL document export,
+-- raw-to-target semantic reconciliation, or a complete graph-integrity proof.
+-- Inline party-uuids/component-uuid references remain visible, not falsely
+-- represented as FACT edges. No absent names, POAM details or findings are invented.
+-- Facts with BOTH endpoints missing cannot be assigned a Content ID from DIM lineage.
+-- The independent table-wide POAM section prevents hiding those rows with a filter.
+-- No cleanup/rekey/reload is performed. Duplicate DIM keys remain explicit.
+
+WITH
+params AS (
+    SELECT 'REPLACE_WITH_CONTENT_ID'::VARCHAR AS CONTENT_ID
+),
+models AS (
+    SELECT COLUMN1 AS MODEL, COLUMN2 AS ROOT_ELEMENT_TYPE FROM VALUES
+        ('SSP', 'system-security-plan'),
+        ('ASSESSMENT_RESULTS', 'assessment-results'),
+        ('POAM', 'plan-of-action-and-milestones'),
+        ('SECURITY_ASSESSMENT_PLAN', 'assessment-plan')
+),
+all_nodes AS (
+    SELECT 'SSP' AS MODEL, PK_OSCAL_SSP_ELEMENT_HASH AS NODE_KEY,
+           SOURCE_SYSTEM_NAME, SOURCE_TABLE_NAME, SOURCE_RECORD_ID,
+           ELEMENT_TYPE, OSCAL_UUID, METADATA_JSON,
+           DW_PIPELINE_RUN_ID, DW_LOAD_TIMESTAMP, DW_LOAD_TIMESTAMP_TZ
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+    UNION ALL
+    SELECT 'ASSESSMENT_RESULTS' AS MODEL, PK_DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT_HASH AS NODE_KEY,
+           SOURCE_SYSTEM_NAME, SOURCE_TABLE_NAME, SOURCE_RECORD_ID,
+           ELEMENT_TYPE, OSCAL_UUID, METADATA_JSON,
+           DW_PIPELINE_RUN_ID, DW_LOAD_TIMESTAMP, DW_LOAD_TIMESTAMP_TZ
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_RESULTS_ELEMENT
+    UNION ALL
+    SELECT 'POAM' AS MODEL, PK_DIM_OSCAL_POAM_ELEMENT_HASH AS NODE_KEY,
+           SOURCE_SYSTEM_NAME, SOURCE_TABLE_NAME, SOURCE_RECORD_ID,
+           ELEMENT_TYPE, OSCAL_UUID, METADATA_JSON,
+           DW_PIPELINE_RUN_ID, DW_LOAD_TIMESTAMP, DW_LOAD_TIMESTAMP_TZ
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_POAM_ELEMENT
+    UNION ALL
+    SELECT 'SECURITY_ASSESSMENT_PLAN' AS MODEL, PK_DIM_OSCAL_ASSESSMENT_PLAN_ELEMENT_HASH AS NODE_KEY,
+           SOURCE_SYSTEM_NAME, SOURCE_TABLE_NAME, SOURCE_RECORD_ID,
+           ELEMENT_TYPE, OSCAL_UUID, METADATA_JSON,
+           DW_PIPELINE_RUN_ID, DW_LOAD_TIMESTAMP, DW_LOAD_TIMESTAMP_TZ
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_ASSESSMENT_PLAN_ELEMENT
+),
+nodes AS (
+    SELECT n.*
+    FROM all_nodes n CROSS JOIN params p
+    WHERE n.SOURCE_SYSTEM_NAME = 'ARCHER'
+      AND n.SOURCE_TABLE_NAME = 'ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW'
+      AND TRIM(n.SOURCE_RECORD_ID::VARCHAR) = p.CONTENT_ID
+),
+-- Unfiltered index: another source/record is NOT mistaken for a missing endpoint.
+-- Identity labels are supplied only for a unique DIM key, never chosen from duplicates.
+key_index AS (
+    SELECT MODEL, NODE_KEY, COUNT(*) AS MATCH_COUNT,
+           IFF(COUNT(*)=1, MAX(SOURCE_SYSTEM_NAME), NULL) AS SOURCE_SYSTEM_NAME,
+           IFF(COUNT(*)=1, MAX(SOURCE_TABLE_NAME), NULL) AS SOURCE_TABLE_NAME,
+           IFF(COUNT(*)=1, MAX(SOURCE_RECORD_ID), NULL) AS SOURCE_RECORD_ID,
+           IFF(COUNT(*)=1, MAX(ELEMENT_TYPE), NULL) AS ELEMENT_TYPE,
+           IFF(COUNT(*)=1, MAX(OSCAL_UUID), NULL) AS OSCAL_UUID
+    FROM all_nodes
+    GROUP BY MODEL, NODE_KEY
+),
+all_edges AS (
+    SELECT 'SSP' AS MODEL, PK_FACT_OSCAL_DEPENDENCY_HASH AS EDGE_KEY,
+           FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH, DEPENDENCY_TYPE,
+           SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY
+    UNION ALL
+    SELECT 'ASSESSMENT_RESULTS' AS MODEL, PK_FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY_HASH AS EDGE_KEY,
+           FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH, DEPENDENCY_TYPE,
+           SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_RESULTS_DEPENDENCY
+    UNION ALL
+    SELECT 'POAM' AS MODEL, PK_FACT_OSCAL_POAM_DEPENDENCY_HASH AS EDGE_KEY,
+           FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH, DEPENDENCY_TYPE,
+           SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_POAM_DEPENDENCY
+    UNION ALL
+    SELECT 'SECURITY_ASSESSMENT_PLAN' AS MODEL, PK_FACT_OSCAL_ASSESSMENT_PLAN_DEPENDENCY_HASH AS EDGE_KEY,
+           FK_SOURCE_ELEMENT_HASH, FK_TARGET_ELEMENT_HASH, DEPENDENCY_TYPE,
+           SOURCE_OSCAL_UUID, TARGET_OSCAL_UUID
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_ASSESSMENT_PLAN_DEPENDENCY
+),
+edge_context AS (
+    SELECT e.*,
+           COALESCE(s.MATCH_COUNT,0) AS SOURCE_MATCH_COUNT,
+           COALESCE(t.MATCH_COUNT,0) AS TARGET_MATCH_COUNT,
+           s.SOURCE_SYSTEM_NAME AS PARENT_SOURCE_SYSTEM,
+           s.SOURCE_TABLE_NAME AS PARENT_SOURCE_TABLE,
+           s.SOURCE_RECORD_ID AS PARENT_CONTENT_ID,
+           s.ELEMENT_TYPE AS PARENT_ELEMENT_TYPE,
+           t.SOURCE_SYSTEM_NAME AS CHILD_SOURCE_SYSTEM,
+           t.SOURCE_TABLE_NAME AS CHILD_SOURCE_TABLE,
+           t.SOURCE_RECORD_ID AS CHILD_CONTENT_ID,
+           t.ELEMENT_TYPE AS CHILD_ELEMENT_TYPE,
+           CASE
+             WHEN e.FK_SOURCE_ELEMENT_HASH IS NULL OR e.FK_TARGET_ELEMENT_HASH IS NULL
+               THEN 'NULL_FK'
+             WHEN COALESCE(s.MATCH_COUNT,0)>1 OR COALESCE(t.MATCH_COUNT,0)>1
+               THEN 'AMBIGUOUS_DIM_KEY'
+             WHEN s.MATCH_COUNT IS NULL AND t.MATCH_COUNT IS NULL
+               THEN 'BOTH_ENDPOINTS_MISSING'
+             WHEN s.MATCH_COUNT IS NULL THEN 'ORPHAN_SOURCE_FK'
+             WHEN t.MATCH_COUNT IS NULL THEN 'ORPHAN_TARGET_FK'
+             WHEN e.FK_SOURCE_ELEMENT_HASH=e.FK_TARGET_ELEMENT_HASH THEN 'SELF_EDGE'
+             WHEN e.SOURCE_OSCAL_UUID IS DISTINCT FROM s.OSCAL_UUID
+               OR e.TARGET_OSCAL_UUID IS DISTINCT FROM t.OSCAL_UUID THEN 'UUID_MISMATCH'
+             WHEN s.SOURCE_SYSTEM_NAME IS DISTINCT FROM t.SOURCE_SYSTEM_NAME
+               OR s.SOURCE_TABLE_NAME IS DISTINCT FROM t.SOURCE_TABLE_NAME
+               THEN 'CROSS_NAMESPACE_EDGE'
+             WHEN s.SOURCE_RECORD_ID IS DISTINCT FROM t.SOURCE_RECORD_ID
+               THEN 'CROSS_RECORD_EDGE'
+             WHEN e.DEPENDENCY_TYPE IS DISTINCT FROM 'CONTAINS'
+               THEN 'UNEXPECTED_DEPENDENCY_TYPE'
+             ELSE 'ENDPOINT_CHECKS_OK_NOT_FULL_QA'
+           END AS EDGE_STATUS
+    FROM all_edges e
+    LEFT JOIN key_index s ON s.MODEL=e.MODEL AND s.NODE_KEY=e.FK_SOURCE_ELEMENT_HASH
+    LEFT JOIN key_index t ON t.MODEL=e.MODEL AND t.NODE_KEY=e.FK_TARGET_ELEMENT_HASH
+),
+selected_edges AS (
+    SELECT e.* FROM edge_context e
+    WHERE EXISTS (
+        SELECT 1 FROM nodes n
+        WHERE n.MODEL=e.MODEL
+          AND (n.NODE_KEY=e.FK_SOURCE_ELEMENT_HASH OR n.NODE_KEY=e.FK_TARGET_ELEMENT_HASH)
+    )
+),
+node_counts AS (
+    SELECT m.MODEL, p.CONTENT_ID, COUNT(n.MODEL) AS NODE_COUNT,
+           COALESCE(COUNT_IF(n.ELEMENT_TYPE=m.ROOT_ELEMENT_TYPE),0) AS ROOT_COUNT
+    FROM models m CROSS JOIN params p LEFT JOIN nodes n ON n.MODEL=m.MODEL
+    GROUP BY m.MODEL, p.CONTENT_ID
+),
+edge_counts AS (
+    SELECT MODEL, COUNT(*) AS INCIDENT_EDGE_COUNT,
+           COALESCE(COUNT_IF(EDGE_STATUS<>'ENDPOINT_CHECKS_OK_NOT_FULL_QA'),0) AS BAD_INCIDENT_EDGES
+    FROM selected_edges GROUP BY MODEL
+),
+poam_buckets AS (
+    SELECT CASE
+             WHEN SOURCE_MATCH_COUNT=0 AND TARGET_MATCH_COUNT=0 THEN 'BOTH_ENDPOINTS_MISSING'
+             WHEN SOURCE_MATCH_COUNT=0 THEN 'SOURCE_ENDPOINT_MISSING_ONLY'
+             WHEN TARGET_MATCH_COUNT=0 THEN 'TARGET_ENDPOINT_MISSING_ONLY'
+             ELSE 'BOTH_ENDPOINTS_PRESENT'
+           END AS BUCKET,
+           COUNT(*) AS FACT_ROWS
+    FROM edge_context WHERE MODEL='POAM'
+    GROUP BY 1
+),
+report AS (
+    SELECT 0 AS SORT_ORDER, 'MODEL_SUMMARY' AS ROW_KIND,
+           n.MODEL, n.CONTENT_ID, NULL::VARCHAR AS ELEMENT_TYPE,
+           NULL::VARCHAR AS ROW_HASH, NULL::VARCHAR AS OSCAL_UUID,
+           NULL::VARCHAR AS ATTRIBUTE_PATH, 'OBJECT' AS VALUE_TYPE,
+           OBJECT_CONSTRUCT_KEEP_NULL(
+               'node_count',n.NODE_COUNT,'root_count',n.ROOT_COUNT,
+               'incident_edge_count',COALESCE(e.INCIDENT_EDGE_COUNT,0),
+               'bad_incident_edges',COALESCE(e.BAD_INCIDENT_EDGES,0)
+           )::VARIANT AS VALUE,
+           CASE WHEN NOT REGEXP_LIKE(n.CONTENT_ID,'^[0-9]+$')
+                  THEN 'SET_CONTENT_ID_IN_PARAMS'
+                WHEN n.NODE_COUNT=0 THEN 'MISSING_MODEL'
+                WHEN n.ROOT_COUNT<>1 OR COALESCE(e.BAD_INCIDENT_EDGES,0)>0 THEN 'REVIEW'
+                ELSE 'INFO_NOT_FULL_QA' END AS STATUS,
+           OBJECT_CONSTRUCT('scope','Selected Source One Content ID; not a release sign-off')::VARIANT AS CONTEXT
+    FROM node_counts n LEFT JOIN edge_counts e ON e.MODEL=n.MODEL
+
+    UNION ALL
+    SELECT 10, 'ELEMENT', n.MODEL, TRIM(n.SOURCE_RECORD_ID::VARCHAR), n.ELEMENT_TYPE,
+           HEX_ENCODE(n.NODE_KEY), n.OSCAL_UUID, '$',
+           COALESCE(TYPEOF(n.METADATA_JSON),'SQL_NULL'), n.METADATA_JSON,
+           CASE WHEN n.NODE_KEY IS NULL THEN 'NULL_DIM_KEY'
+                WHEN k.MATCH_COUNT>1 THEN 'DUPLICATE_DIM_KEY'
+                WHEN NOT COALESCE(IS_OBJECT(n.METADATA_JSON),FALSE) THEN 'NON_OBJECT_PAYLOAD'
+                ELSE 'STORED_ELEMENT_NOT_FULL_QA' END,
+           OBJECT_CONSTRUCT_KEEP_NULL(
+               'source_system_name',n.SOURCE_SYSTEM_NAME,'source_table_name',n.SOURCE_TABLE_NAME,
+               'stored_source_record_id',n.SOURCE_RECORD_ID,'dim_key_rows',k.MATCH_COUNT,
+               'dw_pipeline_run_id',n.DW_PIPELINE_RUN_ID,
+               'dw_load_timestamp',n.DW_LOAD_TIMESTAMP,'dw_load_timestamp_tz',n.DW_LOAD_TIMESTAMP_TZ
+           )::VARIANT
+    FROM nodes n LEFT JOIN key_index k ON k.MODEL=n.MODEL AND k.NODE_KEY=n.NODE_KEY
+
+    UNION ALL
+    SELECT 20, 'ATTRIBUTE', n.MODEL, TRIM(n.SOURCE_RECORD_ID::VARCHAR), n.ELEMENT_TYPE,
+           HEX_ENCODE(n.NODE_KEY), n.OSCAL_UUID, a.PATH::VARCHAR,
+           COALESCE(TYPEOF(a.VALUE),'SQL_NULL'), a.VALUE,
+           CASE WHEN IS_NULL_VALUE(a.VALUE) THEN 'JSON_NULL'
+                WHEN a.VALUE IS NULL THEN 'SQL_NULL'
+                ELSE 'PRESENT' END,
+           OBJECT_CONSTRUCT_KEEP_NULL('key',a.KEY,'array_index',a.INDEX)::VARIANT
+    FROM nodes n, LATERAL FLATTEN(INPUT=>n.METADATA_JSON, RECURSIVE=>TRUE) a
+
+    UNION ALL
+    SELECT 30, 'RELATIONSHIP', e.MODEL, p.CONTENT_ID, e.CHILD_ELEMENT_TYPE,
+           HEX_ENCODE(e.EDGE_KEY), e.TARGET_OSCAL_UUID, NULL::VARCHAR,
+           'OBJECT', OBJECT_CONSTRUCT_KEEP_NULL(
+               'parent_node_hash',HEX_ENCODE(e.FK_SOURCE_ELEMENT_HASH),
+               'child_node_hash',HEX_ENCODE(e.FK_TARGET_ELEMENT_HASH),
+               'parent_uuid',e.SOURCE_OSCAL_UUID,'child_uuid',e.TARGET_OSCAL_UUID,
+               'dependency_type',e.DEPENDENCY_TYPE,
+               'parent_element_type',e.PARENT_ELEMENT_TYPE,'child_element_type',e.CHILD_ELEMENT_TYPE,
+               'parent_content_id',e.PARENT_CONTENT_ID,'child_content_id',e.CHILD_CONTENT_ID
+           )::VARIANT, e.EDGE_STATUS,
+           OBJECT_CONSTRUCT_KEEP_NULL(
+               'parent_source_system',e.PARENT_SOURCE_SYSTEM,'parent_source_table',e.PARENT_SOURCE_TABLE,
+               'child_source_system',e.CHILD_SOURCE_SYSTEM,'child_source_table',e.CHILD_SOURCE_TABLE,
+               'source_dim_matches',e.SOURCE_MATCH_COUNT,'target_dim_matches',e.TARGET_MATCH_COUNT
+           )::VARIANT
+    FROM selected_edges e CROSS JOIN params p
+
+    UNION ALL
+    SELECT 40, 'POAM_TABLE_SCOPE', 'POAM', NULL::VARCHAR, NULL::VARCHAR,
+           NULL::VARCHAR, NULL::VARCHAR, b.BUCKET, 'INTEGER', TO_VARIANT(b.FACT_ROWS),
+           IFF(b.BUCKET='BOTH_ENDPOINTS_PRESENT','INFO_NOT_FULL_QA','REVIEW_TABLE_WIDE_ORPHANS'),
+           OBJECT_CONSTRUCT(
+               'scope','Entire POAM FACT table; not assigned to the selected Content ID',
+               'note','Buckets are mutually exclusive. Endpoint presence does not prove other graph checks.'
+           )::VARIANT
+    FROM poam_buckets b
+)
+SELECT CURRENT_TIMESTAMP() AS QA_EXECUTED_AT,
+       ROW_KIND, MODEL, CONTENT_ID, ELEMENT_TYPE, ROW_HASH, OSCAL_UUID,
+       ATTRIBUTE_PATH, VALUE_TYPE, VALUE, STATUS, CONTEXT
+FROM report
+ORDER BY SORT_ORDER, MODEL, ELEMENT_TYPE, ROW_HASH, ATTRIBUTE_PATH;
