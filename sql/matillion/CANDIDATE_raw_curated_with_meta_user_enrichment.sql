@@ -16,7 +16,7 @@
 --   * preserve original Id / HasRead / HasUpdate / HasDelete / other member keys
 --   * add ResolvedUser {ContractVersion, LookupStatus, EEID, FIRST_NAME, MIDDLE_NAME, LAST_NAME}
 --   * valid unmatched users remain with USER_NOT_FOUND; no identity is invented
---   * GroupList is left byte-structurally unchanged until Meta Group is available
+--   * GroupList is left unchanged until Meta Group is available
 --
 -- If user enrichment hits a malformed/ambiguous member for a record, the raw->curated
 -- conversion still proceeds for that record using the un-enriched candidate JSON.
@@ -189,16 +189,7 @@ FROM (
                 u.value AS MEMBER_VALUE,
                 CASE
                     WHEN TYPEOF(u.value:"Id") IN ('INTEGER', 'DECIMAL', 'VARCHAR')
-                     AND REGEXP_LIKE(u.value:"Id"::VARCHAR, '^[0-9]+
-    ) curated
-) AS src
-WHERE IFF(
-          TYPEOF(tgt.RAW_DATA) = 'ARRAY',
-          tgt.RAW_DATA[0],
-          tgt.RAW_DATA
-      ):"RequestedObject":"Id"::NUMBER = src.RECORD_ID
-  AND tgt.CURATED_JSON IS NULL;
-)
+                     AND REGEXP_LIKE(u.value:"Id"::VARCHAR, '^[0-9]+$')
                         THEN TRY_TO_NUMBER(u.value:"Id"::VARCHAR, 38, 0)
                 END AS ARCHER_USER_ID
             FROM curated_fields cf,
