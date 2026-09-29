@@ -1,39 +1,67 @@
 -- OSCAL / Archer CURATED_JSON Meta User enrichment
 -- Date: 2026-09-29
--- CANDIDATE ONLY: writes CURATED_JSON when executed. Review in DEV before use.
---
--- Intended Matillion placement:
---   1) Existing raw -> CURATED_JSON conversion runs first.
---   2) This enrichment runs next, before OSCAL mapping.
+-- CANDIDATE WRITE STEP: run only after the existing raw -> CURATED_JSON conversion.
+-- Review in DEV before enabling in the normal Matillion flow.
 --
 -- UserList[].Id -> ARCHER_META_USER.ARCHER_USER_ID
--- Original Id and permission flags are preserved.
--- GroupList is NOT changed until an authoritative Meta Group lookup is available.
--- Unmatched users are preserved with LookupStatus = USER_NOT_FOUND.
--- Existing ResolvedUser values from another contract block that record from update.
+-- Preserves original Id, HasRead, HasUpdate, HasDelete, and all other member keys.
+-- Adds ResolvedUser {ContractVersion, LookupStatus, EEID, FIRST_NAME, MIDDLE_NAME, LAST_NAME}.
+--
+-- GroupList is preserved unchanged until an authoritative Meta Group lookup is available.
+-- Valid unmatched user IDs remain present with LookupStatus = USER_NOT_FOUND.
+-- Matched users with blank EEID remain present with MATCHED_MISSING_EEID.
+-- Malformed user members, invalid user IDs, duplicate lookup IDs, foreign ResolvedUser
+-- contracts, malformed UserList shapes, duplicate source records, and Content-ID mismatch
+-- are not silently corrected; those records are skipped by this enrichment write.
+--
+-- This step does not alter RAW_DATA, CONTENT_ID, OSCAL UUIDs, DIM/FACT keys, or mappings.
+-- Re-running this step refreshes only the ResolvedUser object owned by contract
+-- archer-meta-user-v1; it does not remove original Archer reference information.
 
 UPDATE ${jv_raw_table_name} AS tgt
 SET tgt.CURATED_JSON = src.ENRICHED_CURATED_JSON
 FROM (
-    WITH source_rows AS (
+    WITH source_base AS (
         SELECT
             IFF(
                 TYPEOF(r.RAW_DATA) = 'ARRAY',
                 r.RAW_DATA[0],
                 r.RAW_DATA
             ):"RequestedObject":"Id"::NUMBER AS RECORD_ID,
+            r.CONTENT_ID::VARCHAR AS STORED_CONTENT_ID,
             r.CURATED_JSON
         FROM ${jv_raw_table_name} r
         WHERE TYPEOF(r.CURATED_JSON) = 'OBJECT'
+    ),
+    source_candidates AS (
+        SELECT
+            *,
+            COUNT(*) OVER (PARTITION BY RECORD_ID) AS SOURCE_ROWS_FOR_RECORD
+        FROM source_base
+    ),
+    source_rows AS (
+        SELECT
+            RECORD_ID,
+            STORED_CONTENT_ID,
+            CURATED_JSON
+        FROM source_candidates
+        WHERE RECORD_ID IS NOT NULL
+          AND SOURCE_ROWS_FOR_RECORD = 1
+          AND STORED_CONTENT_ID = RECORD_ID::VARCHAR
     ),
     fields AS (
         SELECT
             s.RECORD_ID,
             f.key::STRING AS SQL_KEY,
-            f.value       AS FIELD_VALUE
+            f.value       AS FIELD_VALUE,
+            IFF(
+                f.value:"UserList" IS NOT NULL
+                AND NOT COALESCE(IS_NULL_VALUE(f.value:"UserList"), FALSE)
+                AND NOT COALESCE(IS_ARRAY(f.value:"UserList"), FALSE),
+                1, 0
+            ) AS INVALID_USERLIST_SHAPE
         FROM source_rows s,
              LATERAL FLATTEN(INPUT => AS_OBJECT(s.CURATED_JSON)) f
-        WHERE s.RECORD_ID IS NOT NULL
     ),
     user_members AS (
         SELECT
@@ -101,7 +129,12 @@ FROM (
         SELECT
             r.*,
             CASE
-                WHEN LOOKUP_STATUS IN ('INVALID_MEMBER_OBJECT', 'ENRICHMENT_KEY_COLLISION')
+                WHEN LOOKUP_STATUS IN (
+                    'INVALID_MEMBER_OBJECT',
+                    'ENRICHMENT_KEY_COLLISION',
+                    'INVALID_USER_ID',
+                    'DUPLICATE_LOOKUP_ID'
+                )
                     THEN MEMBER_VALUE
                 ELSE TO_VARIANT(
                     OBJECT_INSERT(
@@ -120,7 +153,12 @@ FROM (
                 )
             END AS ENRICHED_MEMBER_VALUE,
             IFF(
-                LOOKUP_STATUS IN ('INVALID_MEMBER_OBJECT', 'ENRICHMENT_KEY_COLLISION'),
+                LOOKUP_STATUS IN (
+                    'INVALID_MEMBER_OBJECT',
+                    'ENRICHMENT_KEY_COLLISION',
+                    'INVALID_USER_ID',
+                    'DUPLICATE_LOOKUP_ID'
+                ),
                 1, 0
             ) AS BLOCKING_MEMBER
         FROM resolved_members r
@@ -129,6 +167,7 @@ FROM (
         SELECT
             RECORD_ID,
             SQL_KEY,
+            COUNT(*) AS MEMBER_COUNT,
             ARRAY_AGG(
                 COALESCE(ENRICHED_MEMBER_VALUE, PARSE_JSON('null'))
             ) WITHIN GROUP (ORDER BY MEMBER_INDEX) AS ENRICHED_USER_LIST,
@@ -144,6 +183,8 @@ FROM (
                 WHEN COALESCE(IS_ARRAY(f.FIELD_VALUE:"UserList"), FALSE)
                  AND COALESCE(ARRAY_SIZE(AS_ARRAY(f.FIELD_VALUE:"UserList")), 0) > 0
                  AND ul.ENRICHED_USER_LIST IS NOT NULL
+                 AND ul.MEMBER_COUNT = ARRAY_SIZE(AS_ARRAY(f.FIELD_VALUE:"UserList"))
+                 AND COALESCE(ul.BLOCKING_MEMBERS, 0) = 0
                     THEN TO_VARIANT(
                         OBJECT_INSERT(
                             AS_OBJECT(f.FIELD_VALUE),
@@ -154,7 +195,17 @@ FROM (
                     )
                 ELSE f.FIELD_VALUE
             END AS FIELD_VALUE,
-            COALESCE(ul.BLOCKING_MEMBERS, 0) AS BLOCKING_MEMBERS
+            f.INVALID_USERLIST_SHAPE
+              + IFF(
+                    COALESCE(IS_ARRAY(f.FIELD_VALUE:"UserList"), FALSE)
+                    AND COALESCE(ARRAY_SIZE(AS_ARRAY(f.FIELD_VALUE:"UserList")), 0) > 0
+                    AND (
+                        ul.ENRICHED_USER_LIST IS NULL
+                        OR ul.MEMBER_COUNT <> ARRAY_SIZE(AS_ARRAY(f.FIELD_VALUE:"UserList"))
+                        OR COALESCE(ul.BLOCKING_MEMBERS, 0) > 0
+                    ),
+                    1, 0
+                ) AS BLOCKED_FIELD
         FROM fields f
         LEFT JOIN user_lists ul
             ON ul.RECORD_ID = f.RECORD_ID
@@ -167,7 +218,7 @@ FROM (
                 SQL_KEY,
                 COALESCE(FIELD_VALUE, PARSE_JSON('null'))
             ) AS ENRICHED_CURATED_JSON,
-            SUM(BLOCKING_MEMBERS) AS BLOCKING_MEMBERS,
+            SUM(BLOCKED_FIELD) AS BLOCKED_FIELDS,
             COUNT_IF(
                 COALESCE(IS_ARRAY(FIELD_VALUE:"UserList"), FALSE)
                 AND COALESCE(ARRAY_SIZE(AS_ARRAY(FIELD_VALUE:"UserList")), 0) > 0
@@ -180,11 +231,12 @@ FROM (
         ENRICHED_CURATED_JSON
     FROM rebuilt
     WHERE USERLIST_FIELDS > 0
-      AND BLOCKING_MEMBERS = 0
+      AND BLOCKED_FIELDS = 0
 ) AS src
 WHERE IFF(
           TYPEOF(tgt.RAW_DATA) = 'ARRAY',
           tgt.RAW_DATA[0],
           tgt.RAW_DATA
       ):"RequestedObject":"Id"::NUMBER = src.RECORD_ID
+  AND tgt.CONTENT_ID::VARCHAR = src.RECORD_ID::VARCHAR
   AND TYPEOF(tgt.CURATED_JSON) = 'OBJECT';
