@@ -1,4 +1,4 @@
--- READ ONLY: original Matillion extraction/typing on its existing pending cohort.
+-- READ ONLY: latest owner-confirmed Matillion extraction/typing on its existing pending cohort.
 -- ${jv_raw_table_name} is the EXISTING Matillion job variable. In a Snowflake
 -- worksheet, substitute its actual fully qualified table name; do not guess it.
 -- No UPDATE/DDL. No raw IDs or field values are returned. Duplicate checks include
@@ -47,11 +47,11 @@ mapped AS (
                      AND amf.LEVEL_ID = f.LEVEL_ID THEN 0
                     ELSE 1
                 END,
-                TO_NUMBER(f.FIELD_ID)
+                TRY_TO_NUMBER(f.FIELD_ID)
         ) AS rn
     FROM flat f
     LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
-        ON TO_NUMBER(amf.FIELD_ID) = TO_NUMBER(f.FIELD_ID)
+        ON TO_NUMBER(amf.FIELD_ID) = TRY_TO_NUMBER(f.FIELD_ID)
 ),
 typed AS (
     SELECT
@@ -100,7 +100,7 @@ nested_mapped AS (
         nf.V
     FROM nested_flat nf
     LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
-        ON TO_NUMBER(amf.FIELD_ID) = TO_NUMBER(nf.FIELD_ID)
+        ON TO_NUMBER(amf.FIELD_ID) = TRY_TO_NUMBER(nf.FIELD_ID)
     WHERE amf.SQL_FIELD_NAME IS NOT NULL
 ),
 nested_typed AS (
