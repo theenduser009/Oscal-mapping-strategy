@@ -17,7 +17,7 @@ class MatillionNullKeyPatchTests(unittest.TestCase):
         candidate = CANDIDATE.read_text(encoding='utf-8')
         cls.candidate = candidate[candidate.index('UPDATE ${jv_raw_table_name}'):].strip()
 
-    def test_only_aggregate_and_identity_input_are_changed(self):
+    def test_only_approved_candidate_deltas_are_changed(self):
         reversed_patch = self.candidate.replace(
             "OBJECT_AGG(SQL_KEY, COALESCE(TYPED_VALUE, PARSE_JSON('null'))) AS CURATED_JSON,\n"
             "                OBJECT_AGG(SQL_KEY, TYPED_VALUE) AS ID_SOURCE_JSON",
@@ -28,6 +28,10 @@ class MatillionNullKeyPatchTests(unittest.TestCase):
                                                     f'curated.CURATED_JSON:"{key}"::string')
         reversed_patch = reversed_patch.replace('            c.CURATED_JSON,\n            c.ID_SOURCE_JSON\n',
                                                 '            c.CURATED_JSON\n')
+        # Owner-confirmed 2026-09-29 Matillion delta: source-side FIELD_ID
+        # parsing became non-throwing in the ordering and both metadata joins.
+        reversed_patch = reversed_patch.replace('TRY_TO_NUMBER(f.FIELD_ID)', 'TO_NUMBER(f.FIELD_ID)')
+        reversed_patch = reversed_patch.replace('TRY_TO_NUMBER(nf.FIELD_ID)', 'TO_NUMBER(nf.FIELD_ID)')
         self.assertEqual(self.original, reversed_patch)
 
     def test_existing_rows_not_silently_added_to_update_scope(self):
@@ -43,13 +47,13 @@ class MatillionNullKeyPatchTests(unittest.TestCase):
         self.assertIn('tgt.CONTENT_ID   = src.CONTENT_ID', assignments)
         self.assertIn('curated.REQ_OBJ_ID::string', self.candidate)
 
-    def test_preflight_preserves_original_extraction_and_typing(self):
-        original_ctes = self.original.split('        WITH norm AS (', 1)[1].split('        curated AS (', 1)[0]
-        original_ctes = 'WITH norm AS (' + original_ctes
-        original_ctes = re.sub(r'^ {8}', '', original_ctes, flags=re.MULTILINE).strip().rstrip(',')
+    def test_preflight_matches_current_candidate_extraction_and_typing(self):
+        candidate_ctes = self.candidate.split('        WITH norm AS (', 1)[1].split('        curated AS (', 1)[0]
+        candidate_ctes = 'WITH norm AS (' + candidate_ctes
+        candidate_ctes = re.sub(r'^ {8}', '', candidate_ctes, flags=re.MULTILINE).strip().rstrip(',')
         text = PREFLIGHT.read_text(encoding='utf-8')
         actual_ctes = text[text.index('WITH norm AS ('):].split(',\npreflight AS (', 1)[0].strip()
-        self.assertEqual(original_ctes, actual_ctes)
+        self.assertEqual(candidate_ctes, actual_ctes)
         self.assertIn('GROUP BY REQ_OBJ_ID, SQL_KEY HAVING COUNT(*) > 1', text)
         self.assertIn('POPULATED_VALUES_CONVERTED_TO_SQL_NULL', text)
         self.assertIn('NO_PENDING_ROWS_NOT_A_VERIFICATION', text)
