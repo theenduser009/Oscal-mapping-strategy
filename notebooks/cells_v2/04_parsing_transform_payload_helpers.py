@@ -320,6 +320,69 @@ def _party_reference_identifier(item):
     return _scalar_text(item, "Responsible-party reference identifier is invalid", "Responsible-party reference identifier is empty")
 
 
+def _party_resolved_user(item):
+    item = _to_python(item)
+    if not isinstance(item, dict) or "ResolvedUser" not in item:
+        return None
+    resolved = _to_python(item.get("ResolvedUser"))
+    if not isinstance(resolved, dict):
+        raise ValueError("ResolvedUser must be an object")
+    if resolved.get("ContractVersion") != "archer-meta-user-v1":
+        raise ValueError("ResolvedUser contract version is unsupported")
+    status = resolved.get("LookupStatus")
+    if status not in {"MATCHED", "MATCHED_MISSING_EEID", "USER_NOT_FOUND"}:
+        raise ValueError("ResolvedUser lookup status is unsupported")
+    return resolved
+
+
+def _party_resolved_text(resolved, name):
+    value = resolved.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("ResolvedUser " + name + " must be text")
+    value = value.strip()
+    return value or None
+
+
+def _party_payload(item, party_uuid, party_type, context):
+    payload = {"uuid": party_uuid, "type": party_type}
+    resolved = _party_resolved_user(item)
+    if resolved is None or resolved["LookupStatus"] == "USER_NOT_FOUND":
+        return payload
+
+    name_parts = [
+        value for name in ("FIRST_NAME", "MIDDLE_NAME", "LAST_NAME")
+        if (value := _party_resolved_text(resolved, name)) is not None
+    ]
+    if name_parts:
+        payload["name"] = " ".join(name_parts)
+
+    eeid = _party_resolved_text(resolved, "EEID")
+    if resolved["LookupStatus"] == "MATCHED" and eeid is None:
+        raise ValueError("ResolvedUser MATCHED record is missing EEID")
+
+    scheme = context["config"].get("ARCHER_EEID_SCHEME")
+    if eeid is not None and scheme is not None:
+        if not isinstance(scheme, str) or not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", scheme.strip()):
+            raise ValueError("ARCHER_EEID_SCHEME must be an absolute URI")
+        payload["external-ids"] = [{"scheme": scheme.strip(), "id": eeid}]
+    return payload
+
+
+def _merge_party_payload(existing, candidate):
+    if existing["uuid"] != candidate["uuid"] or existing["type"] != candidate["type"]:
+        raise ValueError("Party identity resolves to conflicting core payload")
+    merged = copy.deepcopy(existing)
+    for member in ("name", "external-ids"):
+        if member not in candidate:
+            continue
+        if member in merged and _json_text(merged[member]) != _json_text(candidate[member]):
+            raise ValueError("Party identity resolves to conflicting enriched payload")
+        merged[member] = copy.deepcopy(candidate[member])
+    return merged
+
+
 def _component_reference_content_ids(value):
     result = []
     for item in (value if isinstance(value, list) else [value]):
@@ -548,19 +611,28 @@ def _metadata_party_instances(path, source_obj, source_id, operator, parameters,
                 continue
             params, extracted = _metadata_params(row), _extract_reference_ids(value)
             members = extracted if isinstance(extracted, list) else [extracted]
-            party_ids = dict.fromkeys(_metadata_party_uuid(group, source_id, _party_reference_identifier(item), context)
-                                      for item in members if item is not None)
+            party_ids = {}
+            for item in members:
+                if item is None:
+                    continue
+                identifier = _party_reference_identifier(item)
+                party_uuid = _metadata_party_uuid(group, source_id, identifier, context)
+                candidate = _party_payload(item, party_uuid, group["party_type"], context)
+                parties[party_uuid] = (
+                    _merge_party_payload(parties[party_uuid], candidate)
+                    if party_uuid in parties else candidate
+                )
+                party_ids.setdefault(party_uuid, None)
             if not party_ids:
                 continue
             role, title = params["role_id"], params["role_title"]
             if roles.setdefault(role, title) != title:
                 raise ValueError("Role identity resolves to conflicting titles")
-            parties.update(dict.fromkeys(party_ids, group["party_type"]))
             field, references = assignments.setdefault(role, (row["SOURCE_FIELD_NAME"], {}))
             references.update(party_ids)
         cache[group["assignments_path"]] = {
             "roles": [(key, {"id": key, "title": title}) for key, title in roles.items()],
-            "parties": [(key, {"uuid": key, "type": kind}) for key, kind in parties.items()],
+            "parties": [(key, payload) for key, payload in parties.items()],
             "assignments": [(field, {"role-id": role, "party-uuids": list(references)})
                             for role, (field, references) in assignments.items()],
         }
