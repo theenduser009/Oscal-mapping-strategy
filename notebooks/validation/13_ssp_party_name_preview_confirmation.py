@@ -8,6 +8,7 @@
 #   the existing OSCAL party nodes that gained a name, while graph identity and
 #   FACT relationships remain unchanged.
 
+import json
 from snowflake.snowpark import functions as F
 
 ROUTE = ("source-one", "SSP")
@@ -37,14 +38,19 @@ if load.get("status") != "PREVIEW_PASSED_NO_TARGET_DML":
 nodes = graph["nodes"]
 party_nodes = nodes.filter(F.col("ELEMENT_TYPE") == F.lit(PARTY_ELEMENT_TYPE))
 
-party_count = party_nodes.count()
-named_party_count = party_nodes.filter(
-    "PARSE_JSON(METADATA_JSON):name IS NOT NULL"
-).count()
+party_count = 0
+named_party_count = 0
+identity_mismatch_count = 0
 
-identity_mismatch_count = party_nodes.filter(
-    F.col("OSCAL_UUID") != F.col("INSTANCE_KEY")
-).count()
+for row in party_nodes.select(
+    "METADATA_JSON", "OSCAL_UUID", "INSTANCE_KEY"
+).to_local_iterator():
+    party_count += 1
+    payload = json.loads(row["METADATA_JSON"])
+    if payload.get("name") is not None:
+        named_party_count += 1
+    if row["OSCAL_UUID"] != row["INSTANCE_KEY"]:
+        identity_mismatch_count += 1
 
 dim_changes = load["expected_changes"]["D"]
 fact_changes = load["expected_changes"]["F"]
