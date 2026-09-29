@@ -60,13 +60,23 @@ report_by_route = {
     (g["source"], g["model"]): g["load"]
     for g in PIPELINE_REPORT.get("groups", [])
 }
-for context in route_contexts:
+for context in runtime_contexts:
     route = (QA_SOURCE_KEY, context["config"]["OSCAL_MODEL"])
     load = report_by_route.get(route)
     if load is None or load.get("status") not in {
         "PREVIEW_PASSED_NO_TARGET_DML", "COMMITTED_AND_VERIFIED"
     }:
         raise ValueError("Every selected Source One route needs an accepted Cell 7 result before QA")
+
+# Use the runtime contexts retained by Cell 7 because those contain the frozen
+# lookup snapshots actually used to build/verify the graph.
+runtime_contexts = []
+for context in runtime_contexts:
+    route = (QA_SOURCE_KEY, context["config"]["OSCAL_MODEL"])
+    graph = MODEL_GRAPHS.get(route)
+    if graph is None or graph.get("context") is None:
+        raise ValueError("Cell 7 runtime context is unavailable for " + str(route))
+    runtime_contexts.append(graph["context"])
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -200,7 +210,7 @@ for row in all_mapping_rows:
 # ---------------------------------------------------------------------------
 
 active_rows = []
-for context in route_contexts:
+for context in runtime_contexts:
     model = context["config"]["OSCAL_MODEL"]
     for row in context["mapping_rows"]:
         active_rows.append((context, model, row))
@@ -278,7 +288,7 @@ def _qa_meta_resolution(model, row):
 source_records = {}
 for record in SOURCE_INPUTS[QA_SOURCE_KEY]["source_df"].to_local_iterator():
     rid = str(record["SOURCE_RECORD_ID"]).strip()
-    source_records[rid] = _metadata_parse(record, route_contexts[0])
+    source_records[rid] = _metadata_parse(record, runtime_contexts[0])
 
 sample_content_ids = sorted(source_records)[:QA_SAMPLE_CONTENT_IDS]
 
@@ -354,7 +364,7 @@ for context, model, row in active_rows:
     rows_by_owner[(model, row["OWNER_ELEMENT_PATH"])].append(row)
     context_by_model[model] = context
 
-for context in route_contexts:
+for context in runtime_contexts:
     model = context["config"]["OSCAL_MODEL"]
     graph = MODEL_GRAPHS[(QA_SOURCE_KEY, model)]["nodes"]
     owner_paths = sorted({
@@ -488,13 +498,41 @@ for context, model, row in active_rows:
 # Publish read-only result frames
 # ---------------------------------------------------------------------------
 
-QA_COVERAGE_DF = session.create_dataframe(coverage_rows)
-QA_ATTENTION_DF = session.create_dataframe(
-    attention_rows if attention_rows else [{
+def _qa_frame(rows, columns, fallback):
+    data = rows if rows else [fallback]
+    return session.create_dataframe(
+        [tuple(row.get(name) for name in columns) for row in data],
+        schema=columns,
+    )
+
+
+coverage_columns = [
+    "SOURCE_FIELD_NAME", "OSCAL_MODEL", "ARCHER_DEV_FIELD_ID",
+    "ARCHER_FIELD_TYPE_ID", "META_FIELD_STATUS", "TARGET_PATH",
+    "SOURCE_PRESENT", "SOURCE_POPULATED", "SOURCE_EXPLICIT_NULL",
+    "TARGET_EVIDENCE_RECORDS", "TARGET_EVIDENCE_OCCURRENCES",
+    "QA_STATUS", "RULE_ID",
+]
+disposition_columns = [
+    "SOURCE_FIELD_NAME", "OSCAL_MODEL", "EXECUTION_STATUS", "TARGET_PATH", "RULE_ID",
+]
+sample_columns = [
+    "CONTENT_ID", "SOURCE_FIELD_NAME", "OSCAL_MODEL", "TARGET_PATH",
+    "EXPECTED_VALUE", "TARGET_VALUES", "VALUE_STATUS",
+]
+
+QA_COVERAGE_DF = _qa_frame(
+    coverage_rows,
+    coverage_columns,
+    {name: None for name in coverage_columns},
+)
+QA_ATTENTION_DF = _qa_frame(
+    attention_rows,
+    coverage_columns,
+    {
+        **{name: None for name in coverage_columns},
         "SOURCE_FIELD_NAME": "<NONE>",
         "OSCAL_MODEL": "<NONE>",
-        "ARCHER_DEV_FIELD_ID": None,
-        "ARCHER_FIELD_TYPE_ID": None,
         "META_FIELD_STATUS": "NONE",
         "TARGET_PATH": "<NONE>",
         "SOURCE_PRESENT": 0,
@@ -504,19 +542,23 @@ QA_ATTENTION_DF = session.create_dataframe(
         "TARGET_EVIDENCE_OCCURRENCES": 0,
         "QA_STATUS": "NO_ATTENTION_ROWS",
         "RULE_ID": "<NONE>",
-    }]
+    },
 )
-QA_DISPOSITION_DF = session.create_dataframe(
-    disposition_rows if disposition_rows else [{
+QA_DISPOSITION_DF = _qa_frame(
+    disposition_rows,
+    disposition_columns,
+    {
         "SOURCE_FIELD_NAME": "<NONE>",
         "OSCAL_MODEL": "<NONE>",
         "EXECUTION_STATUS": "NONE",
         "TARGET_PATH": "<NONE>",
         "RULE_ID": "<NONE>",
-    }]
+    },
 )
-QA_SAMPLE_DF = session.create_dataframe(
-    sample_rows if sample_rows else [{
+QA_SAMPLE_DF = _qa_frame(
+    sample_rows,
+    sample_columns,
+    {
         "CONTENT_ID": "<NONE>",
         "SOURCE_FIELD_NAME": "<NONE>",
         "OSCAL_MODEL": "<NONE>",
@@ -524,7 +566,7 @@ QA_SAMPLE_DF = session.create_dataframe(
         "EXPECTED_VALUE": "<NONE>",
         "TARGET_VALUES": "<NONE>",
         "VALUE_STATUS": "NO_SAMPLE_ROWS",
-    }]
+    },
 )
 
 status_counts = defaultdict(int)
