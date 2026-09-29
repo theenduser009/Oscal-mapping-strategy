@@ -133,14 +133,22 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             continue
         table = active_session.table(contract["source_table"])
         names = _normalized_columns(table.columns)
-        join_name = _input_column(names, contract.get("join_column", "CONTENT_ID"))
         json_name = _input_column(names, contract.get("json_column", "CURATED_JSON"))
-        if join_name is None or json_name is None:
+        join_json_array_field = contract.get("join_json_array_field")
+        join_name = None if join_json_array_field else _input_column(
+            names, contract.get("join_column", "CONTENT_ID")
+        )
+        if json_name is None or (join_json_array_field is None and join_name is None):
             raise ValueError("Configured joined lookup columns are missing")
+        join_value = (
+            col(json_name)[join_json_array_field][0].cast("string")
+            if join_json_array_field
+            else col(join_name).cast("string")
+        )
         joined[name] = table.select(
-            col(join_name).cast("string").alias("CONTENT_ID"),
+            join_value.alias("CONTENT_ID"),
             col(json_name).alias("CURATED_JSON")
-        ).cache_result()
+        ).filter(col("CONTENT_ID").is_not_null()).cache_result()
     return {"archer_values": archer,
             "fips_values": {key: value.lower() for key, value in archer.items()
                             if value.lower() in {"low", "moderate", "high"}},
