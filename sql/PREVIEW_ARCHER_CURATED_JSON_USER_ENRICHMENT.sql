@@ -125,7 +125,11 @@ WITH source_objects AS (
            COALESCE(a.MATCHED_USERS, 0) AS MATCHED_USERS,
            COALESCE(a.UNMATCHED_USERS, 0) AS UNMATCHED_USERS,
            COALESCE(a.MISSING_EEID_USERS, 0) AS MISSING_EEID_USERS,
-           CASE WHEN COALESCE(f.USER_ARRAY_SIZE, 0) > 0
+           CASE WHEN f.BEFORE_FIELD:"UserList" IS NOT NULL
+                     AND NOT COALESCE(IS_NULL_VALUE(f.BEFORE_FIELD:"UserList"), FALSE)
+                     AND NOT COALESCE(IS_ARRAY(f.BEFORE_FIELD:"UserList"), FALSE)
+                THEN 1
+                WHEN COALESCE(f.USER_ARRAY_SIZE, 0) > 0
                      AND (COALESCE(a.MEMBER_COUNT, 0) <> f.USER_ARRAY_SIZE
                           OR COALESCE(a.BLOCKING_MEMBERS, 0) > 0)
                 THEN 1 ELSE 0 END AS BLOCKED_FIELD
@@ -153,7 +157,8 @@ WITH source_objects AS (
            SUM(COALESCE(GROUP_ARRAY_SIZE, 0)) AS GROUP_MEMBERS_UNCHANGED,
            SUM(IFF(BEFORE_FIELD:"GroupList" IS DISTINCT FROM AFTER_FIELD:"GroupList",
                    1, 0)) AS GROUP_FIELDS_CHANGED,
-           ARRAY_AGG(IFF(USER_ARRAY_SIZE IS NOT NULL OR GROUP_ARRAY_SIZE IS NOT NULL,
+           ARRAY_AGG(IFF(USER_ARRAY_SIZE IS NOT NULL OR GROUP_ARRAY_SIZE IS NOT NULL
+                         OR BLOCKED_FIELD > 0,
                OBJECT_CONSTRUCT_KEEP_NULL(
                    'SourceFieldName', SOURCE_FIELD_NAME,
                    'Blocked', BLOCKED_FIELD,
