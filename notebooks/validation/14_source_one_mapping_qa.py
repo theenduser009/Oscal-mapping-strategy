@@ -245,7 +245,7 @@ for context, model, row in active_rows:
 meta_candidates = defaultdict(list)
 if field_names:
     meta_df = session.table(QA_META_FIELD_TABLE).filter(
-        F.upper(F.col("SQL_FIELD_NAME")).isin(list(sorted(field_names)))
+        F.upper(F.col("SQL_FIELD_NAME")).isin(*sorted(field_names))
     ).select(
         "FIELD_ID", "FIELD_TYPE_ID", "LEVEL_ID", "MODULE_ID",
         "SQL_FIELD_NAME", "FIELD_NAME"
@@ -370,7 +370,7 @@ for context in runtime_contexts:
     owner_paths = sorted({
         row["OWNER_ELEMENT_PATH"] for c, m, row in active_rows if m == model
     })
-    node_frame = graph.filter(F.col("ELEMENT_PATH").isin(owner_paths)).select(
+    node_frame = graph.filter(F.col("ELEMENT_PATH").isin(*owner_paths)).select(
         "ELEMENT_PATH", "INSTANCE_KEY", "SOURCE_RECORD_ID", "METADATA_JSON"
     )
 
