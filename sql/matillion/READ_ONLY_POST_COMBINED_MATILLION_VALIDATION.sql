@@ -1,0 +1,182 @@
+-- Post-Matillion validation for the one-update raw -> CURATED_JSON + Meta User enrichment
+-- Date: 2026-09-29
+-- READ ONLY. No UPDATE / DDL / MERGE / INSERT / DELETE.
+--
+-- Run this AFTER the Matillion job finishes and BEFORE running the OSCAL mapper.
+-- It validates:
+--   * CURATED_JSON was populated
+--   * stored CONTENT_ID = RequestedObject.Id
+--   * UserList members retain Id and receive the expected ResolvedUser contract
+--   * GroupList has not been enriched/rewritten with ResolvedUser/ResolvedGroup
+--
+-- Result set 1 = whole-table acceptance summary.
+-- Result set 2 = per-curated-field UserList coverage.
+-- No user names, EEIDs, or raw IDs are returned.
+
+WITH base AS (
+    SELECT
+        r.CONTENT_ID::VARCHAR AS STORED_CONTENT_ID,
+        r.CURATED_JSON,
+        IFF(
+            TYPEOF(r.RAW_DATA) = 'ARRAY',
+            r.RAW_DATA[0],
+            r.RAW_DATA
+        ) AS OBJ
+    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW r
+),
+rows_norm AS (
+    SELECT
+        STORED_CONTENT_ID,
+        CURATED_JSON,
+        OBJ:"RequestedObject":"Id"::VARCHAR AS REQUESTED_OBJECT_ID
+    FROM base
+),
+curated_fields AS (
+    SELECT
+        r.REQUESTED_OBJECT_ID,
+        f.key::VARCHAR AS SQL_KEY,
+        f.value AS FIELD_VALUE
+    FROM rows_norm r,
+         LATERAL FLATTEN(INPUT => AS_OBJECT(r.CURATED_JSON), OUTER => FALSE) f
+    WHERE TYPEOF(r.CURATED_JSON) = 'OBJECT'
+),
+user_members AS (
+    SELECT
+        f.REQUESTED_OBJECT_ID,
+        f.SQL_KEY,
+        u.value AS MEMBER_VALUE,
+        u.value:"ResolvedUser":"LookupStatus"::VARCHAR AS LOOKUP_STATUS,
+        u.value:"ResolvedUser":"ContractVersion"::VARCHAR AS CONTRACT_VERSION
+    FROM curated_fields f,
+         LATERAL FLATTEN(INPUT => AS_ARRAY(f.FIELD_VALUE:"UserList")) u
+    WHERE COALESCE(IS_ARRAY(f.FIELD_VALUE:"UserList"), FALSE)
+),
+group_members AS (
+    SELECT
+        f.REQUESTED_OBJECT_ID,
+        f.SQL_KEY,
+        g.value AS MEMBER_VALUE
+    FROM curated_fields f,
+         LATERAL FLATTEN(INPUT => AS_ARRAY(f.FIELD_VALUE:"GroupList")) g
+    WHERE COALESCE(IS_ARRAY(f.FIELD_VALUE:"GroupList"), FALSE)
+),
+summary AS (
+    SELECT
+        (SELECT COUNT(*) FROM rows_norm) AS SOURCE_ROWS,
+        (SELECT COUNT(DISTINCT REQUESTED_OBJECT_ID)
+           FROM rows_norm
+          WHERE REQUESTED_OBJECT_ID IS NOT NULL) AS DISTINCT_REQUESTED_OBJECT_IDS,
+        (SELECT COUNT(*) FROM rows_norm
+          WHERE CURATED_JSON IS NULL) AS CURATED_JSON_NULL_ROWS,
+        (SELECT COUNT(*) FROM rows_norm
+          WHERE REQUESTED_OBJECT_ID IS NULL) AS MISSING_REQUESTED_OBJECT_ID_ROWS,
+        (SELECT COUNT(*) FROM rows_norm
+          WHERE STORED_CONTENT_ID IS NULL) AS MISSING_STORED_CONTENT_ID_ROWS,
+        (SELECT COUNT(*) FROM rows_norm
+          WHERE STORED_CONTENT_ID IS NOT NULL
+            AND REQUESTED_OBJECT_ID IS NOT NULL
+            AND STORED_CONTENT_ID <> REQUESTED_OBJECT_ID) AS CONTENT_ID_MISMATCH_ROWS,
+
+        (SELECT COUNT(*) FROM curated_fields
+          WHERE COALESCE(IS_ARRAY(FIELD_VALUE:"UserList"), FALSE)) AS USERLIST_FIELDS,
+        (SELECT COUNT(*) FROM user_members) AS USER_MEMBER_OCCURRENCES,
+        (SELECT COUNT(*) FROM user_members
+          WHERE MEMBER_VALUE:"Id" IS NULL) AS USER_MEMBERS_MISSING_ID,
+        (SELECT COUNT(*) FROM user_members
+          WHERE MEMBER_VALUE:"ResolvedUser" IS NOT NULL) AS USER_MEMBERS_WITH_RESOLVED_USER,
+        (SELECT COUNT(*) FROM user_members
+          WHERE CONTRACT_VERSION = 'archer-meta-user-v1') AS USER_MEMBERS_WITH_EXPECTED_CONTRACT,
+        (SELECT COUNT(*) FROM user_members
+          WHERE LOOKUP_STATUS = 'MATCHED') AS MATCHED_USER_MEMBERS,
+        (SELECT COUNT(*) FROM user_members
+          WHERE LOOKUP_STATUS = 'MATCHED_MISSING_EEID') AS MATCHED_MISSING_EEID_USER_MEMBERS,
+        (SELECT COUNT(*) FROM user_members
+          WHERE LOOKUP_STATUS = 'USER_NOT_FOUND') AS USER_NOT_FOUND_MEMBERS,
+        (SELECT COUNT(*) FROM user_members
+          WHERE LOOKUP_STATUS IS NULL) AS USER_MEMBERS_WITHOUT_LOOKUP_STATUS,
+        (SELECT COUNT(*) FROM user_members
+          WHERE LOOKUP_STATUS NOT IN (
+              'MATCHED',
+              'MATCHED_MISSING_EEID',
+              'USER_NOT_FOUND'
+          )) AS USER_MEMBERS_WITH_UNEXPECTED_STATUS,
+
+        (SELECT COUNT(*) FROM curated_fields
+          WHERE COALESCE(IS_ARRAY(FIELD_VALUE:"GroupList"), FALSE)) AS GROUPLIST_FIELDS,
+        (SELECT COUNT(*) FROM group_members) AS GROUP_MEMBER_OCCURRENCES,
+        (SELECT COUNT(*) FROM group_members
+          WHERE MEMBER_VALUE:"ResolvedUser" IS NOT NULL) AS GROUP_MEMBERS_WITH_RESOLVED_USER,
+        (SELECT COUNT(*) FROM group_members
+          WHERE MEMBER_VALUE:"ResolvedGroup" IS NOT NULL) AS GROUP_MEMBERS_WITH_RESOLVED_GROUP
+)
+SELECT
+    *,
+    CASE
+        WHEN CURATED_JSON_NULL_ROWS > 0
+          OR MISSING_REQUESTED_OBJECT_ID_ROWS > 0
+          OR MISSING_STORED_CONTENT_ID_ROWS > 0
+          OR CONTENT_ID_MISMATCH_ROWS > 0
+          OR USER_MEMBERS_MISSING_ID > 0
+          OR USER_MEMBERS_WITH_RESOLVED_USER <> USER_MEMBER_OCCURRENCES
+          OR USER_MEMBERS_WITH_EXPECTED_CONTRACT <> USER_MEMBER_OCCURRENCES
+          OR USER_MEMBERS_WITHOUT_LOOKUP_STATUS > 0
+          OR USER_MEMBERS_WITH_UNEXPECTED_STATUS > 0
+          OR GROUP_MEMBERS_WITH_RESOLVED_USER > 0
+          OR GROUP_MEMBERS_WITH_RESOLVED_GROUP > 0
+        THEN 'REVIEW_BEFORE_OSCAL'
+        ELSE 'POST_MATILLION_ACCEPTANCE_PASSED'
+    END AS STATUS
+FROM summary;
+
+WITH base AS (
+    SELECT
+        r.CURATED_JSON,
+        IFF(
+            TYPEOF(r.RAW_DATA) = 'ARRAY',
+            r.RAW_DATA[0],
+            r.RAW_DATA
+        ):"RequestedObject":"Id"::VARCHAR AS REQUESTED_OBJECT_ID
+    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW r
+    WHERE TYPEOF(r.CURATED_JSON) = 'OBJECT'
+),
+curated_fields AS (
+    SELECT
+        b.REQUESTED_OBJECT_ID,
+        f.key::VARCHAR AS SQL_KEY,
+        f.value AS FIELD_VALUE
+    FROM base b,
+         LATERAL FLATTEN(INPUT => AS_OBJECT(b.CURATED_JSON)) f
+),
+user_members AS (
+    SELECT
+        f.REQUESTED_OBJECT_ID,
+        f.SQL_KEY,
+        u.value AS MEMBER_VALUE,
+        u.value:"ResolvedUser":"LookupStatus"::VARCHAR AS LOOKUP_STATUS,
+        u.value:"ResolvedUser":"ContractVersion"::VARCHAR AS CONTRACT_VERSION
+    FROM curated_fields f,
+         LATERAL FLATTEN(INPUT => AS_ARRAY(f.FIELD_VALUE:"UserList")) u
+    WHERE COALESCE(IS_ARRAY(f.FIELD_VALUE:"UserList"), FALSE)
+)
+SELECT
+    SQL_KEY,
+    COUNT(DISTINCT REQUESTED_OBJECT_ID) AS SOURCE_RECORDS,
+    COUNT(*) AS USER_MEMBER_OCCURRENCES,
+    COUNT_IF(MEMBER_VALUE:"Id" IS NULL) AS MEMBERS_MISSING_ID,
+    COUNT_IF(MEMBER_VALUE:"ResolvedUser" IS NOT NULL) AS MEMBERS_WITH_RESOLVED_USER,
+    COUNT_IF(CONTRACT_VERSION = 'archer-meta-user-v1') AS MEMBERS_WITH_EXPECTED_CONTRACT,
+    COUNT_IF(LOOKUP_STATUS = 'MATCHED') AS MATCHED_MEMBERS,
+    COUNT_IF(LOOKUP_STATUS = 'MATCHED_MISSING_EEID') AS MATCHED_MISSING_EEID_MEMBERS,
+    COUNT_IF(LOOKUP_STATUS = 'USER_NOT_FOUND') AS USER_NOT_FOUND_MEMBERS,
+    COUNT_IF(LOOKUP_STATUS IS NULL) AS MEMBERS_WITHOUT_LOOKUP_STATUS,
+    COUNT_IF(
+        LOOKUP_STATUS IS NOT NULL
+        AND LOOKUP_STATUS NOT IN (
+            'MATCHED',
+            'MATCHED_MISSING_EEID',
+            'USER_NOT_FOUND'
+        )
+    ) AS MEMBERS_WITH_UNEXPECTED_STATUS
+FROM user_members
+GROUP BY SQL_KEY
+ORDER BY USER_MEMBER_OCCURRENCES DESC, SQL_KEY;
