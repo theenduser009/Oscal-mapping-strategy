@@ -157,8 +157,7 @@ existing content-ID fallback terms. Their order, casts and final requested-objec
 ID fallback are unchanged. It is passed through the inner SELECT but not stored
 in the target. This isolates record identity from newly retained null keys.
 
-All field-type conversions, metadata joins, precedence rules, nested extraction,
-table variable and both `CURATED_JSON IS NULL` update predicates are preserved.
+All field-type conversions, precedence rules, nested extraction, table variable and both `CURATED_JSON IS NULL` update predicates are preserved. Owner-provided 2026-09-29 screenshots confirm one later safety change in metadata matching: source-side `FIELD_ID` parsing uses `TRY_TO_NUMBER` in the ordering and both metadata joins, while the metadata-table `FIELD_ID` side remains `TO_NUMBER`.
 Invalid dates/numbers still require investigation: this candidate retains their
 keys as null; it does not repair the invalid value.
 
@@ -200,8 +199,7 @@ repair with a saved baseline. No bulk production backfill is prepared or authori
 - Top-level missing metadata falls back to `FIELD_<id>`; null preservation does
   not supply a missing governed field name.
 - Nested rows with no `SQL_FIELD_NAME` are explicitly filtered out.
-- Recursive extraction can encounter nonnumeric keys while the join uses strict
-  `TO_NUMBER`; this is a potential separate runtime failure.
+- Source-side top-level and nested `FIELD_ID` conversion now uses `TRY_TO_NUMBER` in the owner-confirmed current SQL, so nonnumeric source keys no longer raise at those three conversion points; they can instead fail to match metadata and need review.
 - `ROW_NUMBER` intentionally selects one row per requested object and SQL key;
   multiple field IDs sharing a name do not become separate JSON properties.
 - Array-root handling currently uses the first item; additional root entries are
