@@ -73,6 +73,7 @@ SOURCE_FILES = [
             "allocated-controls": {
                 "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW",
                 "join_column": "CONTENT_ID",
+                "join_json_array_field": "AUTHORIZATION_PACKAGE",
                 "json_column": "CURATED_JSON",
             },
         },
