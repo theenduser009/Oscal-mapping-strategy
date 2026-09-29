@@ -60,7 +60,7 @@ report_by_route = {
     (g["source"], g["model"]): g["load"]
     for g in PIPELINE_REPORT.get("groups", [])
 }
-for context in runtime_contexts:
+for context in route_contexts:
     route = (QA_SOURCE_KEY, context["config"]["OSCAL_MODEL"])
     load = report_by_route.get(route)
     if load is None or load.get("status") not in {
@@ -71,7 +71,7 @@ for context in runtime_contexts:
 # Use the runtime contexts retained by Cell 7 because those contain the frozen
 # lookup snapshots actually used to build/verify the graph.
 runtime_contexts = []
-for context in runtime_contexts:
+for context in route_contexts:
     route = (QA_SOURCE_KEY, context["config"]["OSCAL_MODEL"])
     graph = MODEL_GRAPHS.get(route)
     if graph is None or graph.get("context") is None:
