@@ -81,6 +81,14 @@ SOURCE_FILES = [
                 "description_field": "DESCRIPTION",
             },
         },
+        "JOINED_LOOKUP_CONTRACTS": {
+            "allocated-controls": {
+                "source_table": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_ALLOCATED_CONTROLS_CONTROL_RAW",
+                "join_column": "CONTENT_ID",
+                "join_json_array_field": "AUTHORIZATION_PACKAGE",
+                "json_column": "CURATED_JSON",
+            },
+        },
     },
     {
         "SOURCE_KEY": "source-two-source",
@@ -188,7 +196,7 @@ MODEL_CONTRACTS = {
         "MODEL_KEY": "SSP", "POLICY": "metadata-v1", "UNREVIEWED_ROWS": "DEFER",
         "MODEL_ALIASES": ("System Security Plan", "SSP - Metadata", "SSP - System Characteristics",
                           "SSP - System Implementation", "SSP - Control Implementation"),
-        "LOOKUP_GROUPS": ("components",),
+        "LOOKUP_GROUPS": ("components", "joined-records"),
         "RUNTIME_OPTIONS": {"parse_decimal": False, "null_source_as_empty": True},
         "STORAGE_CONTRACT": {
             "VERIFIED": True, "PHYSICAL_PROFILE": "BINARY16_UUID32", "MODEL_KEY": "SSP",
@@ -361,7 +369,7 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             if key in archer and archer[key] != value:
                 raise ValueError("Archer lookup identity has conflicting labels")
             archer[key] = value
-    components = {}
+    components, joined = {}, {}
     required = {group for key in profile["MODEL_KEYS"]
                 for group in model_contracts[key].get("LOOKUP_GROUPS", ())}
     # Lookup requirements are data in the source profile, not table names in
@@ -377,11 +385,34 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             col(names["CONTENT_ID"]).alias("CONTENT_ID"),
             col(names["CURATED_JSON"]).alias("CURATED_JSON")
         ).cache_result()
+    for name, contract in profile.get("JOINED_LOOKUP_CONTRACTS", {}).items():
+        if "joined-records" not in required:
+            continue
+        table = active_session.table(contract["source_table"])
+        names = _normalized_columns(table.columns)
+        json_name = _input_column(names, contract.get("json_column", "CURATED_JSON"))
+        join_json_array_field = contract.get("join_json_array_field")
+        join_name = None if join_json_array_field else _input_column(
+            names, contract.get("join_column", "CONTENT_ID")
+        )
+        if json_name is None or (join_json_array_field is None and join_name is None):
+            raise ValueError("Configured joined lookup columns are missing")
+        join_value = (
+            col(json_name)[join_json_array_field][0].cast("string")
+            if join_json_array_field
+            else col(join_name).cast("string")
+        )
+        joined[name] = table.select(
+            join_value.alias("CONTENT_ID"),
+            col(json_name).alias("CURATED_JSON")
+        ).filter(col("CONTENT_ID").is_not_null()).cache_result()
     return {"archer_values": archer,
             "fips_values": {key: value.lower() for key, value in archer.items()
                             if value.lower() in {"low", "moderate", "high"}},
             "component_sources": components,
-            "component_contract": profile.get("LOOKUP_CONTRACTS", {})}
+            "component_contract": profile.get("LOOKUP_CONTRACTS", {}),
+            "joined_sources": joined,
+            "joined_contract": profile.get("JOINED_LOOKUP_CONTRACTS", {})}
 
 
 SOURCE_INPUTS, MAPPING_INPUTS = {}, {}
@@ -411,7 +442,7 @@ LEAN_MAPPER_RELEASE = "lean-csv-registry-v4"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
-    "skip", "canonical-text", "reference-ids",
+    "skip", "canonical-text", "reference-ids", "json-text",
 }
 METADATA_INSTANCE_RULES = {
     "record": "SOURCE_RECORD_ID", "optional-record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
@@ -489,7 +520,7 @@ def _owner_for_path(path, paths):
 def _registry_operator(row):
     operator = _metadata_column_text(row, "OPERATOR")
     if operator:
-        if operator not in {"object", *METADATA_INSTANCE_RULES}:
+        if operator not in {"object", "joined-records", *METADATA_INSTANCE_RULES}:
             raise ValueError("Unknown registry OPERATOR")
         return operator
     if not _registry_meta_bool(row, "IS_COLLECTION"):
@@ -564,15 +595,20 @@ def _registry_elements(rows, selected, profile, model):
         parameters = {"registry_contract": {"parent_path": parent, "is_collection": collection}}
         if collection:
             identity = (row.get("INSTANCE_KEY_RULE"), _metadata_column_text(row, "ITEM_PATH"))
-            expected = ("VALUE", "$") if operator == "object" else (METADATA_INSTANCE_RULES[operator], METADATA_ITEM_PATHS[operator])
-            if identity != expected and not (operator == "properties" and identity == ("SOURCE_FIELD_NAME", "$")):
-                raise ValueError("Registry identity conflicts with OPERATOR")
+            if operator == "joined-records":
+                if not identity[0] or identity[1] != "$":
+                    raise ValueError("Joined-record collection requires an identity source field and ITEM_PATH=$")
+                parameters["joined_instance_field"] = identity[0]
+            else:
+                expected = ("VALUE", "$") if operator == "object" else (METADATA_INSTANCE_RULES[operator], METADATA_ITEM_PATHS[operator])
+                if identity != expected and not (operator == "properties" and identity == ("SOURCE_FIELD_NAME", "$")):
+                    raise ValueError("Registry identity conflicts with OPERATOR")
             parameters["registry_contract"].update(instance_key_rule=identity[0], item_path=identity[1])
         if parent and _registry_meta_bool(by_path[parent], "IS_COLLECTION"):
-            if _registry_operator(by_path[parent]) not in {"record", "optional-record"}:
+            if _registry_operator(by_path[parent]) not in {"record", "optional-record", "joined-records"}:
                 raise ValueError("Nested collection requires a record parent identity")
             parameters["parent_instance_rule"] = "source-record"
-        elif operator in {"record", "optional-record"}:
+        elif operator in {"record", "optional-record", "joined-records"}:
             parameters["parent_instance_rule"] = "singleton"
         policy = _metadata_column_text(row, "UUID_POLICY", required=bool(row.get("OPERATOR"))) or "omit"
         if policy not in {"omit", "node", "instance"} or (policy == "instance") != (operator == "parties"):
@@ -583,9 +619,12 @@ def _registry_elements(rows, selected, profile, model):
             parameters["uuid_from_instance"] = True
         members = _metadata_items(row, "REQUIRED_MEMBERS")
         if members:
-            if operator != "object" or collection or any(not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", member) for member in members):
-                raise ValueError("REQUIRED_MEMBERS requires scalar object member paths")
-            parameters.update(required_members=members, optional_assembly=True)
+            invalid_member = any(not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", member) for member in members)
+            if invalid_member or operator not in {"object", "joined-records"} or (operator == "object" and collection):
+                raise ValueError("REQUIRED_MEMBERS requires scalar object or joined-record member paths")
+            parameters["required_members"] = members
+            if operator == "object":
+                parameters["optional_assembly"] = True
         elif operator == "object" and not collection:
             parameters["materialize_empty"] = True
         if operator in {"properties", "observations"}:
@@ -610,7 +649,7 @@ def _compile_mapping(row, elements):
     target = row["FIELD_RELATIVE_PATH"]
     params, representation = {}, {}
     if target:
-        if operator not in {"object", "record", "optional-record", "values"} or not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", target):
+        if operator not in {"object", "record", "optional-record", "values", "joined-records"} or not re.fullmatch(r"[\w-]+(?:\.[\w-]+)*", target):
             raise ValueError("Member target conflicts with its element operator")
         representation["target"] = target
     source = row.get("VALUE_SOURCE") or "FIELD"
@@ -630,6 +669,9 @@ def _compile_mapping(row, elements):
     if transform == "skip" and representation.get("required"):
         raise ValueError("Skip transform cannot supply a required value")
     allowed = {"VALUE_SOURCE", "VALUE_REQUIRED"}
+    if operator == "joined-records":
+        allowed.add("LOOKUP_KEY")
+        representation["joined_lookup"] = _metadata_column_text(row, "LOOKUP_KEY", True)
     if operator in {"properties", "observations"} and row.get("PROPERTY_NAME") not in (None, ""):
         allowed.add("PROPERTY_NAME")
         property_name = _metadata_column_text(row, "PROPERTY_NAME", True)
@@ -1079,6 +1121,11 @@ def _metadata_transform(row, value, context):
     if transform == "reference-ids":
         result = _extract_reference_ids(value)
         return result if _has_value(result) else SKIP_VALUE
+    if transform == "json-text":
+        try:
+            return json.dumps(_to_python(value), sort_keys=True, separators=(",", ":"), allow_nan=False)
+        except (TypeError, ValueError):
+            raise ValueError("Mapped JSON text value is not serializable") from None
     if transform == "scalar-score":
         return _score_value(value, context)
     if transform == "security-objective":
@@ -1247,6 +1294,144 @@ def _build_component_hydration_lookups(source_df, mapping_rows, source_dfs, cont
     return lookups
 
 
+def _joined_variant_value(value, context):
+    """Decode scalar/object/array VARIANT values returned by Snowpark projection."""
+    value = _to_python(value)
+    if isinstance(value, str):
+        try:
+            return (json.loads(value, parse_float=Decimal)
+                    if context["compiled_plan"].get("options", {}).get("parse_decimal", True)
+                    else json.loads(value))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return value
+    return value
+
+
+def _build_joined_record_lookups(source_df, mapping_rows, context):
+    """Project only mapped child fields before streaming joined records to Python."""
+    from snowflake.snowpark import functions as F
+
+    rows_by_binding = {}
+    for row in mapping_rows:
+        params = _metadata_params(row)
+        binding = params.get("joined_lookup")
+        if not binding:
+            raise ValueError("Joined-record mapping requires LOOKUP_KEY")
+        rows_by_binding.setdefault(binding, []).append(row)
+
+    source_ids = source_df.select(
+        F.trim(F.col("SOURCE_RECORD_ID").cast("string")).alias("_JOIN_ID")
+    ).distinct()
+
+    result = {}
+    for binding, binding_rows in rows_by_binding.items():
+        frame = context["lookups"].get("joined_sources", {}).get(binding)
+        if frame is None:
+            raise ValueError("Joined-record lookup source is unavailable: " + binding)
+
+        columns = {str(name).strip('"').upper(): name for name in frame.columns}
+        if not {"CONTENT_ID", "CURATED_JSON"}.issubset(columns):
+            raise ValueError("Joined-record lookup requires CONTENT_ID and CURATED_JSON")
+
+        owner_paths = {row["OWNER_ELEMENT_PATH"] for row in binding_rows}
+        if len(owner_paths) != 1:
+            raise ValueError("Joined-record lookup binding must belong to one collection path")
+        owner_path = next(iter(owner_paths))
+        parameters = context["compiled_plan"]["elements"][owner_path]["parameters"]
+        identity_field = parameters.get("joined_instance_field")
+        if not identity_field:
+            raise ValueError("Joined-record collection requires a registry identity field")
+
+        required_fields = [identity_field]
+        for row in binding_rows:
+            field = row["SOURCE_FIELD_NAME"]
+            if field not in required_fields:
+                required_fields.append(field)
+
+        json_col = F.col(columns["CURATED_JSON"])
+        projected = [
+            F.trim(F.col(columns["CONTENT_ID"]).cast("string")).alias("_JOIN_ID")
+        ]
+        for field in required_fields:
+            projected.append(F.get(json_col, F.lit(field)).alias(field))
+
+        joined = frame.select(*projected).join(source_ids, "_JOIN_ID", "inner")
+
+        by_parent = {}
+        for record in joined.to_local_iterator():
+            parent_id = str(record["_JOIN_ID"]).strip()
+            payload = {}
+            for field in required_fields:
+                raw = _to_python(record[field])
+                # Preserve the joined child identity exactly as the first accepted
+                # Level-355 batch saw it. Decode mapped payload fields separately.
+                payload[field] = raw if field == identity_field else _joined_variant_value(raw, context)
+            by_parent.setdefault(parent_id, []).append(payload)
+
+        result[binding] = by_parent
+
+    return result
+
+
+def _metadata_joined_record_instances(source_id, rows, parameters, context):
+    bindings = {
+        _metadata_params(row).get("joined_lookup")
+        for row in rows
+        if _metadata_params(row).get("joined_lookup")
+    }
+    if len(bindings) != 1:
+        raise ValueError("Joined-record collection requires exactly one lookup binding")
+
+    binding = next(iter(bindings))
+    children = context.get("joined_record_lookups", {}).get(binding, {}).get(source_id, ())
+    identity_field = parameters.get("joined_instance_field")
+    if not identity_field:
+        raise ValueError("Joined-record collection requires a registry identity field")
+
+    instances = []
+    for child in children:
+        identity = resolve_json_path(child, identity_field, default=SKIP_VALUE)
+        if identity is SKIP_VALUE:
+            raise ValueError("Joined-record identity field is absent")
+        key = _scalar_text(identity, "Joined-record identity must be scalar",
+                           "Joined-record identity must be nonblank")
+
+        payload, crosswalks = {}, []
+        for row in rows:
+            value = _metadata_mapped_value(row, child, context)
+            if value is SKIP_VALUE:
+                continue
+            target = _metadata_target(row)
+            if row["TRANSFORM_ID"] == "status-crosswalk":
+                crosswalks.append(value)
+            else:
+                _metadata_assign(payload, target, value)
+
+        for members in crosswalks:
+            for member, value in members.items():
+                _metadata_assign(payload, member, value, preserve_existing=member == "remarks")
+
+        missing_required = [
+            member for member in parameters.get("required_members", ())
+            if not _has_value(_metadata_get(payload, member))
+        ]
+        if missing_required:
+            context["graph_report"]["SKIPPED_JOINED_RECORDS"] = (
+                context["graph_report"].get("SKIPPED_JOINED_RECORDS", 0) + 1
+            )
+            continue
+
+        _append_unique_collection_instance(
+            instances,
+            {
+                "instance_key": key,
+                "payload": payload,
+                "parent_instance_key": _metadata_parent_key(parameters, source_id),
+            },
+        )
+    return instances
+
+
 def _metadata_party_uuid(group, source_record_id, identifier, context):
     # Cell 3 permits one source namespace per linked model; preserve its accepted seed.
     return _deterministic_uuid(context["config"]["SOURCE_SYSTEM_NAME"], source_record_id, "party", identifier)
@@ -1336,6 +1521,8 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
         return _metadata_party_instances(path, source_obj, source_id, operator, parameters, context)
     if operator == "references":
         return _metadata_reference_instances(source_obj, source_id, rows, parameters, context)
+    if operator == "joined-records":
+        return _metadata_joined_record_instances(source_id, rows, parameters, context)
     payload, instances, crosswalks = {}, [], []
     for row in rows:
         value = _metadata_mapped_value(row, source_obj, context)
@@ -1451,8 +1638,12 @@ def _metadata_prepare(source_df, context):
     plan = context["compiled_plan"]
     references = [row for row in plan["mappings"] if row["TRANSFORM_ID"] != "skip"
                   and plan["elements"][row["OWNER_ELEMENT_PATH"]]["operator"] == "references"]
+    joined_records = [row for row in plan["mappings"] if row["TRANSFORM_ID"] != "skip"
+                      and plan["elements"][row["OWNER_ELEMENT_PATH"]]["operator"] == "joined-records"]
     context["component_hydration_lookups"] = _build_component_hydration_lookups(
         source_df, references, context["lookups"].get("component_sources", {}), context) if references else {}
+    context["joined_record_lookups"] = _build_joined_record_lookups(
+        source_df, joined_records, context) if joined_records else {}
 
 
 def _metadata_finish(nodes, edges, context):
@@ -2038,7 +2229,8 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
     except BaseException as error:
         details = getattr(error, "details", {})
         report.update(status="COMMIT_FAILED_REVIEW_REQUIRED" if report["commit_attempted"] else "FAILED_BEFORE_COMMIT",
-                      failed_route=active, error_type=type(error).__name__, load_error=details)
+                      failed_route=active, error_type=type(error).__name__,
+                      error_message=str(error), load_error=details)
         report["writes_executed"] |= details.get("writes_executed") is True
         raise PipelineError(report) from None
 
