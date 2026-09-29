@@ -28,6 +28,8 @@ class Expr:
         return self
     def is_not_null(self):
         return Expr("not-null", self)
+    def __getitem__(self, key):
+        return Expr("getitem", self, key)
     def __eq__(self, other):
         return Expr("eq", self, other)
     def over(self, window):
@@ -43,6 +45,15 @@ class Expr:
             return None if value is None else str(value)
         if self.op == "not-null":
             return self.args[0].eval(row) is not None
+        if self.op == "getitem":
+            value, key = self.args[0].eval(row), self.args[1]
+            if value is None:
+                return None
+            if isinstance(value, dict):
+                return value.get(key)
+            if isinstance(value, list) and isinstance(key, int):
+                return value[key] if 0 <= key < len(value) else None
+            return None
         if self.op == "eq":
             return self.args[0].eval(row) == self.args[1].eval(row)
         raise AssertionError("Unexpected fake expression operation")
@@ -338,6 +349,36 @@ class MultiModelInputs(unittest.TestCase):
         self.assertEqual({"1": "High"}, lookups["fips_values"])
         self.assertIn("software", lookups["component_sources"])
         self.assertEqual(1, session.cache_calls["LOOKUP_ONE"])
+
+    def test_joined_lookup_can_use_singleton_json_array_parent_reference(self):
+        tables = {
+            "VALUES": [{"SELECT_VALUE_ID": 1, "SELECT_VALUE_NAME": "High"}],
+            "JOINED": [
+                {"CONTENT_ID": "control-a", "CURATED_JSON": {
+                    "AUTHORIZATION_PACKAGE": [100], "CONTROL_NUMBER": "a"}},
+                {"CONTENT_ID": "control-b", "CURATED_JSON": {
+                    "AUTHORIZATION_PACKAGE": None, "CONTROL_NUMBER": "b"}},
+            ],
+        }
+        session = Session(tables)
+        selected = profile(models=("CUSTOM_MODEL",))
+        selected["JOINED_LOOKUP_CONTRACTS"] = {
+            "allocated-controls": {
+                "source_table": "JOINED",
+                "join_column": "CONTENT_ID",
+                "join_json_array_field": "AUTHORIZATION_PACKAGE",
+                "json_column": "CURATED_JSON",
+            }
+        }
+        lookups = self.ns["load_source_lookups"](
+            session, selected, {"CUSTOM_MODEL": {"LOOKUP_GROUPS": ("joined-records",)}},
+            {"ARCHER_META_VALUE_TABLE": "VALUES"})
+        frame = lookups["joined_sources"]["allocated-controls"]
+        self.assertEqual([{
+            "CONTENT_ID": "100",
+            "CURATED_JSON": {"AUTHORIZATION_PACKAGE": [100], "CONTROL_NUMBER": "a"},
+        }], frame.rows)
+        self.assertEqual(1, session.cache_calls["JOINED"])
 
     def test_csv_blank_lines_and_missing_trailing_cells_preserve_column_alignment(self):
         text = 'FIELD,NOTES,STATUS\n  \nA\nB,"two, words",APPROVED\n'
