@@ -1,7 +1,8 @@
--- REVIEW CANDIDATE: derived from the uploaded SQL transcription, not live-verified.
--- Compare with the actual Matillion component; run the read-only preflight first.
--- Only null-key retention and identity-input isolation change. Both NULL-only
--- update predicates remain. This does NOT repair already-populated CURATED_JSON.
+-- REVIEW CANDIDATE: synchronized to owner-provided latest Matillion SQL screenshots on 2026-09-29.
+-- Still compare with the actual Matillion component before deployment; screenshots are not a byte export.
+-- This candidate includes the accepted null-key/identity isolation changes plus the owner-confirmed
+-- source FIELD_ID safety changes: TRY_TO_NUMBER on source-side FIELD_ID ordering/joins.
+-- Both NULL-only update predicates remain. This does NOT repair already-populated CURATED_JSON.
 -- Do not remove those predicates or deploy a production-wide backfill.
 
 UPDATE ${jv_raw_table_name} AS tgt
@@ -62,11 +63,11 @@ FROM (
                              AND amf.LEVEL_ID = f.LEVEL_ID THEN 0
                             ELSE 1
                         END,
-                        TO_NUMBER(f.FIELD_ID)
+                        TRY_TO_NUMBER(f.FIELD_ID)
                 ) AS rn
             FROM flat f
             LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
-                ON TO_NUMBER(amf.FIELD_ID) = TO_NUMBER(f.FIELD_ID)
+                ON TO_NUMBER(amf.FIELD_ID) = TRY_TO_NUMBER(f.FIELD_ID)
         ),
         typed AS (
             SELECT
@@ -115,7 +116,7 @@ FROM (
                 nf.V
             FROM nested_flat nf
             LEFT JOIN RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD amf
-                ON TO_NUMBER(amf.FIELD_ID) = TO_NUMBER(nf.FIELD_ID)
+                ON TO_NUMBER(amf.FIELD_ID) = TRY_TO_NUMBER(nf.FIELD_ID)
             WHERE amf.SQL_FIELD_NAME IS NOT NULL
         ),
         nested_typed AS (
