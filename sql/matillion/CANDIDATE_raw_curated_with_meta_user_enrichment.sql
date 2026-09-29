@@ -8,7 +8,7 @@
 --   * source-side TRY_TO_NUMBER FIELD_ID safety
 --   * type conversion and nested extraction
 --   * JSON-null key preservation
---   * ID_SOURCE_JSON isolation for CONTENT_ID selection
+--   * owner-confirmed Archer record identity: RequestedObject.Id -> CONTENT_ID
 --   * both CURATED_JSON IS NULL pending-row predicates
 --
 -- Added in this SAME UPDATE:
@@ -30,14 +30,7 @@ FROM (
     SELECT
         curated.REQ_OBJ_ID AS RECORD_ID,
         curated.CURATED_JSON,
-        COALESCE(
-            curated.ID_SOURCE_JSON:"ssp_uuid"::string,
-            curated.ID_SOURCE_JSON:"AUTH_PKG_TRACKING_ID"::string,
-            curated.ID_SOURCE_JSON:"HRTN_ID"::string,
-            curated.ID_SOURCE_JSON:"TRACKING_ID"::string,
-            curated.ID_SOURCE_JSON:"CONTENT_ID"::string,
-            curated.REQ_OBJ_ID::string
-        ) AS CONTENT_ID
+        curated.REQ_OBJ_ID::string AS CONTENT_ID
     FROM (
         WITH norm AS (
             SELECT
