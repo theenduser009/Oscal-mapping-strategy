@@ -39,7 +39,7 @@ party_nodes = nodes.filter(F.col("ELEMENT_TYPE") == F.lit(PARTY_ELEMENT_TYPE))
 
 party_count = party_nodes.count()
 named_party_count = party_nodes.filter(
-    F.col("METADATA_JSON").contains('"name"')
+    "PARSE_JSON(METADATA_JSON):name IS NOT NULL"
 ).count()
 
 identity_mismatch_count = party_nodes.filter(
