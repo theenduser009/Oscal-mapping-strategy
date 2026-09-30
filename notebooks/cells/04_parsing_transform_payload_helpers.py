@@ -205,6 +205,8 @@ def _metadata_transform(row, value, context):
         return SKIP_VALUE
     if transform == "direct":
         return _to_python(value)
+    if transform == "source-field-name":
+        return row["SOURCE_FIELD_NAME"]
     if transform in {"text", "timestamp", "canonical-text"}:
         value = _metadata_text(_to_python(value), "Mapped value")
         if transform == "canonical-text" and value != value.strip():
@@ -707,8 +709,15 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             if field_identity and len(values) != 1:
                 raise ValueError("One scalar value is required per field identity")
             for item in values:
-                property_name = _metadata_params(row).get("property_name") or _stable_property_name(field)
+                property_params = _metadata_params(row)
+                property_name = property_params.get("property_name") or _stable_property_name(field)
                 prop = {"name": _metadata_text(property_name, "Property name"), "value": item}
+                for parameter, member in (
+                        ("property_ns", "ns"),
+                        ("property_class", "class"),
+                        ("property_group", "group")):
+                    if property_params.get(parameter) not in (None, ""):
+                        prop[member] = _metadata_text(property_params[parameter], "Property " + member)
                 item_payload = {"props": [prop]} if operator == "observations" else prop
                 key = field if field_identity else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
                 _append_unique_collection_instance(instances, {"instance_key": key, "payload": item_payload,
