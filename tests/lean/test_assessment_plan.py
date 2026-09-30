@@ -82,23 +82,29 @@ class AssessmentPlanTests(unittest.TestCase):
                   "UNMAPPED_PRIVATE_FIELD": "Must not appear"}
         records = [{"SOURCE_RECORD_ID": record, "CURATED_JSON": source} for record in ("package-a", "package-b")]
         nodes, edges = build(self.ns, self.context, records)
-        self.assertEqual((8, 6), (len(nodes.rows), len(edges.rows)))
+        self.assertEqual((14, 12), (len(nodes.rows), len(edges.rows)))
         for record in ("package-a", "package-b"):
             owned = [row for row in nodes.rows if row["SOURCE_RECORD_ID"] == record]
             task = next(row for row in owned if row["ELEMENT_PATH"] == TASK_PATH)
             self.assertEqual({"uuid": task["OSCAL_UUID"], "title": "Preassessment review", "type": "action",
                               "remarks": source[COMMENTS]}, json.loads(task["METADATA_JSON"]))
             properties = [row for row in owned if row["ELEMENT_PATH"] == PROP_PATH]
+            business_properties = [row for row in properties
+                                   if json.loads(row["METADATA_JSON"])["name"] != "source-field"]
+            lineage_properties = [json.loads(row["METADATA_JSON"]) for row in properties
+                                  if json.loads(row["METADATA_JSON"])["name"] == "source-field"]
             self.assertEqual({"request-to-begin-assessment": "Requested", "approval-to-begin-assessment": "Approved"},
-                {json.loads(row["METADATA_JSON"])["name"]: json.loads(row["METADATA_JSON"])["value"] for row in properties})
+                {json.loads(row["METADATA_JSON"])["name"]: json.loads(row["METADATA_JSON"])["value"]
+                 for row in business_properties})
+            self.assertEqual({REQUEST, APPROVAL, COMMENTS}, {prop["value"] for prop in lineage_properties})
             for row in properties:
                 self.assertNotIn("uuid", json.loads(row["METADATA_JSON"]))
                 edge = next(edge for edge in edges.rows if edge["FK_TARGET_ELEMENT_HASH"] == row["NODE_KEY"])
                 self.assertEqual(task["NODE_KEY"], edge["FK_SOURCE_ELEMENT_HASH"])
-        self.assertEqual(8, len({row["NODE_KEY"] for row in nodes.rows}))
-        self.assertEqual(8, len({row["OSCAL_UUID"] for row in nodes.rows}))
+        self.assertEqual(14, len({row["NODE_KEY"] for row in nodes.rows}))
+        self.assertEqual(14, len({row["OSCAL_UUID"] for row in nodes.rows}))
         self.assertNotIn("Must not appear", json.dumps(business(nodes), default=str))
-        self.assertEqual({"nodes": 8, "edges": 6, "source_records": 2},
+        self.assertEqual({"nodes": 14, "edges": 12, "source_records": 2},
                          self.ns["_load_graph"](nodes, edges, self.context["config"]))
 
     def test_explicit_nulls_preserved_but_missing_fields_are_absent(self):
@@ -106,7 +112,7 @@ class AssessmentPlanTests(unittest.TestCase):
         for raw in (source, json.dumps(source)):
             with self.subTest(source_type=type(raw).__name__):
                 nodes, edges = self.graph(raw)
-                self.assertEqual((4, 3), (len(nodes.rows), len(edges.rows)))
+                self.assertEqual((7, 6), (len(nodes.rows), len(edges.rows)))
                 self.assertEqual([None, None], [payload["value"] for payload in self.payloads(nodes, PROP_PATH)])
                 self.assertIsNone(self.payloads(nodes, TASK_PATH)[0]["remarks"])
         for source in ({}, {REQUEST: "", APPROVAL: [], COMMENTS: ""}):
@@ -202,11 +208,15 @@ class AssessmentPlanTests(unittest.TestCase):
         context["lookups"] = {"archer_values": {"101": "Selected"}}
         before = self.graph({"UNRELATED_REVIEW_CHOICE": None}, context=context)
         after = self.graph({"UNRELATED_REVIEW_CHOICE": {"ValuesListIds": [101]}}, context=context)
-        self.assertEqual((3, 2), tuple(len(frame.rows) for frame in before))
+        self.assertEqual((4, 3), tuple(len(frame.rows) for frame in before))
         self.assertEqual({row["NODE_KEY"] for row in before[0].rows}, {row["NODE_KEY"] for row in after[0].rows})
         self.assertEqual(business(before[1]), business(after[1]))
+        props = self.payloads(after[0], root + ".tasks[].props[]")
         self.assertEqual([{"name": "unrelated-review-choice", "value": "Selected"}],
-                         self.payloads(after[0], root + ".tasks[].props[]"))
+                         [{key: value for key, value in prop.items() if key != "uuid"}
+                          for prop in props if prop["name"] != "source-field"])
+        self.assertEqual(["UNRELATED_REVIEW_CHOICE"],
+                         [prop["value"] for prop in props if prop["name"] == "source-field"])
 
     def test_preview_null_insert_populated_update_and_unchanged_readback(self):
         session = storage.Session()
@@ -234,7 +244,7 @@ class AssessmentPlanTests(unittest.TestCase):
         self.assertEqual([], session.query("SELECT * FROM " + contract["TARGET_DIM"]))
         inserted = load(nulls, True)
         self.assertEqual("COMMITTED_AND_VERIFIED", inserted["status"])
-        self.assertEqual({"INSERTS": 4, "UPDATES": 0, "UNCHANGED": 0}, inserted["expected_changes"]["D"])
+        self.assertEqual({"INSERTS": 7, "UPDATES": 0, "UNCHANGED": 0}, inserted["expected_changes"]["D"])
         dim, pk = contract["TARGET_DIM"], contract["DIM_PK_COLUMN"]
         saved = {row[pk]: row for row in session.query("SELECT * FROM " + dim)}
         facts = session.query("SELECT * FROM " + contract["TARGET_FACT"])
@@ -242,15 +252,15 @@ class AssessmentPlanTests(unittest.TestCase):
         populated = {REQUEST: {"ValuesListIds": [101]}, APPROVAL: {"ValuesListIds": [102]}, COMMENTS: "Reviewed"}
         changed = load(populated, True)
         self.assertEqual("COMMITTED_AND_VERIFIED", changed["status"])
-        self.assertEqual({"INSERTS": 0, "UPDATES": 3, "UNCHANGED": 1}, changed["expected_changes"]["D"])
+        self.assertEqual({"INSERTS": 0, "UPDATES": 3, "UNCHANGED": 4}, changed["expected_changes"]["D"])
         changed_rows = {row[pk]: row for row in session.query("SELECT * FROM " + dim)}
         self.assertEqual(set(saved), set(changed_rows))
         self.assertEqual(facts, session.query("SELECT * FROM " + contract["TARGET_FACT"]))
         repeated = load(populated, True)
-        self.assertEqual({"D": {"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 4},
-                          "F": {"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 3}}, repeated["expected_changes"])
+        self.assertEqual({"D": {"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 7},
+                          "F": {"INSERTS": 0, "UPDATES": 0, "UNCHANGED": 6}}, repeated["expected_changes"])
         restored = load(nulls, True)
-        self.assertEqual({"INSERTS": 0, "UPDATES": 3, "UNCHANGED": 1}, restored["expected_changes"]["D"])
+        self.assertEqual({"INSERTS": 0, "UPDATES": 3, "UNCHANGED": 4}, restored["expected_changes"]["D"])
         payloads = [json.loads(row["METADATA_JSON"]) for row in session.query("SELECT * FROM " + dim)]
         self.assertEqual(2, sum("value" in payload and payload["value"] is None for payload in payloads))
         self.assertTrue(any("remarks" in payload and payload["remarks"] is None for payload in payloads))
