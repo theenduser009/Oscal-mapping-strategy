@@ -74,8 +74,13 @@ FULL_CONTROL_ASSESSMENT_HELPER remains excluded.
 
 - Maintained Cells 3 and 4 were updated.
 - cells_v2 and NB_ARCHER_OSCAL_MAPPER_V1.py were regenerated from maintained cells.
-- Focused lean tests were added for exact namespaced lineage-property emission
-  and invalid namespace rejection.
+- GitHub Actions run 36769347168 passed the generated-notebook synchronization check.
+- In that run, both focused lineage tests passed:
+  - test_namespaced_source_field_lineage_property_emits_exact_shape
+  - test_property_namespace_must_be_absolute_uri
+- The overall branch workflow still failed on unrelated pre-existing lean-suite
+  issues that were already present before this lineage change; this checkpoint
+  does not claim a clean full-suite release.
 - A read-only preview inspection helper was added:
   notebooks/validation/15_ssp_security_impact_lineage_prop_preview.py
 
