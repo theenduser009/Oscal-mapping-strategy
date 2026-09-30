@@ -25,6 +25,7 @@ CONFIG = {
     "SSP_DOCUMENT_VERSION": "1.0",
     "EXECUTE_WRITES": False,
     "IDENTITY_VERSION": "v1_registry_path_instance",
+    "LINEAGE_PROPERTY_NS": "urn:company:oscal:lineage:v1",
     "ASSESSMENT_TASK_TITLE": "Preassessment review",
     "ASSESSMENT_TASK_TYPE": "action",
     "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
