@@ -64,5 +64,42 @@ class PropertyNameOverrideTests(unittest.TestCase):
         self.assertEqual([], context["mapping_rows"])
 
 
+    def test_namespaced_source_field_lineage_property_emits_exact_shape(self):
+        ns = active_namespace()
+        row = base.mapping(
+            "INTEGRITY_CONTROL_CATEGORY_OVERRIDE",
+            base.OBSERVATION,
+            "source-field-name",
+            PROPERTY_NAME="source-field",
+            PROPERTY_NS="urn:company:oscal:lineage:v1",
+            PROPERTY_CLASS="security-objective-integrity",
+        )
+        context = base.compile_context(ns, [row])
+        self.assertEqual("READY", context["routing_report"]["STATUS"])
+        nodes, _ = base.build(ns, context, [{
+            "SOURCE_RECORD_ID": "record-one",
+            "CURATED_JSON": {"INTEGRITY_CONTROL_CATEGORY_OVERRIDE": {"ValuesListIds": [1]}},
+        }])
+        self.assertEqual(
+            [{
+                "name": "source-field",
+                "value": "INTEGRITY_CONTROL_CATEGORY_OVERRIDE",
+                "ns": "urn:company:oscal:lineage:v1",
+                "class": "security-objective-integrity",
+            }],
+            base.payloads(nodes, base.OBSERVATION)[0]["props"],
+        )
+
+    def test_property_namespace_must_be_absolute_uri(self):
+        ns = active_namespace()
+        row = base.mapping(
+            "NEW_SCORE", base.OBSERVATION, "source-field-name",
+            PROPERTY_NAME="source-field", PROPERTY_NS="relative/lineage",
+        )
+        context = base.compile_context(ns, [row])
+        self.assertEqual("BLOCKED", context["routing_report"]["STATUS"])
+        self.assertEqual([], context["mapping_rows"])
+
+
 if __name__ == "__main__":
     unittest.main()
