@@ -9,7 +9,7 @@ LEAN_MAPPER_RELEASE = "lean-csv-registry-v4"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
-    "skip", "canonical-text", "reference-ids", "json-text", "source-field-name",
+    "skip", "canonical-text", "reference-ids", "json-text",
 }
 METADATA_INSTANCE_RULES = {
     "record": "SOURCE_RECORD_ID", "optional-record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
@@ -78,6 +78,28 @@ def _metadata_params(row):
 
 def _metadata_target(row):
     return _metadata_params(row).get("target") or row.get("FIELD_RELATIVE_PATH") or row.get("OSCAL_FIELD_NAME")
+
+
+def _lineage_property_routes(rows, elements):
+    """Route every approved source field to the nearest registered props[] extension point."""
+    property_parents = [
+        (spec["parameters"]["registry_contract"].get("parent_path"), path)
+        for path, spec in elements.items()
+        if spec["operator"] == "properties"
+    ]
+    routes = {}
+    for row in rows:
+        if row["APPROVAL_STATUS"] != "APPROVED" or row.get("VALUE_SOURCE") == "CONFIG":
+            continue
+        owner = row["OWNER_ELEMENT_PATH"]
+        candidates = [(parent, path) for parent, path in property_parents
+                      if parent and (owner == parent or owner.startswith(parent + "."))]
+        if not candidates:
+            continue
+        _, props_path = max(candidates, key=lambda item: len(item[0]))
+        target = re.sub(r"[^A-Za-z0-9._-]+", "-", row["CANONICAL_ELEMENT_PATH"]).strip("-.")
+        routes.setdefault(props_path, []).append(dict(row, LINEAGE_TARGET_CLASS=target))
+    return routes
 
 
 def _owner_for_path(path, paths):
@@ -245,21 +267,6 @@ def _compile_mapping(row, elements):
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", property_name):
             raise ValueError("PROPERTY_NAME contains unsupported characters")
         representation["property_name"] = property_name
-    if operator in {"properties", "observations"}:
-        for column, parameter in (
-                ("PROPERTY_NS", "property_ns"),
-                ("PROPERTY_CLASS", "property_class"),
-                ("PROPERTY_GROUP", "property_group")):
-            if row.get(column) in (None, ""):
-                continue
-            allowed.add(column)
-            value = _metadata_column_text(row, column, True)
-            if column == "PROPERTY_NS":
-                if not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", value):
-                    raise ValueError("PROPERTY_NS must be an absolute URI")
-            elif not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value):
-                raise ValueError(column + " contains unsupported characters")
-            representation[parameter] = value
     if transform == "security-objective":
         allowed.add("ALLOWED_VALUES")
         if row.get("ALLOWED_VALUES"):
@@ -300,7 +307,7 @@ def _compile_mapping(row, elements):
             representation["description_required"] = _registry_meta_bool(row, "DESCRIPTION_REQUIRED")
     columns = {"ALLOWED_VALUES", "VALUE_MAP", "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE",
                "REFERENCE_TYPE", "LOOKUP_KEY", "DESCRIPTION_REQUIRED", "VALUE_SOURCE", "VALUE_REQUIRED",
-               "PROPERTY_NAME", "PROPERTY_NS", "PROPERTY_CLASS", "PROPERTY_GROUP"}
+               "PROPERTY_NAME"}
     if any(row.get(key) not in (None, "") for key in columns - allowed):
         raise ValueError("CSV parameter does not apply to the selected operation")
     return dict(row, TRANSFORM_PARAMS=params, REPRESENTATION=operator, REPRESENTATION_PARAMS=representation,
@@ -448,8 +455,10 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                                if key in {"parse_decimal", "null_source_as_empty", "preserve_null_observations"}}
                     if type(options.get("preserve_null_observations", False)) is not bool:
                         raise ValueError("preserve_null_observations must be true or false")
+                    lineage = _lineage_property_routes(selected, elements)
                     plan = dict(version=1, release=LEAN_MAPPER_RELEASE, elements=elements, mappings=selected,
-                                reference_groups=groups, options=options, report=report)
+                                reference_groups=groups, lineage_by_props_path=lineage,
+                                options=options, report=report)
                 except ValueError as error:
                     contract_error = str(error)
                     issues.append(dict(row=None, field=None, reason="METADATA_CONTRACT_ERROR", severity="BLOCKED", affected_rows=len(selected)))
