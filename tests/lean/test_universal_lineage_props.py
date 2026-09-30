@@ -50,12 +50,14 @@ class UniversalLineagePropertyTests(unittest.TestCase):
             "CURATED_JSON": {"SOURCE_TITLE": "Mapped title"},
         }])
         self.assertEqual([{"title": "Mapped title"}], base.payloads(nodes, base.SUMMARY))
-        self.assertEqual([{
+        lineage = base.payloads(nodes, PROPS)
+        self.assertEqual(1, len(lineage))
+        self.assertEqual({
             "name": "source-field",
             "ns": NS,
             "class": "synthetic-model.summary.title",
             "value": "SOURCE_TITLE",
-        }], base.payloads(nodes, PROPS))
+        }, {key: value for key, value in lineage[0].items() if key != "uuid"})
 
     def test_missing_source_emits_no_lineage_prop(self):
         row = base.mapping("SOURCE_TITLE", base.SUMMARY + ".title", "text")
