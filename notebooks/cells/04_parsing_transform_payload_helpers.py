@@ -747,11 +747,12 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
         else:
             _metadata_assign(payload, target, value)
     if operator == "properties":
-        namespace = context["config"].get("LINEAGE_PROPERTY_NS")
-        if namespace:
+        lineage_rows = context["compiled_plan"].get("lineage_by_props_path", {}).get(path, ())
+        if lineage_rows:
+            namespace = context["config"].get("LINEAGE_PROPERTY_NS")
             if not isinstance(namespace, str) or not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", namespace.strip()):
                 raise ValueError("LINEAGE_PROPERTY_NS must be an absolute URI")
-            for lineage in context["compiled_plan"].get("lineage_by_props_path", {}).get(path, ()):
+            for lineage in lineage_rows:
                 if not _lineage_source_is_mapped(lineage, source_obj, context):
                     continue
                 prop = {
