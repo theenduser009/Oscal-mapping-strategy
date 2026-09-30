@@ -1,0 +1,54 @@
+-- SSP metadata -> props graph join
+-- Date: 2026-09-30
+-- READ ONLY.
+--
+-- Purpose:
+--   Show the persisted SSP root, its metadata node, and every metadata props child
+--   by joining DIM -> FACT -> DIM -> FACT -> DIM.
+--
+-- Optional: uncomment the SOURCE_RECORD_ID predicate at the bottom to inspect one
+-- Authorization Package / Content ID.
+
+SELECT
+    root.SOURCE_RECORD_ID,
+
+    root.PK_OSCAL_SSP_ELEMENT_HASH      AS ROOT_NODE_KEY,
+    root.ELEMENT_TYPE                   AS ROOT_ELEMENT_TYPE,
+    root.OSCAL_UUID                     AS ROOT_OSCAL_UUID,
+
+    metadata.PK_OSCAL_SSP_ELEMENT_HASH  AS METADATA_NODE_KEY,
+    metadata.ELEMENT_TYPE               AS METADATA_ELEMENT_TYPE,
+    metadata.OSCAL_UUID                 AS METADATA_OSCAL_UUID,
+    metadata.METADATA_JSON              AS METADATA_JSON,
+
+    f_meta_prop.DEPENDENCY_TYPE         AS METADATA_TO_PROP_RELATIONSHIP,
+
+    prop.PK_OSCAL_SSP_ELEMENT_HASH      AS PROP_NODE_KEY,
+    prop.ELEMENT_TYPE                   AS PROP_ELEMENT_TYPE,
+    prop.OSCAL_UUID                     AS PROP_OSCAL_UUID,
+    prop.METADATA_JSON                  AS PROP_JSON
+
+FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT root
+
+JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY f_root_meta
+  ON f_root_meta.FK_SOURCE_ELEMENT_HASH = root.PK_OSCAL_SSP_ELEMENT_HASH
+
+JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT metadata
+  ON metadata.PK_OSCAL_SSP_ELEMENT_HASH = f_root_meta.FK_TARGET_ELEMENT_HASH
+
+JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.FACT_OSCAL_SSP_DEPENDENCY f_meta_prop
+  ON f_meta_prop.FK_SOURCE_ELEMENT_HASH = metadata.PK_OSCAL_SSP_ELEMENT_HASH
+
+JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT prop
+  ON prop.PK_OSCAL_SSP_ELEMENT_HASH = f_meta_prop.FK_TARGET_ELEMENT_HASH
+
+WHERE root.ELEMENT_TYPE = 'system-security-plan'
+  AND metadata.ELEMENT_TYPE = 'metadata'
+  AND prop.ELEMENT_TYPE = 'props'
+  AND root.SOURCE_SYSTEM_NAME = 'ARCHER'
+  AND root.SOURCE_TABLE_NAME = 'ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW'
+  -- AND root.SOURCE_RECORD_ID = '565189'
+
+ORDER BY
+    root.SOURCE_RECORD_ID,
+    prop.OSCAL_UUID;
