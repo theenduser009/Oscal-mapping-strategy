@@ -15,6 +15,24 @@ from test_registry_release import mapping_rows, release_registry, SUPPORT
 from test_flat_mapping_release import SSP_GRAPH_DIGEST
 
 
+LINEAGE_NS = "urn:company:oscal:lineage:v1"
+
+
+def native_graph(nodes, edges):
+    lineage_keys = {
+        row["NODE_KEY"] for row in nodes.rows
+        if json.loads(row["METADATA_JSON"]).get("ns") == LINEAGE_NS
+        and json.loads(row["METADATA_JSON"]).get("name") == "source-field"
+    }
+    return (
+        Frame([row for row in nodes.rows if row["NODE_KEY"] not in lineage_keys]),
+        Frame([row for row in edges.rows
+               if row["FK_SOURCE_ELEMENT_HASH"] not in lineage_keys
+               and row["FK_TARGET_ELEMENT_HASH"] not in lineage_keys]),
+        lineage_keys,
+    )
+
+
 class LeanAcceptanceTests(unittest.TestCase):
     def setUp(self):
         self.ns = namespace()
@@ -49,8 +67,10 @@ class LeanAcceptanceTests(unittest.TestCase):
         context, records = self.ssp()
         original = copy.deepcopy(records)
         nodes, edges = build(self.ns, context, records)
-        self.assertEqual((20, 19), (len(nodes.rows), len(edges.rows)))
-        serialized = json.dumps([business(nodes), business(edges)], sort_keys=True)
+        native_nodes, native_edges, lineage_keys = native_graph(nodes, edges)
+        self.assertEqual((20, 19), (len(native_nodes.rows), len(native_edges.rows)))
+        self.assertEqual(6, len(lineage_keys))
+        serialized = json.dumps([business(native_nodes), business(native_edges)], sort_keys=True)
         self.assertEqual(SSP_GRAPH_DIGEST, hashlib.sha256(serialized.encode()).hexdigest())
         self.assertEqual(original, records)
         expected_parents = {row["NODE_PATH"]: row["PARENT_NODE_PATH"] for row in context["registry_rows"]}
@@ -132,7 +152,11 @@ class LeanAcceptanceTests(unittest.TestCase):
     def test_process_order_cannot_build_children_before_parents(self):
         context, records = self.ssp(lambda registry: [row.update(PROCESS_ORDER=100-row["PROCESS_ORDER"]) for row in registry])
         nodes, edges = build(self.ns, context, records)
-        self.assertEqual(SSP_GRAPH_DIGEST, hashlib.sha256(json.dumps([business(nodes), business(edges)], sort_keys=True).encode()).hexdigest())
+        native_nodes, native_edges, lineage_keys = native_graph(nodes, edges)
+        self.assertEqual(6, len(lineage_keys))
+        self.assertEqual(SSP_GRAPH_DIGEST, hashlib.sha256(
+            json.dumps([business(native_nodes), business(native_edges)], sort_keys=True).encode()
+        ).hexdigest())
 
     def test_registry_specific_child_element_type_survives_graph_and_validation(self):
         path = "system-security-plan.metadata.document-ids[]"
