@@ -9,7 +9,7 @@ LEAN_MAPPER_RELEASE = "lean-csv-registry-v4"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
-    "skip", "canonical-text", "reference-ids", "json-text",
+    "skip", "canonical-text", "reference-ids", "json-text", "source-field-name",
 }
 METADATA_INSTANCE_RULES = {
     "record": "SOURCE_RECORD_ID", "optional-record": "SOURCE_RECORD_ID", "observations": "SOURCE_FIELD_NAME",
@@ -245,6 +245,21 @@ def _compile_mapping(row, elements):
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", property_name):
             raise ValueError("PROPERTY_NAME contains unsupported characters")
         representation["property_name"] = property_name
+    if operator in {"properties", "observations"}:
+        for column, parameter in (
+                ("PROPERTY_NS", "property_ns"),
+                ("PROPERTY_CLASS", "property_class"),
+                ("PROPERTY_GROUP", "property_group")):
+            if row.get(column) in (None, ""):
+                continue
+            allowed.add(column)
+            value = _metadata_column_text(row, column, True)
+            if column == "PROPERTY_NS":
+                if not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", value):
+                    raise ValueError("PROPERTY_NS must be an absolute URI")
+            elif not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value):
+                raise ValueError(column + " contains unsupported characters")
+            representation[parameter] = value
     if transform == "security-objective":
         allowed.add("ALLOWED_VALUES")
         if row.get("ALLOWED_VALUES"):
@@ -285,7 +300,7 @@ def _compile_mapping(row, elements):
             representation["description_required"] = _registry_meta_bool(row, "DESCRIPTION_REQUIRED")
     columns = {"ALLOWED_VALUES", "VALUE_MAP", "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE",
                "REFERENCE_TYPE", "LOOKUP_KEY", "DESCRIPTION_REQUIRED", "VALUE_SOURCE", "VALUE_REQUIRED",
-               "PROPERTY_NAME"}
+               "PROPERTY_NAME", "PROPERTY_NS", "PROPERTY_CLASS", "PROPERTY_GROUP"}
     if any(row.get(key) not in (None, "") for key in columns - allowed):
         raise ValueError("CSV parameter does not apply to the selected operation")
     return dict(row, TRANSFORM_PARAMS=params, REPRESENTATION=operator, REPRESENTATION_PARAMS=representation,
