@@ -67,3 +67,36 @@ These source fields are shown under SSP System Implementation and reference `sys
 - Resolve `AUTHORIZATION_DECISION` and calculated-field persistence.
 - Define precedence when recommended, override, ProgramSite, and CNSS impact values disagree.
 - Validate referenced component UUID generation and deduplication in preview mode before enabling writes.
+
+
+## Portable source-field lineage props
+
+Owner-approved September 30, 2026.
+
+For the 11 active security-impact source candidates, the mapper also emits a
+namespaced property under `system-security-plan.system-characteristics.props[]`
+when that Archer field is populated.
+
+Shape:
+
+```json
+{
+  "name": "source-field",
+  "ns": "urn:company:oscal:lineage:v1",
+  "class": "security-objective-integrity",
+  "value": "INTEGRITY_CONTROL_CATEGORY_OVERRIDE"
+}
+```
+
+`class` identifies the native OSCAL objective member:
+`security-objective-confidentiality`, `security-objective-integrity`, or
+`security-objective-availability`.
+
+The lineage prop does not replace or alter the native
+`security-impact-level` value. Multiple agreeing Archer source fields produce
+multiple lineage props. Conflicting native objective values continue to fail
+closed under the existing singleton-target rule.
+
+The namespace is intentionally configuration-neutral/anonymized for this
+repository and can be replaced with an organization-approved absolute URI
+without changing the native OSCAL mapping.
