@@ -205,8 +205,6 @@ def _metadata_transform(row, value, context):
         return SKIP_VALUE
     if transform == "direct":
         return _to_python(value)
-    if transform == "source-field-name":
-        return row["SOURCE_FIELD_NAME"]
     if transform in {"text", "timestamp", "canonical-text"}:
         value = _metadata_text(_to_python(value), "Mapped value")
         if transform == "canonical-text" and value != value.strip():
@@ -273,6 +271,21 @@ def _metadata_mapped_value(row, source_obj, context):
         raise ValueError("Mapping failed for field " + field + " (" + str(row.get("RULE_ID", "")) + ")") from None
     context["graph_report"]["MISSING_VALUES" if value is SKIP_VALUE else "MAPPED_VALUES"] += 1
     return value
+
+
+def _lineage_source_is_mapped(row, source_obj, context):
+    """Match normal omission/null semantics without re-running transformations or counters."""
+    params = _metadata_params(row)
+    raw = resolve_json_path(source_obj, row["SOURCE_FIELD_NAME"], default=SKIP_VALUE)
+    if raw is SKIP_VALUE:
+        return False
+    if raw is None:
+        return bool(params.get("preserve_null") or (
+            row["TRANSFORM_ID"] == "scalar-score"
+            and row["REPRESENTATION"] == "observations"
+            and context["compiled_plan"]["options"].get("preserve_null_observations", False)
+        ))
+    return _has_value(raw)
 
 
 def _metadata_assign(payload, target, value, preserve_existing=False):
@@ -709,15 +722,8 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             if field_identity and len(values) != 1:
                 raise ValueError("One scalar value is required per field identity")
             for item in values:
-                property_params = _metadata_params(row)
-                property_name = property_params.get("property_name") or _stable_property_name(field)
+                property_name = _metadata_params(row).get("property_name") or _stable_property_name(field)
                 prop = {"name": _metadata_text(property_name, "Property name"), "value": item}
-                for parameter, member in (
-                        ("property_ns", "ns"),
-                        ("property_class", "class"),
-                        ("property_group", "group")):
-                    if property_params.get(parameter) not in (None, ""):
-                        prop[member] = _metadata_text(property_params[parameter], "Property " + member)
                 item_payload = {"props": [prop]} if operator == "observations" else prop
                 key = field if field_identity else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
                 _append_unique_collection_instance(instances, {"instance_key": key, "payload": item_payload,
@@ -740,6 +746,25 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
             crosswalks.append(value)
         else:
             _metadata_assign(payload, target, value)
+    if operator == "properties":
+        lineage_rows = context["compiled_plan"].get("lineage_by_props_path", {}).get(path, ())
+        if lineage_rows:
+            namespace = context["config"].get("LINEAGE_PROPERTY_NS")
+            if not isinstance(namespace, str) or not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", namespace.strip()):
+                raise ValueError("LINEAGE_PROPERTY_NS must be an absolute URI")
+            for lineage in lineage_rows:
+                if not _lineage_source_is_mapped(lineage, source_obj, context):
+                    continue
+                prop = {
+                    "name": "source-field",
+                    "ns": namespace.strip(),
+                    "class": lineage["LINEAGE_TARGET_CLASS"],
+                    "value": lineage["SOURCE_FIELD_NAME"],
+                }
+                key = "lineage:" + lineage["RULE_ID"]
+                _append_unique_collection_instance(instances, {
+                    "instance_key": key, "payload": prop, "parent_instance_key": parent
+                })
     for members in crosswalks:
         for member, value in members.items():
             _metadata_assign(payload, member, value, preserve_existing=member == "remarks")
