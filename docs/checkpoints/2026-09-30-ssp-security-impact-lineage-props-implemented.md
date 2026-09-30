@@ -1,3 +1,12 @@
+# SUPERSEDED — field-specific lineage pilot
+
+Superseded September 30, 2026 by:
+`docs/checkpoints/2026-09-30-universal-registry-driven-lineage-props.md`
+
+The 11-row field-specific implementation described below was removed. The current mapper uses one universal registry-driven lineage mechanism with no duplicate per-field lineage mapping rows.
+
+---
+
 # SSP security-impact lineage props implemented
 
 Date: September 30, 2026
