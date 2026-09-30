@@ -1,0 +1,25 @@
+-- READ ONLY: inspect one responsible-party role and all people assigned to it.
+-- Change only these two values.
+SET QA_CONTENT_ID = '2883408';
+SET QA_ROLE_ID = 'security-control-assessor';
+
+WITH assigned AS (
+  SELECT rp.SOURCE_RECORD_ID,
+         rp.METADATA_JSON:"role-id"::STRING AS ROLE_ID,
+         f.VALUE::STRING AS PARTY_UUID
+  FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT rp,
+       LATERAL FLATTEN(INPUT => rp.METADATA_JSON:"party-uuids") f
+  WHERE rp.SOURCE_RECORD_ID = $QA_CONTENT_ID
+    AND rp.ELEMENT_TYPE = 'responsible-parties'
+    AND rp.METADATA_JSON:"role-id"::STRING = $QA_ROLE_ID
+)
+SELECT a.SOURCE_RECORD_ID,
+       a.ROLE_ID,
+       a.PARTY_UUID,
+       p.METADATA_JSON:name::STRING AS PARTY_NAME
+FROM assigned a
+LEFT JOIN RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT p
+  ON p.SOURCE_RECORD_ID = a.SOURCE_RECORD_ID
+ AND p.ELEMENT_TYPE = 'parties'
+ AND p.METADATA_JSON:uuid::STRING = a.PARTY_UUID
+ORDER BY a.PARTY_UUID;
