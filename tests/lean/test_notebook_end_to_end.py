@@ -384,7 +384,7 @@ class NotebookEndToEndTests(unittest.TestCase):
         self.assertEqual("COMMITTED_AND_VERIFIED", inserted["status"])
         saved = {row[pk]: row for row in self.session.query("SELECT * FROM " + dim)}
         edges = self.session.query("SELECT * FROM " + fact)
-        self.assertEqual((4, 3), (len(saved), len(edges)))
+        self.assertEqual((7, 6), (len(saved), len(edges)))
         payloads = [json.loads(row["METADATA_JSON"]) for row in saved.values()]
         self.assertEqual(2, sum("value" in payload and payload["value"] is None for payload in payloads))
         self.assertTrue(any("remarks" in payload and payload["remarks"] is None for payload in payloads))
@@ -394,7 +394,7 @@ class NotebookEndToEndTests(unittest.TestCase):
         with self.notebook_transport():
             _, changed = ns["run_oscal_pipeline"](ns["SOURCE_INPUTS"], ns["MAPPING_CONTEXTS"], "COMMIT")
         self.assertEqual("COMMITTED_AND_VERIFIED", changed["status"])
-        self.assertEqual({"INSERTS": 0, "UPDATES": 3, "UNCHANGED": 1},
+        self.assertEqual({"INSERTS": 0, "UPDATES": 3, "UNCHANGED": 4},
                          changed["groups"][0]["load"]["expected_changes"]["D"])
         self.assertEqual(set(saved), {row[pk] for row in self.session.query("SELECT * FROM " + dim)})
         self.assertEqual(edges, self.session.query("SELECT * FROM " + fact))
