@@ -73,8 +73,12 @@ ARCHER_OSCAL_MAPPINGS.csv:
 - cells_v2 regenerated from maintained cells.
 - monolithic NB_ARCHER_OSCAL_MAPPER_V1.py regenerated.
 - focused universal-lineage unit tests added.
+- GitHub Actions run 36771095246 confirmed all five universal-lineage tests pass.
+- The generated-notebook synchronization check also passed.
+- Compared with the pre-lineage baseline workflow, this change introduced no
+  additional failing tests; the branch still has unrelated pre-existing failures.
 - universal read-only SSP preview helper:
-  notebooks/validation/15_ssp_security_impact_lineage_prop_preview.py
+  notebooks/validation/15_ssp_universal_lineage_prop_preview.py
 
 ## Snowflake status
 
