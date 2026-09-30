@@ -16,7 +16,9 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# One selector only. No swapping Cell 1 files between Source 1 and Source 2.
+# Route selectors. Keep source/model selection explicit when the same OSCAL model
+# is fed by more than one Archer source.
+SELECTED_SOURCE_KEYS = ("source-one",)
 SELECTED_MODELS = ("SSP",)
 
 CONFIG = {
@@ -225,6 +227,12 @@ if (not SELECTED_MODELS or len(set(SELECTED_MODELS)) != len(SELECTED_MODELS)
         or set(SELECTED_MODELS) - MODEL_CONTRACTS.keys()):
     raise ValueError("Choose distinct configured models in SELECTED_MODELS")
 
+configured_source_keys = tuple(source["SOURCE_KEY"] for source in SOURCE_FILES)
+if (not SELECTED_SOURCE_KEYS
+        or len(set(SELECTED_SOURCE_KEYS)) != len(SELECTED_SOURCE_KEYS)
+        or set(SELECTED_SOURCE_KEYS) - set(configured_source_keys)):
+    raise ValueError("Choose distinct configured sources in SELECTED_SOURCE_KEYS")
+
 SOURCE_PROFILES = []
 if (len({source["SOURCE_KEY"] for source in SOURCE_FILES}) != len(SOURCE_FILES)
         or len({source["RAW_TABLE"].upper() for source in SOURCE_FILES}) != len(SOURCE_FILES)
@@ -233,11 +241,18 @@ if (len({source["SOURCE_KEY"] for source in SOURCE_FILES}) != len(SOURCE_FILES)
     raise ValueError("Each source key, physical source and source namespace must have one binding")
 
 for source in SOURCE_FILES:
+    if source["SOURCE_KEY"] not in SELECTED_SOURCE_KEYS:
+        continue
     routes = tuple(model for model in SELECTED_MODELS if model in source["MODEL_BINDINGS"])
     if routes:
         SOURCE_PROFILES.append({**source, "MODEL_KEYS": routes, "BASE_CONFIG": dict(CONFIG)})
 
+if not SOURCE_PROFILES:
+    raise ValueError("Selected source/model combination has no configured route")
 if any(not any(model in source["MODEL_KEYS"] for source in SOURCE_PROFILES) for model in SELECTED_MODELS):
-    raise ValueError("Selected model has no configured source")
+    raise ValueError("Selected model has no configured route in the selected sources")
 
-print("OSCAL mapping:", SELECTED_MODELS, "Run:", CONFIG["RUN_ID"])
+print("OSCAL mapping:", list(zip(
+    [profile["SOURCE_KEY"] for profile in SOURCE_PROFILES],
+    [profile["MODEL_KEYS"] for profile in SOURCE_PROFILES]
+)), "Run:", CONFIG["RUN_ID"])
