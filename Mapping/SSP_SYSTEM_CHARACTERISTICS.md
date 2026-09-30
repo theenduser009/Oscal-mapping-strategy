@@ -69,34 +69,21 @@ These source fields are shown under SSP System Implementation and reference `sys
 - Validate referenced component UUID generation and deduplication in preview mode before enabling writes.
 
 
-## Portable source-field lineage props
+## Universal source-field lineage props
 
-Owner-approved September 30, 2026.
+Owner decision September 30, 2026: source-field lineage is a universal mapper behavior, not a per-field mapping task.
 
-For the 11 active security-impact source candidates, the mapper also emits a
-namespaced property under `system-security-plan.system-characteristics.props[]`
-when that Archer field is populated.
-
-Shape:
+For every approved FIELD mapping, the compiler locates the nearest registered OSCAL `props[]` extension point that encloses the mapped target. When that source field actually maps a value, the graph builder emits one lineage property there:
 
 ```json
 {
   "name": "source-field",
   "ns": "urn:company:oscal:lineage:v1",
-  "class": "security-objective-integrity",
-  "value": "INTEGRITY_CONTROL_CATEGORY_OVERRIDE"
+  "class": "<normalized canonical OSCAL target path>",
+  "value": "<exact Archer SOURCE_FIELD_NAME>"
 }
 ```
 
-`class` identifies the native OSCAL objective member:
-`security-objective-confidentiality`, `security-objective-integrity`, or
-`security-objective-availability`.
+No additional lineage rows are required in `ARCHER_OSCAL_MAPPINGS.csv`. The behavior is registry-driven and applies the same way to every approved source field that has a valid enclosing registered `props[]` collection. Native OSCAL values are unchanged. Multiple agreeing source fields produce multiple lineage props; existing conflicting-singleton validation still fails closed.
 
-The lineage prop does not replace or alter the native
-`security-impact-level` value. Multiple agreeing Archer source fields produce
-multiple lineage props. Conflicting native objective values continue to fail
-closed under the existing singleton-target rule.
-
-The namespace is intentionally configuration-neutral/anonymized for this
-repository and can be replaced with an organization-approved absolute URI
-without changing the native OSCAL mapping.
+If an OSCAL area has no registered enclosing `props[]` extension point, the mapper does not invent one.
