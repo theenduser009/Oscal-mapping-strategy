@@ -1,7 +1,7 @@
 # SSP security-impact all-field validation harness
 
 Date: September 30, 2026
-Status: Code/documentation committed and read-back verification pending in this checkpoint. No Snowflake execution claimed.
+Status: Code/documentation committed and read-back verified in GitHub. No Snowflake execution claimed.
 
 ## Current executable inventory
 
@@ -23,7 +23,7 @@ Current mapper behavior:
 
 ## Validation status
 
-Repository changes only. The new SQL has not yet been owner-run in Snowflake. Current source/target conclusions remain limited to the earlier confidentiality/integrity owner checks and historical read-only checkpoints.
+Repository changes are committed and read-back verified. The new SQL has not yet been owner-run in Snowflake. Current source/target conclusions remain limited to the earlier confidentiality/integrity owner checks and historical read-only checkpoints.
 
 ## Next action
 
