@@ -184,3 +184,22 @@ A matching read-only post-run validator is committed at
 Validation performed here: repository source inspection, branch/head verification, exact file creation, and Git read-back. No Snowflake/Matillion execution was performed from chat. The existing user-only Matillion candidate remains historical and is not proof that value/group enrichment has executed.
 
 Next action: place/run the new candidate in Matillion DEV after the existing raw-to-CURATED_JSON conversion, then run the read-only validator and capture its result before simplifying notebook-side Archer meta lookups. Do not remove the notebook fallback until the Matillion enrichment is persisted and read-back verified.
+
+
+## CORRECTION — Matillion meta-reference contract — 2026-10-01
+
+This section supersedes the immediately earlier Matillion meta-reference candidate note where the value table/columns were recorded incorrectly.
+
+Owner correction and live evidence:
+- Value lookup table is `RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE`.
+- Value key is `SELECT_VALUE_ID`.
+- Resolved label is `SELECT_VALUE_NAME`.
+- Example owner-provided value ID: `80664`; its business label is read from `SELECT_VALUE_NAME`.
+- Group lookup table is `RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_GROUP`.
+- Group key is `GROUP_ID`.
+- Resolved group label is `GROUP_NAME`.
+- The Matillion enrichment does not require `GUID` for the current group-resolution contract.
+
+The current Git candidate and matching read-only validator were corrected to those exact contracts. The earlier commit using `ARCHER_META_VALUES / VALUEID / VALUENAME` is superseded and must not be run. No Matillion or Snowflake execution was performed from chat.
+
+Next action remains: run the corrected DEV Matillion candidate, then run the corrected read-only post-enrichment validator. Keep notebook-side lookup fallback until that persisted enrichment is read-back verified.
