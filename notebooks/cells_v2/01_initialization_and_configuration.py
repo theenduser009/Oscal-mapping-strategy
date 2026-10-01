@@ -52,6 +52,8 @@ SOURCE_FILES = [
             "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE", "REFERENCE_TYPE",
             "LOOKUP_KEY", "DESCRIPTION_REQUIRED",
         ),
+        # Temporary human-review aid only; execution does not depend on NOTES.
+        "MAPPING_OPTIONAL_COLUMNS": ("NOTES",),
         "MODEL_BINDINGS": (
             "SSP",
             "ASSESSMENT_RESULTS",
