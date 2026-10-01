@@ -510,3 +510,27 @@ current target, because PREVIEW proposes zero DML. Before declaring the v10 code
 accepted, review one focused in-memory CIA/security-impact sample from MODEL_GRAPHS to
 confirm ResolvedValues are being consumed as intended even though the persisted target
 requires no update.
+
+
+## CIA ResolvedValues validation helper added — 2026-10-01
+
+After the successful unchanged SSP PREVIEW, a focused read-only in-memory validator
+was added at:
+`notebooks/validation/19_ssp_cia_resolved_values_validation.py`.
+
+Purpose:
+- prove the v10 clean boundary from Matillion `ResolvedValues[]` to the
+  candidate SSP `security-impact-level` payload;
+- compare each populated CIA/security-objective mapping to the actual in-memory
+  candidate value;
+- report canonical Low/Moderate/High normalization separately from reviewed
+  legacy-label occurrences;
+- fail on any source-ID / ResolvedValues identity mismatch, cardinality mismatch,
+  unresolved status, or source-to-candidate value mismatch.
+
+No database DML/DDL is performed. Live execution is still pending. The helper
+must be run in the same notebook session after the successful Cells 1-7 PREVIEW
+while `MODEL_GRAPHS` and `SOURCE_INPUTS` are still present.
+
+Acceptance signal:
+`MISMATCHES = 0` and `CIA_RESOLVED_VALUES_VALIDATED = True`.
