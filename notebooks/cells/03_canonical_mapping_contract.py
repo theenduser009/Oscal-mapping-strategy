@@ -7,7 +7,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v9-matillion-resolved-meta"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v10-curated-resolved-only"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
