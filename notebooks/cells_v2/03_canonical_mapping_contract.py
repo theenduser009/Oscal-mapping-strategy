@@ -7,7 +7,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v5-lineage"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v6-lineage-required"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -82,50 +82,31 @@ def _metadata_target(row):
     return _metadata_params(row).get("target") or row.get("FIELD_RELATIVE_PATH") or row.get("OSCAL_FIELD_NAME")
 
 
-def _lineage_targets(row):
-    """Output member signatures, derived from existing operators and mapping rules."""
-    operator, params = row["REPRESENTATION"], _metadata_params(row)
-    if operator in {"properties", "observations"}:
-        name = params.get("property_name") or re.sub(r"[^a-z0-9]+", "-", row["SOURCE_FIELD_NAME"].lower()).strip("-")
-        return [("property:" + name, "value" if operator == "properties" else "props.0.value")]
-    if operator == "references":
-        return [("reference:" + str(params.get("reference_type") or ""), "")]
-    if operator == "assignments":
-        return [("role:" + params["role_id"], "party-uuids")]
-    if row["TRANSFORM_ID"] == "status-crosswalk":
-        members = ["state"]
-        if "other" in row["TRANSFORM_PARAMS"]["crosswalk"].values():
-            members.append("remarks")
-        return [(member, member) for member in members]
-    target = _metadata_target(row)
-    return [(target, target)] if target else []
+def _lineage_required(row):
+    """One mapping-sheet switch. Missing means N for older fixtures."""
+    value = str(row.get("LINEAGE_REQUIRED") or "N").strip().upper()
+    if value not in {"Y", "N"}:
+        raise ValueError("LINEAGE_REQUIRED must be Y or N")
+    return value == "Y"
 
 
 def _compile_lineage_rules(rows):
-    """Only ambiguous outputs or joined-source fields need per-instance attribution.
-
-    A unique one-to-one field is recoverable from this versioned mapping plan.
-    Transforms alone do not make a source ambiguous. CONFIG never claims Archer
-    attribution, but a competing CONFIG assignment can make a FIELD ambiguous.
-    """
-    candidates = {}
-    active = [row for row in rows if row["APPROVAL_STATUS"] == "APPROVED"
-              and row["TRANSFORM_ID"] not in {"skip", "reject-populated"}]
-    for row in active:
-        identity = (_metadata_params(row).get("value_source", "FIELD"),
-                    _metadata_params(row).get("joined_lookup"), row["SOURCE_FIELD_NAME"])
-        for signature, _ in _lineage_targets(row):
-            candidates.setdefault((row["OWNER_ELEMENT_PATH"], signature), set()).add(identity)
+    """Compile only mapping rows explicitly marked LINEAGE_REQUIRED=Y."""
     rules = {}
-    for row in active:
-        if _metadata_params(row).get("value_source") == "CONFIG":
+    for row in rows:
+        required = _lineage_required(row)
+        if not required or row["APPROVAL_STATUS"] != "APPROVED":
             continue
-        targets = [target for signature, target in _lineage_targets(row)
-                   if row["REPRESENTATION"] == "joined-records"
-                   or len(candidates[(row["OWNER_ELEMENT_PATH"], signature)]) > 1]
-        if targets:
-            rules[row["RULE_ID"]] = {"source_field": row["SOURCE_FIELD_NAME"],
-                                      "targets": tuple(targets)}
+        if (_metadata_params(row).get("value_source") == "CONFIG"
+                or row["TRANSFORM_ID"] in {"skip", "reject-populated"}):
+            raise ValueError("LINEAGE_REQUIRED=Y requires an approved source FIELD mapping")
+        target = _metadata_target(row)
+        if not target or row["REPRESENTATION"] in {"properties", "observations"}:
+            raise ValueError("LINEAGE_REQUIRED=Y requires a native OSCAL member target")
+        rules[row["RULE_ID"]] = {
+            "source_field": row["SOURCE_FIELD_NAME"],
+            "targets": (target,),
+        }
     return rules
 
 
