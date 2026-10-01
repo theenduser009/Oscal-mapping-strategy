@@ -57,3 +57,10 @@ No live Snowflake PREVIEW has yet been run for the new three-key lineage payload
 ## NOTES retained for transition review
 
 Owner decision on 2026-10-01: keep `NOTES` for a while as a human review aid. The clean CSV therefore has 19 columns. Execution does not read NOTES; Cell 2 accepts it only as an explicitly optional column. All other retired provenance/history columns remain removed.
+
+
+## Seven-cell release-marker correction
+
+A fresh Snowflake PREVIEW attempt failed before commit with `Run the matching Cell 5 before Cell 7`. Root cause was a repository packaging mismatch introduced during the v7 cleanup: Cell 5 advertised `lean-csv-registry-v7-production-clean` while Cell 7 still checked for `lean-csv-registry-v6-lineage-required`.
+
+Corrected and read back on 2026-10-01. Current head after the fix: `8e7129b77e2f56dd7395888b3bc2b02041dcdec0`. A dedicated release-marker test was added so Cells 3/4/5/7 cannot silently drift again. No Snowflake DML occurred; the failed run was `FAILED_BEFORE_COMMIT` with `writes_executed=false` and `commit_attempted=false`.
