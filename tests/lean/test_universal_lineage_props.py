@@ -90,6 +90,30 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
         }])
         self.assertEqual([], base.payloads(nodes, PROPS))
 
+    def test_two_selected_sources_for_same_native_member_keep_both_source_names(self):
+        rows = [
+            base.mapping("SOURCE_A", base.SUMMARY + ".title", "text",
+                         LINEAGE_REQUIRED="Y", RULE_ID="synthetic:source-a"),
+            base.mapping("SOURCE_B", base.SUMMARY + ".title", "text",
+                         LINEAGE_REQUIRED="Y", RULE_ID="synthetic:source-b"),
+        ]
+        ns = lean_support.namespace(models=("SSP",))
+        context = base.compile_context(ns, rows, registry=registry_with_props())
+        context["config"]["LINEAGE_PROPERTY_NS"] = NS
+        nodes, _ = base.build(ns, context, [{
+            "SOURCE_RECORD_ID": "record-one",
+            "CURATED_JSON": {"SOURCE_A": "Same title", "SOURCE_B": "Same title"},
+        }])
+        self.assertEqual([{"title": "Same title"}], base.payloads(nodes, base.SUMMARY))
+        props = [
+            {key: value for key, value in prop.items() if key != "uuid"}
+            for prop in base.payloads(nodes, PROPS)
+        ]
+        self.assertEqual({
+            ("source-field", "title", "SOURCE_A"),
+            ("source-field", "title", "SOURCE_B"),
+        }, {(prop["name"], prop["class"], prop["value"]) for prop in props})
+
     def test_business_prop_is_not_duplicated_as_lineage(self):
         row = base.mapping(
             "FISMA_REPORTABLE", PROPS, "text", LINEAGE_REQUIRED="N",
