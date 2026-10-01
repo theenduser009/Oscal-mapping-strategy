@@ -77,7 +77,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v9-matillion-resolved-meta":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v10-curated-resolved-only":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -151,4 +151,4 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v9-matillion-resolved-meta"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v10-curated-resolved-only"
