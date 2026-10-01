@@ -101,3 +101,18 @@ Owner decision: remove `urn:company:oscal:lineage:v1` entirely. The selective li
 ## Live trace helper check after namespace removal
 
 Owner-provided Snowflake screenshots on 2026-10-01 show `notebooks/validation/18_ssp_lineage_trace_sample.py` executing and resolving lineage source fields to their canonical OSCAL targets. Visible examples include OPERATIONAL_STATUS -> system-security-plan.system-characteristics.status.state and the confidentiality/integrity/availability override fields -> their corresponding security-impact-level objective paths. The helper is also coded to print ARCHER_CONTENT_ID from SOURCE_RECORD_ID, but the uploaded screenshots crop the leftmost output, so the actual Content ID values are not independently readable from this evidence. This confirms the trace mechanism structure, not yet a full v8 PREVIEW acceptance.
+
+
+## Namespace-free v8 live lineage validation PASS
+
+Owner-provided Snowflake output on 2026-10-01 from the current namespace-free validator confirms:
+- EXPECTED LINEAGE FIELDS = 12
+- LINEAGE NODES = 3581
+- REPORTED LINEAGE PROPS = 3581
+- INVALID LINEAGE PROPS = 0
+- DUPLICATE LINEAGE PROPS = 0
+- LINEAGE_CONTRACT_VALIDATED = True
+
+The current Git validator was read back at branch head bb74552529044cf800777781551a0cb6b8b490c3 and contains no lineage namespace requirement. Therefore this live result proves the namespace-free two-key custom property shape (name + value) for all 3,581 candidate lineage props. The populated source-field counts remain OPERATIONAL_STATUS 2771 and the availability/confidentiality/integrity override fields 270 each; the remaining eight configured lineage fields are absent in this source snapshot.
+
+This completes the namespace-free SSP PREVIEW lineage gate. No target COMMIT/read-back has yet been performed for v8.
