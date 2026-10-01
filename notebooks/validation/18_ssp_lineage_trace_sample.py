@@ -1,4 +1,4 @@
-# %% Read-only trace: OSCAL lineage prop -> Archer Content ID + source field + mapped OSCAL path
+# %% Read-only trace: Archer Content ID + source field -> mapped OSCAL target
 # Run after Cells 1-7 PREVIEW. Uses the in-memory SSP graph/context only.
 import json
 
@@ -16,7 +16,6 @@ props = graph["nodes"].filter(
     col("ELEMENT_PATH") == lit("system-security-plan.system-characteristics.props[]")
 ).select(
     "SOURCE_RECORD_ID",
-    "ELEMENT_PATH",
     "METADATA_JSON",
 ).collect()
 
@@ -27,12 +26,11 @@ for row in props:
         continue
 
     source_field = payload.get("value")
-    print({
-        "ARCHER_CONTENT_ID": row["SOURCE_RECORD_ID"],
-        "SOURCE_FIELD_NAME": source_field,
-        "OSCAL_TARGET_PATH": target_by_source.get(source_field),
-        "LINEAGE_PROP_PATH": row["ELEMENT_PATH"],
-    })
+    print(
+        f'{row["SOURCE_RECORD_ID"]} | '
+        f'{source_field} -> '
+        f'{target_by_source.get(source_field)}'
+    )
     shown += 1
     if shown == 20:
         break
