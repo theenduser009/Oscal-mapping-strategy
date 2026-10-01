@@ -55,12 +55,13 @@ class FipsNormalizationTests(unittest.TestCase):
     def test_all_eight_approved_legacy_labels_remain_unchanged(self):
         labels = ["Legacy LOE " + letter + suffix for letter in "ABCD" for suffix in ("", " + DFARS")]
         for row in self.approved_rows():
-            self.assertEqual(set(labels), set(self.ns["_metadata_params"](row)["approved_legacy_values"]))
+            self.assertEqual(set(labels), set((row.get("ALLOWED_VALUES") or "").split("|")))
+            runtime_row = dict(row, TRANSFORM_PARAMS={"approved_legacy_values": labels})
             for index, label in enumerate(labels):
                 source = self.enriched(162400 + index, label)
-                with self.subTest(rule=row["RULE_ID"], source=source):
+                with self.subTest(field=row["SOURCE_FIELD_NAME"], source=source):
                     self.assertIsNone(self.ns["transform_fips_199"](source, self.context))
-                    self.assertEqual(label, self.ns["_metadata_transform"](row, source, self.context))
+                    self.assertEqual(label, self.ns["_metadata_transform"](runtime_row, source, self.context))
 
     def test_resolved_values_fail_closed_on_status_identity_or_cardinality_errors(self):
         bad = [
