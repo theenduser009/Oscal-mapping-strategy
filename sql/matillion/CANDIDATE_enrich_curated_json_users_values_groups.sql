@@ -7,8 +7,8 @@
 -- Preserves original Archer reference IDs and source member shapes.
 -- Enriches:
 --   UserList[].Id    -> ARCHER_META_USER.ARCHER_USER_ID
---   ValuesListIds[]  -> ARCHER_META_VALUES.VALUEID / VALUENAME
---   GroupList[]      -> ARCHER_META_GROUP.GROUP_ID / GROUP_NAME / GUID
+--   ValuesListIds[]  -> ARCHER_META_VALUE.SELECT_VALUE_ID / SELECT_VALUE_NAME
+--   GroupList[]      -> ARCHER_META_GROUP.GROUP_ID / GROUP_NAME
 --
 -- Output additions:
 --   UserList[].ResolvedUser
@@ -213,16 +213,16 @@ FROM (
     ),
     value_lookup AS (
         SELECT
-            TRIM(VALUEID::VARCHAR) AS VALUE_ID,
+            TRIM(SELECT_VALUE_ID::VARCHAR) AS VALUE_ID,
             COUNT(*) AS MATCH_COUNT,
-            IFF(COUNT(*) = 1, MAX(VALUENAME::VARCHAR), NULL) AS VALUE_NAME
-        FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUES
-        WHERE TRIM(VALUEID::VARCHAR) IN (
+            IFF(COUNT(*) = 1, MAX(SELECT_VALUE_NAME::VARCHAR), NULL) AS VALUE_NAME
+        FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE
+        WHERE TRIM(SELECT_VALUE_ID::VARCHAR) IN (
             SELECT VALUE_ID
             FROM value_members
             WHERE VALUE_ID IS NOT NULL
         )
-        GROUP BY TRIM(VALUEID::VARCHAR)
+        GROUP BY TRIM(SELECT_VALUE_ID::VARCHAR)
     ),
     resolved_value_members AS (
         SELECT
@@ -291,8 +291,7 @@ FROM (
         SELECT
             GROUP_ID,
             COUNT(*) AS MATCH_COUNT,
-            IFF(COUNT(*) = 1, MAX(GROUP_NAME::VARCHAR), NULL) AS GROUP_NAME,
-            IFF(COUNT(*) = 1, MAX(GUID::VARCHAR), NULL)       AS GUID
+            IFF(COUNT(*) = 1, MAX(GROUP_NAME::VARCHAR), NULL) AS GROUP_NAME
         FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_GROUP
         WHERE GROUP_ID IN (
             SELECT GROUP_ID
@@ -305,7 +304,6 @@ FROM (
         SELECT
             m.*,
             g.GROUP_NAME,
-            g.GUID,
             CASE
                 WHEN m.GROUP_ID IS NULL
                     THEN 'INVALID_GROUP_ID'
@@ -328,7 +326,6 @@ FROM (
                 OBJECT_CONSTRUCT_KEEP_NULL(
                     'GroupId', GROUP_ID,
                     'GroupName', GROUP_NAME,
-                    'Guid', GUID,
                     'LookupStatus', LOOKUP_STATUS
                 )
             ) WITHIN GROUP (ORDER BY MEMBER_INDEX) AS ITEMS,
