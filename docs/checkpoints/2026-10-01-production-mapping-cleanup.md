@@ -260,3 +260,12 @@ raw-load conversion component.
 Next action: replace the raw-load Matillion SQL with the integrated replacement,
 run once in DEV, and verify CURATED_JSON is populated before any notebook
 simplification.
+
+
+## Matillion metadata enrichment spot checks — 2026-10-01
+
+Owner-confirmed live spot checks after running the integrated raw->CURATED_JSON enrichment:
+- ValuesListIds enrichment is working; example value ID 80654 resolves with LookupStatus=MATCHED and ValueName=Low.
+- GroupList enrichment is also working; owner confirmed the group-ID resolution result is good.
+
+These are field-level live confirmations of both value and group enrichment. They do not by themselves replace the full aggregate validator summary; retain the overall post-enrichment validation gate before removing notebook-side fallback lookups.
