@@ -93,6 +93,10 @@ ORDER BY M.OSCAL_ELEMENT_PATH, M.ARCHER_FIELD_NAME;
 
 -- ============================================================
 -- 3. END-TO-END TRACE:
+-- NOTE:
+-- The persisted DIM table does NOT contain ELEMENT_PATH.
+-- ELEMENT_PATH exists in the in-memory candidate graph only.
+-- Persisted rows are identified here by ELEMENT_TYPE + METADATA_JSON shape.
 --    Archer CONTENT_ID + Archer field -> committed OSCAL member/value.
 --
 --    The lineage prop stores only:
@@ -140,7 +144,7 @@ LINEAGE AS (
         METADATA_JSON:"value"::STRING AS ARCHER_FIELD_NAME
     FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
     WHERE TRIM(SOURCE_RECORD_ID::STRING) = $TEST_CONTENT_ID
-      AND ELEMENT_PATH = 'system-security-plan.system-characteristics.props[]'
+      AND ELEMENT_TYPE = 'props'
       AND METADATA_JSON:"name"::STRING = 'source-field'
 ),
 IMPACT AS (
@@ -151,7 +155,7 @@ IMPACT AS (
         METADATA_JSON:"security-objective-availability"::STRING AS OSCAL_AVAILABILITY
     FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
     WHERE TRIM(SOURCE_RECORD_ID::STRING) = $TEST_CONTENT_ID
-      AND ELEMENT_PATH = 'system-security-plan.system-characteristics.security-impact-level'
+      AND ELEMENT_TYPE = 'security-impact-level'
 )
 SELECT
     S.ARCHER_CONTENT_ID,
