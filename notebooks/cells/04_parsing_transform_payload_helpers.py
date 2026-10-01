@@ -276,8 +276,8 @@ def _metadata_mapped_value(row, source_obj, context):
     return value
 
 
-def _oscal_prop(name, value, namespace=None, group=None):
-    """Shared property constructor; preserve the already-approved null policy."""
+def _oscal_prop(name, value, namespace=None, prop_class=None, group=None):
+    """One property constructor for business props and selective lineage props."""
     prop = {"name": _metadata_text(name, "Property name"), "value": value}
     if value is not None and not isinstance(value, str):
         raise ValueError("Property value must be text or an explicitly preserved warehouse null")
@@ -286,6 +286,8 @@ def _oscal_prop(name, value, namespace=None, group=None):
                 or not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*:[^\s]+", namespace)):
             raise ValueError("Lineage namespace must be an absolute URI without whitespace")
         prop["ns"] = namespace
+    if prop_class is not None:
+        prop["class"] = _metadata_text(prop_class, "Property class")
     if group is not None:
         prop["group"] = _metadata_text(group, "Property group")
     return prop
@@ -842,7 +844,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v5-lineage":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v6-lineage-required":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -879,4 +881,4 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v5-lineage"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v6-lineage-required"
