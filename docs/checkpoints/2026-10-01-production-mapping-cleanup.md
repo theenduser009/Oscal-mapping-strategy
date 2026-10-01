@@ -29,3 +29,26 @@ Next action:
 Upload the cleaned CSV and matching seven cells, run SSP PREVIEW, then run
 notebooks/validation/17_ssp_selective_lineage_contract_validation.py. No COMMIT
 until the fresh PREVIEW and validator are reviewed.
+
+
+## Repository validation actually performed
+
+Code commit: `f5e5755d3e4eaeb733452fd1b65352def49188e0`
+
+GitHub Actions run: `36897565862`
+
+Confirmed:
+- generated notebook synchronization check passed
+- `test_production_mapping_contract` passed
+- all 9 selective-lineage focused tests in `test_universal_lineage_props` passed
+- the production CSV has 155 rows, exactly 18 runtime columns, and 12 LINEAGE_REQUIRED=Y rows
+- read-back inspection confirmed Cell 5 no longer emits a lineage `class`
+
+The full historical `tests/lean` suite remains red: 270 tests ran with 38
+failures and 96 errors. The log includes known historical/fixture compatibility
+issues, stale expectations for removed provenance/RULE_ID columns and older
+153-row counts, plus local end-to-end fixtures that do not provision newer
+Source One lookup tables. This full-suite failure is **not** being treated as a
+successful production release.
+
+No live Snowflake PREVIEW has yet been run for the new three-key lineage payload.
