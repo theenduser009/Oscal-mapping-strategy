@@ -16,7 +16,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v8-source-field-lineage (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v9-matillion-resolved-meta (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -29,7 +29,6 @@ CONFIG = {
     "ASSESSMENT_TASK_TITLE": "Preassessment review",
     "ASSESSMENT_TASK_TYPE": "action",
     "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
-    "ARCHER_META_VALUE_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE",
 }
 
 SOURCE_FILES = [
