@@ -856,7 +856,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v9-matillion-resolved-meta":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v10-curated-resolved-only":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -893,4 +893,4 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v9-matillion-resolved-meta"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v10-curated-resolved-only"
