@@ -35,7 +35,7 @@ class SourceInputTests(unittest.TestCase):
         result, counts, snapshot = self.ns["load_source_input"](session, profile())
         self.assertEqual(1, session.cache_calls["RAW_ONE"])
         self.assertIs(snapshot, result.snapshot)
-        self.assertEqual({"RAW_ROWS": 2, "SELECTED_ROWS": 2, "DUPLICATE_SOURCE_ROWS_RESOLVED": 0}, counts)
+        self.assertEqual({"RAW_ROWS": 2, "SELECTED_ROWS": 2, "NULL_SOURCE_SHELLS_SKIPPED": 0, "DUPLICATE_SOURCE_ROWS_RESOLVED": 0}, counts)
         session.tables["RAW_ONE"].rows[0]["CURATED_JSON"]["value"] = 999
         self.assertEqual(1, result.rows[0]["CURATED_JSON"]["value"])
 
@@ -48,10 +48,20 @@ class SourceInputTests(unittest.TestCase):
             self.assertEqual([("transaction", None)], session.events)
             self.assertEqual(transaction, session.transaction)
 
-    def test_missing_record_identity_is_rejected(self):
+    def test_missing_record_identity_is_rejected_when_curated_payload_is_populated(self):
         for identity in (None, "", "   "):
-            with self.subTest(identity=identity), self.assertRaises(ValueError):
+            with self.subTest(identity=identity), self.assertRaisesRegex(
+                    ValueError, "Populated curated source contains missing record identities"):
                 self.source([raw(identity, 1)])
+
+    def test_null_identity_and_null_curated_shell_is_skipped_and_counted(self):
+        rows = [raw("good", 1), {"CONTENT_ID": None, "CURATED_JSON": None}]
+        selected, counts, _ = self.source(rows)
+        self.assertEqual([{"SOURCE_RECORD_ID": "good", "CURATED_JSON": {"value": 1}}], selected.rows)
+        self.assertEqual(2, counts["RAW_ROWS"])
+        self.assertEqual(1, counts["SELECTED_ROWS"])
+        self.assertEqual(1, counts["NULL_SOURCE_SHELLS_SKIPPED"])
+        self.assertEqual(0, counts["DUPLICATE_SOURCE_ROWS_RESOLVED"])
 
     def test_ambiguous_source_columns_reject_before_snapshot(self):
         session = Session({"RAW_ONE": [raw("one", 1)]})
