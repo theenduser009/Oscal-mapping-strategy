@@ -245,12 +245,20 @@ class MultiModelInputs(unittest.TestCase):
         self.assertEqual(1, session.cache_calls["RAW_ONE"])
         self.assertFalse(any(event[0] == "rank" for event in session.events))
 
-    def test_null_or_blank_source_identity_is_rejected_after_snapshot(self):
+    def test_null_or_blank_source_identity_is_rejected_when_curated_payload_exists(self):
         for bad in (None, "", "   "):
             session = Session({"RAW_ONE": [raw(bad, 1)]})
-            with self.subTest(identity=bad), self.assertRaisesRegex(ValueError, "missing record identities"):
+            with self.subTest(identity=bad), self.assertRaisesRegex(
+                    ValueError, "Populated curated source contains missing record identities"):
                 self.ns["load_source_input"](session, profile())
             self.assertEqual(1, session.cache_calls["RAW_ONE"])
+
+    def test_null_identity_null_curated_source_shell_is_skipped(self):
+        session = Session({"RAW_ONE": [raw("good", 1), {"CONTENT_ID": None, "CURATED_JSON": None}]})
+        result, report, _ = self.ns["load_source_input"](session, profile())
+        self.assertEqual([{"SOURCE_RECORD_ID": "good", "CURATED_JSON": {"value": 1}}], result.rows)
+        self.assertEqual(1, report["NULL_SOURCE_SHELLS_SKIPPED"])
+        self.assertEqual(1, report["SELECTED_ROWS"])
 
     def test_configured_identity_and_json_columns_are_used(self):
         session = Session({"RAW_ONE": [{"Source Id": 42, "Payload": {"x": 1}}]})
