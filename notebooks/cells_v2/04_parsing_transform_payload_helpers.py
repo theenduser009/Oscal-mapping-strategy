@@ -98,7 +98,45 @@ def _contains_archer_select_id_container(value):
     return isinstance(value, list) and any(_contains_archer_select_id_container(item) for item in value)
 
 
+def _resolved_archer_value_labels(value):
+    """Use Matillion-resolved select labels while proving they match the source IDs."""
+    value = _to_python(value)
+    if not isinstance(value, dict) or "ResolvedValues" not in value:
+        return None
+    resolved = _to_python(value.get("ResolvedValues"))
+    if not isinstance(resolved, list):
+        raise ValueError("ResolvedValues must be an array")
+    source_ids = None
+    for key in ("ValuesListIds", "ValueListIds"):
+        if key in value and _has_value(value[key]):
+            raw = _to_python(value[key])
+            source_ids = raw if isinstance(raw, list) else [raw]
+            break
+    if source_ids is None:
+        raise ValueError("ResolvedValues requires source value IDs")
+    if len(resolved) != len(source_ids):
+        raise ValueError("ResolvedValues cardinality does not match source value IDs")
+    labels = []
+    for source_id, item in zip(source_ids, resolved):
+        item = _to_python(item)
+        if not isinstance(item, dict):
+            raise ValueError("ResolvedValues member must be an object")
+        if item.get("LookupStatus") != "MATCHED":
+            raise ValueError("ResolvedValues contains an unresolved value")
+        resolved_id = item.get("ValueId")
+        label = item.get("ValueName")
+        if resolved_id is None or str(resolved_id).strip() != str(source_id).strip():
+            raise ValueError("ResolvedValues identity does not match source value ID")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError("ResolvedValues matched label must be nonblank text")
+        labels.append(label.strip())
+    return labels
+
+
 def resolve_archer_select_value(value, context):
+    resolved = _resolved_archer_value_labels(value)
+    if resolved is not None:
+        return resolved
     lookup = context["lookups"].get("archer_values", {})
     strict = _contains_archer_select_id_container(value)
     extracted = _extract_reference_ids(value)
@@ -122,6 +160,9 @@ def resolve_archer_select_value(value, context):
 
 
 def _single_archer_label(value, context):
+    resolved = _resolved_archer_value_labels(value)
+    if resolved is not None:
+        return resolved[0] if len(resolved) == 1 else None
     extracted = _extract_reference_ids(value)
     values = [item for item in (extracted if isinstance(extracted, list) else [extracted]) if item is not None]
     if len(values) != 1 or isinstance(values[0], (dict, list)):
@@ -135,6 +176,12 @@ def _single_archer_label(value, context):
 
 def transform_fips_199(value, context):
     # A singleton objective must not discard unrecognized members of a list.
+    resolved = _resolved_archer_value_labels(value)
+    if resolved is not None:
+        if len(resolved) != 1:
+            raise ValueError("Security objective requires exactly one input value")
+        candidate = resolved[0].strip().lower()
+        return candidate if candidate in {"low", "moderate", "high"} else None
     extracted = _extract_reference_ids(value)
     items = extracted if isinstance(extracted, list) else [extracted]
     if not items:
@@ -831,7 +878,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v8-source-field-lineage":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v9-matillion-resolved-meta":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -868,4 +915,4 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v9-matillion-resolved-meta"
