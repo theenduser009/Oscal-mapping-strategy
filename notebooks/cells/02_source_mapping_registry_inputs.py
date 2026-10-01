@@ -109,17 +109,10 @@ def load_mapping_rows(profile):
 
 def load_source_lookups(active_session, profile, model_contracts, shared_config):
     _input_no_transaction(active_session)
-    values = active_session.table(shared_config["ARCHER_META_VALUE_TABLE"]).select(
-        col("SELECT_VALUE_ID"), col("SELECT_VALUE_NAME")
-    ).filter(col("SELECT_VALUE_NAME").is_not_null())
+    # Archer select-value labels are enriched upstream by Matillion in CURATED_JSON
+    # as ResolvedValues[]. The notebook no longer queries ARCHER_META_VALUE.
+    # Keep empty compatibility maps for synthetic/local fixtures that inject their own lookups.
     archer = {}
-    for row in values.collect():
-        if row["SELECT_VALUE_ID"] is not None:
-            key = str(row["SELECT_VALUE_ID"]).strip()
-            value = str(row["SELECT_VALUE_NAME"]).strip()
-            if key in archer and archer[key] != value:
-                raise ValueError("Archer lookup identity has conflicting labels")
-            archer[key] = value
     components, joined = {}, {}
     required = {group for key in profile["MODEL_KEYS"]
                 for group in model_contracts[key].get("LOOKUP_GROUPS", ())}
