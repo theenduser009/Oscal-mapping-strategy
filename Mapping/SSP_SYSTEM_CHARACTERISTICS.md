@@ -87,3 +87,30 @@ For every approved FIELD mapping, the compiler locates the nearest registered OS
 No additional lineage rows are required in `ARCHER_OSCAL_MAPPINGS.csv`. The behavior is registry-driven and applies the same way to every approved source field that has a valid enclosing registered `props[]` collection. Native OSCAL values are unchanged. Multiple agreeing source fields produce multiple lineage props; existing conflicting-singleton validation still fails closed.
 
 If an OSCAL area has no registered enclosing `props[]` extension point, the mapper does not invent one.
+
+
+## Selective business props and lineage
+
+Updated 2026-10-01.
+
+The mapping CSV is the authority.
+
+- If a row targets a native OSCAL member, the value stays in that native member.
+- If a row explicitly targets `system-security-plan.system-characteristics.props[]`,
+  that property is business/extension data. Its default property name is the
+  source field converted to lower kebab case, for example
+  `FISMA_REPORTABLE -> fisma-reportable`.
+- Missing or null source values are omitted unless the mapping row explicitly
+  preserves nulls. A null source does not create an empty property merely to
+  prove that a mapping exists.
+- `LINEAGE_REQUIRED=Y` is separate from business props. It means that after a
+  successful native mapping, one additional namespaced `source-field` property
+  is emitted at the nearest valid props owner. Its `class` is the native target
+  member name and its `value` is the exact Archer source field name.
+- `LINEAGE_REQUIRED=N` emits no extra lineage property.
+
+Current first-pass Y scope is SSP System Characteristics only: OPERATIONAL_STATUS
+plus the eleven security-objective candidate fields. Existing business-property
+rows such as FISMA_REPORTABLE, FINANCIAL_SYSTEM, MISSION_CRITICAL,
+CRITICAL_INFRASTRUCTURE and PIA_REQUIRED remain normal props and are not
+duplicated as lineage.
