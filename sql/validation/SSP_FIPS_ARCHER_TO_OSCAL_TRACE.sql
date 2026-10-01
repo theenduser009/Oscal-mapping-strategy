@@ -191,3 +191,91 @@ SELECT
 FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE
 WHERE LOWER(TRIM(SELECT_VALUE_NAME)) IN ('low', 'moderate', 'high')
 ORDER BY LOWER(TRIM(SELECT_VALUE_NAME)), SELECT_VALUE_ID;
+
+-- ============================================================
+-- 5. FIND A REAL "HIGH" FIPS EXAMPLE END TO END
+--    Step A: resolve Archer meta value(s) whose label is High.
+--    Step B: find Source One records whose FIPS candidate field contains that ID.
+--    Step C: show the committed OSCAL value for the matching objective.
+--    READ ONLY.
+-- ============================================================
+
+WITH HIGH_IDS AS (
+    SELECT
+        TRIM(SELECT_VALUE_ID::STRING) AS SELECT_VALUE_ID,
+        TRIM(SELECT_VALUE_NAME::STRING) AS SELECT_VALUE_NAME
+    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE
+    WHERE LOWER(TRIM(SELECT_VALUE_NAME::STRING)) = 'high'
+),
+FIPS_MAPPING AS (
+    SELECT COLUMN1 AS ARCHER_FIELD_NAME, COLUMN2 AS OSCAL_ELEMENT_PATH
+    FROM VALUES
+      ('RECOMMENDED_CONFIDENTIALITY_CONTROL_CATEGORY',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-confidentiality'),
+      ('CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-confidentiality'),
+      ('RECOMMENDED_INTEGRITY_CONTROL_CATEGORY',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-integrity'),
+      ('INTEGRITY_CONTROL_CATEGORY_OVERRIDE',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-integrity'),
+      ('AVAILABILITY_CONTROL_CATEGORY_OVERRIDE',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-availability'),
+      ('RECOMMENDED_AVAILABILITY_CONTROL_CATEGORY',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-availability'),
+      ('PROGRAMSITE_INTEGRITY_CONTROL_CATEGORY',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-integrity'),
+      ('PROGRAMSITE_AVAILABILITY_CONTROL_CATEGORY',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-availability'),
+      ('CNSS_AVAILABILITY_RATING',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-availability'),
+      ('CNSS_CONFIDENTIALITY_RATING',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-confidentiality'),
+      ('CNSS_INTEGRITY_RATING',
+       'system-security-plan.system-characteristics.security-impact-level.security-objective-integrity')
+),
+SOURCE_HIGH AS (
+    SELECT DISTINCT
+        R.CONTENT_ID::STRING AS ARCHER_CONTENT_ID,
+        M.ARCHER_FIELD_NAME,
+        M.OSCAL_ELEMENT_PATH,
+        V.VALUE::STRING AS SELECT_VALUE_ID,
+        H.SELECT_VALUE_NAME,
+        GET(R.CURATED_JSON, M.ARCHER_FIELD_NAME) AS ARCHER_RAW_VALUE
+    FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_AUTHORIZATION_PACKAGE_RAW R
+    CROSS JOIN FIPS_MAPPING M,
+         LATERAL FLATTEN(
+             INPUT => GET(GET(R.CURATED_JSON, M.ARCHER_FIELD_NAME), 'ValuesListIds')
+         ) V
+    JOIN HIGH_IDS H
+      ON TRIM(V.VALUE::STRING) = H.SELECT_VALUE_ID
+),
+IMPACT AS (
+    SELECT
+        SOURCE_RECORD_ID::STRING AS ARCHER_CONTENT_ID,
+        METADATA_JSON:"security-objective-confidentiality"::STRING AS OSCAL_CONFIDENTIALITY,
+        METADATA_JSON:"security-objective-integrity"::STRING AS OSCAL_INTEGRITY,
+        METADATA_JSON:"security-objective-availability"::STRING AS OSCAL_AVAILABILITY
+    FROM RTX_ENTERPRISESERVICES_DEV.ES_ESC_GRC_CURATED.DIM_OSCAL_SSP_ELEMENT
+    WHERE ELEMENT_TYPE = 'security-impact-level'
+)
+SELECT
+    S.ARCHER_CONTENT_ID,
+    S.ARCHER_FIELD_NAME,
+    S.SELECT_VALUE_ID,
+    S.SELECT_VALUE_NAME AS ARCHER_RESOLVED_LABEL,
+    S.ARCHER_RAW_VALUE,
+    S.OSCAL_ELEMENT_PATH,
+    CASE
+        WHEN S.OSCAL_ELEMENT_PATH LIKE '%security-objective-confidentiality'
+            THEN I.OSCAL_CONFIDENTIALITY
+        WHEN S.OSCAL_ELEMENT_PATH LIKE '%security-objective-integrity'
+            THEN I.OSCAL_INTEGRITY
+        WHEN S.OSCAL_ELEMENT_PATH LIKE '%security-objective-availability'
+            THEN I.OSCAL_AVAILABILITY
+    END AS COMMITTED_OSCAL_VALUE
+FROM SOURCE_HIGH S
+LEFT JOIN IMPACT I
+  ON I.ARCHER_CONTENT_ID = S.ARCHER_CONTENT_ID
+ORDER BY S.ARCHER_CONTENT_ID, S.ARCHER_FIELD_NAME
+LIMIT 50;
+
