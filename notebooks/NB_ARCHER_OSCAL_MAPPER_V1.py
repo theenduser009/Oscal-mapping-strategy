@@ -28,7 +28,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v9-matillion-resolved-meta (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v10-curated-resolved-only (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -313,15 +313,32 @@ def load_source_input(active_session, profile):
     # Freeze once in a session-local temporary table, before validation and
     # model fan-out. Keep the returned cache handle alive in SOURCE_INPUTS.
     candidates = raw.select(*selected).cache_result()
-    if candidates.filter("SOURCE_RECORD_ID IS NULL OR LENGTH(TRIM(SOURCE_RECORD_ID)) = 0").count():
-        raise ValueError("Source contains missing record identities")
     count = candidates.count()
-    distinct = candidates.select("SOURCE_RECORD_ID").distinct().count()
-    if count != distinct:
+
+    # Owner-approved temporary source-shell policy:
+    # rows with both missing CONTENT_ID and SQL-NULL CURATED_JSON carry no curated
+    # business content and are skipped. A populated CURATED_JSON without identity
+    # still fails closed.
+    missing_identity = candidates.filter(
+        "SOURCE_RECORD_ID IS NULL OR LENGTH(TRIM(SOURCE_RECORD_ID)) = 0"
+    )
+    missing_identity_count = missing_identity.count()
+    if missing_identity_count:
+        if missing_identity.filter("CURATED_JSON IS NOT NULL").count():
+            raise ValueError("Populated curated source contains missing record identities")
+        working = candidates.filter(
+            "SOURCE_RECORD_ID IS NOT NULL AND LENGTH(TRIM(SOURCE_RECORD_ID)) > 0"
+        )
+    else:
+        working = candidates
+
+    distinct = working.select("SOURCE_RECORD_ID").distinct().count()
+    selected_count = working.count()
+    if selected_count != distinct:
         if not order_columns:
             raise ValueError("Duplicate source identities require approved technical ordering")
         order = [col(name).desc_nulls_last() for name in order_columns]
-        latest = candidates.with_column(
+        latest = working.with_column(
             "_SOURCE_RANK", dense_rank().over(
                 Window.partition_by("SOURCE_RECORD_ID").order_by(*order)
             )
@@ -332,10 +349,14 @@ def load_source_input(active_session, profile):
         if result.count() != distinct:
             raise ValueError("Conflicting source payloads share the latest approved technical ordering")
     else:
-        result = candidates.select("SOURCE_RECORD_ID", "CURATED_JSON")
+        result = working.select("SOURCE_RECORD_ID", "CURATED_JSON")
     # The frozen snapshot yields one selected row per distinct source identity.
-    return result, {"RAW_ROWS": count, "SELECTED_ROWS": distinct,
-                    "DUPLICATE_SOURCE_ROWS_RESOLVED": count - distinct}, candidates
+    return result, {
+        "RAW_ROWS": count,
+        "SELECTED_ROWS": distinct,
+        "NULL_SOURCE_SHELLS_SKIPPED": missing_identity_count,
+        "DUPLICATE_SOURCE_ROWS_RESOLVED": selected_count - distinct,
+    }, candidates
 
 
 def load_mapping_rows(profile):
@@ -375,10 +396,8 @@ def load_mapping_rows(profile):
 
 def load_source_lookups(active_session, profile, model_contracts, shared_config):
     _input_no_transaction(active_session)
-    # Archer select-value labels are enriched upstream by Matillion in CURATED_JSON
-    # as ResolvedValues[]. The notebook no longer queries ARCHER_META_VALUE.
-    # Keep empty compatibility maps for synthetic/local fixtures that inject their own lookups.
-    archer = {}
+    # Archer users/select values/groups are enriched upstream in CURATED_JSON.
+    # Notebook lookups are now only for OSCAL component/joined-record hydration.
     components, joined = {}, {}
     required = {group for key in profile["MODEL_KEYS"]
                 for group in model_contracts[key].get("LOOKUP_GROUPS", ())}
@@ -420,10 +439,7 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             col(record_name).cast("string").alias("_SOURCE_RECORD_ID"),
             col(json_name).alias("CURATED_JSON")
         ).filter(col("CONTENT_ID").is_not_null()).cache_result()
-    return {"archer_values": archer,
-            "fips_values": {key: value.lower() for key, value in archer.items()
-                            if value.lower() in {"low", "moderate", "high"}},
-            "component_sources": components,
+    return {"component_sources": components,
             "component_contract": profile.get("LOOKUP_CONTRACTS", {}),
             "joined_sources": joined,
             "joined_contract": profile.get("JOINED_LOOKUP_CONTRACTS", {})}
@@ -454,7 +470,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v9-matillion-resolved-meta"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v10-curated-resolved-only"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -1029,14 +1045,19 @@ def _contains_archer_select_id_container(value):
     return isinstance(value, list) and any(_contains_archer_select_id_container(item) for item in value)
 
 
-def _resolved_archer_value_labels(value):
-    """Use Matillion-resolved select labels while proving they match the source IDs."""
+def _resolved_select_labels(value):
+    """Read Matillion-resolved select labels and prove they match source IDs."""
     value = _to_python(value)
-    if not isinstance(value, dict) or "ResolvedValues" not in value:
+    if not isinstance(value, dict):
+        return None
+    if "ResolvedValues" not in value:
+        if _contains_archer_select_id_container(value):
+            raise ValueError("Curated select field is missing ResolvedValues")
         return None
     resolved = _to_python(value.get("ResolvedValues"))
     if not isinstance(resolved, list):
         raise ValueError("ResolvedValues must be an array")
+
     source_ids = None
     for key in ("ValuesListIds", "ValueListIds"):
         if key in value and _has_value(value[key]):
@@ -1047,6 +1068,7 @@ def _resolved_archer_value_labels(value):
         raise ValueError("ResolvedValues requires source value IDs")
     if len(resolved) != len(source_ids):
         raise ValueError("ResolvedValues cardinality does not match source value IDs")
+
     labels = []
     for source_id, item in zip(source_ids, resolved):
         item = _to_python(item)
@@ -1064,71 +1086,43 @@ def _resolved_archer_value_labels(value):
     return labels
 
 
-def resolve_archer_select_value(value, context):
-    resolved = _resolved_archer_value_labels(value)
+def resolve_curated_select_value(value):
+    """Return Matillion-resolved select labels; never query Archer metadata here."""
+    resolved = _resolved_select_labels(value)
     if resolved is not None:
         return resolved
-    lookup = context["lookups"].get("archer_values", {})
-    strict = _contains_archer_select_id_container(value)
-    extracted = _extract_reference_ids(value)
-
-    def resolve(item):
-        item = _to_python(item)
-        if item is None:
-            return None
-        if isinstance(item, (dict, list, bool)):
-            if strict:
-                raise ValueError("Archer select-value container is invalid")
-            return item
-        key = str(item).strip()
-        if strict and (key not in lookup or not _has_value(lookup[key])):
-            raise ValueError("Archer select-value ID is unresolved")
-        return lookup.get(key, item)
-
-    if isinstance(extracted, list):
-        return [result for item in extracted if (result := resolve(item)) is not None]
-    return resolve(extracted)
+    if _contains_archer_select_id_container(value):
+        raise ValueError("Curated select field is unresolved")
+    return _to_python(value)
 
 
-def _single_archer_label(value, context):
-    resolved = _resolved_archer_value_labels(value)
-    if resolved is not None:
-        return resolved[0] if len(resolved) == 1 else None
-    extracted = _extract_reference_ids(value)
-    values = [item for item in (extracted if isinstance(extracted, list) else [extracted]) if item is not None]
-    if len(values) != 1 or isinstance(values[0], (dict, list)):
+def resolve_archer_select_value(value, context=None):
+    """Compatibility wrapper; production resolution is already in CURATED_JSON."""
+    return resolve_curated_select_value(value)
+
+
+def _single_curated_label(value):
+    resolved = resolve_curated_select_value(value)
+    values = resolved if isinstance(resolved, list) else [resolved]
+    values = [item for item in values if item is not None]
+    if len(values) != 1 or isinstance(values[0], (dict, list, bool)):
         return None
-    item, key = values[0], str(values[0]).strip()
-    label = context["lookups"].get("archer_values", {}).get(key)
-    if label is not None:
-        return str(label).strip() or None
-    return key if isinstance(item, str) and key and not key.isdigit() else None
+    label = str(values[0]).strip()
+    return label or None
 
 
-def transform_fips_199(value, context):
-    # A singleton objective must not discard unrecognized members of a list.
-    resolved = _resolved_archer_value_labels(value)
-    if resolved is not None:
-        if len(resolved) != 1:
-            raise ValueError("Security objective requires exactly one input value")
-        candidate = resolved[0].strip().lower()
-        return candidate if candidate in {"low", "moderate", "high"} else None
-    extracted = _extract_reference_ids(value)
-    items = extracted if isinstance(extracted, list) else [extracted]
-    if not items:
-        return None
-    if len(items) != 1:
-        raise ValueError("Security objective requires exactly one input value")
-    item, lookups = items[0], context["lookups"]
-    if item is None:
-        return None
-    key = str(item).strip()
-    label = lookups.get("fips_values", {}).get(key)
+def normalize_security_objective(value):
+    """Normalize already-resolved OSCAL CIA labels; no Archer lookup occurs here."""
+    label = _single_curated_label(value)
     if label is None:
-        candidate = str(lookups.get("archer_values", {}).get(key, item)).strip().lower()
-        label = candidate if candidate in {"low", "moderate", "high"} else None
-    return label
+        return None
+    candidate = label.lower()
+    return candidate if candidate in {"low", "moderate", "high"} else None
 
+
+def transform_fips_199(value, context=None):
+    """Compatibility wrapper around OSCAL CIA normalization."""
+    return normalize_security_objective(value)
 
 def transform_document_identifier(value):
     return _scalar_text(value, "Document identifier must be scalar", "Document identifier must be finite and nonblank")
@@ -1161,7 +1155,7 @@ def _score_value(value, context):
     if not _has_value(value):
         return None
     if _contains_archer_select_id_container(value):
-        value = resolve_archer_select_value(value, context)
+        value = resolve_curated_select_value(value)
     values = value if isinstance(value, list) else [value]
     if len(values) != 1 or not isinstance(values[0], (str, int, float, bool, Decimal)):
         raise ValueError("One scalar score is required per observation")
@@ -1196,7 +1190,7 @@ def _metadata_transform(row, value, context):
     if transform == "identifier":
         return transform_document_identifier(value)
     if transform == "archer-select":
-        result = resolve_archer_select_value(value, context)
+        result = resolve_curated_select_value(value)
         return result if _has_value(result) else SKIP_VALUE
     if transform == "reference-ids":
         result = _extract_reference_ids(value)
@@ -1209,17 +1203,17 @@ def _metadata_transform(row, value, context):
     if transform == "scalar-score":
         return _score_value(value, context)
     if transform == "security-objective":
-        result = transform_fips_199(value, context)
+        result = normalize_security_objective(value)
         if isinstance(result, list):
             raise ValueError("Security objective resolved to multiple values")
         if _has_value(result):
             return str(result)
-        label = _single_archer_label(value, context)
+        label = _single_curated_label(value)
         if label is None or label not in params.get("approved_legacy_values", ()):
             raise ValueError("Security objective contains an unreviewed label")
         return label
     if transform == "status-crosswalk":
-        label = _single_archer_label(value, context)
+        label = _single_curated_label(value)
         if label is None:
             raise ValueError("Crosswalk source label is unresolved or multivalued")
         target = params["crosswalk"].get(_stable_property_name(label))
@@ -1809,7 +1803,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v9-matillion-resolved-meta":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v10-curated-resolved-only":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -1846,7 +1840,7 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v9-matillion-resolved-meta"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v10-curated-resolved-only"
 
 
 # %% Cell 5 - Build nodes, exact containment, and selective source-field lineage
@@ -1928,7 +1922,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v9-matillion-resolved-meta":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v10-curated-resolved-only":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -2002,7 +1996,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v9-matillion-resolved-meta"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v10-curated-resolved-only"
 
 
 # %% Cell 6 - Validate once, preview, then atomically upsert the reviewed tables
@@ -2457,7 +2451,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
         if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.2-lineage":
             raise ValueError("Run the matching Cell 6 before Cell 7")
-        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v9-matillion-resolved-meta":
+        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v10-curated-resolved-only":
             raise ValueError("Run the matching Cell 5 before Cell 7")
         routes = {}
         for context in mapping_contexts:
