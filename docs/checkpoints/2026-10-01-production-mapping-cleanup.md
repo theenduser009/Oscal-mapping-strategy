@@ -269,3 +269,32 @@ Owner-confirmed live spot checks after running the integrated raw->CURATED_JSON 
 - GroupList enrichment is also working; owner confirmed the group-ID resolution result is good.
 
 These are field-level live confirmations of both value and group enrichment. They do not by themselves replace the full aggregate validator summary; retain the overall post-enrichment validation gate before removing notebook-side fallback lookups.
+
+
+## v9 notebook consumes Matillion-resolved values — 2026-10-01
+
+Owner-confirmed upstream evidence now supports moving the select-value resolution boundary into Matillion:
+- value ID 80654 is persisted in CURATED_JSON with ResolvedValues LookupStatus=MATCHED and ValueName=Low;
+- GroupList enrichment is also owner-confirmed good; the posted sample shows GroupId 268 resolving to GroupName `Global Archer: Read Access` for populated group-list fields.
+
+Repository implementation:
+- new matched mapper release: `lean-csv-registry-v9-matillion-resolved-meta`;
+- Cell 1 no longer configures `ARCHER_META_VALUE_TABLE`;
+- Cell 2 no longer queries `ARCHER_META_VALUE`; production lookup maps are empty compatibility containers only;
+- Cell 4 consumes `ResolvedValues[]` from CURATED_JSON first, verifies source-ID/cardinality/status identity, and normalizes matched Low/Moderate/High labels for security-objective mappings;
+- unresolved, mismatched, malformed, or cardinality-conflicting ResolvedValues fail closed;
+- reviewed Legacy LOE labels remain governed by the existing mapping CSV allowed-values contract; no new LOE-to-FIPS equivalence is invented;
+- Cells 3/4/5/7 use the same v9 release marker;
+- maintained cells, cells_v2, and the combined notebook are synchronized;
+- the 155-row/19-column mapping CSV is unchanged.
+
+Repository validation actually performed:
+- generated notebook synchronization check passed in GitHub Actions;
+- all five focused Matillion-resolved FIPS tests pass: canonical Low/Moderate/High normalization, direct-text compatibility, fail-closed identity/status/cardinality checks, removal of the runtime meta-value-table dependency, and reviewed Legacy LOE preservation;
+- the historical full lean suite is still red: 272 tests ran with 30 failures and 102 errors. The remaining failures are dominated by pre-existing stale 153-row, retired RULE_ID/provenance, old routing/registry fixture, and historical persistence expectations. This is not being treated as a green full-suite release.
+
+Evidence boundary:
+No Snowflake execution of the v9 seven-cell mapper has yet been observed. The namespace-free v8 COMMIT/readback remains the persisted baseline; it does not prove v9 candidate values.
+
+Next action:
+Load the matched v9 Cells 1-7 in Snowflake, keep `EXECUTE_WRITES=False`, run SSP PREVIEW only, and post the full pipeline/group report. Do not COMMIT v9 until that fresh PREVIEW is reviewed.
