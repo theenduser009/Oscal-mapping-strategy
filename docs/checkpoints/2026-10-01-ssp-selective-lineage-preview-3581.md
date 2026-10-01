@@ -58,3 +58,25 @@ The helper now uses `.limit(20).collect()` and prints the returned rows, an API
 pattern already used by the maintained mapper code. This is a read-only
 diagnostic-only correction. It does not alter the mapper, mapping sheet, graph,
 lineage generation, or target data.
+
+
+## Full selective-lineage contract validator added — 2026-10-01
+
+Read-only validation helper:
+`notebooks/validation/17_ssp_selective_lineage_contract_validation.py`
+
+Added at commit `c3ce068908429032a0e84a73d1b88ad31da47e7c`.
+
+Purpose: validate all candidate SSP lineage props already built by PREVIEW against
+the compiled `LINEAGE_REQUIRED` contract. It requires exactly 12 configured
+lineage fields, the expected namespace, exactly the four approved property keys,
+the expected class for each source field, no duplicate source-record/field/class
+lineage props, and agreement between candidate lineage-node count and the PREVIEW
+`LINEAGE_PROPS` count.
+
+This helper has been published and read back from GitHub, but has **not yet been
+executed in Snowflake**. No mapper runtime, mapping CSV, registry, or target data
+was changed by adding it.
+
+Next action: run only this helper against the existing in-memory SSP PREVIEW graph.
+Do not rerun Cells 1-7 and do not COMMIT until its live result is reviewed.
