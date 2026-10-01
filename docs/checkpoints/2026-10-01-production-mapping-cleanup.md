@@ -153,3 +153,8 @@ Interpretation: the committed target state matches the namespace-free v8 candida
 Owner-confirmed live lookup on 2026-10-01: Archer SELECT_VALUE_ID 162407 resolves to SELECT_VALUE_NAME `Legacy LOE C` in `RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE`.
 
 For the inspected Content ID 867022, the populated confidentiality, integrity, and availability override fields each carried `ValuesListIds:[162407]`; the committed OSCAL security-impact members therefore contain `Legacy LOE C`. This is consistent with the current `security-objective` transform and the mapping CSV's reviewed legacy allowed-values contract. This checkpoint confirms the ID-to-label resolution step for that concrete value; it does not imply all FIPS candidate IDs have been individually verified.
+
+
+## FIPS payload-to-Archer-field live trace
+
+Owner-provided Snowflake result on 2026-10-01 for Content ID 867022 shows the committed `security-impact-level` payload repeated alongside all 11 reviewed Archer candidate fields. The visible committed OSCAL payload has confidentiality, integrity, and availability objective members populated as `Legacy LOE C`. The three visible populated Archer source fields are `AVAILABILITY_CONTROL_CATEGORY_OVERRIDE`, `CONFIDENTIALITY_CONTROL_CATEGORY_OVERRIDE`, and `INTEGRITY_CONTROL_CATEGORY_OVERRIDE`; each carries `ValuesListIds:[162407]`. The other reviewed candidate rows shown are null for this record. This corroborates the earlier verified Archer meta-value resolution `162407 -> Legacy LOE C` and demonstrates the payload-to-source-field trace for the inspected Content ID.
