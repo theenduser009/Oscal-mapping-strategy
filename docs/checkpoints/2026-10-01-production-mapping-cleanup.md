@@ -396,3 +396,34 @@ Next action: run the three SELECTs from that file. If the gap is current lookup
 coverage or lookup-table raw-load health, repair/reload the corresponding
 upstream component source. Do not remove the hydration guard or skip component
 records merely to make PREVIEW pass.
+
+
+## Component hydration root cause confirmed — lookup tables empty — 2026-10-01
+
+Owner-provided live Snowflake results from
+`sql/validation/READ_ONLY_SSP_COMPONENT_HYDRATION_GAP.sql` establish the
+current failure cause.
+
+Coverage summary:
+- `INTERCONNECTIONS`: 4,444 reference occurrences / 1,405 distinct referenced IDs; 0 matched; all 4,444 missing.
+- `INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM`: 352 occurrences / 82 distinct IDs; 0 matched; all 352 missing.
+- `SOFTWARE`: current diagnostic shows populated references but 0 matched.
+
+Lookup-table health proves why all hydration misses:
+- `RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_SOFTWARE_RAW`: 0 rows.
+- `RTX_RAW_DEV.ES_ESC_GRC.ARCHER_CONTENT_INTERCONNECTIONS_RAW`: 0 rows.
+
+Therefore Cell 7's `Component hydration lookup record is missing` is not a
+v10 FIPS/ResolvedValues regression and should not be bypassed in notebook code.
+The accepted component hydrator is correctly failing closed because the two
+configured upstream lookup sources are empty in the current DEV snapshot.
+
+Historical September component-hydration acceptance used populated lookup
+sources and cannot be used as proof for the current daily snapshot.
+
+Next action:
+reload/populate the two component lookup raw tables through their normal
+Matillion/source ingestion path, then rerun only the lookup-table health query
+and the component coverage summary. Once lookup rows are present and coverage
+returns matched IDs, rerun Cells 1-7 in PREVIEW with writes disabled. Do not
+remove the hydration guard or fabricate component title/description values.
