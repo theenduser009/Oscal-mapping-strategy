@@ -298,3 +298,27 @@ No Snowflake execution of the v9 seven-cell mapper has yet been observed. The na
 
 Next action:
 Load the matched v9 Cells 1-7 in Snowflake, keep `EXECUTE_WRITES=False`, run SSP PREVIEW only, and post the full pipeline/group report. Do not COMMIT v9 until that fresh PREVIEW is reviewed.
+
+
+## Cell 2 blocked by missing source identity — 2026-10-01
+
+Owner-provided Snowflake screenshot shows the v9 run stopping in Cell 2 at
+`load_source_input` with:
+`ValueError: Source contains missing record identities`.
+
+Fresh repository read-back confirms Cell 2 intentionally rejects any source row
+whose configured `CONTENT_ID` is SQL NULL or blank before deduplication/model
+fan-out. This is an upstream source-integrity gate, not a mapper transform error.
+Do not weaken Cell 2 by filtering or inventing a source identity.
+
+The exact upstream cause is not yet proven. A new read-only diagnostic is
+committed at:
+`sql/matillion/READ_ONLY_SOURCE_IDENTITY_CURATED_GAP.sql`.
+
+It reports whole-table missing CONTENT_ID / CURATED_JSON counts, RAW_DATA physical
+types, RequestedObject.Id coverage, identity mismatches, and only the affected
+problem rows. No Snowflake DML is performed.
+
+Next action: run that diagnostic and inspect all three result sets before making
+another Matillion or notebook change. The v9 PREVIEW has not started; v8 remains
+the last committed/read-back verified OSCAL target baseline.
