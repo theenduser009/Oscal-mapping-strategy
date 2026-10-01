@@ -1,6 +1,6 @@
 # Generated copy-ready cells — October 1, 2026
 
-These seven files are byte-identical generated copies of the [maintained source](../cells/README.md). They are not a second engine. Versions: `lean-csv-registry-v5-lineage` / `oscal-lean-daily-v3.2-lineage`.
+These seven files are byte-identical generated copies of the [maintained source](../cells/README.md). They are not a second engine. Versions: `lean-csv-registry-v6-lineage-required` / `oscal-lean-daily-v3.2-lineage`.
 
 1. [Configuration](01_initialization_and_configuration.py)
 2. [Inputs](02_source_mapping_registry_inputs.py)
