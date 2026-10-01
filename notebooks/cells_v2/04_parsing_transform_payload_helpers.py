@@ -134,19 +134,22 @@ def _single_archer_label(value, context):
 
 
 def transform_fips_199(value, context):
+    # A singleton objective must not discard unrecognized members of a list.
     extracted = _extract_reference_ids(value)
-    normalized, lookups = [], context["lookups"]
-    for item in (extracted if isinstance(extracted, list) else [extracted]):
-        if item is None:
-            continue
-        key = str(item).strip()
-        label = lookups.get("fips_values", {}).get(key)
-        if label is None:
-            candidate = str(lookups.get("archer_values", {}).get(key, item)).strip().lower()
-            label = candidate if candidate in {"low", "moderate", "high"} else None
-        if label is not None:
-            normalized.append(label)
-    return normalized[0] if len(normalized) == 1 else normalized or None
+    items = extracted if isinstance(extracted, list) else [extracted]
+    if not items:
+        return None
+    if len(items) != 1:
+        raise ValueError("Security objective requires exactly one input value")
+    item, lookups = items[0], context["lookups"]
+    if item is None:
+        return None
+    key = str(item).strip()
+    label = lookups.get("fips_values", {}).get(key)
+    if label is None:
+        candidate = str(lookups.get("archer_values", {}).get(key, item)).strip().lower()
+        label = candidate if candidate in {"low", "moderate", "high"} else None
+    return label
 
 
 def transform_document_identifier(value):
@@ -273,19 +276,34 @@ def _metadata_mapped_value(row, source_obj, context):
     return value
 
 
-def _lineage_source_is_mapped(row, source_obj, context):
-    """Match normal omission/null semantics without re-running transformations or counters."""
-    params = _metadata_params(row)
-    raw = resolve_json_path(source_obj, row["SOURCE_FIELD_NAME"], default=SKIP_VALUE)
-    if raw is SKIP_VALUE:
-        return False
-    if raw is None:
-        return bool(params.get("preserve_null") or (
-            row["TRANSFORM_ID"] == "scalar-score"
-            and row["REPRESENTATION"] == "observations"
-            and context["compiled_plan"]["options"].get("preserve_null_observations", False)
-        ))
-    return _has_value(raw)
+def _oscal_prop(name, value, namespace=None, group=None):
+    """Shared property constructor; preserve the already-approved null policy."""
+    prop = {"name": _metadata_text(name, "Property name"), "value": value}
+    if value is not None and not isinstance(value, str):
+        raise ValueError("Property value must be text or an explicitly preserved warehouse null")
+    if namespace is not None:
+        if (not isinstance(namespace, str) or re.search(r"\s", namespace)
+                or not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*:[^\s]+", namespace)):
+            raise ValueError("Lineage namespace must be an absolute URI without whitespace")
+        prop["ns"] = namespace
+    if group is not None:
+        prop["group"] = _metadata_text(group, "Property group")
+    return prop
+
+
+def _capture_contribution(contributions, row, target, context, origin=None):
+    rule = context["compiled_plan"]["lineage_rules"].get(row["RULE_ID"])
+    if rule is not None and target in rule["targets"]:
+        contribution = {"rule_id": row["RULE_ID"], "source_field": rule["source_field"],
+                        "target": target, "origin": origin}
+        if contribution not in contributions:
+            contributions.append(contribution)
+
+
+def _assign_mapped(payload, row, target, value, contributions, context, origin=None,
+                   preserve_existing=False):
+    if _metadata_assign(payload, target, value, preserve_existing):
+        _capture_contribution(contributions, row, target, context, origin)
 
 
 def _metadata_assign(payload, target, value, preserve_existing=False):
@@ -297,9 +315,10 @@ def _metadata_assign(payload, target, value, preserve_existing=False):
     member = tokens[-1]
     if member in current and _json_text(current[member]) != _json_text(value):
         if preserve_existing:
-            return
+            return False
         raise ValueError("Singleton target has conflicting populated mappings")
     current[member] = copy.deepcopy(value)
+    return True
 
 
 def _metadata_get(payload, target):
@@ -321,6 +340,9 @@ def _append_unique_collection_instance(instances, instance):
         if existing["instance_key"] == instance["instance_key"]:
             if _json_text(existing["payload"]) != _json_text(instance["payload"]):
                 raise ValueError("Collection identity resolves to conflicting payloads")
+            for contribution in instance.get("contributions", ()):
+                if contribution not in existing.setdefault("contributions", []):
+                    existing["contributions"].append(contribution)
             return
     instances.append(instance)
 
@@ -507,8 +529,8 @@ def _build_joined_record_lookups(source_df, mapping_rows, context):
             raise ValueError("Joined-record lookup source is unavailable: " + binding)
 
         columns = {str(name).strip('"').upper(): name for name in frame.columns}
-        if not {"CONTENT_ID", "CURATED_JSON"}.issubset(columns):
-            raise ValueError("Joined-record lookup requires CONTENT_ID and CURATED_JSON")
+        if not {"CONTENT_ID", "CURATED_JSON", "_SOURCE_RECORD_ID"}.issubset(columns):
+            raise ValueError("Joined-record lookup requires parent, child identity, and CURATED_JSON")
 
         owner_paths = {row["OWNER_ELEMENT_PATH"] for row in binding_rows}
         if len(owner_paths) != 1:
@@ -527,7 +549,8 @@ def _build_joined_record_lookups(source_df, mapping_rows, context):
 
         json_col = F.col(columns["CURATED_JSON"])
         projected = [
-            F.trim(F.col(columns["CONTENT_ID"]).cast("string")).alias("_JOIN_ID")
+            F.trim(F.col(columns["CONTENT_ID"]).cast("string")).alias("_JOIN_ID"),
+            F.col(columns["_SOURCE_RECORD_ID"]).cast("string").alias("_SOURCE_RECORD_ID"),
         ]
         for field in required_fields:
             projected.append(F.get(json_col, F.lit(field)).alias(field))
@@ -543,7 +566,11 @@ def _build_joined_record_lookups(source_df, mapping_rows, context):
                 # Preserve the joined child identity exactly as the first accepted
                 # Level-355 batch saw it. Decode mapped payload fields separately.
                 payload[field] = raw if field == identity_field else _joined_variant_value(raw, context)
-            by_parent.setdefault(parent_id, []).append(payload)
+            source_record_id = _scalar_text(record["_SOURCE_RECORD_ID"],
+                                            "Joined source identity must be scalar",
+                                            "Joined source identity must be nonblank")
+            by_parent.setdefault(parent_id, []).append({
+                "source_record_id": source_record_id, "payload": payload})
 
         result[binding] = by_parent
 
@@ -551,61 +578,47 @@ def _build_joined_record_lookups(source_df, mapping_rows, context):
 
 
 def _metadata_joined_record_instances(source_id, rows, parameters, context):
-    bindings = {
-        _metadata_params(row).get("joined_lookup")
-        for row in rows
-        if _metadata_params(row).get("joined_lookup")
-    }
-    if len(bindings) != 1:
+    bindings = {_metadata_params(row).get("joined_lookup") for row in rows}
+    if len(bindings) != 1 or None in bindings:
         raise ValueError("Joined-record collection requires exactly one lookup binding")
-
     binding = next(iter(bindings))
     children = context.get("joined_record_lookups", {}).get(binding, {}).get(source_id, ())
     identity_field = parameters.get("joined_instance_field")
     if not identity_field:
         raise ValueError("Joined-record collection requires a registry identity field")
-
+    contract = context["lookups"]["joined_contract"][binding]
     instances = []
-    for child in children:
+    for record in children:
+        child = record["payload"]
         identity = resolve_json_path(child, identity_field, default=SKIP_VALUE)
         if identity is SKIP_VALUE:
             raise ValueError("Joined-record identity field is absent")
         key = _scalar_text(identity, "Joined-record identity must be scalar",
                            "Joined-record identity must be nonblank")
-
-        payload, crosswalks = {}, []
+        origin = {"source_system": context["config"]["SOURCE_SYSTEM_NAME"],
+                  "source_table": contract["source_table"],
+                  "source_record_id": record["source_record_id"]}
+        payload, crosswalks, contributions = {}, [], []
         for row in rows:
             value = _metadata_mapped_value(row, child, context)
             if value is SKIP_VALUE:
                 continue
-            target = _metadata_target(row)
             if row["TRANSFORM_ID"] == "status-crosswalk":
-                crosswalks.append(value)
+                crosswalks.append((row, value))
             else:
-                _metadata_assign(payload, target, value)
-
-        for members in crosswalks:
+                _assign_mapped(payload, row, _metadata_target(row), value, contributions, context, origin)
+        for row, members in crosswalks:
             for member, value in members.items():
-                _metadata_assign(payload, member, value, preserve_existing=member == "remarks")
-
-        missing_required = [
-            member for member in parameters.get("required_members", ())
-            if not _has_value(_metadata_get(payload, member))
-        ]
-        if missing_required:
-            context["graph_report"]["SKIPPED_JOINED_RECORDS"] = (
-                context["graph_report"].get("SKIPPED_JOINED_RECORDS", 0) + 1
-            )
+                _assign_mapped(payload, row, member, value, contributions, context, origin,
+                               preserve_existing=member == "remarks")
+        if any(not _has_value(_metadata_get(payload, member))
+               for member in parameters.get("required_members", ())):
+            context["graph_report"]["SKIPPED_JOINED_RECORDS"] = context["graph_report"].get("SKIPPED_JOINED_RECORDS", 0) + 1
             continue
-
-        _append_unique_collection_instance(
-            instances,
-            {
-                "instance_key": key,
-                "payload": payload,
-                "parent_instance_key": _metadata_parent_key(parameters, source_id),
-            },
-        )
+        _append_unique_collection_instance(instances, {
+            "instance_key": key, "payload": payload,
+            "parent_instance_key": _metadata_parent_key(parameters, source_id),
+            "contributions": contributions})
     return instances
 
 
@@ -619,10 +632,15 @@ def _metadata_party_instances(path, source_obj, source_id, operator, parameters,
                  if path in (group["roles_path"], group["parties_path"], group["assignments_path"]))
     cache = context.setdefault("_metadata_reference_cache", {})
     if group["assignments_path"] not in cache:
-        roles, parties, assignments = {}, {}, {}
+        roles, parties, assignments, contributors = {}, {}, {}, {}
         for row in context["mappings_by_path"].get(group["assignments_path"], ()):
             value = _metadata_mapped_value(row, source_obj, context)
             if value is SKIP_VALUE:
+                continue
+            # An explicitly empty user/group selection is absence, not a person.
+            # Do not hide null, malformed, or populated unresolved references.
+            if (isinstance(value, dict) and {"UserList", "GroupList"}.intersection(value)
+                    and value.get("UserList", []) == [] and value.get("GroupList", []) == []):
                 continue
             params, extracted = _metadata_params(row), _extract_reference_ids(value)
             members = extracted if isinstance(extracted, list) else [extracted]
@@ -645,24 +663,29 @@ def _metadata_party_instances(path, source_obj, source_id, operator, parameters,
                 raise ValueError("Role identity resolves to conflicting titles")
             field, references = assignments.setdefault(role, (row["SOURCE_FIELD_NAME"], {}))
             references.update(party_ids)
+            _capture_contribution(contributors.setdefault(role, []), row, "party-uuids", context)
         cache[group["assignments_path"]] = {
             "roles": [(key, {"id": key, "title": title}) for key, title in roles.items()],
             "parties": [(key, payload) for key, payload in parties.items()],
             "assignments": [(field, {"role-id": role, "party-uuids": list(references)})
                             for role, (field, references) in assignments.items()],
+            "contributions": contributors,
         }
+    family = cache[group["assignments_path"]]
     return [{"instance_key": key, "payload": payload,
+             "contributions": family["contributions"].get(payload.get("role-id"), []) if operator == "assignments" else [],
              "parent_instance_key": _metadata_parent_key(parameters, source_id)}
-            for key, payload in cache[group["assignments_path"]][operator]]
+            for key, payload in family[operator]]
 
 
 def _metadata_reference_instances(source_obj, source_id, rows, parameters, context):
-    references = {}
+    references, contributors = {}, {}
     for row in rows:
         value, params = _metadata_mapped_value(row, source_obj, context), _metadata_params(row)
         if value is SKIP_VALUE:
             continue
         for identifier in _component_reference_content_ids(value):
+            _capture_contribution(contributors.setdefault(identifier, []), row, "", context)
             previous = references.get(identifier)
             if previous and previous["reference_type"] != params["reference_type"]:
                 raise ValueError("Referenced identity has contradictory types")
@@ -677,6 +700,7 @@ def _metadata_reference_instances(source_obj, source_id, rows, parameters, conte
             if hydrated["description"] is not None:
                 payload["description"] = hydrated["description"]
         result.append({"instance_key": identifier, "payload": payload,
+                       "contributions": contributors.get(identifier, []),
                        "parent_instance_key": _metadata_parent_key(parameters, source_id)})
     return result
 
@@ -709,7 +733,7 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
         return _metadata_reference_instances(source_obj, source_id, rows, parameters, context)
     if operator == "joined-records":
         return _metadata_joined_record_instances(source_id, rows, parameters, context)
-    payload, instances, crosswalks = {}, [], []
+    payload, instances, crosswalks, contributions = {}, [], [], []
     for row in rows:
         value = _metadata_mapped_value(row, source_obj, context)
         if value is SKIP_VALUE:
@@ -723,10 +747,14 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
                 raise ValueError("One scalar value is required per field identity")
             for item in values:
                 property_name = _metadata_params(row).get("property_name") or _stable_property_name(field)
-                prop = {"name": _metadata_text(property_name, "Property name"), "value": item}
+                prop = _oscal_prop(property_name, item)
+                item_contributions = []
+                _capture_contribution(item_contributions, row,
+                                      "props.0.value" if operator == "observations" else "value", context)
                 item_payload = {"props": [prop]} if operator == "observations" else prop
                 key = field if field_identity else field + ":" + _deterministic_hash("source-field-value-v1", field, item)
                 _append_unique_collection_instance(instances, {"instance_key": key, "payload": item_payload,
+                                                               "contributions": item_contributions,
                                                                "parent_instance_key": parent})
         elif operator == "values":
             for member in (value if isinstance(value, list) else [value]):
@@ -740,44 +768,30 @@ def _metadata_instances(source_obj, source_id, registry_row, context):
                 for token in tokens[:-1]:
                     cursor = cursor.setdefault(token, {})
                 cursor[tokens[-1]] = normalized
+                item_contributions = []
+                _capture_contribution(item_contributions, row, target, context)
                 _append_unique_collection_instance(instances, {"instance_key": _deterministic_hash("value-v1", normalized),
-                                                               "payload": item_payload, "parent_instance_key": parent})
+                                                               "payload": item_payload, "parent_instance_key": parent,
+                                                               "contributions": item_contributions})
         elif row["TRANSFORM_ID"] == "status-crosswalk":
-            crosswalks.append(value)
+            crosswalks.append((row, value))
         else:
-            _metadata_assign(payload, target, value)
-    if operator == "properties":
-        lineage_rows = context["compiled_plan"].get("lineage_by_props_path", {}).get(path, ())
-        if lineage_rows:
-            namespace = context["config"].get("LINEAGE_PROPERTY_NS")
-            if not isinstance(namespace, str) or not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", namespace.strip()):
-                raise ValueError("LINEAGE_PROPERTY_NS must be an absolute URI")
-            for lineage in lineage_rows:
-                if not _lineage_source_is_mapped(lineage, source_obj, context):
-                    continue
-                prop = {
-                    "name": "source-field",
-                    "ns": namespace.strip(),
-                    "class": lineage["LINEAGE_TARGET_CLASS"],
-                    "value": lineage["SOURCE_FIELD_NAME"],
-                }
-                key = "lineage:" + lineage["RULE_ID"]
-                _append_unique_collection_instance(instances, {
-                    "instance_key": key, "payload": prop, "parent_instance_key": parent
-                })
-    for members in crosswalks:
+            _assign_mapped(payload, row, target, value, contributions, context)
+    for row, members in crosswalks:
         for member, value in members.items():
-            _metadata_assign(payload, member, value, preserve_existing=member == "remarks")
+            _assign_mapped(payload, row, member, value, contributions, context,
+                           preserve_existing=member == "remarks")
     if any(not _has_value(_metadata_get(payload, member)) for member in parameters.get("required_members", ())):
         if parameters.get("optional_assembly"):
             return []
         raise ValueError("Required payload member is missing")
     if operator == "optional-record":
         if payload or _metadata_descendant_has_value(path, source_obj, context):
-            instances.append({"instance_key": source_id, "payload": payload, "parent_instance_key": parent})
+            instances.append({"instance_key": source_id, "payload": payload, "parent_instance_key": parent,
+                              "contributions": contributions})
     elif operator in {"object", "record"} and (payload or parameters.get("materialize_empty") or operator == "record"):
         instances.append({"instance_key": source_id if operator == "record" else "singleton",
-                          "payload": payload, "parent_instance_key": parent})
+                          "payload": payload, "parent_instance_key": parent, "contributions": contributions})
     return instances
 
 
@@ -828,14 +842,16 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v4":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v5-lineage":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
+    config["LINEAGE_GAP_COUNT"] = 0
     if (config["OSCAL_MODEL"], config["SOURCE_SYSTEM_NAME"], config["SOURCE_TABLE_NAME"]) != (model_key, source_system, source_table):
         raise ValueError("Graph arguments conflict with compiled metadata context")
     context.pop("_metadata_reference_cache", None)
     context["graph_report"] = {"SOURCE_RECORDS": 0, "INVALID_SOURCE_RECORDS": 0, "DUPLICATE_SOURCE_RECORDS": 0,
-                               "MAPPED_VALUES": 0, "MISSING_VALUES": 0, "STATUS": "NOT_RUN", "OUTPUTS_PUBLISHED": False}
+                               "MAPPED_VALUES": 0, "MISSING_VALUES": 0, "STATUS": "NOT_RUN", "OUTPUTS_PUBLISHED": False,
+                               "LINEAGE_GROUPS": 0, "LINEAGE_GAPS": 0, "LINEAGE_GAP_SAMPLES": []}
     return context
 
 
@@ -857,7 +873,10 @@ def _metadata_finish(nodes, edges, context):
         report["STATUS"] = "BLOCKED"
         raise ValueError("Source is empty or contains invalid or duplicate record identities")
     report.update(STATUS="MAPPED_SCOPE_BUILT", OUTPUTS_PUBLISHED=True, NODES=len(nodes), EDGES=len(edges),
-                  DOCUMENTS=report["SOURCE_RECORDS"], FULL_MODEL_COMPLETE=False, SCHEMA_VALIDATED=False)
+                  DOCUMENTS=report["SOURCE_RECORDS"], FULL_MODEL_COMPLETE=False, SCHEMA_VALIDATED=False,
+                  LINEAGE_COMPLETE=report["LINEAGE_GAPS"] == 0)
 
 
 print("Cell 4 transforms and registry operators ready")
+
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v5-lineage"

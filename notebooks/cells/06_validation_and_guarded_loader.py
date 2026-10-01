@@ -5,7 +5,7 @@ import re
 import uuid
 from numbers import Integral
 
-OSCAL_LOAD_RELEASE = "oscal-lean-daily-v3.1"
+OSCAL_LOAD_RELEASE = "oscal-lean-daily-v3.2-lineage"
 _AUDIT = {"DW_PIPELINE_RUN_ID", "DW_LOAD_TIMESTAMP", "DW_LOAD_TIMESTAMP_TZ"}
 _DIM_FIELDS = {
     "ELEMENT_TYPE": "VARCHAR(64)", "OSCAL_UUID": "VARCHAR(32)", "METADATA_JSON": "VARIANT",
@@ -60,6 +60,8 @@ def _load_no_transaction():
 def _load_storage(config):
     if type(config.get("EXECUTE_WRITES")) is not bool:
         raise LoadError("EXPLICIT_BOOLEAN_WRITE_MODE_REQUIRED")
+    if config["EXECUTE_WRITES"] and config.get("LINEAGE_GAP_COUNT", 0):
+        raise LoadError("LINEAGE_COVERAGE_GAPS", {"COUNT": config["LINEAGE_GAP_COUNT"]})
     if config.get("OBSOLETE_ROW_POLICY", "BLOCK") != "BLOCK":
         raise LoadError("ONLY_BLOCK_OBSOLETE_POLICY_IS_APPROVED")
     storage = config.get("STORAGE_CONTRACT")
@@ -345,7 +347,8 @@ def validate_and_load_oscal(canonical_nodes_df, canonical_edges_df, config):
     result = {"release": OSCAL_LOAD_RELEASE, "model": config.get("OSCAL_MODEL"),
               "mode": "COMMIT" if config.get("EXECUTE_WRITES") is True else "PREVIEW",
               "writes_executed": False, "persisted": False, "committed": False,
-              "target_dml_attempted": False, "pre_write_validation_passed": False}
+              "target_dml_attempted": False, "pre_write_validation_passed": False,
+              "lineage_gaps": config.get("LINEAGE_GAP_COUNT", 0)}
     phase, context = "PREPARATION", None
     try:
         context = _load_prepare(canonical_nodes_df, canonical_edges_df, config)

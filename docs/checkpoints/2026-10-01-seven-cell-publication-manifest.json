@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-01",
+  "repository": "theenduser009/Oscal-mapping-strategy",
+  "branch": "simplify-metadata-boundary",
+  "inspected_code_commit": "94e41f8896d73cd6ed191c6030efb7f31c7d206b",
+  "parent_commit": "847c9544de9f3efc273d194da5d4037d33bea286",
+  "concurrent_change": "The parent adds only connection-test.txt relative to the inspected code revision. That file and commit are preserved.",
+  "mapper_release": "lean-csv-registry-v5-lineage",
+  "loader_release": "oscal-lean-daily-v3.2-lineage",
+  "status": "LOCALLY_TESTED_CANDIDATE_PUBLISHED_NOT_PRODUCTION_APPROVED",
+  "local_tests": {"scenario_passed": 73, "focused_passed": 53, "failed": 0, "errors": 0, "native_parity_passed": true, "engine": "limited Python/SQLite adapter", "full_repository_suite_claimed": false, "native_snowflake_claimed": false},
+  "files": [
+    {"path": "notebooks/cells/01_initialization_and_configuration.py", "git_blob_sha": "2a31a421a9496ed256a4800bb4ddb25313234e57", "bytes": 12359},
+    {"path": "notebooks/cells/02_source_mapping_registry_inputs.py", "git_blob_sha": "78c6ffc9994ef86ecf60d0d40934a8382b9d6a1c", "bytes": 9289},
+    {"path": "notebooks/cells/03_canonical_mapping_contract.py", "git_blob_sha": "ddaf654fd1ec2b53df55bd3b17f92971a9190f79", "bytes": 30563},
+    {"path": "notebooks/cells/04_parsing_transform_payload_helpers.py", "git_blob_sha": "ce19c8d40a1243f30bd9064b110536698e6939e5", "bytes": 43075},
+    {"path": "notebooks/cells/05_registry_graph_builder.py", "git_blob_sha": "4539ad06a3599d297f0658687fa8579eb119a9b3", "bytes": 10077},
+    {"path": "notebooks/cells/06_validation_and_guarded_loader.py", "git_blob_sha": "5aa988846217dd364bae667cb59f7fb57e760128", "bytes": 22025},
+    {"path": "notebooks/cells/07_mapper_orchestrator.py", "git_blob_sha": "f4270f75dbb04caefc93ceb8c9bbba68858d227c", "bytes": 5458},
+    {"path": "notebooks/NB_ARCHER_OSCAL_MAPPER_V1.py", "git_blob_sha": "b0eff842e104f8157951bdc06004f6626d542904", "bytes": 133427},
+    {"path": "notebooks/validation/15_ssp_universal_lineage_prop_preview.py", "git_blob_sha": "0960d56f4654b12499dcc1dd3b718e25159a9cdb", "bytes": 3810}
+  ],
+  "mirror_rule": "Each notebooks/cells/*.py path has a byte-identical notebooks/cells_v2/*.py counterpart with the same Git blob SHA.",
+  "generator": {"path": "tools/sync_notebook_cells.py", "git_blob_sha": "d5874dc29d3f8088af49a5a478f7d8646f15dad2", "modified": false, "check_passed": true},
+  "production_csv_modified": false,
+  "registry_modified": false,
+  "snowflake_target_writes": false,
+  "unrelated_files_deleted": false
+}

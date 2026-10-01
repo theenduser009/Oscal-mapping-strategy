@@ -29,8 +29,10 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
     try:
         if load_mode not in {"PREVIEW", "COMMIT"} or not mapping_contexts:
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
-        if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.1":
+        if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.2-lineage":
             raise ValueError("Run the matching Cell 6 before Cell 7")
+        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v5-lineage":
+            raise ValueError("Run the matching Cell 5 before Cell 7")
         routes = {}
         for context in mapping_contexts:
             config = context["config"]
@@ -53,8 +55,13 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
                 context["config"]["EXPECTED_SOURCE_RECORDS"] = expected
             nodes, edges, result = run_oscal_mapping(source["source_df"], None, None, context["config"], context)
             graphs[active] = {"nodes": nodes, "edges": edges, "context": context}
-            report["groups"].append({"source": active[0], "model": active[1], "load": result})
+            report["groups"].append({"source": active[0], "model": active[1], "load": result,
+                                     "mapping_fingerprint": context["compiled_plan"]["mapping_fingerprint"],
+                                     "lineage": {key: value for key, value in context["graph_report"].items()
+                                                 if key.startswith("LINEAGE_")}})
         if load_mode == "COMMIT":
+            if any(graph["context"]["config"].get("LINEAGE_GAP_COUNT", 0) for graph in graphs.values()):
+                raise ValueError("LINEAGE_COVERAGE_GAPS: review the graph lineage report before COMMIT")
             for group in report["groups"]:
                 active = (group["source"], group["model"])
                 graph = graphs[active]
@@ -69,7 +76,8 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
         details = getattr(error, "details", {})
         report.update(status="COMMIT_FAILED_REVIEW_REQUIRED" if report["commit_attempted"] else "FAILED_BEFORE_COMMIT",
                       failed_route=active, error_type=type(error).__name__,
-                      error_message=str(error), load_error=details)
+                      error_message=(str(error) if type(error) is ValueError or isinstance(error, LoadError)
+                                     else "Operation failed; inspect protected runtime logs."), load_error=details)
         report["writes_executed"] |= details.get("writes_executed") is True
         raise PipelineError(report) from None
 

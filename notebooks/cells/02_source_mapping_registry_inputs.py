@@ -145,8 +145,12 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             if join_json_array_field
             else col(join_name).cast("string")
         )
+        record_name = _input_column(names, contract.get("content_id_column", "CONTENT_ID"))
+        if record_name is None:
+            raise ValueError("Joined source requires its configured source record identity")
         joined[name] = table.select(
             join_value.alias("CONTENT_ID"),
+            col(record_name).cast("string").alias("_SOURCE_RECORD_ID"),
             col(json_name).alias("CURATED_JSON")
         ).filter(col("CONTENT_ID").is_not_null()).cache_result()
     return {"archer_values": archer,

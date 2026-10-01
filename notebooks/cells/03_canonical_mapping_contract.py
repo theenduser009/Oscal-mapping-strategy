@@ -2,10 +2,12 @@
 
 import copy
 import math
+import hashlib
+import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v4"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v5-lineage"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -80,26 +82,51 @@ def _metadata_target(row):
     return _metadata_params(row).get("target") or row.get("FIELD_RELATIVE_PATH") or row.get("OSCAL_FIELD_NAME")
 
 
-def _lineage_property_routes(rows, elements):
-    """Route every approved source field to the nearest registered props[] extension point."""
-    property_parents = [
-        (spec["parameters"]["registry_contract"].get("parent_path"), path)
-        for path, spec in elements.items()
-        if spec["operator"] == "properties"
-    ]
-    routes = {}
-    for row in rows:
-        if row["APPROVAL_STATUS"] != "APPROVED" or row.get("VALUE_SOURCE") == "CONFIG":
+def _lineage_targets(row):
+    """Output member signatures, derived from existing operators and mapping rules."""
+    operator, params = row["REPRESENTATION"], _metadata_params(row)
+    if operator in {"properties", "observations"}:
+        name = params.get("property_name") or re.sub(r"[^a-z0-9]+", "-", row["SOURCE_FIELD_NAME"].lower()).strip("-")
+        return [("property:" + name, "value" if operator == "properties" else "props.0.value")]
+    if operator == "references":
+        return [("reference:" + str(params.get("reference_type") or ""), "")]
+    if operator == "assignments":
+        return [("role:" + params["role_id"], "party-uuids")]
+    if row["TRANSFORM_ID"] == "status-crosswalk":
+        members = ["state"]
+        if "other" in row["TRANSFORM_PARAMS"]["crosswalk"].values():
+            members.append("remarks")
+        return [(member, member) for member in members]
+    target = _metadata_target(row)
+    return [(target, target)] if target else []
+
+
+def _compile_lineage_rules(rows):
+    """Only ambiguous outputs or joined-source fields need per-instance attribution.
+
+    A unique one-to-one field is recoverable from this versioned mapping plan.
+    Transforms alone do not make a source ambiguous. CONFIG never claims Archer
+    attribution, but a competing CONFIG assignment can make a FIELD ambiguous.
+    """
+    candidates = {}
+    active = [row for row in rows if row["APPROVAL_STATUS"] == "APPROVED"
+              and row["TRANSFORM_ID"] not in {"skip", "reject-populated"}]
+    for row in active:
+        identity = (_metadata_params(row).get("value_source", "FIELD"),
+                    _metadata_params(row).get("joined_lookup"), row["SOURCE_FIELD_NAME"])
+        for signature, _ in _lineage_targets(row):
+            candidates.setdefault((row["OWNER_ELEMENT_PATH"], signature), set()).add(identity)
+    rules = {}
+    for row in active:
+        if _metadata_params(row).get("value_source") == "CONFIG":
             continue
-        owner = row["OWNER_ELEMENT_PATH"]
-        candidates = [(parent, path) for parent, path in property_parents
-                      if parent and (owner == parent or owner.startswith(parent + "."))]
-        if not candidates:
-            continue
-        _, props_path = max(candidates, key=lambda item: len(item[0]))
-        target = re.sub(r"[^A-Za-z0-9._-]+", "-", row["CANONICAL_ELEMENT_PATH"]).strip("-.")
-        routes.setdefault(props_path, []).append(dict(row, LINEAGE_TARGET_CLASS=target))
-    return routes
+        targets = [target for signature, target in _lineage_targets(row)
+                   if row["REPRESENTATION"] == "joined-records"
+                   or len(candidates[(row["OWNER_ELEMENT_PATH"], signature)]) > 1]
+        if targets:
+            rules[row["RULE_ID"]] = {"source_field": row["SOURCE_FIELD_NAME"],
+                                      "targets": tuple(targets)}
+    return rules
 
 
 def _owner_for_path(path, paths):
@@ -455,9 +482,11 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                                if key in {"parse_decimal", "null_source_as_empty", "preserve_null_observations"}}
                     if type(options.get("preserve_null_observations", False)) is not bool:
                         raise ValueError("preserve_null_observations must be true or false")
-                    lineage = _lineage_property_routes(selected, elements)
-                    plan = dict(version=1, release=LEAN_MAPPER_RELEASE, elements=elements, mappings=selected,
-                                reference_groups=groups, lineage_by_props_path=lineage,
+                    lineage = _compile_lineage_rules(selected)
+                    fingerprint = hashlib.sha256(json.dumps(selected, sort_keys=True, default=str,
+                                                             separators=(",", ":")).encode("utf-8")).hexdigest()
+                    plan = dict(version=2, release=LEAN_MAPPER_RELEASE, elements=elements, mappings=selected,
+                                reference_groups=groups, lineage_rules=lineage, mapping_fingerprint=fingerprint,
                                 options=options, report=report)
                 except ValueError as error:
                     contract_error = str(error)
