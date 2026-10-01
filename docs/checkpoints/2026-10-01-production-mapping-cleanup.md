@@ -203,3 +203,28 @@ Owner correction and live evidence:
 The current Git candidate and matching read-only validator were corrected to those exact contracts. The earlier commit using `ARCHER_META_VALUES / VALUEID / VALUENAME` is superseded and must not be run. No Matillion or Snowflake execution was performed from chat.
 
 Next action remains: run the corrected DEV Matillion candidate, then run the corrected read-only post-enrichment validator. Keep notebook-side lookup fallback until that persisted enrichment is read-back verified.
+
+
+## Post-enrichment validator result — value/group enrichment not yet present — 2026-10-01
+
+Owner-provided Snowflake screenshots from `READ_ONLY_POST_META_REFERENCE_ENRICHMENT_VALIDATION.sql` show:
+- USER_MEMBER_OCCURRENCES = 55,782
+- USER_MEMBERS_RESOLVED = 55,782
+- VALUE_ID_OCCURRENCES = 185,440
+- RESOLVED_VALUE_OCCURRENCES = 0
+- MATCHED_VALUE_OCCURRENCES = 0
+- VALUE_NOT_FOUND_OCCURRENCES = 0
+- VALUE_IDENTITY_MISMATCHES = 185,440
+- GROUP_ID_OCCURRENCES = 192,141
+- RESOLVED_GROUP_OCCURRENCES = 0
+- MATCHED_GROUP_OCCURRENCES = 0
+- GROUP_NOT_FOUND_OCCURRENCES = 0
+- BAD_GROUP_STATUS_OCCURRENCES = 0
+- GROUP_IDENTITY_MISMATCHES = 192,141
+- STATUS = REVIEW_BEFORE_OSCAL
+
+The sample CIA/FIPS result also shows populated `ValuesListIds` (examples include 80654, 162409, 162411, 162405) while `ResolvedValues` is NULL.
+
+Interpretation: the previously deployed UserList enrichment is present, but the new ValuesListIds/GroupList enrichment is not persisted in the inspected CURATED_JSON. This result does not prove a lookup failure: if the corrected candidate had executed and merely missed a lookup, it is designed to emit VALUE_NOT_FOUND/GROUP_NOT_FOUND rows rather than zero resolved arrays. Do not simplify notebook lookups yet.
+
+Next action: execute the corrected DEV Matillion candidate `sql/matillion/CANDIDATE_enrich_curated_json_users_values_groups.sql` and capture the Matillion affected-row/result status. Then rerun the same read-only validator. If the Matillion component reports zero rows updated or the validator remains unchanged, stop and inspect candidate eligibility/blocking rather than retrying blindly.
