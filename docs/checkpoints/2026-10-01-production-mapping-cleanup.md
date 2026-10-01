@@ -427,3 +427,39 @@ Matillion/source ingestion path, then rerun only the lookup-table health query
 and the component coverage summary. Once lookup rows are present and coverage
 returns matched IDs, rerun Cells 1-7 in PREVIEW with writes disabled. Do not
 remove the hydration guard or fabricate component title/description values.
+
+
+## v10 Cell 7 reached target preflight and hit obsolete-row guard — 2026-10-01
+
+Owner-provided Snowflake screenshot shows the current SSP PREVIEW progressed past
+source loading, Matillion-resolved values, graph construction, and component
+hydration, then stopped in loader PREPARATION with:
+- mode = PREVIEW
+- status = FAILED_BEFORE_COMMIT
+- groups = []
+- writes_executed = false
+- commit_attempted = false
+- failed_route = source-one / SSP
+- error_type = LoadError
+- error_message = OBSOLETE_TARGET_ROWS_BLOCKED
+- loader release = oscal-lean-daily-v3.2-lineage
+- target_dml_attempted = false
+- pre_write_validation_passed = false
+- lineage_gaps = 0
+
+This is the loader's existing anti-delete/daily-loss guard. It means at least
+one target DIM/FACT row inside the current source-record scope is absent from
+the candidate stage. The guard fires before MERGE and therefore no target DML
+occurred.
+
+Do not weaken the guard or rerun Cell 7 before inspecting the failed PREVIEW's
+temporary stage tables. Existing read-only helper:
+`notebooks/validation/12_ssp_obsolete_target_rows_diagnostic.py`
+was designed for this exact condition and must be run in the SAME Snowflake
+notebook session immediately after the failure. Preparation failures retain the
+TMP_OSCAL_* stage set for diagnosis.
+
+Next action: run that helper as the next cell and capture its OBSOLETE SUMMARY,
+DIM BY ELEMENT TYPE, classification, top affected source records, and FACT BY
+DEPENDENCY TYPE. Use those results to distinguish intended identity changes
+from real source-data loss before any loader/mapping change.
