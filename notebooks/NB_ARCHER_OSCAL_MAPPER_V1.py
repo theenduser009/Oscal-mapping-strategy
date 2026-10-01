@@ -28,7 +28,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v8-source-field-lineage (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v9-matillion-resolved-meta (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -41,7 +41,6 @@ CONFIG = {
     "ASSESSMENT_TASK_TITLE": "Preassessment review",
     "ASSESSMENT_TASK_TYPE": "action",
     "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
-    "ARCHER_META_VALUE_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE",
 }
 
 SOURCE_FILES = [
@@ -376,17 +375,10 @@ def load_mapping_rows(profile):
 
 def load_source_lookups(active_session, profile, model_contracts, shared_config):
     _input_no_transaction(active_session)
-    values = active_session.table(shared_config["ARCHER_META_VALUE_TABLE"]).select(
-        col("SELECT_VALUE_ID"), col("SELECT_VALUE_NAME")
-    ).filter(col("SELECT_VALUE_NAME").is_not_null())
+    # Archer select-value labels are enriched upstream by Matillion in CURATED_JSON
+    # as ResolvedValues[]. The notebook no longer queries ARCHER_META_VALUE.
+    # Keep empty compatibility maps for synthetic/local fixtures that inject their own lookups.
     archer = {}
-    for row in values.collect():
-        if row["SELECT_VALUE_ID"] is not None:
-            key = str(row["SELECT_VALUE_ID"]).strip()
-            value = str(row["SELECT_VALUE_NAME"]).strip()
-            if key in archer and archer[key] != value:
-                raise ValueError("Archer lookup identity has conflicting labels")
-            archer[key] = value
     components, joined = {}, {}
     required = {group for key in profile["MODEL_KEYS"]
                 for group in model_contracts[key].get("LOOKUP_GROUPS", ())}
@@ -462,7 +454,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v8-source-field-lineage"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v9-matillion-resolved-meta"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -1037,7 +1029,45 @@ def _contains_archer_select_id_container(value):
     return isinstance(value, list) and any(_contains_archer_select_id_container(item) for item in value)
 
 
+def _resolved_archer_value_labels(value):
+    """Use Matillion-resolved select labels while proving they match the source IDs."""
+    value = _to_python(value)
+    if not isinstance(value, dict) or "ResolvedValues" not in value:
+        return None
+    resolved = _to_python(value.get("ResolvedValues"))
+    if not isinstance(resolved, list):
+        raise ValueError("ResolvedValues must be an array")
+    source_ids = None
+    for key in ("ValuesListIds", "ValueListIds"):
+        if key in value and _has_value(value[key]):
+            raw = _to_python(value[key])
+            source_ids = raw if isinstance(raw, list) else [raw]
+            break
+    if source_ids is None:
+        raise ValueError("ResolvedValues requires source value IDs")
+    if len(resolved) != len(source_ids):
+        raise ValueError("ResolvedValues cardinality does not match source value IDs")
+    labels = []
+    for source_id, item in zip(source_ids, resolved):
+        item = _to_python(item)
+        if not isinstance(item, dict):
+            raise ValueError("ResolvedValues member must be an object")
+        if item.get("LookupStatus") != "MATCHED":
+            raise ValueError("ResolvedValues contains an unresolved value")
+        resolved_id = item.get("ValueId")
+        label = item.get("ValueName")
+        if resolved_id is None or str(resolved_id).strip() != str(source_id).strip():
+            raise ValueError("ResolvedValues identity does not match source value ID")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError("ResolvedValues matched label must be nonblank text")
+        labels.append(label.strip())
+    return labels
+
+
 def resolve_archer_select_value(value, context):
+    resolved = _resolved_archer_value_labels(value)
+    if resolved is not None:
+        return resolved
     lookup = context["lookups"].get("archer_values", {})
     strict = _contains_archer_select_id_container(value)
     extracted = _extract_reference_ids(value)
@@ -1061,6 +1091,9 @@ def resolve_archer_select_value(value, context):
 
 
 def _single_archer_label(value, context):
+    resolved = _resolved_archer_value_labels(value)
+    if resolved is not None:
+        return resolved[0] if len(resolved) == 1 else None
     extracted = _extract_reference_ids(value)
     values = [item for item in (extracted if isinstance(extracted, list) else [extracted]) if item is not None]
     if len(values) != 1 or isinstance(values[0], (dict, list)):
@@ -1074,6 +1107,12 @@ def _single_archer_label(value, context):
 
 def transform_fips_199(value, context):
     # A singleton objective must not discard unrecognized members of a list.
+    resolved = _resolved_archer_value_labels(value)
+    if resolved is not None:
+        if len(resolved) != 1:
+            raise ValueError("Security objective requires exactly one input value")
+        candidate = resolved[0].strip().lower()
+        return candidate if candidate in {"low", "moderate", "high"} else None
     extracted = _extract_reference_ids(value)
     items = extracted if isinstance(extracted, list) else [extracted]
     if not items:
@@ -1770,7 +1809,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v8-source-field-lineage":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v9-matillion-resolved-meta":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -1807,7 +1846,7 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v9-matillion-resolved-meta"
 
 
 # %% Cell 5 - Build nodes, exact containment, and selective source-field lineage
@@ -1889,7 +1928,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v8-source-field-lineage":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v9-matillion-resolved-meta":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -1963,7 +2002,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v9-matillion-resolved-meta"
 
 
 # %% Cell 6 - Validate once, preview, then atomically upsert the reviewed tables
@@ -2418,7 +2457,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
         if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.2-lineage":
             raise ValueError("Run the matching Cell 6 before Cell 7")
-        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v8-source-field-lineage":
+        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v9-matillion-resolved-meta":
             raise ValueError("Run the matching Cell 5 before Cell 7")
         routes = {}
         for context in mapping_contexts:
