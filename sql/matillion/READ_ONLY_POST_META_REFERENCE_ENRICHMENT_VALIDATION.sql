@@ -3,7 +3,7 @@
 -- READ ONLY. No DML / DDL.
 --
 -- Validates the current Source One Authorization Package RAW table after
--- CANDIDATE_enrich_curated_json_users_values_groups.sql runs.
+-- CANDIDATE_raw_curated_with_meta_user_value_group_enrichment.sql runs.
 --
 -- Expected enrichment:
 --   UserList[].ResolvedUser
