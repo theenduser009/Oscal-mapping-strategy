@@ -96,3 +96,8 @@ Interpretation: the cleaned mapping contract and matched seven-cell release now 
 ## Namespace removed from selective lineage — 2026-10-01
 
 Owner decision: remove `urn:company:oscal:lineage:v1` entirely. The selective lineage payload is now only `{"name":"source-field","value":"<ARCHER_FIELD_NAME>"}`. Traceability does not depend on a namespace: the lineage DIM row carries `SOURCE_RECORD_ID` (the Archer Content ID), the property `value` carries the exact Archer source field name, the mapping CSV resolves that source field to `OSCAL_ELEMENT_PATH`, and the FACT containment edge ties the lineage prop to the corresponding OSCAL graph context. This supersedes the earlier three-key namespace-bearing lineage payload. Fresh PREVIEW is required before COMMIT because the live 3,581-prop validation was for the superseded namespace-bearing payload.
+
+
+## Live trace helper check after namespace removal
+
+Owner-provided Snowflake screenshots on 2026-10-01 show `notebooks/validation/18_ssp_lineage_trace_sample.py` executing and resolving lineage source fields to their canonical OSCAL targets. Visible examples include OPERATIONAL_STATUS -> system-security-plan.system-characteristics.status.state and the confidentiality/integrity/availability override fields -> their corresponding security-impact-level objective paths. The helper is also coded to print ARCHER_CONTENT_ID from SOURCE_RECORD_ID, but the uploaded screenshots crop the leftmost output, so the actual Content ID values are not independently readable from this evidence. This confirms the trace mechanism structure, not yet a full v8 PREVIEW acceptance.
