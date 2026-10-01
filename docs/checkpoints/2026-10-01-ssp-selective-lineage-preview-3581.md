@@ -25,3 +25,22 @@ at commit `46340d7be6b91b968a85fd1c4121cbe226ec6339`.
 Evidence boundary: the user loaded an updated mapping sheet directly into the notebook. This checkpoint does not establish that that notebook-loaded mapping sheet is already committed to GitHub or packaged for the eventual remote deployment.
 
 Next action: use the helper to inspect a small sample of candidate lineage props and confirm the minimal `source-field` structure before any COMMIT.
+
+
+## Helper correction — 2026-10-01
+
+The first helper version passed the lineage namespace as a bare Python string to
+Snowpark `Column.contains()`. In the live notebook Snowpark compiled that string
+as a quoted column identifier, causing SQL compilation error `invalid identifier
+'"urn:company:oscal:lineage:v1"'`.
+
+Corrected helper commit: `e71e17e6abdaee477277f4280b60e64d2fa54c93`.
+
+The helper now imports `lit` and uses:
+
+```python
+col("METADATA_JSON").contains(lit("urn:company:oscal:lineage:v1"))
+```
+
+This is a read-only diagnostic correction only. It does not change mapper
+runtime behavior, the mapping sheet, lineage generation, or target data.
