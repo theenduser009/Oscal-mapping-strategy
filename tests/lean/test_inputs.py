@@ -151,10 +151,11 @@ class MappingCsvTests(unittest.TestCase):
             self.read("FIELD,NOTES\n", MAPPING_SOURCE_COLUMN="SOURCE_KEY")
 
     def test_released_csv_loads_all_reviewed_occurrences(self):
-        selected = {**profile(), "MAPPING_FILE": str(ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv")}
+        selected = {**profile(), "MAPPING_FILE": str(ROOT / "Mapping/ARCHER_OSCAL_MAPPINGS.csv"),
+                    "MAPPING_SOURCE_COLUMN": "SOURCE_KEY", "MAPPING_SOURCE_VALUE": "source-one"}
         rows = self.load(selected)
-        self.assertEqual(155, len(rows))
-        self.assertTrue(all("SOURCE_KEY" not in row for row in rows))
+        self.assertEqual(153, len(rows))
+        self.assertEqual({"source-one"}, {row["SOURCE_KEY"] for row in rows})
         with open(selected["MAPPING_FILE"], encoding="utf-8-sig", newline="") as handle:
             original = list(csv.DictReader(handle))
         self.assertEqual([row["NOTES"] or None for row in original], [row["NOTES"] for row in rows])

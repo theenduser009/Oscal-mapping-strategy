@@ -7,7 +7,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v9-clean-mapping"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v8-source-field-lineage"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -321,6 +321,8 @@ def _mapping_route(row, profile, model, paths, inactive, aliases, roots, routing
         reason = "UNKNOWN_SOURCE_KEY"
     elif source and source != profile["SOURCE_KEY"]:
         reason, severity = "OTHER_SOURCE", "EXCLUDED"
+    elif status and not source:
+        reason = "MISSING_SOURCE_KEY"
     elif status in {"DEFERRED", "EXCLUDED"}:
         reason, severity = "EXPLICIT_" + status, status
     elif label_model and owner_model and label_model != owner_model or (

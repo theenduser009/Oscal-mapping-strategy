@@ -2,34 +2,18 @@
 
 Date: 2026-10-01
 
-The Source One CSV is bound to Source One by its configured file/profile, so it
-does not repeat SOURCE_KEY on every row. OSCAL_MODEL uses canonical model keys,
-and default controls are left blank so only exceptions stand out.
+The runtime CSV is intentionally lean. `NOTES` is temporarily retained as a human review aid, but execution does not depend on it. Historical spreadsheet coordinates, Markdown/GitHub provenance, duplicate target-path fields, and hand-maintained rule IDs are not runtime inputs.
 
 ## Runtime columns
 
-SOURCE_FIELD_NAME, OSCAL_MODEL, OSCAL_ELEMENT_PATH, EXECUTION_STATUS, TRANSFORM_ID, LINEAGE_REQUIRED, NULL_POLICY, VALUE_SOURCE, VALUE_REQUIRED, ALLOWED_VALUES, VALUE_MAP, OTHER_REMARKS_TEMPLATE, ROLE_ID, ROLE_TITLE, REFERENCE_TYPE, LOOKUP_KEY, DESCRIPTION_REQUIRED, NOTES.
+SOURCE_FIELD_NAME, OSCAL_MODEL, OSCAL_ELEMENT_PATH, NOTES, EXECUTION_STATUS,
+TRANSFORM_ID, SOURCE_KEY, NULL_POLICY, LINEAGE_REQUIRED, VALUE_SOURCE,
+VALUE_REQUIRED, ALLOWED_VALUES, VALUE_MAP, OTHER_REMARKS_TEMPLATE, ROLE_ID,
+ROLE_TITLE, REFERENCE_TYPE, LOOKUP_KEY, DESCRIPTION_REQUIRED.
 
-Defaults:
-- blank LINEAGE_REQUIRED = no lineage; Y = emit selective source-field lineage
-- blank VALUE_SOURCE = FIELD; CONFIG is explicit
-- blank VALUE_REQUIRED = false; true is explicit
-- blank NULL_POLICY = omit; preserve is explicit
-
-NOTES is temporarily retained for human review only; mapper execution does not
-depend on it.
-
-DESCRIPTION_REQUIRED remains in the CSV because it changes component hydration
-behavior for a specific mapping. ROLE_ID/ROLE_TITLE, REFERENCE_TYPE/LOOKUP_KEY,
-ALLOWED_VALUES, VALUE_MAP and OTHER_REMARKS_TEMPLATE also remain because they are
-real mapping semantics, not development provenance.
-
-Retired from Source One runtime:
-MAPPING_TYPE, RUNTIME_TARGET_PATH, RULE_ID, SOURCE_KEY, ORIGINAL_ROW_ID,
-SOURCE_DOCUMENT, SOURCE_LINE, ORIGINAL_EXCEL_ROW, EXECUTION_NOTE.
-
-The exact v8 CSV that produced the verified SSP COMMIT is preserved under
-Mapping/archive and is not a runtime input.
+Retired from runtime: MAPPING_TYPE, RUNTIME_TARGET_PATH, RULE_ID,
+ORIGINAL_ROW_ID, SOURCE_DOCUMENT, SOURCE_LINE, ORIGINAL_EXCEL_ROW, EXECUTION_NOTE.
+The exact pre-cleanup CSV is preserved under Mapping/archive for history only.
 
 ## Selective lineage prop
 
@@ -42,6 +26,12 @@ Only LINEAGE_REQUIRED=Y mappings that actually contribute a value emit:
 }
 ```
 
-Traceability is:
-SOURCE_RECORD_ID (Archer Content ID) + lineage prop value (Archer field name) +
-mapping CSV OSCAL_ELEMENT_PATH + FACT containment relationship.
+There is no namespace, class, target path, target UUID, source-table property, or lineage-group property. `value` is the exact Archer source field name. Traceability uses the lineage node's SOURCE_RECORD_ID together with the mapping CSV's SOURCE_FIELD_NAME -> OSCAL_ELEMENT_PATH contract and the FACT containment edge.
+
+The production runtime does not depend on Mapping/*.md files, original Excel row
+numbers, GitHub line numbers, or the archive CSV.
+
+
+## Temporary NOTES column
+
+`NOTES` is kept for the current review period. The mapper ignores it. Cell 2 treats it as an explicitly allowed optional column, so NOTES can be removed later without redesigning the mapping contract.

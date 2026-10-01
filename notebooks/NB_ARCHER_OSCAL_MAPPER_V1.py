@@ -28,7 +28,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v9-clean-mapping (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v8-source-field-lineage (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -54,12 +54,14 @@ SOURCE_FILES = [
         "CURATED_JSON_COLUMN": "CURATED_JSON",
         "MAPPING_FILE": "ARCHER_OSCAL_MAPPINGS.csv",
         "MAPPING_ENCODING": "utf-8-sig",
+        "MAPPING_SOURCE_COLUMN": "SOURCE_KEY",
+        "MAPPING_SOURCE_VALUE": "source-one",
         "MAPPING_COLUMNS": (
             "SOURCE_FIELD_NAME", "OSCAL_MODEL", "OSCAL_ELEMENT_PATH", "EXECUTION_STATUS",
-            "TRANSFORM_ID", "LINEAGE_REQUIRED", "NULL_POLICY", "VALUE_SOURCE",
-            "VALUE_REQUIRED", "ALLOWED_VALUES", "VALUE_MAP", "OTHER_REMARKS_TEMPLATE",
-            "ROLE_ID", "ROLE_TITLE", "REFERENCE_TYPE", "LOOKUP_KEY",
-            "DESCRIPTION_REQUIRED",
+            "TRANSFORM_ID", "SOURCE_KEY", "NULL_POLICY", "LINEAGE_REQUIRED",
+            "VALUE_SOURCE", "VALUE_REQUIRED", "ALLOWED_VALUES", "VALUE_MAP",
+            "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE", "REFERENCE_TYPE",
+            "LOOKUP_KEY", "DESCRIPTION_REQUIRED",
         ),
         # Temporary human-review aid only; execution does not depend on NOTES.
         "MAPPING_OPTIONAL_COLUMNS": ("NOTES",),
@@ -460,7 +462,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v9-clean-mapping"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v8-source-field-lineage"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -774,6 +776,8 @@ def _mapping_route(row, profile, model, paths, inactive, aliases, roots, routing
         reason = "UNKNOWN_SOURCE_KEY"
     elif source and source != profile["SOURCE_KEY"]:
         reason, severity = "OTHER_SOURCE", "EXCLUDED"
+    elif status and not source:
+        reason = "MISSING_SOURCE_KEY"
     elif status in {"DEFERRED", "EXCLUDED"}:
         reason, severity = "EXPLICIT_" + status, status
     elif label_model and owner_model and label_model != owner_model or (
@@ -1766,7 +1770,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v9-clean-mapping":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v8-source-field-lineage":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -1803,7 +1807,7 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v9-clean-mapping"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"
 
 
 # %% Cell 5 - Build nodes, exact containment, and selective source-field lineage
@@ -1885,7 +1889,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v9-clean-mapping":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v8-source-field-lineage":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -1959,7 +1963,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v9-clean-mapping"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"
 
 
 # %% Cell 6 - Validate once, preview, then atomically upsert the reviewed tables
@@ -2414,7 +2418,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
         if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.2-lineage":
             raise ValueError("Run the matching Cell 6 before Cell 7")
-        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v9-clean-mapping":
+        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v8-source-field-lineage":
             raise ValueError("Run the matching Cell 5 before Cell 7")
         routes = {}
         for context in mapping_contexts:
