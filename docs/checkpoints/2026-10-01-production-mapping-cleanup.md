@@ -463,3 +463,50 @@ Next action: run that helper as the next cell and capture its OBSOLETE SUMMARY,
 DIM BY ELEMENT TYPE, classification, top affected source records, and FACT BY
 DEPENDENCY TYPE. Use those results to distinguish intended identity changes
 from real source-data loss before any loader/mapping change.
+
+
+## v10 SSP PREVIEW passed unchanged against committed target — 2026-10-01
+
+Owner-provided Snowflake Cell 7 screenshot shows a successful live SSP PREVIEW after
+the upstream supporting loads completed.
+
+Observed report:
+- mode = PREVIEW
+- status = PREVIEW_COMPLETE
+- source = source-one
+- model = SSP
+- loader release = oscal-lean-daily-v3.2-lineage
+- writes_executed = false
+- persisted = false
+- committed = false
+- target_dml_attempted = false
+- pre_write_validation_passed = true
+- validation_passed = true
+- storage_verified = true
+- lineage_gaps = 0
+- nodes = 550,380
+- edges = 547,567
+- source_records = 2,813
+- DIM expected changes: INSERTS 0 / UPDATES 0 / UNCHANGED 550,380
+- FACT expected changes: INSERTS 0 / UPDATES 0 / UNCHANGED 547,567
+- load status = PREVIEW_PASSED_NO_TARGET_DML
+- temporary_cleanup = REMOVED
+- lineage props = 3,581
+- lineage gaps = 0
+- lineage complete = true
+
+This is strong live evidence that the current v10 candidate graph is byte/field
+equivalent, under the loader's stored comparison contract, to the current committed
+SSP target scope: no inserts, no updates, and no obsolete-row block. It also confirms
+the prior component-hydration/allocated-control preparation failures were upstream
+data-readiness issues rather than a required mapper bypass.
+
+Important boundary: this is PREVIEW/read-only evidence only. It does not constitute a
+new COMMIT. The last persisted target remains the previously read-back verified v8
+commit, although the v10 candidate currently proposes zero target changes.
+
+Next action: no target write is required for SSP if the intent is only to reconcile the
+current target, because PREVIEW proposes zero DML. Before declaring the v10 code release
+accepted, review one focused in-memory CIA/security-impact sample from MODEL_GRAPHS to
+confirm ResolvedValues are being consumed as intended even though the persisted target
+requires no update.
