@@ -47,15 +47,32 @@ def load_source_input(active_session, profile):
     # Freeze once in a session-local temporary table, before validation and
     # model fan-out. Keep the returned cache handle alive in SOURCE_INPUTS.
     candidates = raw.select(*selected).cache_result()
-    if candidates.filter("SOURCE_RECORD_ID IS NULL OR LENGTH(TRIM(SOURCE_RECORD_ID)) = 0").count():
-        raise ValueError("Source contains missing record identities")
     count = candidates.count()
-    distinct = candidates.select("SOURCE_RECORD_ID").distinct().count()
-    if count != distinct:
+
+    # Owner-approved temporary source-shell policy:
+    # rows with both missing CONTENT_ID and SQL-NULL CURATED_JSON carry no curated
+    # business content and are skipped. A populated CURATED_JSON without identity
+    # still fails closed.
+    missing_identity = candidates.filter(
+        "SOURCE_RECORD_ID IS NULL OR LENGTH(TRIM(SOURCE_RECORD_ID)) = 0"
+    )
+    missing_identity_count = missing_identity.count()
+    if missing_identity_count:
+        if missing_identity.filter("CURATED_JSON IS NOT NULL").count():
+            raise ValueError("Populated curated source contains missing record identities")
+        working = candidates.filter(
+            "SOURCE_RECORD_ID IS NOT NULL AND LENGTH(TRIM(SOURCE_RECORD_ID)) > 0"
+        )
+    else:
+        working = candidates
+
+    distinct = working.select("SOURCE_RECORD_ID").distinct().count()
+    selected_count = working.count()
+    if selected_count != distinct:
         if not order_columns:
             raise ValueError("Duplicate source identities require approved technical ordering")
         order = [col(name).desc_nulls_last() for name in order_columns]
-        latest = candidates.with_column(
+        latest = working.with_column(
             "_SOURCE_RANK", dense_rank().over(
                 Window.partition_by("SOURCE_RECORD_ID").order_by(*order)
             )
@@ -66,10 +83,14 @@ def load_source_input(active_session, profile):
         if result.count() != distinct:
             raise ValueError("Conflicting source payloads share the latest approved technical ordering")
     else:
-        result = candidates.select("SOURCE_RECORD_ID", "CURATED_JSON")
+        result = working.select("SOURCE_RECORD_ID", "CURATED_JSON")
     # The frozen snapshot yields one selected row per distinct source identity.
-    return result, {"RAW_ROWS": count, "SELECTED_ROWS": distinct,
-                    "DUPLICATE_SOURCE_ROWS_RESOLVED": count - distinct}, candidates
+    return result, {
+        "RAW_ROWS": count,
+        "SELECTED_ROWS": distinct,
+        "NULL_SOURCE_SHELLS_SKIPPED": missing_identity_count,
+        "DUPLICATE_SOURCE_ROWS_RESOLVED": selected_count - distinct,
+    }, candidates
 
 
 def load_mapping_rows(profile):
@@ -109,10 +130,8 @@ def load_mapping_rows(profile):
 
 def load_source_lookups(active_session, profile, model_contracts, shared_config):
     _input_no_transaction(active_session)
-    # Archer select-value labels are enriched upstream by Matillion in CURATED_JSON
-    # as ResolvedValues[]. The notebook no longer queries ARCHER_META_VALUE.
-    # Keep empty compatibility maps for synthetic/local fixtures that inject their own lookups.
-    archer = {}
+    # Archer users/select values/groups are enriched upstream in CURATED_JSON.
+    # Notebook lookups are now only for OSCAL component/joined-record hydration.
     components, joined = {}, {}
     required = {group for key in profile["MODEL_KEYS"]
                 for group in model_contracts[key].get("LOOKUP_GROUPS", ())}
@@ -154,10 +173,7 @@ def load_source_lookups(active_session, profile, model_contracts, shared_config)
             col(record_name).cast("string").alias("_SOURCE_RECORD_ID"),
             col(json_name).alias("CURATED_JSON")
         ).filter(col("CONTENT_ID").is_not_null()).cache_result()
-    return {"archer_values": archer,
-            "fips_values": {key: value.lower() for key, value in archer.items()
-                            if value.lower() in {"low", "moderate", "high"}},
-            "component_sources": components,
+    return {"component_sources": components,
             "component_contract": profile.get("LOOKUP_CONTRACTS", {}),
             "joined_sources": joined,
             "joined_contract": profile.get("JOINED_LOOKUP_CONTRACTS", {})}
