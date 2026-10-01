@@ -111,9 +111,14 @@ class Frame:
     def filter(self, condition):
         self.owner.events.append(("filter", self.table))
         if isinstance(condition, str):
-            if condition != "SOURCE_RECORD_ID IS NULL OR LENGTH(TRIM(SOURCE_RECORD_ID)) = 0":
+            if condition == "SOURCE_RECORD_ID IS NULL OR LENGTH(TRIM(SOURCE_RECORD_ID)) = 0":
+                predicate = lambda row: row["SOURCE_RECORD_ID"] is None or not row["SOURCE_RECORD_ID"].strip()
+            elif condition == "CURATED_JSON IS NOT NULL":
+                predicate = lambda row: row["CURATED_JSON"] is not None
+            elif condition == "SOURCE_RECORD_ID IS NOT NULL AND LENGTH(TRIM(SOURCE_RECORD_ID)) > 0":
+                predicate = lambda row: row["SOURCE_RECORD_ID"] is not None and bool(row["SOURCE_RECORD_ID"].strip())
+            else:
                 raise AssertionError("Unexpected SQL filter")
-            predicate = lambda row: row["SOURCE_RECORD_ID"] is None or not row["SOURCE_RECORD_ID"].strip()
         else:
             predicate = condition.eval
         return self.child([row for row in self.rows if predicate(row)], self.columns)
@@ -212,7 +217,7 @@ class MultiModelInputs(unittest.TestCase):
                           ("select", "RAW_ONE"), ("cache", "RAW_ONE")], session.events[:4])
         self.assertEqual(1, session.cache_calls["RAW_ONE"])
         self.assertIs(handle, result.snapshot)
-        self.assertEqual({"RAW_ROWS": 2, "SELECTED_ROWS": 2, "DUPLICATE_SOURCE_ROWS_RESOLVED": 0}, report)
+        self.assertEqual({"RAW_ROWS": 2, "SELECTED_ROWS": 2, "NULL_SOURCE_SHELLS_SKIPPED": 0, "DUPLICATE_SOURCE_ROWS_RESOLVED": 0}, report)
         session.tables["RAW_ONE"].rows[0]["CURATED_JSON"]["value"] = 999
         self.assertEqual(1, result.rows[0]["CURATED_JSON"]["value"])
         self.assertEqual({"SOURCE_RECORD_ID", "CURATED_JSON"}, set(result.columns))
