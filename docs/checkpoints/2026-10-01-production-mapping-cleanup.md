@@ -121,3 +121,28 @@ This completes the namespace-free SSP PREVIEW lineage gate. No target COMMIT/rea
 ## Namespace-free v8 lineage validator PASS
 
 Owner-provided Snowflake output on 2026-10-01 confirms the current namespace-free validator passed across all candidate SSP lineage properties: EXPECTED LINEAGE FIELDS=12, LINEAGE NODES=3581, REPORTED LINEAGE PROPS=3581, INVALID LINEAGE PROPS=0, DUPLICATE LINEAGE PROPS=0, and LINEAGE_CONTRACT_VALIDATED=True. The populated source-field counts remain OPERATIONAL_STATUS=2771 and the availability/confidentiality/integrity override fields=270 each; the other eight configured fields produced no lineage rows in this source snapshot. This validates the v8 two-key lineage payload (name + value) in PREVIEW. No target COMMIT/read-back has yet been performed for v8.
+
+
+## Namespace-free v8 SSP COMMIT and read-back verification
+
+Owner-provided Snowflake COMMIT output on 2026-10-01 shows:
+- pipeline status: COMMITTED_AND_VERIFIED
+- source/model: source-one / SSP
+- writes_executed=true
+- persisted=true
+- committed=true
+- target_dml_attempted=true
+- pre_write_validation_passed=true
+- validation_passed=true
+- storage_verified=true
+- source_records=2813
+- nodes=550380
+- edges=547567
+- expected DIM changes before commit: 3581 inserts / 0 updates / 546799 unchanged
+- expected FACT changes before commit: 3581 inserts / 0 updates / 543986 unchanged
+- post-commit verification DIM: 0 inserts / 0 updates / 550380 unchanged
+- post-commit verification FACT: 0 inserts / 0 updates / 547567 unchanged
+- load status: COMMITTED_AND_VERIFIED
+- temporary_cleanup=REMOVED
+
+Interpretation: the committed target state matches the namespace-free v8 candidate graph and is read-back verified. The post-commit zero-insert/zero-update verification establishes immediate idempotency for this exact graph. Any later mapping CSV cleanup is a new version and must go through a fresh PREVIEW before another COMMIT.
