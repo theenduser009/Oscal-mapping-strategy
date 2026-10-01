@@ -1,4 +1,5 @@
 """FIPS normalization from Matillion-resolved Archer select values."""
+import copy
 import unittest
 
 from lean_support import namespace
@@ -11,10 +12,14 @@ class FipsNormalizationTests(unittest.TestCase):
         self.context = {"lookups": {"archer_values": {}, "fips_values": {}}}
 
     def approved_rows(self):
+        profile = copy.deepcopy(next(
+            item for item in self.ns["SOURCE_PROFILES"] if item["SOURCE_KEY"] == "source-one"
+        ))
+        profile["MODEL_KEYS"] = ("SSP",)
         contexts = self.ns["compile_mapping_contexts"](
-            {"source-one": mapping_rows()}, release_registry(), self.ns["SOURCE_PROFILES"],
+            {"source-one": mapping_rows()}, release_registry(), [profile],
             self.ns["MODEL_CONTRACTS"], self.ns["ROUTING_METADATA"])
-        ssp = next(context for context in contexts if context["config"]["OSCAL_MODEL"] == "SSP")
+        ssp = contexts[0]
         rows = [row for row in ssp["mapping_rows"] if row["TRANSFORM_ID"] == "security-objective"]
         self.assertEqual(11, len(rows))
         return rows
