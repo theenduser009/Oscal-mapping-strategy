@@ -146,3 +146,10 @@ Owner-provided Snowflake COMMIT output on 2026-10-01 shows:
 - temporary_cleanup=REMOVED
 
 Interpretation: the committed target state matches the namespace-free v8 candidate graph and is read-back verified. The post-commit zero-insert/zero-update verification establishes immediate idempotency for this exact graph. Any later mapping CSV cleanup is a new version and must go through a fresh PREVIEW before another COMMIT.
+
+
+## Verified Archer meta-value resolution for FIPS candidate
+
+Owner-confirmed live lookup on 2026-10-01: Archer SELECT_VALUE_ID 162407 resolves to SELECT_VALUE_NAME `Legacy LOE C` in `RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE`.
+
+For the inspected Content ID 867022, the populated confidentiality, integrity, and availability override fields each carried `ValuesListIds:[162407]`; the committed OSCAL security-impact members therefore contain `Legacy LOE C`. This is consistent with the current `security-objective` transform and the mapping CSV's reviewed legacy allowed-values contract. This checkpoint confirms the ID-to-label resolution step for that concrete value; it does not imply all FIPS candidate IDs have been individually verified.
