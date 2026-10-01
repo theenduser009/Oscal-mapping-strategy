@@ -853,7 +853,7 @@ def _prepare_model_context(context, model_key, source_system, source_table):
     context.pop("_metadata_reference_cache", None)
     context["graph_report"] = {"SOURCE_RECORDS": 0, "INVALID_SOURCE_RECORDS": 0, "DUPLICATE_SOURCE_RECORDS": 0,
                                "MAPPED_VALUES": 0, "MISSING_VALUES": 0, "STATUS": "NOT_RUN", "OUTPUTS_PUBLISHED": False,
-                               "LINEAGE_GROUPS": 0, "LINEAGE_GAPS": 0, "LINEAGE_GAP_SAMPLES": []}
+                               "LINEAGE_PROPS": 0, "LINEAGE_GAPS": 0, "LINEAGE_GAP_SAMPLES": []}
     return context
 
 
