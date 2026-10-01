@@ -1,9 +1,9 @@
 # %% Read-only SSP selective-lineage sample
 # Run after Cells 1-7 PREVIEW. Uses the graph already held in MODEL_GRAPHS.
-from snowflake.snowpark.functions import col
+from snowflake.snowpark.functions import col, lit
 
 lineage = MODEL_GRAPHS[("source-one", "SSP")]["nodes"].filter(
-    col("METADATA_JSON").contains("urn:company:oscal:lineage:v1")
+    col("METADATA_JSON").contains(lit("urn:company:oscal:lineage:v1"))
 )
 
 print("CANDIDATE LINEAGE NODES =", lineage.count())
