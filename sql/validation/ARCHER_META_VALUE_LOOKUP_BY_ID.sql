@@ -1,0 +1,12 @@
+-- Read-only Archer value-list ID lookup.
+-- Change only TEST_VALUE_ID.
+-- Example from the SSP FIPS/security-objective source payload: 162407.
+
+SET TEST_VALUE_ID = '162407';
+
+SELECT
+    SELECT_VALUE_ID,
+    SELECT_VALUE_NAME
+FROM RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_VALUE
+WHERE TRIM(SELECT_VALUE_ID::STRING) = $TEST_VALUE_ID
+ORDER BY SELECT_VALUE_ID;
