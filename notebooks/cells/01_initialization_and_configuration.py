@@ -16,7 +16,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v6-lineage-required (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v7-production-clean (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -45,6 +45,13 @@ SOURCE_FILES = [
         "MAPPING_ENCODING": "utf-8-sig",
         "MAPPING_SOURCE_COLUMN": "SOURCE_KEY",
         "MAPPING_SOURCE_VALUE": "source-one",
+        "MAPPING_COLUMNS": (
+            "SOURCE_FIELD_NAME", "OSCAL_MODEL", "OSCAL_ELEMENT_PATH", "EXECUTION_STATUS",
+            "TRANSFORM_ID", "SOURCE_KEY", "NULL_POLICY", "LINEAGE_REQUIRED",
+            "VALUE_SOURCE", "VALUE_REQUIRED", "ALLOWED_VALUES", "VALUE_MAP",
+            "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE", "REFERENCE_TYPE",
+            "LOOKUP_KEY", "DESCRIPTION_REQUIRED",
+        ),
         "MODEL_BINDINGS": (
             "SSP",
             "ASSESSMENT_RESULTS",

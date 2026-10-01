@@ -44,15 +44,7 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
         )
         ns, context = compiled(row)
         self.assertEqual("READY", context["routing_report"]["STATUS"])
-        self.assertEqual(
-            {
-                row["RULE_ID"]: {
-                    "source_field": "SOURCE_TITLE",
-                    "targets": ("title",),
-                }
-            },
-            context["compiled_plan"]["lineage_rules"],
-        )
+        self.assertTrue(context["mapping_rows"][0]["LINEAGE_REQUIRED_FLAG"])
         nodes, _ = base.build(ns, context, [{
             "SOURCE_RECORD_ID": "record-one",
             "CURATED_JSON": {"SOURCE_TITLE": "Mapped title"},
@@ -63,7 +55,6 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
         self.assertEqual({
             "name": "source-field",
             "ns": NS,
-            "class": "title",
             "value": "SOURCE_TITLE",
         }, {key: value for key, value in lineage[0].items() if key != "uuid"})
 
@@ -72,7 +63,7 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
             "SOURCE_TITLE", base.SUMMARY + ".title", "text", LINEAGE_REQUIRED="N",
         )
         ns, context = compiled(row)
-        self.assertEqual({}, context["compiled_plan"]["lineage_rules"])
+        self.assertFalse(context["mapping_rows"][0]["LINEAGE_REQUIRED_FLAG"])
         nodes, _ = base.build(ns, context, [{
             "SOURCE_RECORD_ID": "record-one",
             "CURATED_JSON": {"SOURCE_TITLE": "Mapped title"},
@@ -92,10 +83,8 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
 
     def test_two_selected_sources_for_same_native_member_keep_both_source_names(self):
         rows = [
-            base.mapping("SOURCE_A", base.SUMMARY + ".title", "text",
-                         LINEAGE_REQUIRED="Y", RULE_ID="synthetic:source-a"),
-            base.mapping("SOURCE_B", base.SUMMARY + ".title", "text",
-                         LINEAGE_REQUIRED="Y", RULE_ID="synthetic:source-b"),
+            base.mapping("SOURCE_A", base.SUMMARY + ".title", "text", LINEAGE_REQUIRED="Y"),
+            base.mapping("SOURCE_B", base.SUMMARY + ".title", "text", LINEAGE_REQUIRED="Y"),
         ]
         ns = lean_support.namespace(models=("SSP",))
         context = base.compile_context(ns, rows, registry=registry_with_props())
@@ -110,9 +99,9 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
             for prop in base.payloads(nodes, PROPS)
         ]
         self.assertEqual({
-            ("source-field", "title", "SOURCE_A"),
-            ("source-field", "title", "SOURCE_B"),
-        }, {(prop["name"], prop["class"], prop["value"]) for prop in props})
+            ("source-field", "SOURCE_A"),
+            ("source-field", "SOURCE_B"),
+        }, {(prop["name"], prop["value"]) for prop in props})
 
     def test_business_prop_is_not_duplicated_as_lineage(self):
         row = base.mapping(

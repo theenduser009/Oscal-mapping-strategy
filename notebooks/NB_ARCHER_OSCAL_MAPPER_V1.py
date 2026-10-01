@@ -28,7 +28,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v6-lineage-required (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v7-production-clean (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -57,6 +57,13 @@ SOURCE_FILES = [
         "MAPPING_ENCODING": "utf-8-sig",
         "MAPPING_SOURCE_COLUMN": "SOURCE_KEY",
         "MAPPING_SOURCE_VALUE": "source-one",
+        "MAPPING_COLUMNS": (
+            "SOURCE_FIELD_NAME", "OSCAL_MODEL", "OSCAL_ELEMENT_PATH", "EXECUTION_STATUS",
+            "TRANSFORM_ID", "SOURCE_KEY", "NULL_POLICY", "LINEAGE_REQUIRED",
+            "VALUE_SOURCE", "VALUE_REQUIRED", "ALLOWED_VALUES", "VALUE_MAP",
+            "OTHER_REMARKS_TEMPLATE", "ROLE_ID", "ROLE_TITLE", "REFERENCE_TYPE",
+            "LOOKUP_KEY", "DESCRIPTION_REQUIRED",
+        ),
         "MODEL_BINDINGS": (
             "SSP",
             "ASSESSMENT_RESULTS",
@@ -340,6 +347,9 @@ def load_mapping_rows(profile):
         header = [name.strip().upper() for name in header]
         if not all(header) or len(header) != len(set(header)):
             raise ValueError("Mapping CSV columns must be nonblank and unique")
+        expected = tuple(name.upper() for name in profile.get("MAPPING_COLUMNS", ()))
+        if expected and tuple(header) != expected:
+            raise ValueError("Mapping CSV header does not match the production contract")
         binding = profile.get("MAPPING_SOURCE_COLUMN", "").upper()
         if binding and binding not in header:
             raise ValueError("Mapping source binding column is missing")
@@ -446,7 +456,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v6-lineage-required"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v7-production-clean"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -527,26 +537,6 @@ def _lineage_required(row):
     if value not in {"Y", "N"}:
         raise ValueError("LINEAGE_REQUIRED must be Y or N")
     return value == "Y"
-
-
-def _compile_lineage_rules(rows):
-    """Compile only mapping rows explicitly marked LINEAGE_REQUIRED=Y."""
-    rules = {}
-    for row in rows:
-        required = _lineage_required(row)
-        if not required or row["APPROVAL_STATUS"] != "APPROVED":
-            continue
-        if (_metadata_params(row).get("value_source") == "CONFIG"
-                or row["TRANSFORM_ID"] in {"skip", "reject-populated"}):
-            raise ValueError("LINEAGE_REQUIRED=Y requires an approved source FIELD mapping")
-        target = _metadata_target(row)
-        if not target or row["REPRESENTATION"] in {"properties", "observations"}:
-            raise ValueError("LINEAGE_REQUIRED=Y requires a native OSCAL member target")
-        rules[row["RULE_ID"]] = {
-            "source_field": row["SOURCE_FIELD_NAME"],
-            "targets": (target,),
-        }
-    return rules
 
 
 def _owner_for_path(path, paths):
@@ -676,7 +666,6 @@ def _registry_elements(rows, selected, profile, model):
 def _compile_mapping(row, elements):
     """Translate explicit CSV columns to the parameters used by Cell Four."""
     transform = _metadata_column_text(row, "TRANSFORM_ID", True)
-    rule = _metadata_column_text(row, "RULE_ID", True)
     if transform not in METADATA_TRANSFORM_IDS:
         raise ValueError("Unknown reusable TRANSFORM_ID")
     if row["EXECUTION_STATUS"] == "BLOCKED_IF_POPULATED" and transform != "reject-populated":
@@ -693,6 +682,11 @@ def _compile_mapping(row, elements):
         raise ValueError("CONFIG values require an explicit object member target")
     if source == "CONFIG":
         representation["value_source"] = source
+    lineage_required = _lineage_required(row)
+    if lineage_required and (source == "CONFIG" or transform in {"skip", "reject-populated"}):
+        raise ValueError("LINEAGE_REQUIRED=Y requires an approved source FIELD mapping")
+    if lineage_required and (not target or operator in {"properties", "observations"}):
+        raise ValueError("LINEAGE_REQUIRED=Y requires a native OSCAL member target")
     null_policy = row.get("NULL_POLICY") or "omit"
     if null_policy not in {"omit", "preserve"}:
         raise ValueError("NULL_POLICY must be omit or preserve")
@@ -758,20 +752,19 @@ def _compile_mapping(row, elements):
     if any(row.get(key) not in (None, "") for key in columns - allowed):
         raise ValueError("CSV parameter does not apply to the selected operation")
     return dict(row, TRANSFORM_PARAMS=params, REPRESENTATION=operator, REPRESENTATION_PARAMS=representation,
-                APPROVAL_STATUS=row["EXECUTION_STATUS"], RULE_ID=rule)
+                APPROVAL_STATUS=row["EXECUTION_STATUS"], LINEAGE_REQUIRED_FLAG=lineage_required)
 
 
 def _mapping_route(row, profile, model, paths, inactive, aliases, roots, routing, source_keys, unreviewed):
     """Return exclusion reason, or the canonical registered owner and member path."""
     status = row.get("EXECUTION_STATUS")
     original = row.get("OSCAL_ELEMENT_PATH") or ""
-    path = row.get("RUNTIME_TARGET_PATH") or "" if status in {"APPROVED", "BLOCKED_IF_POPULATED"} else original
+    path = original
     label = _model_token(row.get("OSCAL_MODEL"))
     owner_model, label_model = roots.get(path.split(".", 1)[0]), aliases.get(label)
     source = row.get("SOURCE_KEY")
     reason, severity = None, "BLOCKED"
-    if status not in {None, "", "APPROVED", "BLOCKED_IF_POPULATED", "DEFERRED", "EXCLUDED"} or (
-            not status and row.get("RUNTIME_TARGET_PATH")):
+    if status not in {None, "", "APPROVED", "BLOCKED_IF_POPULATED", "DEFERRED", "EXCLUDED"}:
         reason = "INVALID_EXECUTION_STATUS"
     elif source and source not in source_keys:
         reason = "UNKNOWN_SOURCE_KEY"
@@ -896,17 +889,16 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 try:
                     selected = [_compile_mapping(row, elements) for row in selected]
                     identities = [(row["OWNER_ELEMENT_PATH"], row["SOURCE_FIELD_NAME"], row["FIELD_RELATIVE_PATH"]) for row in selected]
-                    if len({row["RULE_ID"] for row in selected}) != len(selected) or len(set(identities)) != len(selected):
-                        raise ValueError("Duplicate mapping rule or field target")
+                    if len(set(identities)) != len(selected):
+                        raise ValueError("Duplicate mapping field target")
                     options = {key: value for key, value in settings.get("RUNTIME_OPTIONS", {}).items()
                                if key in {"parse_decimal", "null_source_as_empty", "preserve_null_observations"}}
                     if type(options.get("preserve_null_observations", False)) is not bool:
                         raise ValueError("preserve_null_observations must be true or false")
-                    lineage = _compile_lineage_rules(selected)
                     fingerprint = hashlib.sha256(json.dumps(selected, sort_keys=True, default=str,
                                                              separators=(",", ":")).encode("utf-8")).hexdigest()
-                    plan = dict(version=2, release=LEAN_MAPPER_RELEASE, elements=elements, mappings=selected,
-                                reference_groups=groups, lineage_rules=lineage, mapping_fingerprint=fingerprint,
+                    plan = dict(version=3, release=LEAN_MAPPER_RELEASE, elements=elements, mappings=selected,
+                                reference_groups=groups, mapping_fingerprint=fingerprint,
                                 options=options, report=report)
                 except ValueError as error:
                     contract_error = str(error)
@@ -1212,36 +1204,28 @@ def _metadata_mapped_value(row, source_obj, context):
             raise ValueError("Required mapped value is absent after conversion")
     except (TypeError, ValueError, ArithmeticError):
         context["graph_report"]["STATUS"] = "BLOCKED"
-        raise ValueError("Mapping failed for field " + field + " (" + str(row.get("RULE_ID", "")) + ")") from None
+        raise ValueError("Mapping failed for field " + field) from None
     context["graph_report"]["MISSING_VALUES" if value is SKIP_VALUE else "MAPPED_VALUES"] += 1
     return value
 
 
-def _oscal_prop(name, value, namespace=None, prop_class=None, group=None):
-    """One property constructor for business props and selective lineage props."""
+def _oscal_prop(name, value, namespace=None):
+    """Build one OSCAL property; namespace is used only for our custom extension."""
     prop = {"name": _metadata_text(name, "Property name"), "value": value}
     if value is not None and not isinstance(value, str):
         raise ValueError("Property value must be text or an explicitly preserved warehouse null")
     if namespace is not None:
         if (not isinstance(namespace, str) or re.search(r"\s", namespace)
                 or not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*:[^\s]+", namespace)):
-            raise ValueError("Lineage namespace must be an absolute URI without whitespace")
+            raise ValueError("Property namespace must be an absolute URI without whitespace")
         prop["ns"] = namespace
-    if prop_class is not None:
-        prop["class"] = _metadata_text(prop_class, "Property class")
-    if group is not None:
-        prop["group"] = _metadata_text(group, "Property group")
     return prop
 
-
 def _capture_contribution(contributions, row, target, context, origin=None):
-    rule = context["compiled_plan"]["lineage_rules"].get(row["RULE_ID"])
-    if rule is not None and target in rule["targets"]:
-        contribution = {"rule_id": row["RULE_ID"], "source_field": rule["source_field"],
-                        "target": target, "origin": origin}
+    if row.get("LINEAGE_REQUIRED_FLAG") and target == _metadata_target(row):
+        contribution = {"source_field": row["SOURCE_FIELD_NAME"], "target": target, "origin": origin}
         if contribution not in contributions:
             contributions.append(contribution)
-
 
 def _assign_mapped(payload, row, target, value, contributions, context, origin=None,
                    preserve_existing=False):
@@ -1785,7 +1769,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v6-lineage-required":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v7-production-clean":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -1822,10 +1806,10 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v6-lineage-required"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v7-production-clean"
 
 
-# %% Cell 5 - Build nodes, exact containment, and contribution-backed lineage
+# %% Cell 5 - Build nodes, exact containment, and selective source-field lineage
 
 
 def _create_canonical_graph_frame(rows, kind):
@@ -1851,7 +1835,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
     if pending and not namespace:
         raise ValueError("LINEAGE_PROPERTY_NS must be an absolute URI")
     for target, contribution in sorted(
-            pending, key=lambda item: (item[0]["NODE_KEY"], item[1]["rule_id"], item[1]["target"])):
+            pending, key=lambda item: (item[0]["NODE_KEY"], item[1]["source_field"], item[1]["target"])):
         host, crossed_collection = target, False
         props_path, inline = None, False
         while host is not None:
@@ -1873,12 +1857,12 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
             if len(report["LINEAGE_GAP_SAMPLES"]) < 25:
                 report["LINEAGE_GAP_SAMPLES"].append({
                     "reason": reason,
-                    "rule_id": contribution["rule_id"],
+                    "source_field": contribution["source_field"],
                     "target_path": target["ELEMENT_PATH"],
                 })
             continue
 
-        identity = (target["NODE_KEY"], contribution["rule_id"], contribution["target"])
+        identity = (host["NODE_KEY"], contribution["source_field"])
         if identity in emitted:
             continue
         emitted.add(identity)
@@ -1887,7 +1871,6 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
             "source-field",
             contribution["source_field"],
             namespace,
-            contribution["target"].split(".")[-1],
         )
         if inline:
             payload = json.loads(host["METADATA_JSON"])
@@ -1896,7 +1879,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
         else:
             append_node(registry[props_path], {
                 "instance_key": "lineage:" + _deterministic_hash(
-                    "source-field-lineage-v1", *identity
+                    "source-field-lineage-v2", *identity
                 ),
                 "payload": prop,
                 "parent_instance_key": host["INSTANCE_KEY"],
@@ -1909,7 +1892,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v6-lineage-required":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v7-production-clean":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -1983,7 +1966,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v6-lineage-required"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v7-production-clean"
 
 
 # %% Cell 6 - Validate once, preview, then atomically upsert the reviewed tables

@@ -7,7 +7,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v6-lineage-required"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v7-production-clean"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -88,26 +88,6 @@ def _lineage_required(row):
     if value not in {"Y", "N"}:
         raise ValueError("LINEAGE_REQUIRED must be Y or N")
     return value == "Y"
-
-
-def _compile_lineage_rules(rows):
-    """Compile only mapping rows explicitly marked LINEAGE_REQUIRED=Y."""
-    rules = {}
-    for row in rows:
-        required = _lineage_required(row)
-        if not required or row["APPROVAL_STATUS"] != "APPROVED":
-            continue
-        if (_metadata_params(row).get("value_source") == "CONFIG"
-                or row["TRANSFORM_ID"] in {"skip", "reject-populated"}):
-            raise ValueError("LINEAGE_REQUIRED=Y requires an approved source FIELD mapping")
-        target = _metadata_target(row)
-        if not target or row["REPRESENTATION"] in {"properties", "observations"}:
-            raise ValueError("LINEAGE_REQUIRED=Y requires a native OSCAL member target")
-        rules[row["RULE_ID"]] = {
-            "source_field": row["SOURCE_FIELD_NAME"],
-            "targets": (target,),
-        }
-    return rules
 
 
 def _owner_for_path(path, paths):
@@ -237,7 +217,6 @@ def _registry_elements(rows, selected, profile, model):
 def _compile_mapping(row, elements):
     """Translate explicit CSV columns to the parameters used by Cell Four."""
     transform = _metadata_column_text(row, "TRANSFORM_ID", True)
-    rule = _metadata_column_text(row, "RULE_ID", True)
     if transform not in METADATA_TRANSFORM_IDS:
         raise ValueError("Unknown reusable TRANSFORM_ID")
     if row["EXECUTION_STATUS"] == "BLOCKED_IF_POPULATED" and transform != "reject-populated":
@@ -254,6 +233,11 @@ def _compile_mapping(row, elements):
         raise ValueError("CONFIG values require an explicit object member target")
     if source == "CONFIG":
         representation["value_source"] = source
+    lineage_required = _lineage_required(row)
+    if lineage_required and (source == "CONFIG" or transform in {"skip", "reject-populated"}):
+        raise ValueError("LINEAGE_REQUIRED=Y requires an approved source FIELD mapping")
+    if lineage_required and (not target or operator in {"properties", "observations"}):
+        raise ValueError("LINEAGE_REQUIRED=Y requires a native OSCAL member target")
     null_policy = row.get("NULL_POLICY") or "omit"
     if null_policy not in {"omit", "preserve"}:
         raise ValueError("NULL_POLICY must be omit or preserve")
@@ -319,20 +303,19 @@ def _compile_mapping(row, elements):
     if any(row.get(key) not in (None, "") for key in columns - allowed):
         raise ValueError("CSV parameter does not apply to the selected operation")
     return dict(row, TRANSFORM_PARAMS=params, REPRESENTATION=operator, REPRESENTATION_PARAMS=representation,
-                APPROVAL_STATUS=row["EXECUTION_STATUS"], RULE_ID=rule)
+                APPROVAL_STATUS=row["EXECUTION_STATUS"], LINEAGE_REQUIRED_FLAG=lineage_required)
 
 
 def _mapping_route(row, profile, model, paths, inactive, aliases, roots, routing, source_keys, unreviewed):
     """Return exclusion reason, or the canonical registered owner and member path."""
     status = row.get("EXECUTION_STATUS")
     original = row.get("OSCAL_ELEMENT_PATH") or ""
-    path = row.get("RUNTIME_TARGET_PATH") or "" if status in {"APPROVED", "BLOCKED_IF_POPULATED"} else original
+    path = original
     label = _model_token(row.get("OSCAL_MODEL"))
     owner_model, label_model = roots.get(path.split(".", 1)[0]), aliases.get(label)
     source = row.get("SOURCE_KEY")
     reason, severity = None, "BLOCKED"
-    if status not in {None, "", "APPROVED", "BLOCKED_IF_POPULATED", "DEFERRED", "EXCLUDED"} or (
-            not status and row.get("RUNTIME_TARGET_PATH")):
+    if status not in {None, "", "APPROVED", "BLOCKED_IF_POPULATED", "DEFERRED", "EXCLUDED"}:
         reason = "INVALID_EXECUTION_STATUS"
     elif source and source not in source_keys:
         reason = "UNKNOWN_SOURCE_KEY"
@@ -457,17 +440,16 @@ def compile_mapping_contexts(mapping_rows, registry_rows, source_profiles, model
                 try:
                     selected = [_compile_mapping(row, elements) for row in selected]
                     identities = [(row["OWNER_ELEMENT_PATH"], row["SOURCE_FIELD_NAME"], row["FIELD_RELATIVE_PATH"]) for row in selected]
-                    if len({row["RULE_ID"] for row in selected}) != len(selected) or len(set(identities)) != len(selected):
-                        raise ValueError("Duplicate mapping rule or field target")
+                    if len(set(identities)) != len(selected):
+                        raise ValueError("Duplicate mapping field target")
                     options = {key: value for key, value in settings.get("RUNTIME_OPTIONS", {}).items()
                                if key in {"parse_decimal", "null_source_as_empty", "preserve_null_observations"}}
                     if type(options.get("preserve_null_observations", False)) is not bool:
                         raise ValueError("preserve_null_observations must be true or false")
-                    lineage = _compile_lineage_rules(selected)
                     fingerprint = hashlib.sha256(json.dumps(selected, sort_keys=True, default=str,
                                                              separators=(",", ":")).encode("utf-8")).hexdigest()
-                    plan = dict(version=2, release=LEAN_MAPPER_RELEASE, elements=elements, mappings=selected,
-                                reference_groups=groups, lineage_rules=lineage, mapping_fingerprint=fingerprint,
+                    plan = dict(version=3, release=LEAN_MAPPER_RELEASE, elements=elements, mappings=selected,
+                                reference_groups=groups, mapping_fingerprint=fingerprint,
                                 options=options, report=report)
                 except ValueError as error:
                     contract_error = str(error)

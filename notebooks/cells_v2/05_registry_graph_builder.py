@@ -1,4 +1,4 @@
-# %% Cell 5 - Build nodes, exact containment, and contribution-backed lineage
+# %% Cell 5 - Build nodes, exact containment, and selective source-field lineage
 
 
 def _create_canonical_graph_frame(rows, kind):
@@ -24,7 +24,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
     if pending and not namespace:
         raise ValueError("LINEAGE_PROPERTY_NS must be an absolute URI")
     for target, contribution in sorted(
-            pending, key=lambda item: (item[0]["NODE_KEY"], item[1]["rule_id"], item[1]["target"])):
+            pending, key=lambda item: (item[0]["NODE_KEY"], item[1]["source_field"], item[1]["target"])):
         host, crossed_collection = target, False
         props_path, inline = None, False
         while host is not None:
@@ -46,12 +46,12 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
             if len(report["LINEAGE_GAP_SAMPLES"]) < 25:
                 report["LINEAGE_GAP_SAMPLES"].append({
                     "reason": reason,
-                    "rule_id": contribution["rule_id"],
+                    "source_field": contribution["source_field"],
                     "target_path": target["ELEMENT_PATH"],
                 })
             continue
 
-        identity = (target["NODE_KEY"], contribution["rule_id"], contribution["target"])
+        identity = (host["NODE_KEY"], contribution["source_field"])
         if identity in emitted:
             continue
         emitted.add(identity)
@@ -60,7 +60,6 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
             "source-field",
             contribution["source_field"],
             namespace,
-            contribution["target"].split(".")[-1],
         )
         if inline:
             payload = json.loads(host["METADATA_JSON"])
@@ -69,7 +68,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
         else:
             append_node(registry[props_path], {
                 "instance_key": "lineage:" + _deterministic_hash(
-                    "source-field-lineage-v1", *identity
+                    "source-field-lineage-v2", *identity
                 ),
                 "payload": prop,
                 "parent_instance_key": host["INSTANCE_KEY"],
@@ -82,7 +81,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v6-lineage-required":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v7-production-clean":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -156,4 +155,4 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v6-lineage-required"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v7-production-clean"

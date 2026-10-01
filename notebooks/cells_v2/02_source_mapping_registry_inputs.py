@@ -81,6 +81,9 @@ def load_mapping_rows(profile):
         header = [name.strip().upper() for name in header]
         if not all(header) or len(header) != len(set(header)):
             raise ValueError("Mapping CSV columns must be nonblank and unique")
+        expected = tuple(name.upper() for name in profile.get("MAPPING_COLUMNS", ()))
+        if expected and tuple(header) != expected:
+            raise ValueError("Mapping CSV header does not match the production contract")
         binding = profile.get("MAPPING_SOURCE_COLUMN", "").upper()
         if binding and binding not in header:
             raise ValueError("Mapping source binding column is missing")

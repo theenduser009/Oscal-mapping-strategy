@@ -271,36 +271,28 @@ def _metadata_mapped_value(row, source_obj, context):
             raise ValueError("Required mapped value is absent after conversion")
     except (TypeError, ValueError, ArithmeticError):
         context["graph_report"]["STATUS"] = "BLOCKED"
-        raise ValueError("Mapping failed for field " + field + " (" + str(row.get("RULE_ID", "")) + ")") from None
+        raise ValueError("Mapping failed for field " + field) from None
     context["graph_report"]["MISSING_VALUES" if value is SKIP_VALUE else "MAPPED_VALUES"] += 1
     return value
 
 
-def _oscal_prop(name, value, namespace=None, prop_class=None, group=None):
-    """One property constructor for business props and selective lineage props."""
+def _oscal_prop(name, value, namespace=None):
+    """Build one OSCAL property; namespace is used only for our custom extension."""
     prop = {"name": _metadata_text(name, "Property name"), "value": value}
     if value is not None and not isinstance(value, str):
         raise ValueError("Property value must be text or an explicitly preserved warehouse null")
     if namespace is not None:
         if (not isinstance(namespace, str) or re.search(r"\s", namespace)
                 or not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*:[^\s]+", namespace)):
-            raise ValueError("Lineage namespace must be an absolute URI without whitespace")
+            raise ValueError("Property namespace must be an absolute URI without whitespace")
         prop["ns"] = namespace
-    if prop_class is not None:
-        prop["class"] = _metadata_text(prop_class, "Property class")
-    if group is not None:
-        prop["group"] = _metadata_text(group, "Property group")
     return prop
 
-
 def _capture_contribution(contributions, row, target, context, origin=None):
-    rule = context["compiled_plan"]["lineage_rules"].get(row["RULE_ID"])
-    if rule is not None and target in rule["targets"]:
-        contribution = {"rule_id": row["RULE_ID"], "source_field": rule["source_field"],
-                        "target": target, "origin": origin}
+    if row.get("LINEAGE_REQUIRED_FLAG") and target == _metadata_target(row):
+        contribution = {"source_field": row["SOURCE_FIELD_NAME"], "target": target, "origin": origin}
         if contribution not in contributions:
             contributions.append(contribution)
-
 
 def _assign_mapped(payload, row, target, value, contributions, context, origin=None,
                    preserve_existing=False):
@@ -844,7 +836,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v6-lineage-required":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v7-production-clean":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -881,4 +873,4 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v6-lineage-required"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v7-production-clean"
