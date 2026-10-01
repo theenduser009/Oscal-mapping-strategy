@@ -322,3 +322,33 @@ problem rows. No Snowflake DML is performed.
 Next action: run that diagnostic and inspect all three result sets before making
 another Matillion or notebook change. The v9 PREVIEW has not started; v8 remains
 the last committed/read-back verified OSCAL target baseline.
+
+
+## v10 curated-resolved-only notebook cleanup — 2026-10-01
+
+Owner decision: for the current Source One snapshot, rows with both missing CONTENT_ID and SQL-NULL CURATED_JSON are treated as empty source shells and skipped so the run can proceed. Populated curated rows without identity still fail closed. The two owner-inspected shell records have empty Archer FieldContents and no curated business payload.
+
+Implemented release: `lean-csv-registry-v10-curated-resolved-only`.
+
+Runtime changes:
+- Cell 2 no longer carries Archer select/FIPS lookup maps at all.
+- `load_source_lookups` now loads only component and joined-record hydration inputs.
+- Cell 2 reports `NULL_SOURCE_SHELLS_SKIPPED` and excludes only missing-identity rows whose CURATED_JSON is SQL NULL; a populated CURATED_JSON with missing identity remains a blocking error.
+- Cell 4 uses Matillion `ResolvedValues[]` as the production select-value source, verifies ValueId/source-ID identity, MATCHED status and cardinality, then maps the resolved label.
+- Low/Moderate/High handling is now only OSCAL CIA normalization of an already-resolved label. There is no ARCHER_META_VALUE/FIPS lookup in the notebook runtime.
+- The reviewed Legacy LOE fallback contract remains in mapping metadata; no new LOE-to-FIPS crosswalk was introduced.
+- Mapping CSV remains unchanged at 155 rows / 19 columns.
+- Cells 1/3/4/5/7 share the v10 release marker; cells_v2 and the combined notebook are synchronized.
+
+Repository validation actually performed:
+- GitHub generated-notebook synchronization gate passed.
+- Focused source-shell test passed: null identity + null curated payload is skipped and counted.
+- Populated curated payload with missing identity still fails closed.
+- Focused resolved-value tests pass for canonical Low/Moderate/High normalization, direct text compatibility, fail-closed resolved-value identity/status/cardinality checks, removal of runtime ARCHER_META_VALUE dependency, and reviewed Legacy LOE preservation.
+- Historical full lean suite remains red: 273 tests ran with 31 failures and 105 errors, dominated by existing stale RULE_ID/153-row/routing/persistence fixture expectations. This is not a green full-suite release.
+
+Evidence boundary:
+No live Snowflake v10 PREVIEW has yet been observed. v8 remains the last target COMMIT/read-back baseline.
+
+Next action:
+Replace Snowflake notebook Cells 1-7 with the matched v10 files and run Cell 2 first. Expected Source One selection report for the currently observed snapshot is RAW_ROWS=2812, NULL_SOURCE_SHELLS_SKIPPED=2, SELECTED_ROWS=2810 (subject to source changes). If Cell 2 succeeds, continue Cells 3-7 in PREVIEW with EXECUTE_WRITES=False and review the resulting CIA/security-impact payload and DIM/FACT delta before any COMMIT.
