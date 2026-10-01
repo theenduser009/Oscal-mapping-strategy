@@ -163,3 +163,24 @@ Owner-provided Snowflake result on 2026-10-01 for Content ID 867022 shows the co
 ## CIA/FIPS semantic reconciliation — 2026-10-01
 
 Fresh review of the actual source note, current mapper code, and historical acceptance shows two distinct rules that must not be conflated. The original SSP System Characteristics source note says all security-impact values must normalize to FIPS 199 low/moderate/high. The current mapper does resolve Archer select IDs through ARCHER_META_VALUE and normalizes labels already recognized as low/moderate/high, but it also preserves explicitly allowed Legacy LOE strings from the mapping CSV. Historical project guidance explicitly recorded that full FIPS normalization was not established and that no Legacy LOE -> FIPS equivalence should be invented without evidence. Therefore the currently committed v8 payload is technically read-back verified, but Legacy LOE values inside security-objective-* are not proof of source-note FIPS normalization. No runtime change is made by this checkpoint. Next evidence step is read-only inventory of actual select IDs/labels across the 11 CIA candidate fields using sql/validation/SSP_CIA_SOURCE_VALUE_AUDIT.sql, followed by an owner-approved crosswalk only if noncanonical legacy labels must be converted.
+
+
+## Matillion meta-reference enrichment candidate — 2026-10-01
+
+Owner-provided live metadata evidence now confirms:
+- `ARCHER_META_VALUES` resolves `VALUEID -> VALUENAME`; the owner reports these values include the canonical CIA labels such as High/Low.
+- `ARCHER_META_GROUP` exposes `GROUP_ID`, `GROUP_NAME`, and `GUID` (owner screenshot).
+
+A new DEV-only Matillion candidate is committed at
+`sql/matillion/CANDIDATE_enrich_curated_json_users_values_groups.sql`.
+It preserves original Archer IDs and enriches existing `CURATED_JSON` with:
+- `UserList[].ResolvedUser`
+- field-level `ResolvedValues[]` from `ValuesListIds[]`
+- field-level `ResolvedGroups[]` from `GroupList[]`
+
+A matching read-only post-run validator is committed at
+`sql/matillion/READ_ONLY_POST_META_REFERENCE_ENRICHMENT_VALIDATION.sql`.
+
+Validation performed here: repository source inspection, branch/head verification, exact file creation, and Git read-back. No Snowflake/Matillion execution was performed from chat. The existing user-only Matillion candidate remains historical and is not proof that value/group enrichment has executed.
+
+Next action: place/run the new candidate in Matillion DEV after the existing raw-to-CURATED_JSON conversion, then run the read-only validator and capture its result before simplifying notebook-side Archer meta lookups. Do not remove the notebook fallback until the Matillion enrichment is persisted and read-back verified.
