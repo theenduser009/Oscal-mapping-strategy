@@ -64,3 +64,30 @@ Owner decision on 2026-10-01: keep `NOTES` for a while as a human review aid. Th
 A fresh Snowflake PREVIEW attempt failed before commit with `Run the matching Cell 5 before Cell 7`. Root cause was a repository packaging mismatch introduced during the v7 cleanup: Cell 5 advertised `lean-csv-registry-v7-production-clean` while Cell 7 still checked for `lean-csv-registry-v6-lineage-required`.
 
 Corrected and read back on 2026-10-01. Current head after the fix: `8e7129b77e2f56dd7395888b3bc2b02041dcdec0`. A dedicated release-marker test was added so Cells 3/4/5/7 cannot silently drift again. No Snowflake DML occurred; the failed run was `FAILED_BEFORE_COMMIT` with `writes_executed=false` and `commit_attempted=false`.
+
+
+## Fresh Snowflake SSP PREVIEW after cleanup
+
+Owner-provided live notebook evidence on 2026-10-01 after loading the cleaned CSV and matched seven-cell release:
+
+- pipeline status: `PREVIEW_COMPLETE`
+- model/source: `SSP / source-one`
+- `writes_executed=false`
+- `persisted=false`
+- `committed=false`
+- `target_dml_attempted=false`
+- `pre_write_validation_passed=true`
+- `validation_passed=true`
+- `storage_verified=true`
+- source records: `2813`
+- candidate nodes: `550380`
+- candidate edges: `547567`
+- DIM expected changes: `3581 inserts / 0 updates / 546799 unchanged`
+- FACT expected changes: `3581 inserts / 0 updates / 543986 unchanged`
+- `LINEAGE_PROPS=3581`
+- `LINEAGE_GAPS=0`
+- `LINEAGE_COMPLETE=true`
+- load status: `PREVIEW_PASSED_NO_TARGET_DML`
+- temporary cleanup: `REMOVED`
+
+Interpretation: the cleaned mapping contract and matched seven-cell release now build and validate successfully in live Snowflake PREVIEW. This proves the candidate graph/storage checks and no-DML safety for this run. It does **not yet** prove that every lineage payload has exactly the new minimal `name + ns + value` shape; run validation helper 17 next before any COMMIT.
