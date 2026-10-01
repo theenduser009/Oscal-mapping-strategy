@@ -7,8 +7,8 @@
 --
 -- Expected enrichment:
 --   UserList[].ResolvedUser
---   field.ResolvedValues[] from ARCHER_META_VALUES.VALUEID / VALUENAME
---   field.ResolvedGroups[] from ARCHER_META_GROUP.GROUP_ID / GROUP_NAME / GUID
+--   field.ResolvedValues[] from ARCHER_META_VALUE.SELECT_VALUE_ID / SELECT_VALUE_NAME
+--   field.ResolvedGroups[] from ARCHER_META_GROUP.GROUP_ID / GROUP_NAME
 
 WITH base AS (
     SELECT
@@ -81,7 +81,6 @@ resolved_groups AS (
         rg.index AS MEMBER_INDEX,
         rg.value:"GroupId"::VARCHAR AS GROUP_ID,
         rg.value:"GroupName"::VARCHAR AS GROUP_NAME,
-        rg.value:"Guid"::VARCHAR AS GUID,
         rg.value:"LookupStatus"::VARCHAR AS LOOKUP_STATUS
     FROM fields f,
          LATERAL FLATTEN(INPUT => AS_ARRAY(f.FIELD_VALUE:"ResolvedGroups")) rg
