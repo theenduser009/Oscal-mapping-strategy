@@ -352,3 +352,47 @@ No live Snowflake v10 PREVIEW has yet been observed. v8 remains the last target 
 
 Next action:
 Replace Snowflake notebook Cells 1-7 with the matched v10 files and run Cell 2 first. Expected Source One selection report for the currently observed snapshot is RAW_ROWS=2812, NULL_SOURCE_SHELLS_SKIPPED=2, SELECTED_ROWS=2810 (subject to source changes). If Cell 2 succeeds, continue Cells 3-7 in PREVIEW with EXECUTE_WRITES=False and review the resulting CIA/security-impact payload and DIM/FACT delta before any COMMIT.
+
+
+## Cell 7 component-hydration failure — 2026-10-01
+
+Owner-provided Snowflake Cell 7 screenshot shows v10 PREVIEW stopping before any
+group publication/commit:
+- mode = PREVIEW
+- status = FAILED_BEFORE_COMMIT
+- groups = []
+- writes_executed = false
+- commit_attempted = false
+- failed_route = source-one / SSP
+- error_type = ValueError
+- error_message = Component hydration lookup record is missing
+
+Fresh code/history review confirms this is not part of the Matillion select-value
+or FIPS cleanup. It is the previously accepted SSP component-hydration contract.
+The mapper intentionally fails closed if a hydrated SOFTWARE or INTERCONNECTION
+reference ContentId is absent from its configured lookup table.
+
+Current executable component hydration bindings remain:
+- SOFTWARE -> ARCHER_CONTENT_SOFTWARE_RAW (title + required description)
+- INTERCONNECTIONS -> ARCHER_CONTENT_INTERCONNECTIONS_RAW
+- INTERCONNECTIONS_CONNECTING_INFORMATION_SYSTEM -> ARCHER_CONTENT_INTERCONNECTIONS_RAW
+The other approved component reference fields do not currently request hydration.
+
+Historical evidence dated 2026-09-09/10 showed the component source contract and
+a successful read-only hydration run for the then-current 2,813-record snapshot.
+That historical acceptance does not prove the current daily snapshot still has
+complete lookup coverage.
+
+No mapper behavior was changed in response to this failure. A new read-only
+diagnostic is committed at:
+sql/validation/READ_ONLY_SSP_COMPONENT_HYDRATION_GAP.sql
+
+It reports:
+1) coverage/missing counts by hydrated Archer source field,
+2) exact current missing component references and parent SSP record,
+3) lookup-table identity/null/duplicate health.
+
+Next action: run the three SELECTs from that file. If the gap is current lookup
+coverage or lookup-table raw-load health, repair/reload the corresponding
+upstream component source. Do not remove the hydration guard or skip component
+records merely to make PREVIEW pass.
