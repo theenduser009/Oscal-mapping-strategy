@@ -21,6 +21,8 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
     plan, config, report = context["compiled_plan"], context["config"], context["graph_report"]
     emitted = set()
     namespace = config.get("LINEAGE_PROPERTY_NS")
+    if pending and not namespace:
+        raise ValueError("LINEAGE_PROPERTY_NS must be an absolute URI")
     for target, contribution in sorted(
             pending, key=lambda item: (item[0]["NODE_KEY"], item[1]["rule_id"], item[1]["target"])):
         host, crossed_collection = target, False
