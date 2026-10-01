@@ -20,9 +20,6 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
     """Attach one source-field prop for each selected surviving contribution."""
     plan, config, report = context["compiled_plan"], context["config"], context["graph_report"]
     emitted = set()
-    namespace = config.get("LINEAGE_PROPERTY_NS")
-    if pending and not namespace:
-        raise ValueError("LINEAGE_PROPERTY_NS must be an absolute URI")
     for target, contribution in sorted(
             pending, key=lambda item: (item[0]["NODE_KEY"], item[1]["source_field"], item[1]["target"])):
         host, crossed_collection = target, False
@@ -59,7 +56,6 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
         prop = _oscal_prop(
             "source-field",
             contribution["source_field"],
-            namespace,
         )
         if inline:
             payload = json.loads(host["METADATA_JSON"])
@@ -81,7 +77,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v7-production-clean":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v8-source-field-lineage":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -155,4 +151,4 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v7-production-clean"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"

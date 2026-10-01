@@ -91,3 +91,8 @@ Owner-provided live notebook evidence on 2026-10-01 after loading the cleaned CS
 - temporary cleanup: `REMOVED`
 
 Interpretation: the cleaned mapping contract and matched seven-cell release now build and validate successfully in live Snowflake PREVIEW. This proves the candidate graph/storage checks and no-DML safety for this run. It does **not yet** prove that every lineage payload has exactly the new minimal `name + ns + value` shape; run validation helper 17 next before any COMMIT.
+
+
+## Namespace removed from selective lineage — 2026-10-01
+
+Owner decision: remove `urn:company:oscal:lineage:v1` entirely. The selective lineage payload is now only `{"name":"source-field","value":"<ARCHER_FIELD_NAME>"}`. Traceability does not depend on a namespace: the lineage DIM row carries `SOURCE_RECORD_ID` (the Archer Content ID), the property `value` carries the exact Archer source field name, the mapping CSV resolves that source field to `OSCAL_ELEMENT_PATH`, and the FACT containment edge ties the lineage prop to the corresponding OSCAL graph context. This supersedes the earlier three-key namespace-bearing lineage payload. Fresh PREVIEW is required before COMMIT because the live 3,581-prop validation was for the superseded namespace-bearing payload.

@@ -16,7 +16,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v7-production-clean (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v8-source-field-lineage (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -26,7 +26,6 @@ CONFIG = {
     "SSP_DOCUMENT_VERSION": "1.0",
     "EXECUTE_WRITES": False,
     "IDENTITY_VERSION": "v1_registry_path_instance",
-    "LINEAGE_PROPERTY_NS": "urn:company:oscal:lineage:v1",
     "ASSESSMENT_TASK_TITLE": "Preassessment review",
     "ASSESSMENT_TASK_TYPE": "action",
     "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",

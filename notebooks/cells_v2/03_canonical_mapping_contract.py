@@ -7,7 +7,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v7-production-clean"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v8-source-field-lineage"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",

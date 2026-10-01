@@ -8,8 +8,6 @@ from test_registry_release import mapping_rows
 
 
 PROPS = base.SUMMARY + ".props[]"
-NS = "urn:company:oscal:lineage:v1"
-
 
 def registry_with_props():
     rows = base.registry_rows()
@@ -33,7 +31,6 @@ def registry_with_props():
 def compiled(row):
     ns = lean_support.namespace(models=("SSP",))
     context = base.compile_context(ns, [row], registry=registry_with_props())
-    context["config"]["LINEAGE_PROPERTY_NS"] = NS
     return ns, context
 
 
@@ -54,7 +51,6 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
         self.assertEqual(1, len(lineage))
         self.assertEqual({
             "name": "source-field",
-            "ns": NS,
             "value": "SOURCE_TITLE",
         }, {key: value for key, value in lineage[0].items() if key != "uuid"})
 
@@ -88,7 +84,6 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
         ]
         ns = lean_support.namespace(models=("SSP",))
         context = base.compile_context(ns, rows, registry=registry_with_props())
-        context["config"]["LINEAGE_PROPERTY_NS"] = NS
         nodes, _ = base.build(ns, context, [{
             "SOURCE_RECORD_ID": "record-one",
             "CURATED_JSON": {"SOURCE_A": "Same title", "SOURCE_B": "Same title"},
@@ -141,17 +136,19 @@ class SelectiveLineagePropertyTests(unittest.TestCase):
         context = base.compile_context(ns, [row], registry=registry_with_props())
         self.assertEqual("BLOCKED", context["routing_report"]["STATUS"])
 
-    def test_required_namespace_fails_closed_only_when_lineage_is_emitted(self):
+    def test_lineage_prop_has_only_name_and_value(self):
         row = base.mapping(
             "SOURCE_TITLE", base.SUMMARY + ".title", "text", LINEAGE_REQUIRED="Y",
         )
         ns, context = compiled(row)
-        context["config"].pop("LINEAGE_PROPERTY_NS")
-        with self.assertRaisesRegex(ValueError, "LINEAGE_PROPERTY_NS must be an absolute URI"):
-            base.build(ns, context, [{
-                "SOURCE_RECORD_ID": "record-one",
-                "CURATED_JSON": {"SOURCE_TITLE": "Mapped title"},
-            }])
+        nodes, _ = base.build(ns, context, [{
+            "SOURCE_RECORD_ID": "record-one",
+            "CURATED_JSON": {"SOURCE_TITLE": "Mapped title"},
+        }])
+        lineage = base.payloads(nodes, PROPS)
+        self.assertEqual(1, len(lineage))
+        payload = {key: value for key, value in lineage[0].items() if key != "uuid"}
+        self.assertEqual({"name": "source-field", "value": "SOURCE_TITLE"}, payload)
 
     def test_current_ssp_system_characteristics_lineage_flags_are_selective(self):
         actual = {

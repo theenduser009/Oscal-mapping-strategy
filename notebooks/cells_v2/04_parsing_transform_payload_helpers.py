@@ -276,16 +276,11 @@ def _metadata_mapped_value(row, source_obj, context):
     return value
 
 
-def _oscal_prop(name, value, namespace=None):
-    """Build one OSCAL property; namespace is used only for our custom extension."""
+def _oscal_prop(name, value):
+    """Build one small OSCAL property."""
     prop = {"name": _metadata_text(name, "Property name"), "value": value}
     if value is not None and not isinstance(value, str):
         raise ValueError("Property value must be text or an explicitly preserved warehouse null")
-    if namespace is not None:
-        if (not isinstance(namespace, str) or re.search(r"\s", namespace)
-                or not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*:[^\s]+", namespace)):
-            raise ValueError("Property namespace must be an absolute URI without whitespace")
-        prop["ns"] = namespace
     return prop
 
 def _capture_contribution(contributions, row, target, context, origin=None):
@@ -836,7 +831,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v7-production-clean":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v8-source-field-lineage":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -873,4 +868,4 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v7-production-clean"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"

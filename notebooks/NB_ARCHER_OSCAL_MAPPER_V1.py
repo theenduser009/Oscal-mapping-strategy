@@ -28,7 +28,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v7-production-clean (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v8-source-field-lineage (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -38,7 +38,6 @@ CONFIG = {
     "SSP_DOCUMENT_VERSION": "1.0",
     "EXECUTE_WRITES": False,
     "IDENTITY_VERSION": "v1_registry_path_instance",
-    "LINEAGE_PROPERTY_NS": "urn:company:oscal:lineage:v1",
     "ASSESSMENT_TASK_TITLE": "Preassessment review",
     "ASSESSMENT_TASK_TYPE": "action",
     "ELEMENT_REGISTRY_TABLE": "RTX_RAW_DEV.ES_ESC_GRC.OSCAL_ELEMENT_REGISTRY",
@@ -463,7 +462,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v7-production-clean"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v8-source-field-lineage"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -1216,16 +1215,11 @@ def _metadata_mapped_value(row, source_obj, context):
     return value
 
 
-def _oscal_prop(name, value, namespace=None):
-    """Build one OSCAL property; namespace is used only for our custom extension."""
+def _oscal_prop(name, value):
+    """Build one small OSCAL property."""
     prop = {"name": _metadata_text(name, "Property name"), "value": value}
     if value is not None and not isinstance(value, str):
         raise ValueError("Property value must be text or an explicitly preserved warehouse null")
-    if namespace is not None:
-        if (not isinstance(namespace, str) or re.search(r"\s", namespace)
-                or not re.fullmatch(r"[A-Za-z][A-Za-z0-9+.-]*:[^\s]+", namespace)):
-            raise ValueError("Property namespace must be an absolute URI without whitespace")
-        prop["ns"] = namespace
     return prop
 
 def _capture_contribution(contributions, row, target, context, origin=None):
@@ -1776,7 +1770,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v7-production-clean":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v8-source-field-lineage":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -1813,7 +1807,7 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v7-production-clean"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"
 
 
 # %% Cell 5 - Build nodes, exact containment, and selective source-field lineage
@@ -1838,9 +1832,6 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
     """Attach one source-field prop for each selected surviving contribution."""
     plan, config, report = context["compiled_plan"], context["config"], context["graph_report"]
     emitted = set()
-    namespace = config.get("LINEAGE_PROPERTY_NS")
-    if pending and not namespace:
-        raise ValueError("LINEAGE_PROPERTY_NS must be an absolute URI")
     for target, contribution in sorted(
             pending, key=lambda item: (item[0]["NODE_KEY"], item[1]["source_field"], item[1]["target"])):
         host, crossed_collection = target, False
@@ -1877,7 +1868,6 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
         prop = _oscal_prop(
             "source-field",
             contribution["source_field"],
-            namespace,
         )
         if inline:
             payload = json.loads(host["METADATA_JSON"])
@@ -1899,7 +1889,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v7-production-clean":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v8-source-field-lineage":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -1973,7 +1963,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v7-production-clean"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v8-source-field-lineage"
 
 
 # %% Cell 6 - Validate once, preview, then atomically upsert the reviewed tables
@@ -2428,7 +2418,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
         if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.2-lineage":
             raise ValueError("Run the matching Cell 6 before Cell 7")
-        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v7-production-clean":
+        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v8-source-field-lineage":
             raise ValueError("Run the matching Cell 5 before Cell 7")
         routes = {}
         for context in mapping_contexts:

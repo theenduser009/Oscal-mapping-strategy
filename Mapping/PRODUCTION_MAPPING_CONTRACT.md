@@ -22,15 +22,11 @@ Only LINEAGE_REQUIRED=Y mappings that actually contribute a value emit:
 ```json
 {
   "name": "source-field",
-  "ns": "urn:company:oscal:lineage:v1",
   "value": "INTEGRITY_CONTROL_CATEGORY_OVERRIDE"
 }
 ```
 
-The namespace marks the property as the organization's OSCAL extension and v1
-versions those extension semantics. There is no class, target path, target UUID,
-source-table property, or lineage-group property; the mapping CSV already records
-the target.
+There is no namespace, class, target path, target UUID, source-table property, or lineage-group property. `value` is the exact Archer source field name. Traceability uses the lineage node's SOURCE_RECORD_ID together with the mapping CSV's SOURCE_FIELD_NAME -> OSCAL_ELEMENT_PATH contract and the FACT containment edge.
 
 The production runtime does not depend on Mapping/*.md files, original Excel row
 numbers, GitHub line numbers, or the archive CSV.

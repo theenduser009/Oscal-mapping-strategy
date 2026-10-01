@@ -31,7 +31,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
         if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.2-lineage":
             raise ValueError("Run the matching Cell 6 before Cell 7")
-        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v7-production-clean":
+        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v8-source-field-lineage":
             raise ValueError("Run the matching Cell 5 before Cell 7")
         routes = {}
         for context in mapping_contexts:
