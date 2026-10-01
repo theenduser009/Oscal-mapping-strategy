@@ -55,7 +55,7 @@ class FipsNormalizationTests(unittest.TestCase):
     def test_all_eight_approved_legacy_labels_remain_unchanged(self):
         labels = ["Legacy LOE " + letter + suffix for letter in "ABCD" for suffix in ("", " + DFARS")]
         for row in self.approved_rows():
-            self.assertEqual(set(labels), set(row["TRANSFORM_PARAMS"]["approved_legacy_values"]))
+            self.assertEqual(set(labels), set(self.ns["_metadata_params"](row)["approved_legacy_values"]))
             for index, label in enumerate(labels):
                 source = self.enriched(162400 + index, label)
                 with self.subTest(rule=row["RULE_ID"], source=source):
