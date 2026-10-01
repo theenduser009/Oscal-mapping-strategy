@@ -228,3 +228,35 @@ The sample CIA/FIPS result also shows populated `ValuesListIds` (examples includ
 Interpretation: the previously deployed UserList enrichment is present, but the new ValuesListIds/GroupList enrichment is not persisted in the inspected CURATED_JSON. This result does not prove a lookup failure: if the corrected candidate had executed and merely missed a lookup, it is designed to emit VALUE_NOT_FOUND/GROUP_NOT_FOUND rows rather than zero resolved arrays. Do not simplify notebook lookups yet.
 
 Next action: execute the corrected DEV Matillion candidate `sql/matillion/CANDIDATE_enrich_curated_json_users_values_groups.sql` and capture the Matillion affected-row/result status. Then rerun the same read-only validator. If the Matillion component reports zero rows updated or the validator remains unchanged, stop and inspect candidate eligibility/blocking rather than retrying blindly.
+
+
+## Matillion raw-load incident diagnosis and integrated replacement — 2026-10-01
+
+Owner reported that a pipeline run populated RAW_DATA but left CURATED_JSON null. Repository inspection found the exact cause: the recently supplied file
+`sql/matillion/CANDIDATE_enrich_curated_json_users_values_groups.sql`
+is a **post-CURATED enrichment** statement. Its source predicate requires
+`TYPEOF(r.CURATED_JSON) = 'OBJECT'` and its target predicate also requires
+`TYPEOF(tgt.CURATED_JSON) = 'OBJECT'`. Therefore it cannot create CURATED_JSON
+for newly loaded rows where CURATED_JSON is SQL NULL. Used in the raw-load
+Matillion component, it updates zero such rows.
+
+A new integrated replacement is committed:
+`sql/matillion/CANDIDATE_raw_curated_with_meta_user_value_group_enrichment.sql`.
+
+This new statement starts from the previously accepted raw -> CURATED_JSON SQL,
+preserves source-side `TRY_TO_NUMBER(FIELD_ID)` safety, existing type conversion,
+nested extraction, JSON-null key preservation, RequestedObject.Id -> CONTENT_ID,
+and both `CURATED_JSON IS NULL` pending-row guards. It then enriches the newly
+built candidate JSON with UserList, ValuesListIds, and GroupList metadata.
+Malformed/ambiguous enrichment falls back to the un-enriched newly built
+CURATED_JSON for that record rather than preventing raw-to-curated conversion.
+
+Validation performed in chat: current branch/source inspection and Git read-back
+of the integrated file. No Matillion/Snowflake execution of the integrated
+replacement has yet been observed. The post-CURATED enrichment file remains
+valid only for already-populated CURATED_JSON and must not be used as the
+raw-load conversion component.
+
+Next action: replace the raw-load Matillion SQL with the integrated replacement,
+run once in DEV, and verify CURATED_JSON is populated before any notebook
+simplification.
