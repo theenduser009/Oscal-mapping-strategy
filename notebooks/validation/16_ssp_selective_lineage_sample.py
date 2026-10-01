@@ -8,8 +8,11 @@ lineage = MODEL_GRAPHS[("source-one", "SSP")]["nodes"].filter(
 
 print("CANDIDATE LINEAGE NODES =", lineage.count())
 
-lineage.select(
+sample = lineage.select(
     "SOURCE_RECORD_ID",
     "ELEMENT_PATH",
     "METADATA_JSON",
-).show(20, truncate=False)
+).limit(20).collect()
+
+for row in sample:
+    print(row.as_dict(recursive=True) if hasattr(row, "as_dict") else row)
