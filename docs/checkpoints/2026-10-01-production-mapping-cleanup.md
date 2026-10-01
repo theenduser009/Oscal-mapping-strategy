@@ -116,3 +116,8 @@ Owner-provided Snowflake output on 2026-10-01 from the current namespace-free va
 The current Git validator was read back at branch head bb74552529044cf800777781551a0cb6b8b490c3 and contains no lineage namespace requirement. Therefore this live result proves the namespace-free two-key custom property shape (name + value) for all 3,581 candidate lineage props. The populated source-field counts remain OPERATIONAL_STATUS 2771 and the availability/confidentiality/integrity override fields 270 each; the remaining eight configured lineage fields are absent in this source snapshot.
 
 This completes the namespace-free SSP PREVIEW lineage gate. No target COMMIT/read-back has yet been performed for v8.
+
+
+## Namespace-free v8 lineage validator PASS
+
+Owner-provided Snowflake output on 2026-10-01 confirms the current namespace-free validator passed across all candidate SSP lineage properties: EXPECTED LINEAGE FIELDS=12, LINEAGE NODES=3581, REPORTED LINEAGE PROPS=3581, INVALID LINEAGE PROPS=0, DUPLICATE LINEAGE PROPS=0, and LINEAGE_CONTRACT_VALIDATED=True. The populated source-field counts remain OPERATIONAL_STATUS=2771 and the availability/confidentiality/integrity override fields=270 each; the other eight configured fields produced no lineage rows in this source snapshot. This validates the v8 two-key lineage payload (name + value) in PREVIEW. No target COMMIT/read-back has yet been performed for v8.
