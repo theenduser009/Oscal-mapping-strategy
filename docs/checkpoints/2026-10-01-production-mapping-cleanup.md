@@ -52,3 +52,8 @@ Source One lookup tables. This full-suite failure is **not** being treated as a
 successful production release.
 
 No live Snowflake PREVIEW has yet been run for the new three-key lineage payload.
+
+
+## NOTES retained for transition review
+
+Owner decision on 2026-10-01: keep `NOTES` for a while as a human review aid. The clean CSV therefore has 19 columns. Execution does not read NOTES; Cell 2 accepts it only as an explicitly optional column. All other retired provenance/history columns remain removed.
