@@ -7,7 +7,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v10-curated-resolved-only"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v11-meta-driven-security-objectives"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -260,9 +260,9 @@ def _compile_mapping(row, elements):
             raise ValueError("PROPERTY_NAME contains unsupported characters")
         representation["property_name"] = property_name
     if transform == "security-objective":
-        allowed.add("ALLOWED_VALUES")
-        if row.get("ALLOWED_VALUES"):
-            params["approved_legacy_values"] = _metadata_items(row, "ALLOWED_VALUES")
+        # CIA labels come from Matillion ResolvedValues, validated against
+        # ARCHER_META_VALUE upstream. Do not carry a manual label allowlist in CSV.
+        pass
     if transform == "status-crosswalk":
         allowed.update(("VALUE_MAP", "OTHER_REMARKS_TEMPLATE"))
         crosswalk = {}
