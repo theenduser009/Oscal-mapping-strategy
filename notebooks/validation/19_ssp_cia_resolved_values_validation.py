@@ -61,7 +61,7 @@ source_records_checked = 0
 populated_field_occurrences = 0
 resolved_occurrences = 0
 canonical_occurrences = 0
-legacy_occurrences = 0
+noncanonical_meta_occurrences = 0
 complete_records = 0
 incomplete_records = 0
 complete_comparisons = 0
@@ -125,7 +125,7 @@ for record in source_df.to_local_iterator():
         if str(expected).lower() in {"low", "moderate", "high"}:
             canonical_occurrences += 1
         else:
-            legacy_occurrences += 1
+            noncanonical_meta_occurrences += 1
 
         if len(samples) < 20:
             raw_py = _to_python(raw)
@@ -188,7 +188,7 @@ print("SECURITY_IMPACT_NODES =", len(candidate_rows))
 print("POPULATED_CIA_FIELD_OCCURRENCES =", populated_field_occurrences)
 print("RESOLVEDVALUES_OCCURRENCES =", resolved_occurrences)
 print("CANONICAL_LOW_MODERATE_HIGH_OCCURRENCES =", canonical_occurrences)
-print("REVIEWED_LEGACY_OCCURRENCES =", legacy_occurrences)
+print("NONCANONICAL_META_LABEL_OCCURRENCES =", noncanonical_meta_occurrences)
 print("COMPLETE_CIA_RECORDS =", complete_records)
 print("INCOMPLETE_CIA_RECORDS_SKIPPED_BY_DESIGN =", incomplete_records)
 print("COMPLETE_TARGET_COMPARISONS =", complete_comparisons)
