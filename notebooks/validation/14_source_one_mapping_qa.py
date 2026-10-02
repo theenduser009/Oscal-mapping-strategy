@@ -1,5 +1,5 @@
 # %% Source One mapping QA gate
-# Date: 2026-09-29
+# Updated: 2026-10-02 for v10 curated-resolved-only runtime
 # READ ONLY. No DML / DDL / MERGE / INSERT / UPDATE / DELETE.
 #
 # Run after a successful Cell 7 PREVIEW or COMMIT/verification in the same notebook session.
@@ -22,6 +22,7 @@
 #   * Archer Dev FIELD_ID is resolved with source-table LevelId context. Ambiguous
 #     matches are reported; this script never silently chooses one.
 #   * Config/support mappings are separated from Archer-field validation.
+#   * CIA/security-objective atomic assembly is validated separately by helper 19.
 
 import copy
 import json
@@ -32,6 +33,7 @@ QA_SOURCE_KEY = "source-one"
 QA_SAMPLE_CONTENT_IDS = 15
 QA_META_FIELD_TABLE = "RTX_RAW_DEV.ES_ESC_GRC.ARCHER_META_FIELD"
 QA_RELATIONSHIP_FIELD_TYPES = {9, 23}
+QA_RUNTIME_RELEASE = "lean-csv-registry-v10-curated-resolved-only"
 
 if "MAPPING_INPUTS" not in globals() or QA_SOURCE_KEY not in MAPPING_INPUTS:
     raise ValueError("Run current Cell 2 before Source One QA")
@@ -77,6 +79,12 @@ for context in route_contexts:
     if graph is None or graph.get("context") is None:
         raise ValueError("Cell 7 runtime context is unavailable for " + str(route))
     runtime_contexts.append(graph["context"])
+
+for context in runtime_contexts:
+    if context["compiled_plan"].get("release") != QA_RUNTIME_RELEASE:
+        raise ValueError(
+            "Source One QA requires the matched v10 curated-resolved-only runtime"
+        )
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -187,6 +195,20 @@ def _qa_level_ids(table_name):
     return sorted({int(r["LEVEL_ID"]) for r in rows if r["LEVEL_ID"] is not None})
 
 
+def _qa_mapping_key(model, row):
+    """Stable current-runtime mapping identity; RULE_ID was retired from the CSV."""
+    return (
+        model,
+        row["SOURCE_FIELD_NAME"],
+        row["OWNER_ELEMENT_PATH"],
+        row.get("FIELD_RELATIVE_PATH") or "",
+    )
+
+
+def _qa_mapping_key_text(model, row):
+    return "|".join(str(part) for part in _qa_mapping_key(model, row))
+
+
 # ---------------------------------------------------------------------------
 # Full mapping disposition inventory
 # ---------------------------------------------------------------------------
@@ -195,14 +217,14 @@ all_mapping_rows = MAPPING_INPUTS[QA_SOURCE_KEY]
 disposition_rows = []
 for row in all_mapping_rows:
     status = (row.get("EXECUTION_STATUS") or "").strip() or "<BLANK>"
-    path = (row.get("RUNTIME_TARGET_PATH") or row.get("OSCAL_ELEMENT_PATH") or "").strip()
+    path = (row.get("OSCAL_ELEMENT_PATH") or "").strip()
     if status != "APPROVED" or not path or "TBD" in path.upper() or "MULTIPLE" in path.upper():
         disposition_rows.append({
             "SOURCE_FIELD_NAME": row.get("SOURCE_FIELD_NAME"),
             "OSCAL_MODEL": row.get("OSCAL_MODEL"),
             "EXECUTION_STATUS": status,
             "TARGET_PATH": path or "<BLANK>",
-            "RULE_ID": row.get("RULE_ID"),
+            "MAPPING_KEY": "|".join((str(row.get("OSCAL_MODEL") or ""), str(row.get("SOURCE_FIELD_NAME") or ""), path or "<BLANK>")),
         })
 
 # ---------------------------------------------------------------------------
@@ -232,14 +254,14 @@ for context, model, row in active_rows:
     field = row["SOURCE_FIELD_NAME"]
     params = _metadata_params(row)
     if params.get("value_source") == "CONFIG":
-        field_origin[(model, row["RULE_ID"])] = (None, ())
+        field_origin[_qa_mapping_key(model, row)] = (None, ())
         continue
     table = source_profile["RAW_TABLE"]
     if row["REPRESENTATION"] == "joined-records":
         binding = params.get("joined_lookup")
         contract = context["lookups"]["joined_contract"].get(binding, {})
         table = contract.get("source_table") or table
-    field_origin[(model, row["RULE_ID"])] = (table, tuple(levels_by_table.get(table, ())))
+    field_origin[_qa_mapping_key(model, row)] = (table, tuple(levels_by_table.get(table, ())))
     field_names.add(field.upper())
 
 meta_candidates = defaultdict(list)
@@ -264,7 +286,7 @@ def _qa_meta_resolution(model, row):
             "META_FIELD_STATUS": "CONFIG_SUPPORT",
         }
     field = row["SOURCE_FIELD_NAME"].upper()
-    _, levels = field_origin[(model, row["RULE_ID"])]
+    _, levels = field_origin[_qa_mapping_key(model, row)]
     candidates = [
         item for item in meta_candidates.get(field, [])
         if not levels or item["LEVEL_ID"] in levels
@@ -297,11 +319,11 @@ source_expected = defaultdict(lambda: defaultdict(list))
 sample_expected = {}
 
 for context, model, row in active_rows:
-    key = (model, row["RULE_ID"])
+    key = _qa_mapping_key(model, row)
     coverage[key] = {
         "SOURCE_FIELD_NAME": row["SOURCE_FIELD_NAME"],
         "OSCAL_MODEL": model,
-        "RULE_ID": row["RULE_ID"],
+        "MAPPING_KEY": _qa_mapping_key_text(model, row),
         "TARGET_PATH": row["CANONICAL_ELEMENT_PATH"],
         "OWNER_ELEMENT_PATH": row["OWNER_ELEMENT_PATH"],
         "REPRESENTATION": row["REPRESENTATION"],
@@ -383,7 +405,7 @@ for context in runtime_contexts:
             "payload": payload,
         }
         for row in rows_by_owner.get((model, owner), ()):
-            key = (model, row["RULE_ID"])
+            key = _qa_mapping_key(model, row)
             operator = row["REPRESENTATION"]
             values = _qa_target_values(row, node)
 
@@ -415,7 +437,7 @@ attention_rows = []
 sample_rows = []
 
 for context, model, row in active_rows:
-    key = (model, row["RULE_ID"])
+    key = _qa_mapping_key(model, row)
     item = coverage[key]
     meta = _qa_meta_resolution(model, row)
     item.update(meta)
@@ -457,7 +479,7 @@ for context, model, row in active_rows:
         "TARGET_EVIDENCE_RECORDS": target_records,
         "TARGET_EVIDENCE_OCCURRENCES": item["TARGET_EVIDENCE_OCCURRENCES"],
         "QA_STATUS": qa_status,
-        "RULE_ID": item["RULE_ID"],
+        "MAPPING_KEY": item["MAPPING_KEY"],
     }
     coverage_rows.append(output)
 
@@ -474,6 +496,7 @@ for context, model, row in active_rows:
         and source_populated > 0
         and not relationship_exception
         and row["REPRESENTATION"] not in {"assignments", "references", "joined-records"}
+        and row["TRANSFORM_ID"] != "security-objective"
     ):
         for rid in sample_content_ids:
             expected = sample_expected.get((key, rid), SKIP_VALUE)
@@ -511,10 +534,10 @@ coverage_columns = [
     "ARCHER_FIELD_TYPE_ID", "META_FIELD_STATUS", "TARGET_PATH",
     "SOURCE_PRESENT", "SOURCE_POPULATED", "SOURCE_EXPLICIT_NULL",
     "TARGET_EVIDENCE_RECORDS", "TARGET_EVIDENCE_OCCURRENCES",
-    "QA_STATUS", "RULE_ID",
+    "QA_STATUS", "MAPPING_KEY",
 ]
 disposition_columns = [
-    "SOURCE_FIELD_NAME", "OSCAL_MODEL", "EXECUTION_STATUS", "TARGET_PATH", "RULE_ID",
+    "SOURCE_FIELD_NAME", "OSCAL_MODEL", "EXECUTION_STATUS", "TARGET_PATH", "MAPPING_KEY",
 ]
 sample_columns = [
     "CONTENT_ID", "SOURCE_FIELD_NAME", "OSCAL_MODEL", "TARGET_PATH",
@@ -541,7 +564,7 @@ QA_ATTENTION_DF = _qa_frame(
         "TARGET_EVIDENCE_RECORDS": 0,
         "TARGET_EVIDENCE_OCCURRENCES": 0,
         "QA_STATUS": "NO_ATTENTION_ROWS",
-        "RULE_ID": "<NONE>",
+        "MAPPING_KEY": "<NONE>",
     },
 )
 QA_DISPOSITION_DF = _qa_frame(
@@ -552,7 +575,7 @@ QA_DISPOSITION_DF = _qa_frame(
         "OSCAL_MODEL": "<NONE>",
         "EXECUTION_STATUS": "NONE",
         "TARGET_PATH": "<NONE>",
-        "RULE_ID": "<NONE>",
+        "MAPPING_KEY": "<NONE>",
     },
 )
 QA_SAMPLE_DF = _qa_frame(
@@ -586,6 +609,7 @@ QA_SUMMARY = {
     "SAMPLE_CONTENT_IDS": sample_content_ids,
     "SAMPLE_VALUE_STATUS_COUNTS": dict(sorted(sample_status_counts.items())),
     "ATTENTION_ROWS": len(attention_rows),
+    "CIA_ATOMIC_VALIDATION": "RUN_HELPER_19_SEPARATELY",
 }
 
 print("SOURCE_ONE_QA_SUMMARY")
