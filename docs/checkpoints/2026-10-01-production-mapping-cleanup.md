@@ -589,3 +589,16 @@ This is live read-only proof that every populated CIA source occurrence observed
 Semantic boundary retained: 110 populated occurrences are canonical Low/Moderate/High and normalize to low/moderate/high; 791 occurrences are reviewed Legacy LOE labels and remain preserved. This acceptance proves mapping/runtime consistency, not a Legacy LOE -> FIPS equivalence.
 
 The next Source One validation is the broader exact-path QA required by the September 29 review. Existing helper 14 was refreshed for the current v10 mapping contract: retired RULE_ID/RUNTIME_TARGET_PATH dependencies were removed, a stable current mapping key is derived from model/source/owner/relative target, and CIA atomic value sampling is delegated to accepted helper 19. No runtime mapper or mapping CSV was changed by this QA-helper update.
+
+
+## Focused SSP props QA introduced — 2026-10-02
+
+Owner rejected the broad Source One QA output as insufficient for closeout because relationship-exception labels and aggregate evidence do not prove each field mapped to its exact OSCAL property. That assessment is accepted: helper 14 remains a triage/inventory report, not final field-by-field proof.
+
+A new root-level read-only helper was added: RUN_SSP_PROPS_ONE_BY_ONE.py. It validates one props[] branch at a time and prints each mapping separately with Archer SQL field name, Archer display field name, FIELD_ID, FIELD_TYPE_ID, LevelId context, exact OSCAL props[] path, exact expected prop name, source present/populated/null counts, target records with that exact prop name, exact transformed-value matches, mismatches, and deterministic sample Content IDs.
+
+The helper intentionally does not use the generic field-type-9/23 relationship-exception shortcut. For a props mapping it compares the exact transformed property value to the exact emitted property name/value.
+
+Default starting scope is system-security-plan.metadata.props[]. Current mapping CSV has one approved mapping in that branch: ARCHER_CONTENT_AUTHORIZATION_PACKAGE_CONFIRMED_IN_ARCHER. After that branch is reviewed, the same helper can be switched by changing QA_PROP_PATH to system-security-plan.system-characteristics.props[].
+
+No production mapper, mapping CSV, or target data was changed by this QA helper. Live execution is pending.
