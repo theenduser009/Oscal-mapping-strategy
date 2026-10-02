@@ -28,7 +28,7 @@ from snowflake.snowpark.types import StringType, StructField, StructType, Timest
 
 session = get_active_session()
 
-# Matched seven-cell release: lean-csv-registry-v10-curated-resolved-only (2026-10-01).
+# Matched seven-cell release: lean-csv-registry-v11-meta-driven-security-objectives (2026-10-01).
 # One selector only. No swapping Cell 1 files between Source 1 and Source 2.
 SELECTED_MODELS = ("SSP",)
 
@@ -470,7 +470,7 @@ import json
 import re
 from collections import Counter
 
-LEAN_MAPPER_RELEASE = "lean-csv-registry-v10-curated-resolved-only"
+LEAN_MAPPER_RELEASE = "lean-csv-registry-v11-meta-driven-security-objectives"
 METADATA_TRANSFORM_IDS = {
     "direct", "text", "timestamp", "date", "identifier", "archer-select",
     "scalar-score", "security-objective", "status-crosswalk", "reject-populated",
@@ -723,9 +723,9 @@ def _compile_mapping(row, elements):
             raise ValueError("PROPERTY_NAME contains unsupported characters")
         representation["property_name"] = property_name
     if transform == "security-objective":
-        allowed.add("ALLOWED_VALUES")
-        if row.get("ALLOWED_VALUES"):
-            params["approved_legacy_values"] = _metadata_items(row, "ALLOWED_VALUES")
+        # CIA labels come from Matillion ResolvedValues, validated against
+        # ARCHER_META_VALUE upstream. Do not carry a manual label allowlist in CSV.
+        pass
     if transform == "status-crosswalk":
         allowed.update(("VALUE_MAP", "OTHER_REMARKS_TEMPLATE"))
         crosswalk = {}
@@ -1203,15 +1203,11 @@ def _metadata_transform(row, value, context):
     if transform == "scalar-score":
         return _score_value(value, context)
     if transform == "security-objective":
-        result = normalize_security_objective(value)
-        if isinstance(result, list):
-            raise ValueError("Security objective resolved to multiple values")
-        if _has_value(result):
-            return str(result)
         label = _single_curated_label(value)
-        if label is None or label not in params.get("approved_legacy_values", ()):
-            raise ValueError("Security objective contains an unreviewed label")
-        return label
+        if label is None:
+            raise ValueError("Security objective requires exactly one resolved Archer meta label")
+        candidate = label.lower()
+        return candidate if candidate in {"low", "moderate", "high"} else label
     if transform == "status-crosswalk":
         label = _single_curated_label(value)
         if label is None:
@@ -1803,7 +1799,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v10-curated-resolved-only":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v11-meta-driven-security-objectives":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -1840,7 +1836,7 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v10-curated-resolved-only"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v11-meta-driven-security-objectives"
 
 
 # %% Cell 5 - Build nodes, exact containment, and selective source-field lineage
@@ -1922,7 +1918,7 @@ def _attach_record_lineage(pending, parents, registry, append_node, context):
 def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
                       model_key, source_system, source_table, context=None):
     context = _prepare_model_context(context, model_key, source_system, source_table)
-    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v10-curated-resolved-only":
+    if getattr(_metadata_instances, "_oscal_mapper_release", None) != "lean-csv-registry-v11-meta-driven-security-objectives":
         raise ValueError("Run the matching Cell 4 before Cell 5")
     config, report = context["config"], context["graph_report"]
     registry = _canonical_registry_rows(element_registry_df, model_key, context)
@@ -1996,7 +1992,7 @@ def build_oscal_graph(source_df, canonical_mapping_df, element_registry_df,
     return node_frame, edge_frame
 
 
-build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v10-curated-resolved-only"
+build_oscal_graph._oscal_mapper_release = "lean-csv-registry-v11-meta-driven-security-objectives"
 
 
 # %% Cell 6 - Validate once, preview, then atomically upsert the reviewed tables
@@ -2451,7 +2447,7 @@ def run_oscal_pipeline(source_inputs, mapping_contexts, load_mode="PREVIEW"):
             raise ValueError("Choose PREVIEW or COMMIT and at least one mapping route")
         if getattr(validate_and_load_oscal, "_oscal_loader_release", None) != "oscal-lean-daily-v3.2-lineage":
             raise ValueError("Run the matching Cell 6 before Cell 7")
-        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v10-curated-resolved-only":
+        if getattr(build_oscal_graph, "_oscal_mapper_release", None) != "lean-csv-registry-v11-meta-driven-security-objectives":
             raise ValueError("Run the matching Cell 5 before Cell 7")
         routes = {}
         for context in mapping_contexts:
