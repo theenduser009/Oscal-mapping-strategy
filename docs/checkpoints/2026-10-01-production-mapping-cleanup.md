@@ -578,3 +578,14 @@ Important semantic gap retained: 791 populated CIA occurrences currently resolve
 Combined with the successful unchanged SSP PREVIEW (0 DIM inserts/updates, 0 FACT inserts/updates, 550,380 nodes, 547,567 edges, lineage complete), the v10 runtime behavior is live validated for the current Source One snapshot. No target write is required to reconcile the current persisted target because PREVIEW proposed zero DML.
 
 Next action: decide separately whether the remaining Legacy LOE labels require an owner-approved business/FIPS crosswalk. Do not invent that crosswalk. If no such semantic conversion is currently required, proceed to the next Source One QA/closeout checkpoint without committing SSP target changes.
+
+
+## CIA ResolvedValues validation accepted — 2026-10-02
+
+Owner-provided Snowflake output from corrected helper 19 passed with the following live results: CIA_MAPPING_FIELDS=11; SOURCE_RECORDS_CHECKED=2813; SECURITY_IMPACT_NODES=270; POPULATED_CIA_FIELD_OCCURRENCES=901; RESOLVEDVALUES_OCCURRENCES=901; CANONICAL_LOW_MODERATE_HIGH_OCCURRENCES=110; REVIEWED_LEGACY_OCCURRENCES=791; COMPLETE_CIA_RECORDS=270; INCOMPLETE_CIA_RECORDS_SKIPPED_BY_DESIGN=90; COMPLETE_TARGET_COMPARISONS=810; SOURCE_TARGET_CONFLICTS=0; MISSING_COMPLETE_NODES=0; UNEXPECTED_PARTIAL_NODES=0; MISMATCHES=0; final signal CIA_RESOLVED_VALUES_VALIDATED=True.
+
+This is live read-only proof that every populated CIA source occurrence observed by the v10 run was supplied through Matillion ResolvedValues, that all 270 complete CIA records emitted exactly one complete security-impact-level object, and that 90 incomplete records emitted no partial object by design. No production mapper change was needed after the helper correction.
+
+Semantic boundary retained: 110 populated occurrences are canonical Low/Moderate/High and normalize to low/moderate/high; 791 occurrences are reviewed Legacy LOE labels and remain preserved. This acceptance proves mapping/runtime consistency, not a Legacy LOE -> FIPS equivalence.
+
+The next Source One validation is the broader exact-path QA required by the September 29 review. Existing helper 14 was refreshed for the current v10 mapping contract: retired RULE_ID/RUNTIME_TARGET_PATH dependencies were removed, a stable current mapping key is derived from model/source/owner/relative target, and CIA atomic value sampling is delegated to accepted helper 19. No runtime mapper or mapping CSV was changed by this QA-helper update.
