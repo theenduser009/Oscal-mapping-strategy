@@ -256,15 +256,11 @@ def _metadata_transform(row, value, context):
     if transform == "scalar-score":
         return _score_value(value, context)
     if transform == "security-objective":
-        result = normalize_security_objective(value)
-        if isinstance(result, list):
-            raise ValueError("Security objective resolved to multiple values")
-        if _has_value(result):
-            return str(result)
         label = _single_curated_label(value)
-        if label is None or label not in params.get("approved_legacy_values", ()):
-            raise ValueError("Security objective contains an unreviewed label")
-        return label
+        if label is None:
+            raise ValueError("Security objective requires exactly one resolved Archer meta label")
+        candidate = label.lower()
+        return candidate if candidate in {"low", "moderate", "high"} else label
     if transform == "status-crosswalk":
         label = _single_curated_label(value)
         if label is None:
@@ -856,7 +852,7 @@ def _metadata_parse(record, context):
 
 
 def _prepare_model_context(context, model_key, source_system, source_table):
-    if context["compiled_plan"].get("release") != "lean-csv-registry-v10-curated-resolved-only":
+    if context["compiled_plan"].get("release") != "lean-csv-registry-v11-meta-driven-security-objectives":
         raise ValueError("Run the matching lean Cell 3 before building the graph")
     config = context["config"]
     config["LINEAGE_GAP_COUNT"] = 0
@@ -893,4 +889,4 @@ def _metadata_finish(nodes, edges, context):
 
 print("Cell 4 transforms and registry operators ready")
 
-_metadata_instances._oscal_mapper_release = "lean-csv-registry-v10-curated-resolved-only"
+_metadata_instances._oscal_mapper_release = "lean-csv-registry-v11-meta-driven-security-objectives"
