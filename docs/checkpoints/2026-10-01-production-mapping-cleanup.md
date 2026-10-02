@@ -534,3 +534,16 @@ while `MODEL_GRAPHS` and `SOURCE_INPUTS` are still present.
 
 Acceptance signal:
 `MISMATCHES = 0` and `CIA_RESOLVED_VALUES_VALIDATED = True`.
+
+
+## CIA validation helper corrected for atomic security-impact assembly — 2026-10-02
+
+Owner-provided execution of validation helper 19 showed correct Matillion-resolved traces such as ValueId 80654 -> Low -> OSCAL low and reviewed Legacy LOE labels preserved, but the helper reported a mismatch on a source record with a populated CIA field.
+
+Fresh code/test review established the issue was in the validation helper, not the v10 mapper. The governed security-impact-level object is an atomic optional assembly: its registry REQUIRED_MEMBERS contract requires all CIA objective members before the node is emitted. Historical regression tests/test_ssp_security_impact_atomic_emission.py explicitly verifies that zero, one, or two populated objectives emit no security-impact-level instance, while a complete CIA set emits one singleton.
+
+The original helper incorrectly compared every populated CIA field to a candidate security-impact node, so a valid incomplete source record appeared as a mismatch.
+
+notebooks/validation/19_ssp_cia_resolved_values_validation.py is now corrected to distinguish complete CIA records from incomplete records skipped by design, require no partial node for incomplete records, and compare candidate payload values only for complete CIA records. No production mapper/runtime/mapping CSV code was changed for this correction.
+
+Next action: rerun only helper 19 in the same successful PREVIEW notebook session. Acceptance requires SOURCE_TARGET_CONFLICTS=0, MISSING_COMPLETE_NODES=0, UNEXPECTED_PARTIAL_NODES=0, MISMATCHES=0, and CIA_RESOLVED_VALUES_VALIDATED=True.
