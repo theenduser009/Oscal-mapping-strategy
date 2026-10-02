@@ -547,3 +547,34 @@ The original helper incorrectly compared every populated CIA field to a candidat
 notebooks/validation/19_ssp_cia_resolved_values_validation.py is now corrected to distinguish complete CIA records from incomplete records skipped by design, require no partial node for incomplete records, and compare candidate payload values only for complete CIA records. No production mapper/runtime/mapping CSV code was changed for this correction.
 
 Next action: rerun only helper 19 in the same successful PREVIEW notebook session. Acceptance requires SOURCE_TARGET_CONFLICTS=0, MISSING_COMPLETE_NODES=0, UNEXPECTED_PARTIAL_NODES=0, MISMATCHES=0, and CIA_RESOLVED_VALUES_VALIDATED=True.
+
+
+## CIA ResolvedValues validation PASSED — 2026-10-02
+
+Owner-provided Snowflake execution of `notebooks/validation/19_ssp_cia_resolved_values_validation.py` completed successfully in the same live PREVIEW session.
+
+Observed results:
+- CIA_MAPPING_FIELDS = 11
+- REQUIRED_CIA_MEMBERS = confidentiality, integrity, availability
+- SOURCE_RECORDS_CHECKED = 2,813
+- SECURITY_IMPACT_NODES = 270
+- POPULATED_CIA_FIELD_OCCURRENCES = 901
+- RESOLVEDVALUES_OCCURRENCES = 901
+- CANONICAL_LOW_MODERATE_HIGH_OCCURRENCES = 110
+- REVIEWED_LEGACY_OCCURRENCES = 791
+- COMPLETE_CIA_RECORDS = 270
+- INCOMPLETE_CIA_RECORDS_SKIPPED_BY_DESIGN = 90
+- COMPLETE_TARGET_COMPARISONS = 810
+- SOURCE_TARGET_CONFLICTS = 0
+- MISSING_COMPLETE_NODES = 0
+- UNEXPECTED_PARTIAL_NODES = 0
+- MISMATCHES = 0
+- final signal: CIA_RESOLVED_VALUES_VALIDATED = True
+
+This is read-only live proof that v10 consumes Matillion `ResolvedValues[]` correctly, preserves the atomic security-impact-level assembly contract, and produces candidate OSCAL CIA member values consistent with the configured transformations. It also confirms 90 source records have incomplete CIA membership and are intentionally omitted rather than emitting partial security-impact-level objects.
+
+Important semantic gap retained: 791 populated CIA occurrences currently resolve to reviewed Legacy LOE labels rather than canonical low/moderate/high. This validation proves transport/mapping consistency; it does not establish a Legacy LOE -> FIPS 199 equivalence. The 110 canonical occurrences are normalized to low/moderate/high as intended.
+
+Combined with the successful unchanged SSP PREVIEW (0 DIM inserts/updates, 0 FACT inserts/updates, 550,380 nodes, 547,567 edges, lineage complete), the v10 runtime behavior is live validated for the current Source One snapshot. No target write is required to reconcile the current persisted target because PREVIEW proposed zero DML.
+
+Next action: decide separately whether the remaining Legacy LOE labels require an owner-approved business/FIPS crosswalk. Do not invent that crosswalk. If no such semantic conversion is currently required, proceed to the next Source One QA/closeout checkpoint without committing SSP target changes.
