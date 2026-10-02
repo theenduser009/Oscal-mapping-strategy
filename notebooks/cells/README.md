@@ -1,6 +1,6 @@
-# Maintained seven-cell mapper — October 1, 2026
+# Maintained seven-cell mapper — October 2, 2026
 
-This is the single maintained implementation. All seven files below now contain the delivered selective LINEAGE_REQUIRED mapper: `lean-csv-registry-v6-lineage-required` / `oscal-lean-daily-v3.2-lineage`.
+This is the single maintained implementation. All seven files below now contain the delivered selective LINEAGE_REQUIRED mapper: `lean-csv-registry-v11-meta-driven-security-objectives` / `oscal-lean-daily-v3.2-lineage`.
 
 | Cell | Copy the full file | Responsibility |
 |---|---|---|
